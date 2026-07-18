@@ -1,0 +1,8 @@
+extends:
+  - recommended
+
+rules:
+  # This slice is intentionally local/CI-only and has no public server URL.
+  no-server-example.com: off
+  # Health operations do not invent client-error responses to satisfy a style rule.
+  operation-4xx-response: off

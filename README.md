@@ -78,15 +78,15 @@ before the first executable slice.
 
 ## Current stage
 
-The repository has an accepted product direction, module boundary, and initial
-technology stack. The first vertical slice and its acceptance criteria have
-status `Accepted`. No application dependencies or runnable services have been
-introduced yet.
+The public documentation baseline is published. Implementation of the first
+vertical slice is tracked in
+[Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1) and proceeds
+through focused, reviewable pull requests.
 
-The next gate is to initialize and publish the documentation baseline as its
-own Git history before application implementation begins. Implementation then
-proceeds through focused, reviewable changes that keep the accepted delivery
-specification and canonical CI proof synchronized.
+The current increment establishes canonical API and event contracts, generated
+TypeScript types, one repository-owned verification entrypoint, and the first
+GitHub Actions workflow. Runnable application services remain intentionally
+out of scope until this contract foundation is reviewed.
 
 ## License
 

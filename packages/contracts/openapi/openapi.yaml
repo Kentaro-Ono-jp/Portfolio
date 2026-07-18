@@ -1,0 +1,457 @@
+openapi: 3.1.0
+info:
+  title: ReactorFront Document Intelligence API
+  version: 0.1.0
+  description: >-
+    Canonical synchronous contract for the first document-classification
+    vertical slice.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:8000
+    description: Local Compose environment
+security: []
+tags:
+  - name: Documents
+    description: Document submission and processing status.
+  - name: Operations
+    description: Process health and dependency readiness.
+paths:
+  /api/v1/documents:
+    post:
+      tags:
+        - Documents
+      summary: Submit a PDF for classification
+      operationId: createDocument
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+            encoding:
+              file:
+                contentType: application/pdf
+      responses:
+        '202':
+          description: The document and processing job were accepted.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentAccepted'
+        '400':
+          $ref: '#/components/responses/InvalidDocument'
+        '413':
+          $ref: '#/components/responses/DocumentTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/documents/{documentId}:
+    get:
+      tags:
+        - Documents
+      summary: Get document processing status
+      operationId: getDocument
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Current document and processing state.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentStatus'
+        '404':
+          $ref: '#/components/responses/DocumentNotFound'
+  /health:
+    get:
+      tags:
+        - Operations
+      summary: Check whether the API process is running
+      operationId: getHealth
+      responses:
+        '200':
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /ready:
+    get:
+      tags:
+        - Operations
+      summary: Check whether the API can accept useful work
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Required runtime dependencies are reachable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: At least one required dependency is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/DependencyUnavailableProblem'
+components:
+  parameters:
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      description: Server-generated document identifier.
+      schema:
+        type: string
+        format: uuid
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: Optional caller-provided identifier used for traceability.
+      schema:
+        type: string
+        format: uuid
+  headers:
+    CorrelationId:
+      description: Correlation identifier assigned to this request flow.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    InvalidDocument:
+      description: The submitted file is not a supported PDF.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/InvalidDocumentProblem'
+    DocumentTooLarge:
+      description: The submitted file exceeds the 5 MiB limit.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/DocumentTooLargeProblem'
+    UnsupportedMediaType:
+      description: The request does not contain an application/pdf file.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/UnsupportedMediaTypeProblem'
+    DocumentNotFound:
+      description: No document exists for the supplied identifier.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/DocumentNotFoundProblem'
+  schemas:
+    Classification:
+      type: string
+      enum:
+        - invoice
+        - report
+    DocumentAccepted:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: accepted
+    DocumentStatus:
+      oneOf:
+        - $ref: '#/components/schemas/AcceptedDocumentStatus'
+        - $ref: '#/components/schemas/QueuedDocumentStatus'
+        - $ref: '#/components/schemas/ProcessingDocumentStatus'
+        - $ref: '#/components/schemas/CompletedDocumentStatus'
+        - $ref: '#/components/schemas/FailedDocumentStatus'
+      discriminator:
+        propertyName: status
+        mapping:
+          accepted: '#/components/schemas/AcceptedDocumentStatus'
+          queued: '#/components/schemas/QueuedDocumentStatus'
+          processing: '#/components/schemas/ProcessingDocumentStatus'
+          completed: '#/components/schemas/CompletedDocumentStatus'
+          failed: '#/components/schemas/FailedDocumentStatus'
+    AcceptedDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - createdAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: accepted
+        createdAt:
+          type: string
+          format: date-time
+    QueuedDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - createdAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: queued
+        createdAt:
+          type: string
+          format: date-time
+    ProcessingDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - createdAt
+        - startedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: processing
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+    CompletedDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - classification
+        - confidence
+        - modelVersion
+        - createdAt
+        - startedAt
+        - completedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: completed
+        classification:
+          $ref: '#/components/schemas/Classification'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    FailedDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - failureCode
+        - createdAt
+        - completedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: failed
+        failureCode:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          maxLength: 128
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    Health:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          const: ok
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - correlationId
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]*$'
+        correlationId:
+          type: string
+          format: uuid
+    InvalidDocumentProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 400
+            code:
+              type: string
+              const: INVALID_DOCUMENT
+      unevaluatedProperties: false
+    DocumentTooLargeProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 413
+            code:
+              type: string
+              const: DOCUMENT_TOO_LARGE
+      unevaluatedProperties: false
+    UnsupportedMediaTypeProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 415
+            code:
+              type: string
+              const: UNSUPPORTED_MEDIA_TYPE
+      unevaluatedProperties: false
+    DocumentNotFoundProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 404
+            code:
+              type: string
+              const: DOCUMENT_NOT_FOUND
+      unevaluatedProperties: false
+    DependencyUnavailableProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 503
+            code:
+              type: string
+              const: DEPENDENCY_UNAVAILABLE
+      unevaluatedProperties: false

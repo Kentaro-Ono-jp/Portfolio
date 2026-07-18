@@ -1,0 +1,11 @@
+{
+  "eventId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+  "eventType": "document.processing.started.v1",
+  "occurredAt": "2026-07-18T07:00:01Z",
+  "correlationId": "11111111-1111-4111-8111-111111111111",
+  "documentId": "22222222-2222-4222-8222-222222222222",
+  "jobId": "33333333-3333-4333-8333-333333333333",
+  "objectKey": "documents/22222222-2222-4222-8222-222222222222/source.pdf",
+  "sourceSha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "modelVersion": "document-type-v1"
+}

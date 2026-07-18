@@ -1,9 +1,11 @@
 # Delivery Specification 0001: First end-to-end vertical slice
 
-- Status: Accepted
+- Status: In Progress
 - Date: 2026-07-18
 - Accepted: 2026-07-18
+- Started: 2026-07-18
 - Owner: ReactorFront
+- Tracking issue: [#1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1)
 - Related decisions:
   - [ADR-0001: Adopt a modular monorepo](../adr/0001-modular-monorepo.md)
   - [ADR-0002: Target an AI-enabled document intelligence platform](../adr/0002-target-document-intelligence-platform.md)
@@ -197,22 +199,6 @@ validated classification result or a sanitized failure code.
 The JSON Schema is versioned under `packages/contracts`. Consumers reject an
 invalid event without silently treating it as a valid job.
 
-## Pre-implementation gates
-
-Application coding starts only after these repository gates pass:
-
-- initialize local Git with default branch `main`
-- confirm the configured author name and email without publishing secrets
-- create `Kentaro-Ono-jp/Portfolio` as a public GitHub repository without
-  generating a second README, license, or `.gitignore`
-- commit and push the documentation scaffold as the public baseline
-- confirm `origin` points to the intended repository
-- create a focused implementation issue and branch for this slice
-- keep the first application implementation out of the baseline commit
-
-This order preserves visible planning and review history instead of publishing
-the whole system as one retrospective bulk commit.
-
 ### Minimum ML proof
 
 - Extract text from the supported PDF fixture.
@@ -231,6 +217,22 @@ Model accuracy on synthetic data is not presented as production-grade quality.
 The proof in this slice is a real, reproducible ML lifecycle and inference
 boundary. Later slices will add meaningful evaluation datasets and quality
 claims.
+
+## Pre-implementation gates
+
+Application coding starts only after these repository gates pass:
+
+- initialize local Git with default branch `main`
+- confirm the configured author name and email without publishing secrets
+- create `Kentaro-Ono-jp/Portfolio` as a public GitHub repository without
+  generating a second README, license, or `.gitignore`
+- commit and push the documentation scaffold as the public baseline
+- confirm `origin` points to the intended repository
+- create a focused implementation issue and branch for this slice
+- keep the first application implementation out of the baseline commit
+
+This order preserves visible planning and review history instead of publishing
+the whole system as one retrospective bulk commit.
 
 ## Step 1: Implement the smallest end-to-end product flow
 

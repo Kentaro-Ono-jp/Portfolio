@@ -1,12 +1,14 @@
 # Shared contracts
 
-## Intended responsibility
+## Responsibility
 
-This package area will contain language-neutral contracts shared across service
-boundaries.
+This package contains the language-neutral contracts shared across service
+boundaries:
 
-Possible contents include OpenAPI documents, JSON Schema, event schemas, error
-codes, and generated clients or types.
+- `openapi/openapi.yaml`: canonical OpenAPI 3.1 synchronous API contract
+- `events/*.schema.json`: canonical JSON Schema event contracts
+- `examples/events/*.json`: deterministic valid event examples
+- `generated/api.d.ts`: generated TypeScript API types
 
 ## Boundary rules
 
@@ -25,5 +27,22 @@ codes, and generated clients or types.
 - The web application consumes generated TypeScript types or a generated client.
 - Contract and event names are explicitly versioned.
 
-The exact generator and any package-publishing strategy remain implementation
-decisions. Generated output must be reproducible and checked for drift in CI.
+## Verification and generation
+
+From the repository root:
+
+```console
+pnpm contracts:check
+```
+
+The command lints OpenAPI, validates valid and impossible API response states,
+validates positive and negative event examples, regenerates
+`generated/api.d.ts`, and fails when committed generated output has drifted.
+Generate the TypeScript output alone with:
+
+```console
+pnpm contracts:generate
+```
+
+The package remains private workspace infrastructure. A publishing strategy is
+deferred until an external consumer requires one.
