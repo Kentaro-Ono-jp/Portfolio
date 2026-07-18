@@ -11,7 +11,18 @@ IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 
 
 def iter_markdown_files() -> list[Path]:
-    excluded = {".git", "node_modules"}
+    excluded = {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "build",
+        "coverage",
+        "dist",
+        "htmlcov",
+        "node_modules",
+    }
     return sorted(
         path
         for path in REPOSITORY_ROOT.rglob("*.md")

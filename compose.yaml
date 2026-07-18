@@ -1,5 +1,78 @@
 name: reactorfront-portfolio
 
-# Product, service, and delivery decisions are accepted. Services remain empty
-# only until the first focused implementation change begins.
-services: {}
+services:
+  postgres:
+    image: postgres:18.4-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296
+    environment:
+      POSTGRES_DB: portfolio
+      POSTGRES_USER: portfolio
+      POSTGRES_PASSWORD: portfolio-local-password
+    ports:
+      - "127.0.0.1:${PORTFOLIO_POSTGRES_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portfolio -d portfolio"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+  minio:
+    image: reactorfront-portfolio-minio:2025-10-15
+    build:
+      context: infra/docker/minio
+      args:
+        MINIO_COMMIT: 9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a
+    environment:
+      MINIO_ROOT_USER: portfolio-local-access
+      MINIO_ROOT_PASSWORD: portfolio-local-secret
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "127.0.0.1:${PORTFOLIO_MINIO_PORT:-59000}:9000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    volumes:
+      - minio-data:/data
+
+  api:
+    image: reactorfront-portfolio-api:local
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    environment:
+      PORTFOLIO_DATABASE_URL: postgresql+psycopg://portfolio:portfolio-local-password@postgres:5432/portfolio
+      PORTFOLIO_S3_ENDPOINT_URL: http://minio:9000
+      PORTFOLIO_S3_ACCESS_KEY_ID: portfolio-local-access
+      PORTFOLIO_S3_SECRET_ACCESS_KEY: portfolio-local-secret
+      PORTFOLIO_S3_BUCKET: portfolio-documents
+      PORTFOLIO_S3_REGION: us-east-1
+      PORTFOLIO_EVENT_CONTRACT_DIRECTORY: /workspace/packages/contracts/events
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        alembic -c /workspace/apps/api/alembic.ini upgrade head &&
+        uvicorn reactorfront_api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:${PORTFOLIO_API_PORT:-58000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:
+  minio-data:

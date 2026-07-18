@@ -1,8 +1,11 @@
 # API application boundary
 
-## Intended responsibility
+## Responsibility
 
-This area will expose the backend API and coordinate application use cases.
+This area exposes the backend API and coordinates API-owned application use
+cases. The current increment accepts and validates PDFs, stores source objects,
+and atomically records a document, processing job, and transactional outbox
+event.
 
 ## Boundary rules
 
@@ -10,20 +13,74 @@ This area will expose the backend API and coordinate application use cases.
 - Do not import web implementation details.
 - Communicate with ML capabilities through a documented interface rather than
   importing ML internals.
-- Keep transport concerns separate from application and domain logic when the
-  concrete design is introduced.
+- Keep transport concerns separate from application and domain logic.
+- Keep PostgreSQL credentials inside API-owned roles; ML services never receive
+  direct database access.
 
-## Accepted initial direction
+## Implemented boundary
 
-- Python with FastAPI and Pydantic
-- Versioned REST endpoints described by OpenAPI 3.1
-- PostgreSQL with SQLAlchemy and Alembic
-- API-owned PostgreSQL state; ML processes receive no database credentials
-- a transactional outbox dispatcher for processing requests
-- a RabbitMQ event consumer for idempotent processing-state updates
-- Celery and RabbitMQ for at-least-once asynchronous ML processing
-- pytest, Ruff, and static type checking
+- Python 3.13 with exact dependencies locked by uv
+- FastAPI and Pydantic transport models
+- SQLAlchemy 2 and PostgreSQL 18 persistence
+- explicit Alembic migrations
+- S3-compatible source-object storage through boto3
+- canonical JSON Schema validation before outbox persistence
+- stable public problem responses without raw internal errors
+- pytest, Ruff, strict mypy, pip-audit, and branch-aware coverage
 
-Exact runtime and package versions will be pinned after compatibility checks.
+The API writes the source object first, then inserts the document, accepted job,
+and requested outbox event in one database transaction. A confirmed uncommitted
+transaction triggers a best-effort object deletion. If the commit response is
+lost, the repository observes all three persisted identities through a fresh
+connection. Only a complete matching observation upgrades the request to
+accepted; an immediate absence is not treated as rollback proof, so the source
+is retained whenever the outcome remains unknown.
+The submitted filename is display-only; the server creates the object key and
+persists a SHA-256 digest.
+
+The outbox dispatcher, RabbitMQ consumers, Celery worker, and ML result updates
+are deliberately outside this focused increment.
+
+## Layout
+
+- `src/reactorfront_api/app.py`: HTTP composition and process probes
+- `src/reactorfront_api/service.py`: application policy and compensation
+- `src/reactorfront_api/persistence.py`: API-owned SQLAlchemy model and repository
+- `src/reactorfront_api/storage.py`: S3-compatible object adapter
+- `src/reactorfront_api/event_contracts.py`: canonical event validation
+- `alembic/`: explicit database history
+- `tests/`: unit tests and real-service integration proof
+
+## Configuration
+
+Runtime settings use the `PORTFOLIO_` prefix. Committed defaults are safe local
+examples and are overridden inside Compose.
+
+| Variable | Default |
+|---|---|
+| `PORTFOLIO_DATABASE_URL` | PostgreSQL on `127.0.0.1:55432` |
+| `PORTFOLIO_S3_ENDPOINT_URL` | `http://127.0.0.1:59000` |
+| `PORTFOLIO_S3_ACCESS_KEY_ID` | `portfolio-local-access` |
+| `PORTFOLIO_S3_SECRET_ACCESS_KEY` | `portfolio-local-secret` |
+| `PORTFOLIO_S3_BUCKET` | `portfolio-documents` |
+| `PORTFOLIO_S3_REGION` | `us-east-1` |
+
+These values are development-only. Required host ports bind to `127.0.0.1`,
+and the MinIO administration console is not published to the host.
+
+## Verification
+
+From the repository root:
+
+```console
+uv sync --project apps/api --frozen
+python scripts/verify.py --static-only
+```
+
+GitHub Actions runs `python scripts/verify.py` without the flag. It builds the
+fixed PostgreSQL and MinIO environment, applies migrations, rejects model drift,
+starts the API image, and exercises the real HTTP, database, and object-storage
+boundaries.
+
 Authentication and authorization are deliberately deferred beyond the first
 vertical slice.

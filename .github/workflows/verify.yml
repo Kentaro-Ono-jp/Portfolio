@@ -16,9 +16,9 @@ concurrency:
 
 jobs:
   verify:
-    name: Contracts and repository checks
+    name: API boundary and repository checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -39,8 +39,24 @@ jobs:
         with:
           python-version-file: .python-version
 
-      - name: Install contract tooling
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: 0.11.29
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Install pinned dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install pinned API dependencies
+        run: uv sync --project apps/api --frozen
 
       - name: Run canonical verification
         run: python scripts/verify.py
+
+      - name: Tear down the isolated Compose project
+        if: always()
+        run: >-
+          docker compose -p reactorfront-portfolio down
+          --remove-orphans --volumes

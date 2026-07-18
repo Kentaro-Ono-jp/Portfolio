@@ -6,7 +6,8 @@ environment for this portfolio.
 `verify.yml` runs the repository-owned `scripts/verify.py` entrypoint on pull
 requests, `main`, and manual dispatch. Its first increment proves the canonical
 contracts, generated types, documentation links, and Compose definition from a
-clean GitHub-hosted runner.
+clean GitHub-hosted runner. An unconditional final step removes only the
+`reactorfront-portfolio` project and its ephemeral runner volumes.
 
 The workflow will expand through later focused changes to build the Compose
 project, wait for readiness, verify the business flow, preserve failure

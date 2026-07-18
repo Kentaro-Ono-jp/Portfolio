@@ -7,19 +7,35 @@ The accepted first-slice specification names `scripts/verify.py` as the
 canonical verification entrypoint used by humans, coding agents, and GitHub
 Actions.
 
-Run it from the repository root after `pnpm install`:
+Run it from the repository root after installing the two pinned dependency
+sets:
 
 ```console
+pnpm install --frozen-lockfile
+uv sync --project apps/api --frozen
 python scripts/verify.py
 ```
 
-The current entrypoint validates contracts, local Markdown links, and the
-isolated Compose definition without starting Docker. It will expand in the same
-file as executable services and end-to-end checks are introduced.
+The default path validates repository structure and then starts only the
+`reactorfront-portfolio` Compose project for migration, API-image, PostgreSQL,
+and S3-compatible integration checks. It stops that project afterward. GitHub
+Actions also removes the two project-scoped test volumes; local execution
+preserves them. A failed teardown makes verification fail, and the workflow has
+an unconditional project-scoped teardown step as a final safety net.
+
+Use the non-container path when Docker is intentionally unavailable:
+
+```console
+python scripts/verify.py --static-only
+```
 
 Supporting scripts are implementation details of that entrypoint:
 
 - `check_docs.py` rejects broken local Markdown links.
+- `check-generated-contract.mjs` regenerates API types and detects content drift
+  without confusing valid uncommitted output with stale output.
+- `prepare_integration.py` idempotently creates the deterministic S3 test
+  bucket after MinIO is healthy.
 - `validate-openapi.mjs` proves valid state variants and rejects impossible
   document states or unstable problem-response combinations.
 - `validate-events.mjs` validates canonical event examples and representative

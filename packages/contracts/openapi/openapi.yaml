@@ -58,6 +58,10 @@ paths:
           $ref: '#/components/responses/DocumentTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '503':
+          $ref: '#/components/responses/DependencyUnavailable'
   /api/v1/documents/{documentId}:
     get:
       tags:
@@ -79,6 +83,10 @@ paths:
                 $ref: '#/components/schemas/DocumentStatus'
         '404':
           $ref: '#/components/responses/DocumentNotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '503':
+          $ref: '#/components/responses/DependencyUnavailable'
   /health:
     get:
       tags:
@@ -106,11 +114,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
         '503':
-          description: At least one required dependency is unavailable.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/DependencyUnavailableProblem'
+          $ref: '#/components/responses/DependencyUnavailable'
 components:
   parameters:
     DocumentId:
@@ -136,30 +140,60 @@ components:
         type: string
         format: uuid
   responses:
+    InvalidRequest:
+      description: A path, header, or request-body value violates the API contract.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/InvalidRequestProblem'
     InvalidDocument:
       description: The submitted file is not a supported PDF.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/InvalidDocumentProblem'
     DocumentTooLarge:
       description: The submitted file exceeds the 5 MiB limit.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/DocumentTooLargeProblem'
     UnsupportedMediaType:
       description: The request does not contain an application/pdf file.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/UnsupportedMediaTypeProblem'
     DocumentNotFound:
       description: No document exists for the supplied identifier.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/DocumentNotFoundProblem'
+              $ref: '#/components/schemas/DocumentNotFoundProblem'
+    DependencyUnavailable:
+      description: At least one required dependency is unavailable.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/DependencyUnavailableProblem'
   schemas:
     Classification:
       type: string
@@ -375,6 +409,22 @@ components:
         correlationId:
           type: string
           format: uuid
+    InvalidRequestProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 422
+            code:
+              type: string
+              const: INVALID_REQUEST
+      unevaluatedProperties: false
     InvalidDocumentProblem:
       type: object
       allOf:
