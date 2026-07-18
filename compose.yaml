@@ -1,0 +1,5 @@
+name: reactorfront-portfolio
+
+# Product, service, and delivery decisions are accepted. Services remain empty
+# only until the first focused implementation change begins.
+services: {}
