@@ -157,6 +157,7 @@ class SqlAlchemySubmissionRepository:
                     created_at=submission.occurred_at,
                 )
                 session.add(document)
+                session.flush()
 
                 job = ProcessingJobRow(
                     id=submission.job_id,
@@ -166,6 +167,7 @@ class SqlAlchemySubmissionRepository:
                     created_at=submission.occurred_at,
                 )
                 session.add(job)
+                session.flush()
 
                 outbox_event = OutboxEventRow(
                     event_id=submission.event_id,

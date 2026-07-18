@@ -47,8 +47,10 @@ class FakeTransaction:
 class FakeSession:
     transaction: FakeTransaction = field(default_factory=FakeTransaction)
     flush_error: Exception | None = None
+    flush_error_at_call: int = 1
     rows: dict[type[object], object | None] = field(default_factory=dict)
     added: list[object] = field(default_factory=list)
+    flush_snapshots: list[list[type[object]]] = field(default_factory=list)
 
     def __enter__(self) -> FakeSession:
         return self
@@ -68,7 +70,8 @@ class FakeSession:
         self.added.append(value)
 
     def flush(self) -> None:
-        if self.flush_error is not None:
+        self.flush_snapshots.append([type(row) for row in self.added])
+        if self.flush_error is not None and len(self.flush_snapshots) == self.flush_error_at_call:
             raise self.flush_error
 
     def get(self, model: type[object], _identity: UUID) -> object | None:
@@ -121,12 +124,20 @@ def test_save_flushes_all_rows_before_committing(monkeypatch: pytest.MonkeyPatch
         ProcessingJobRow,
         OutboxEventRow,
     ]
+    assert session.flush_snapshots == [
+        [DocumentRow],
+        [DocumentRow, ProcessingJobRow],
+        [DocumentRow, ProcessingJobRow, OutboxEventRow],
+    ]
     assert session.transaction.committed
     assert not session.transaction.rolled_back
 
 
 def test_save_marks_flush_failure_as_not_committed(monkeypatch: pytest.MonkeyPatch) -> None:
-    session = FakeSession(flush_error=RuntimeError("constraint failure"))
+    session = FakeSession(
+        flush_error=RuntimeError("constraint failure"),
+        flush_error_at_call=3,
+    )
     repository = repository_with_session(monkeypatch, session)
 
     with pytest.raises(SubmissionPersistenceError) as captured:
