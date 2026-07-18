@@ -35,9 +35,10 @@ From the repository root:
 pnpm contracts:check
 ```
 
-The command lints OpenAPI, validates positive and negative event examples,
-regenerates `generated/api.d.ts`, and fails when committed generated output has
-drifted. Generate the TypeScript output alone with:
+The command lints OpenAPI, validates valid and impossible API response states,
+validates positive and negative event examples, regenerates
+`generated/api.d.ts`, and fails when committed generated output has drifted.
+Generate the TypeScript output alone with:
 
 ```console
 pnpm contracts:generate

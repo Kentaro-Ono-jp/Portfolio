@@ -20,6 +20,8 @@ file as executable services and end-to-end checks are introduced.
 Supporting scripts are implementation details of that entrypoint:
 
 - `check_docs.py` rejects broken local Markdown links.
+- `validate-openapi.mjs` proves valid state variants and rejects impossible
+  document states or unstable problem-response combinations.
 - `validate-events.mjs` validates canonical event examples and representative
   rejection cases against the versioned JSON Schemas.
 - `stamp-generated-contract.mjs` records the canonical source and regeneration

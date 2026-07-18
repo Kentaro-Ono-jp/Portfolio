@@ -54,7 +54,11 @@ same change.
 
 ## Verification
 
-There is no runtime verification command yet. Until services exist, validate
-documentation links, repository boundaries, and `docker compose config` only.
-When a shared verification entrypoint is added, all agent instructions and CI
-must point to that one executable path.
+Use `python scripts/verify.py` as the canonical verification entrypoint for
+humans, coding agents, and GitHub Actions. Install the pinned JavaScript
+dependencies with `pnpm install --frozen-lockfile` before running it.
+
+Until services exist, this entrypoint validates canonical contracts, generated
+type drift, documentation links, and `docker compose config` without starting
+Docker. Expand this same entrypoint as runnable services are introduced; do not
+create a competing verification path.

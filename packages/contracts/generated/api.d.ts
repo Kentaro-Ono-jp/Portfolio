@@ -78,8 +78,6 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ProcessingStatus: "accepted" | "queued" | "processing" | "completed" | "failed";
-        /** @enum {string} */
         Classification: "invoice" | "report";
         DocumentAccepted: {
             /** Format: uuid */
@@ -89,22 +87,85 @@ export interface components {
             /** @constant */
             status: "accepted";
         };
-        DocumentStatus: {
+        DocumentStatus: components["schemas"]["AcceptedDocumentStatus"] | components["schemas"]["QueuedDocumentStatus"] | components["schemas"]["ProcessingDocumentStatus"] | components["schemas"]["CompletedDocumentStatus"] | components["schemas"]["FailedDocumentStatus"];
+        AcceptedDocumentStatus: {
             /** Format: uuid */
             documentId: string;
             /** Format: uuid */
             jobId: string;
-            status: components["schemas"]["ProcessingStatus"];
-            classification?: components["schemas"]["Classification"] | null;
-            confidence?: number | null;
-            modelVersion?: string | null;
-            failureCode?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "accepted";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        QueuedDocumentStatus: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "queued";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ProcessingDocumentStatus: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "processing";
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            startedAt?: string | null;
+            startedAt: string;
+        };
+        CompletedDocumentStatus: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "completed";
+            classification: components["schemas"]["Classification"];
+            confidence: number;
+            modelVersion: string;
             /** Format: date-time */
-            completedAt?: string | null;
+            createdAt: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            completedAt: string;
+        };
+        FailedDocumentStatus: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "failed";
+            failureCode: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            completedAt: string;
         };
         Health: {
             /** @constant */
@@ -120,6 +181,36 @@ export interface components {
             /** Format: uuid */
             correlationId: string;
         };
+        InvalidDocumentProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 400;
+            /** @constant */
+            code: "INVALID_DOCUMENT";
+        };
+        DocumentTooLargeProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 413;
+            /** @constant */
+            code: "DOCUMENT_TOO_LARGE";
+        };
+        UnsupportedMediaTypeProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 415;
+            /** @constant */
+            code: "UNSUPPORTED_MEDIA_TYPE";
+        };
+        DocumentNotFoundProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 404;
+            /** @constant */
+            code: "DOCUMENT_NOT_FOUND";
+        };
+        DependencyUnavailableProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 503;
+            /** @constant */
+            code: "DEPENDENCY_UNAVAILABLE";
+        };
     };
     responses: {
         /** @description The submitted file is not a supported PDF. */
@@ -128,7 +219,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/problem+json": components["schemas"]["Problem"];
+                "application/problem+json": components["schemas"]["InvalidDocumentProblem"];
             };
         };
         /** @description The submitted file exceeds the 5 MiB limit. */
@@ -137,7 +228,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/problem+json": components["schemas"]["Problem"];
+                "application/problem+json": components["schemas"]["DocumentTooLargeProblem"];
             };
         };
         /** @description The request does not contain an application/pdf file. */
@@ -146,7 +237,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/problem+json": components["schemas"]["Problem"];
+                "application/problem+json": components["schemas"]["UnsupportedMediaTypeProblem"];
             };
         };
         /** @description No document exists for the supplied identifier. */
@@ -155,7 +246,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/problem+json": components["schemas"]["Problem"];
+                "application/problem+json": components["schemas"]["DocumentNotFoundProblem"];
             };
         };
     };
@@ -280,7 +371,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/problem+json": components["schemas"]["DependencyUnavailableProblem"];
                 };
             };
         };

@@ -20,6 +20,9 @@ importers:
       openapi-typescript:
         specifier: 7.13.0
         version: 7.13.0(typescript@5.9.3)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
   packages/contracts: {}
 
@@ -166,6 +169,11 @@ packages:
   yaml-ast-parser@0.0.43:
     resolution: {integrity: sha512-2PTINUwsRqSd+s8XxKaJWQlUuEMHJQyEuh2edBbW8KNJz0SJPwUSD2zRWqezFEdN7IzAgeuYHFUCF7o8zRdZ0A==}
 
+  yaml@2.9.0:
+    resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yargs-parser@21.1.1:
     resolution: {integrity: sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==}
     engines: {node: '>=12'}
@@ -298,5 +306,7 @@ snapshots:
   uri-js-replace@1.0.1: {}
 
   yaml-ast-parser@0.0.43: {}
+
+  yaml@2.9.0: {}
 
   yargs-parser@21.1.1: {}

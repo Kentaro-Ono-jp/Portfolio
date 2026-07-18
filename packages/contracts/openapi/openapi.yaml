@@ -110,7 +110,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: '#/components/schemas/DependencyUnavailableProblem'
 components:
   parameters:
     DocumentId:
@@ -141,34 +141,26 @@ components:
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/InvalidDocumentProblem'
     DocumentTooLarge:
       description: The submitted file exceeds the 5 MiB limit.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/DocumentTooLargeProblem'
     UnsupportedMediaType:
       description: The request does not contain an application/pdf file.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/UnsupportedMediaTypeProblem'
     DocumentNotFound:
       description: No document exists for the supplied identifier.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/DocumentNotFoundProblem'
   schemas:
-    ProcessingStatus:
-      type: string
-      enum:
-        - accepted
-        - queued
-        - processing
-        - completed
-        - failed
     Classification:
       type: string
       enum:
@@ -192,6 +184,21 @@ components:
           type: string
           const: accepted
     DocumentStatus:
+      oneOf:
+        - $ref: '#/components/schemas/AcceptedDocumentStatus'
+        - $ref: '#/components/schemas/QueuedDocumentStatus'
+        - $ref: '#/components/schemas/ProcessingDocumentStatus'
+        - $ref: '#/components/schemas/CompletedDocumentStatus'
+        - $ref: '#/components/schemas/FailedDocumentStatus'
+      discriminator:
+        propertyName: status
+        mapping:
+          accepted: '#/components/schemas/AcceptedDocumentStatus'
+          queued: '#/components/schemas/QueuedDocumentStatus'
+          processing: '#/components/schemas/ProcessingDocumentStatus'
+          completed: '#/components/schemas/CompletedDocumentStatus'
+          failed: '#/components/schemas/FailedDocumentStatus'
+    AcceptedDocumentStatus:
       type: object
       additionalProperties: false
       required:
@@ -207,37 +214,131 @@ components:
           type: string
           format: uuid
         status:
-          $ref: '#/components/schemas/ProcessingStatus'
-        classification:
-          oneOf:
-            - $ref: '#/components/schemas/Classification'
-            - type: 'null'
-        confidence:
-          type:
-            - number
-            - 'null'
-          minimum: 0
-          maximum: 1
-        modelVersion:
-          type:
-            - string
-            - 'null'
-        failureCode:
-          type:
-            - string
-            - 'null'
+          type: string
+          const: accepted
+        createdAt:
+          type: string
+          format: date-time
+    QueuedDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - createdAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: queued
+        createdAt:
+          type: string
+          format: date-time
+    ProcessingDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - createdAt
+        - startedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: processing
         createdAt:
           type: string
           format: date-time
         startedAt:
-          type:
-            - string
-            - 'null'
+          type: string
+          format: date-time
+    CompletedDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - classification
+        - confidence
+        - modelVersion
+        - createdAt
+        - startedAt
+        - completedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: completed
+        classification:
+          $ref: '#/components/schemas/Classification'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
           format: date-time
         completedAt:
-          type:
-            - string
-            - 'null'
+          type: string
+          format: date-time
+    FailedDocumentStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - failureCode
+        - createdAt
+        - completedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: failed
+        failureCode:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          maxLength: 128
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
           format: date-time
     Health:
       type: object
@@ -250,7 +351,6 @@ components:
           const: ok
     Problem:
       type: object
-      additionalProperties: false
       required:
         - type
         - title
@@ -275,3 +375,83 @@ components:
         correlationId:
           type: string
           format: uuid
+    InvalidDocumentProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 400
+            code:
+              type: string
+              const: INVALID_DOCUMENT
+      unevaluatedProperties: false
+    DocumentTooLargeProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 413
+            code:
+              type: string
+              const: DOCUMENT_TOO_LARGE
+      unevaluatedProperties: false
+    UnsupportedMediaTypeProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 415
+            code:
+              type: string
+              const: UNSUPPORTED_MEDIA_TYPE
+      unevaluatedProperties: false
+    DocumentNotFoundProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 404
+            code:
+              type: string
+              const: DOCUMENT_NOT_FOUND
+      unevaluatedProperties: false
+    DependencyUnavailableProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 503
+            code:
+              type: string
+              const: DEPENDENCY_UNAVAILABLE
+      unevaluatedProperties: false
