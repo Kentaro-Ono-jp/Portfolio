@@ -13,7 +13,7 @@
     "contracts:validate-openapi": "node scripts/validate-openapi.mjs",
     "contracts:validate-events": "node scripts/validate-events.mjs",
     "contracts:generate": "openapi-typescript packages/contracts/openapi/openapi.yaml -o packages/contracts/generated/api.d.ts && node scripts/stamp-generated-contract.mjs",
-    "contracts:check": "pnpm contracts:lint && pnpm contracts:validate-openapi && pnpm contracts:validate-events && pnpm contracts:generate && git diff --exit-code -- packages/contracts/generated/api.d.ts",
+    "contracts:check": "pnpm contracts:lint && pnpm contracts:validate-openapi && pnpm contracts:validate-events && node scripts/check-generated-contract.mjs",
     "verify": "python scripts/verify.py"
   },
   "devDependencies": {

@@ -216,6 +216,7 @@ export interface components {
         /** @description The submitted file is not a supported PDF. */
         InvalidDocument: {
             headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
                 [name: string]: unknown;
             };
             content: {
@@ -225,6 +226,7 @@ export interface components {
         /** @description The submitted file exceeds the 5 MiB limit. */
         DocumentTooLarge: {
             headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
                 [name: string]: unknown;
             };
             content: {
@@ -234,6 +236,7 @@ export interface components {
         /** @description The request does not contain an application/pdf file. */
         UnsupportedMediaType: {
             headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
                 [name: string]: unknown;
             };
             content: {
@@ -243,10 +246,21 @@ export interface components {
         /** @description No document exists for the supplied identifier. */
         DocumentNotFound: {
             headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
                 [name: string]: unknown;
             };
             content: {
                 "application/problem+json": components["schemas"]["DocumentNotFoundProblem"];
+            };
+        };
+        /** @description At least one required dependency is unavailable. */
+        DependencyUnavailable: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["DependencyUnavailableProblem"];
             };
         };
     };
@@ -297,6 +311,7 @@ export interface operations {
             400: components["responses"]["InvalidDocument"];
             413: components["responses"]["DocumentTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            503: components["responses"]["DependencyUnavailable"];
         };
     };
     getDocument: {
@@ -325,6 +340,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["DocumentNotFound"];
+            503: components["responses"]["DependencyUnavailable"];
         };
     };
     getHealth: {
@@ -365,15 +381,7 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
-            /** @description At least one required dependency is unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["DependencyUnavailableProblem"];
-                };
-            };
+            503: components["responses"]["DependencyUnavailable"];
         };
     };
 }

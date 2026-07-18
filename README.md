@@ -1,6 +1,8 @@
 # ReactorFront Portfolio
 
-> Status: first vertical slice accepted for implementation — 2026-07-18
+> Status: first vertical slice in implementation — 2026-07-18
+
+[![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml)
 
 This repository is ReactorFront's public engineering portfolio. It is not a
 static profile site or a collection of disconnected demos. It will contain one
@@ -71,10 +73,49 @@ Portfolio/
 GitHub Actions will be the authoritative build and runtime verification
 environment. Local Docker Desktop is a development convenience only.
 
-The root [`compose.yaml`](compose.yaml) currently reserves the isolated Compose
-project name `reactorfront-portfolio`; services will be added through focused
-vertical-slice changes. A shared verification entrypoint will be introduced
-before the first executable slice.
+The root [`compose.yaml`](compose.yaml) owns the isolated Compose project
+`reactorfront-portfolio`. The canonical verifier checks contracts, generated
+types, linting, formatting, static types, migrations, unit tests, and a real
+HTTP/PostgreSQL/S3-compatible integration path in GitHub Actions.
+
+Install the pinned dependencies and run the same verification from the
+repository root:
+
+```console
+pnpm install --frozen-lockfile
+uv sync --project apps/api --frozen
+python scripts/verify.py
+```
+
+The full command builds and starts only this repository's Compose project and
+stops it afterward. To run all checks without starting containers:
+
+```console
+python scripts/verify.py --static-only
+```
+
+### Run the current API boundary
+
+Start the two dependencies, create the deterministic development bucket, then
+start the migrated API:
+
+```console
+docker compose -p reactorfront-portfolio up --detach --build --wait postgres minio
+uv run --project apps/api python scripts/prepare_integration.py
+docker compose -p reactorfront-portfolio up --detach --build --wait api
+```
+
+The API is available at `http://localhost:58000`; MinIO's development console
+is available at `http://localhost:59001`. Host ports can be changed with the
+safe examples in [`.env.example`](.env.example).
+
+Submit a PDF of at most 5 MiB:
+
+```console
+curl --request POST http://localhost:58000/api/v1/documents \
+  --header "X-Correlation-ID: 11111111-1111-4111-8111-111111111111" \
+  --form "file=@sample.pdf;type=application/pdf"
+```
 
 ## Current stage
 
@@ -83,10 +124,11 @@ vertical slice is tracked in
 [Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1) and proceeds
 through focused, reviewable pull requests.
 
-The current increment establishes canonical API and event contracts, generated
-TypeScript types, one repository-owned verification entrypoint, and the first
-GitHub Actions workflow. Runnable application services remain intentionally
-out of scope until this contract foundation is reviewed.
+The contract foundation is merged. The current focused increment implements
+the API-owned document-submission boundary: validated PDF storage, atomic
+document/job/outbox persistence, status lookup, migrations, health and
+readiness probes, and real-service integration verification. Outbox dispatch,
+RabbitMQ, ML processing, and the web application remain later increments.
 
 ## License
 
@@ -95,4 +137,5 @@ Copyright (c) 2026 Kentaro Ono (ReactorFront).
 Original source code, documentation, and synthetic fixtures in this repository
 are licensed under the [MIT License](LICENSE) unless a file states otherwise.
 Third-party dependencies, assets, datasets, and models remain subject to their
-respective licenses.
+respective licenses; introduced runtime infrastructure is recorded in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

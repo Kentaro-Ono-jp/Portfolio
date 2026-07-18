@@ -148,10 +148,22 @@ const problemContracts = [
     code: "UNSUPPORTED_MEDIA_TYPE",
   },
   {
+    pathName: "/api/v1/documents",
+    method: "post",
+    httpStatus: 503,
+    code: "DEPENDENCY_UNAVAILABLE",
+  },
+  {
     pathName: "/api/v1/documents/{documentId}",
     method: "get",
     httpStatus: 404,
     code: "DOCUMENT_NOT_FOUND",
+  },
+  {
+    pathName: "/api/v1/documents/{documentId}",
+    method: "get",
+    httpStatus: 503,
+    code: "DEPENDENCY_UNAVAILABLE",
   },
   {
     pathName: "/ready",
