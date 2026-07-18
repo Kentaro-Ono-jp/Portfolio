@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio.reactorfront.dev/contracts/events/document.processing.failed.v1.schema.json",
+  "title": "Document processing failed event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "correlationId",
+    "documentId",
+    "jobId",
+    "objectKey",
+    "sourceSha256",
+    "modelVersion",
+    "failureCode"
+  ],
+  "properties": {
+    "eventId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "eventType": { "const": "document.processing.failed.v1" },
+    "occurredAt": { "$ref": "common.v1.schema.json#/$defs/timestamp" },
+    "correlationId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "documentId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "jobId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "objectKey": { "$ref": "common.v1.schema.json#/$defs/objectKey" },
+    "sourceSha256": { "$ref": "common.v1.schema.json#/$defs/sha256" },
+    "modelVersion": { "$ref": "common.v1.schema.json#/$defs/modelVersion" },
+    "failureCode": { "$ref": "common.v1.schema.json#/$defs/failureCode" }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio.reactorfront.dev/contracts/events/document.processing.requested.v1.schema.json",
+  "title": "Document processing requested event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "correlationId",
+    "documentId",
+    "jobId",
+    "objectKey",
+    "sourceSha256"
+  ],
+  "properties": {
+    "eventId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "eventType": { "const": "document.processing.requested.v1" },
+    "occurredAt": { "$ref": "common.v1.schema.json#/$defs/timestamp" },
+    "correlationId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "documentId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "jobId": { "$ref": "common.v1.schema.json#/$defs/uuid" },
+    "objectKey": { "$ref": "common.v1.schema.json#/$defs/objectKey" },
+    "sourceSha256": { "$ref": "common.v1.schema.json#/$defs/sha256" }
+  }
+}

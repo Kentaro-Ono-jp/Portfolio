@@ -1,0 +1,13 @@
+{
+  "name": "@reactorfront/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Canonical cross-service contracts for ReactorFront Portfolio",
+  "license": "MIT",
+  "types": "generated/api.d.ts",
+  "files": [
+    "events",
+    "generated",
+    "openapi"
+  ]
+}

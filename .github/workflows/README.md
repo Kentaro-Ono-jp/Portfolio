@@ -3,7 +3,11 @@
 GitHub Actions will be the authoritative build and runtime verification
 environment for this portfolio.
 
-No workflow exists yet because there are no executable services or checks.
-The accepted first-slice specification requires `.github/workflows/verify.yml`
-to build the Compose project, wait for readiness, run `scripts/verify.py`,
-capture useful failure evidence, and clean up its ephemeral resources.
+`verify.yml` runs the repository-owned `scripts/verify.py` entrypoint on pull
+requests, `main`, and manual dispatch. Its first increment proves the canonical
+contracts, generated types, documentation links, and Compose definition from a
+clean GitHub-hosted runner.
+
+The workflow will expand through later focused changes to build the Compose
+project, wait for readiness, verify the business flow, preserve failure
+evidence, and clean up only its ephemeral project resources.
