@@ -143,36 +143,37 @@ class SqlAlchemySubmissionRepository:
 
     def save(self, submission: DocumentSubmission) -> None:
         with Session(self._engine) as session, session.begin():
-            session.add(
-                DocumentRow(
-                    id=submission.document_id,
-                    original_filename=submission.original_filename,
-                    object_key=submission.object_key,
-                    sha256=submission.sha256,
-                    content_type=submission.content_type,
-                    size_bytes=submission.size_bytes,
-                    created_at=submission.occurred_at,
-                )
+            document = DocumentRow(
+                id=submission.document_id,
+                original_filename=submission.original_filename,
+                object_key=submission.object_key,
+                sha256=submission.sha256,
+                content_type=submission.content_type,
+                size_bytes=submission.size_bytes,
+                created_at=submission.occurred_at,
             )
-            session.add(
-                ProcessingJobRow(
-                    id=submission.job_id,
-                    document_id=submission.document_id,
-                    status=ProcessingStatus.ACCEPTED.value,
-                    attempt_count=0,
-                    created_at=submission.occurred_at,
-                )
+            session.add(document)
+            session.flush()
+
+            job = ProcessingJobRow(
+                id=submission.job_id,
+                document_id=submission.document_id,
+                status=ProcessingStatus.ACCEPTED.value,
+                attempt_count=0,
+                created_at=submission.occurred_at,
             )
-            session.add(
-                OutboxEventRow(
-                    event_id=submission.event_id,
-                    event_type=submission.event_payload["eventType"],
-                    aggregate_id=submission.job_id,
-                    payload=submission.event_payload,
-                    created_at=submission.occurred_at,
-                    attempt_count=0,
-                )
+            session.add(job)
+            session.flush()
+
+            outbox_event = OutboxEventRow(
+                event_id=submission.event_id,
+                event_type=submission.event_payload["eventType"],
+                aggregate_id=submission.job_id,
+                payload=submission.event_payload,
+                created_at=submission.occurred_at,
+                attempt_count=0,
             )
+            session.add(outbox_event)
 
     def get_status(self, document_id: UUID) -> DocumentStatusRecord | None:
         statement = (
