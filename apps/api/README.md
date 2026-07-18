@@ -31,8 +31,10 @@ event.
 The API writes the source object first, then inserts the document, accepted job,
 and requested outbox event in one database transaction. A confirmed uncommitted
 transaction triggers a best-effort object deletion. If the commit response is
-lost, the repository checks all three persisted identities through a fresh
-connection and retains the source whenever the outcome cannot be reconciled.
+lost, the repository observes all three persisted identities through a fresh
+connection. Only a complete matching observation upgrades the request to
+accepted; an immediate absence is not treated as rollback proof, so the source
+is retained whenever the outcome remains unknown.
 The submitted filename is display-only; the server creates the object key and
 persists a SHA-256 digest.
 

@@ -181,6 +181,12 @@ export interface components {
             /** Format: uuid */
             correlationId: string;
         };
+        InvalidRequestProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 422;
+            /** @constant */
+            code: "INVALID_REQUEST";
+        };
         InvalidDocumentProblem: components["schemas"]["Problem"] & {
             /** @constant */
             status: 400;
@@ -213,6 +219,16 @@ export interface components {
         };
     };
     responses: {
+        /** @description A path, header, or request-body value violates the API contract. */
+        InvalidRequest: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["InvalidRequestProblem"];
+            };
+        };
         /** @description The submitted file is not a supported PDF. */
         InvalidDocument: {
             headers: {
@@ -311,6 +327,7 @@ export interface operations {
             400: components["responses"]["InvalidDocument"];
             413: components["responses"]["DocumentTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["InvalidRequest"];
             503: components["responses"]["DependencyUnavailable"];
         };
     };
@@ -340,6 +357,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["DocumentNotFound"];
+            422: components["responses"]["InvalidRequest"];
             503: components["responses"]["DependencyUnavailable"];
         };
     };

@@ -15,20 +15,25 @@ class ProcessingStatus(StrEnum):
     FAILED = "failed"
 
 
-class SubmissionCommitState(StrEnum):
-    COMMITTED = "committed"
+class SubmissionCommitOutcome(StrEnum):
     NOT_COMMITTED = "not_committed"
     UNKNOWN = "unknown"
+
+
+class SubmissionCommitObservation(StrEnum):
+    COMMITTED = "committed"
+    ABSENT = "absent"
     INCONSISTENT = "inconsistent"
 
 
 class SubmissionPersistenceError(Exception):
-    def __init__(self, *, commit_state: SubmissionCommitState) -> None:
-        super().__init__(f"Submission persistence failed with state {commit_state.value}")
-        self.commit_state = commit_state
+    def __init__(self, *, commit_outcome: SubmissionCommitOutcome) -> None:
+        super().__init__(f"Submission persistence failed with outcome {commit_outcome.value}")
+        self.commit_outcome = commit_outcome
 
 
 class ProblemCode(StrEnum):
+    INVALID_REQUEST = "INVALID_REQUEST"
     INVALID_DOCUMENT = "INVALID_DOCUMENT"
     DOCUMENT_TOO_LARGE = "DOCUMENT_TOO_LARGE"
     UNSUPPORTED_MEDIA_TYPE = "UNSUPPORTED_MEDIA_TYPE"
@@ -117,9 +122,9 @@ class ObjectStorage(Protocol):
 class SubmissionRepository(Protocol):
     def save(self, submission: DocumentSubmission) -> None: ...
 
-    def get_submission_commit_state(
+    def observe_submission_commit(
         self, submission: DocumentSubmission
-    ) -> SubmissionCommitState: ...
+    ) -> SubmissionCommitObservation: ...
 
     def get_status(self, document_id: UUID) -> DocumentStatusRecord | None: ...
 

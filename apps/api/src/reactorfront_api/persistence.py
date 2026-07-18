@@ -28,7 +28,8 @@ from reactorfront_api.domain import (
     DocumentStatusRecord,
     DocumentSubmission,
     ProcessingStatus,
-    SubmissionCommitState,
+    SubmissionCommitObservation,
+    SubmissionCommitOutcome,
     SubmissionPersistenceError,
 )
 
@@ -182,26 +183,28 @@ class SqlAlchemySubmissionRepository:
             except Exception as error:
                 transaction.rollback()
                 raise SubmissionPersistenceError(
-                    commit_state=SubmissionCommitState.NOT_COMMITTED
+                    commit_outcome=SubmissionCommitOutcome.NOT_COMMITTED
                 ) from error
 
             try:
                 transaction.commit()
             except Exception as error:
                 raise SubmissionPersistenceError(
-                    commit_state=SubmissionCommitState.UNKNOWN
+                    commit_outcome=SubmissionCommitOutcome.UNKNOWN
                 ) from error
 
-    def get_submission_commit_state(self, submission: DocumentSubmission) -> SubmissionCommitState:
+    def observe_submission_commit(
+        self, submission: DocumentSubmission
+    ) -> SubmissionCommitObservation:
         with Session(self._engine) as session:
             document = session.get(DocumentRow, submission.document_id)
             job = session.get(ProcessingJobRow, submission.job_id)
             outbox_event = session.get(OutboxEventRow, submission.event_id)
 
         if document is None and job is None and outbox_event is None:
-            return SubmissionCommitState.NOT_COMMITTED
+            return SubmissionCommitObservation.ABSENT
         if document is None or job is None or outbox_event is None:
-            return SubmissionCommitState.INCONSISTENT
+            return SubmissionCommitObservation.INCONSISTENT
 
         matches_submission = (
             document.object_key == submission.object_key
@@ -214,8 +217,8 @@ class SqlAlchemySubmissionRepository:
             and outbox_event.payload == submission.event_payload
         )
         if matches_submission:
-            return SubmissionCommitState.COMMITTED
-        return SubmissionCommitState.INCONSISTENT
+            return SubmissionCommitObservation.COMMITTED
+        return SubmissionCommitObservation.INCONSISTENT
 
     def get_status(self, document_id: UUID) -> DocumentStatusRecord | None:
         statement = (

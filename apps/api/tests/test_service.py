@@ -12,7 +12,7 @@ from reactorfront_api.domain import (
     ProblemCode,
     ProcessingStatus,
     PublicProblem,
-    SubmissionCommitState,
+    SubmissionCommitObservation,
 )
 from reactorfront_api.service import MAX_DOCUMENT_BYTES, REQUESTED_EVENT_TYPE, DocumentService
 from tests.fakes import FakeRepository, FakeStorage, FakeValidator
@@ -234,10 +234,10 @@ def test_lost_commit_acknowledgement_returns_accepted_without_deleting_source() 
     assert not storage.deleted
 
 
-def test_unresolved_commit_state_retains_source_for_reconciliation() -> None:
+def test_lost_commit_acknowledgement_with_absent_observation_retains_source() -> None:
     repository = FakeRepository(
         commit_acknowledgement_error=ConnectionError("commit acknowledgement lost"),
-        commit_state_override=SubmissionCommitState.INCONSISTENT,
+        commit_observation_override=SubmissionCommitObservation.ABSENT,
     )
     service, _repository, storage, _validator = make_service(repository=repository)
 
@@ -255,10 +255,31 @@ def test_unresolved_commit_state_retains_source_for_reconciliation() -> None:
     assert not storage.deleted
 
 
-def test_failed_commit_state_lookup_retains_source_for_reconciliation() -> None:
+def test_inconsistent_commit_observation_retains_source_for_reconciliation() -> None:
     repository = FakeRepository(
         commit_acknowledgement_error=ConnectionError("commit acknowledgement lost"),
-        commit_state_error=ConnectionError("database still unavailable"),
+        commit_observation_override=SubmissionCommitObservation.INCONSISTENT,
+    )
+    service, _repository, storage, _validator = make_service(repository=repository)
+
+    assert_problem(
+        lambda: service.submit(
+            stream=BytesIO(PDF),
+            original_filename="document.pdf",
+            content_type="application/pdf",
+            correlation_id=CORRELATION_ID,
+        ),
+        status=503,
+        code=ProblemCode.DEPENDENCY_UNAVAILABLE,
+    )
+    assert storage.objects
+    assert not storage.deleted
+
+
+def test_failed_commit_observation_retains_source_for_reconciliation() -> None:
+    repository = FakeRepository(
+        commit_acknowledgement_error=ConnectionError("commit acknowledgement lost"),
+        commit_observation_error=ConnectionError("database still unavailable"),
     )
     service, _repository, storage, _validator = make_service(repository=repository)
 

@@ -75,7 +75,16 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
         ),
         (
             "Type-check API source",
-            [uv, "run", "--project", "apps/api", "mypy", "apps/api/src"],
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/api",
+                "mypy",
+                "--config-file",
+                "apps/api/pyproject.toml",
+                "apps/api/src",
+            ],
         ),
         (
             "Audit the installed pinned Python dependency set",

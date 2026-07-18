@@ -11,7 +11,8 @@ import reactorfront_api.persistence as persistence
 from reactorfront_api.domain import (
     DocumentSubmission,
     ProcessingStatus,
-    SubmissionCommitState,
+    SubmissionCommitObservation,
+    SubmissionCommitOutcome,
     SubmissionPersistenceError,
 )
 from reactorfront_api.persistence import (
@@ -143,7 +144,7 @@ def test_save_marks_flush_failure_as_not_committed(monkeypatch: pytest.MonkeyPat
     with pytest.raises(SubmissionPersistenceError) as captured:
         repository.save(submission())
 
-    assert captured.value.commit_state is SubmissionCommitState.NOT_COMMITTED
+    assert captured.value.commit_outcome is SubmissionCommitOutcome.NOT_COMMITTED
     assert session.transaction.rolled_back
     assert not session.transaction.committed
 
@@ -156,11 +157,11 @@ def test_save_marks_commit_exception_as_unresolved(monkeypatch: pytest.MonkeyPat
     with pytest.raises(SubmissionPersistenceError) as captured:
         repository.save(submission())
 
-    assert captured.value.commit_state is SubmissionCommitState.UNKNOWN
+    assert captured.value.commit_outcome is SubmissionCommitOutcome.UNKNOWN
     assert not transaction.rolled_back
 
 
-def test_commit_state_requires_all_three_matching_rows(
+def test_commit_observation_requires_all_three_matching_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     candidate = submission()
@@ -191,17 +192,21 @@ def test_commit_state_requires_all_three_matching_rows(
     session = FakeSession()
     repository = repository_with_session(monkeypatch, session)
 
-    assert repository.get_submission_commit_state(candidate) is SubmissionCommitState.NOT_COMMITTED
+    assert repository.observe_submission_commit(candidate) is SubmissionCommitObservation.ABSENT
 
     session.rows = {DocumentRow: document}
-    assert repository.get_submission_commit_state(candidate) is SubmissionCommitState.INCONSISTENT
+    assert (
+        repository.observe_submission_commit(candidate) is SubmissionCommitObservation.INCONSISTENT
+    )
 
     session.rows = {
         DocumentRow: document,
         ProcessingJobRow: job,
         OutboxEventRow: outbox,
     }
-    assert repository.get_submission_commit_state(candidate) is SubmissionCommitState.COMMITTED
+    assert repository.observe_submission_commit(candidate) is SubmissionCommitObservation.COMMITTED
 
     outbox.payload = {"unexpected": True}
-    assert repository.get_submission_commit_state(candidate) is SubmissionCommitState.INCONSISTENT
+    assert (
+        repository.observe_submission_commit(candidate) is SubmissionCommitObservation.INCONSISTENT
+    )

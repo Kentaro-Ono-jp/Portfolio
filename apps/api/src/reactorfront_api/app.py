@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from fastapi import FastAPI, File, Header, Request, Response, UploadFile, status
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from reactorfront_api.domain import ProblemCode, ProcessingStatus, PublicProblem
@@ -59,7 +60,7 @@ def public_problem_response(problem: PublicProblem) -> JSONResponse:
         status=problem.status,
         detail=problem.detail,
         code=problem.code.value,
-        correlationId=problem.correlation_id,
+        correlation_id=problem.correlation_id,
     )
     return JSONResponse(
         status_code=problem.status,
@@ -79,6 +80,16 @@ def document_too_large_response(correlation_id: UUID) -> JSONResponse:
             correlation_id=correlation_id,
         )
     )
+
+
+def request_correlation_id(request: Request) -> UUID:
+    candidate = request.headers.get(CORRELATION_HEADER)
+    if candidate is not None:
+        try:
+            return UUID(candidate)
+        except ValueError:
+            pass
+    return uuid4()
 
 
 def create_app(*, service: DocumentService | None = None) -> FastAPI:
@@ -109,6 +120,21 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
     async def handle_public_problem(_request: Request, problem: PublicProblem) -> JSONResponse:
         return public_problem_response(problem)
 
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation_error(
+        request: Request,
+        _error: RequestValidationError,
+    ) -> JSONResponse:
+        return public_problem_response(
+            PublicProblem(
+                status=422,
+                code=ProblemCode.INVALID_REQUEST,
+                title="Invalid request",
+                detail="The request does not satisfy the API contract.",
+                correlation_id=request_correlation_id(request),
+            )
+        )
+
     @app.post(
         DOCUMENT_UPLOAD_PATH,
         response_model=DocumentAcceptedResponse,
@@ -117,6 +143,7 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
             400: {"model": ProblemResponse},
             413: {"model": ProblemResponse},
             415: {"model": ProblemResponse},
+            422: {"model": ProblemResponse},
             503: {"model": ProblemResponse},
         },
     )
@@ -134,8 +161,8 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
         )
         response.headers[CORRELATION_HEADER] = str(request_correlation_id)
         return DocumentAcceptedResponse(
-            documentId=result.document_id,
-            jobId=result.job_id,
+            document_id=result.document_id,
+            job_id=result.job_id,
             status=ProcessingStatus.ACCEPTED,
         )
 
@@ -143,7 +170,11 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
         "/api/v1/documents/{document_id}",
         response_model=DocumentStatusResponse,
         response_model_exclude_none=True,
-        responses={404: {"model": ProblemResponse}, 503: {"model": ProblemResponse}},
+        responses={
+            404: {"model": ProblemResponse},
+            422: {"model": ProblemResponse},
+            503: {"model": ProblemResponse},
+        },
     )
     def get_document(
         document_id: UUID,

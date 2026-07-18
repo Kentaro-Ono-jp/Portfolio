@@ -81,27 +81,27 @@ def serialize_document_status(record: DocumentStatusRecord) -> DocumentStatusRes
     match record.status:
         case ProcessingStatus.ACCEPTED:
             return AcceptedDocumentStatusResponse(
-                documentId=record.document_id,
-                jobId=record.job_id,
-                createdAt=record.created_at,
+                document_id=record.document_id,
+                job_id=record.job_id,
+                created_at=record.created_at,
                 status=ProcessingStatus.ACCEPTED,
             )
         case ProcessingStatus.QUEUED:
             return QueuedDocumentStatusResponse(
-                documentId=record.document_id,
-                jobId=record.job_id,
-                createdAt=record.created_at,
+                document_id=record.document_id,
+                job_id=record.job_id,
+                created_at=record.created_at,
                 status=ProcessingStatus.QUEUED,
             )
         case ProcessingStatus.PROCESSING:
             if record.started_at is None:
                 raise ValueError("A processing job must have started_at")
             return ProcessingDocumentStatusResponse(
-                documentId=record.document_id,
-                jobId=record.job_id,
-                createdAt=record.created_at,
+                document_id=record.document_id,
+                job_id=record.job_id,
+                created_at=record.created_at,
                 status=ProcessingStatus.PROCESSING,
-                startedAt=record.started_at,
+                started_at=record.started_at,
             )
         case ProcessingStatus.COMPLETED:
             if (
@@ -115,25 +115,25 @@ def serialize_document_status(record: DocumentStatusRecord) -> DocumentStatusRes
                 raise ValueError("A completed job must have a complete result")
             classification = cast(Literal["invoice", "report"], record.predicted_class)
             return CompletedDocumentStatusResponse(
-                documentId=record.document_id,
-                jobId=record.job_id,
-                createdAt=record.created_at,
+                document_id=record.document_id,
+                job_id=record.job_id,
+                created_at=record.created_at,
                 status=ProcessingStatus.COMPLETED,
                 classification=classification,
                 confidence=record.confidence,
-                modelVersion=record.model_version,
-                startedAt=record.started_at,
-                completedAt=record.completed_at,
+                model_version=record.model_version,
+                started_at=record.started_at,
+                completed_at=record.completed_at,
             )
         case ProcessingStatus.FAILED:
             if record.completed_at is None or record.failure_code is None:
                 raise ValueError("A failed job must have completion data")
             return FailedDocumentStatusResponse(
-                documentId=record.document_id,
-                jobId=record.job_id,
-                createdAt=record.created_at,
+                document_id=record.document_id,
+                job_id=record.job_id,
+                created_at=record.created_at,
                 status=ProcessingStatus.FAILED,
-                failureCode=record.failure_code,
-                startedAt=record.started_at,
-                completedAt=record.completed_at,
+                failure_code=record.failure_code,
+                started_at=record.started_at,
+                completed_at=record.completed_at,
             )

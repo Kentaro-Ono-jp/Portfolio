@@ -16,7 +16,8 @@ from reactorfront_api.domain import (
     ProblemCode,
     ProcessingStatus,
     PublicProblem,
-    SubmissionCommitState,
+    SubmissionCommitObservation,
+    SubmissionCommitOutcome,
     SubmissionPersistenceError,
     SubmissionRepository,
     SubmissionResult,
@@ -127,13 +128,16 @@ class DocumentService:
                 "Submission transaction failed",
                 extra={"correlation_id": str(correlation_id), "document_id": str(document_id)},
             )
-            commit_state = error.commit_state
-            if commit_state is SubmissionCommitState.UNKNOWN:
-                commit_state = self._resolve_commit_state(
+            commit_outcome = error.commit_outcome
+            if commit_outcome is SubmissionCommitOutcome.NOT_COMMITTED:
+                self._compensate_object(object_key=object_key, correlation_id=correlation_id)
+            elif (
+                self._resolve_commit_observation(
                     submission=submission,
                     correlation_id=correlation_id,
                 )
-            if commit_state is SubmissionCommitState.COMMITTED:
+                is SubmissionCommitObservation.COMMITTED
+            ):
                 LOGGER.warning(
                     "Submission commit succeeded but its acknowledgement was lost",
                     extra={
@@ -143,11 +147,9 @@ class DocumentService:
                     },
                 )
                 return self._submission_result(document_id=document_id, job_id=job_id)
-            if commit_state is SubmissionCommitState.NOT_COMMITTED:
-                self._compensate_object(object_key=object_key, correlation_id=correlation_id)
             else:
                 LOGGER.error(
-                    "Source object retained because submission commit state is unresolved",
+                    "Source object retained because submission commit outcome is unknown",
                     extra={
                         "correlation_id": str(correlation_id),
                         "document_id": str(document_id),
@@ -237,24 +239,24 @@ class DocumentService:
                 extra={"correlation_id": str(correlation_id), "object_key": object_key},
             )
 
-    def _resolve_commit_state(
+    def _resolve_commit_observation(
         self,
         *,
         submission: DocumentSubmission,
         correlation_id: UUID,
-    ) -> SubmissionCommitState:
+    ) -> SubmissionCommitObservation | None:
         try:
-            return self._repository.get_submission_commit_state(submission)
+            return self._repository.observe_submission_commit(submission)
         except Exception:
             LOGGER.exception(
-                "Submission commit state could not be reconciled",
+                "Submission commit outcome could not be observed",
                 extra={
                     "correlation_id": str(correlation_id),
                     "document_id": str(submission.document_id),
                     "job_id": str(submission.job_id),
                 },
             )
-            return SubmissionCommitState.UNKNOWN
+            return None
 
     @staticmethod
     def _dependency_problem(correlation_id: UUID) -> PublicProblem:

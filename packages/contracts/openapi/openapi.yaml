@@ -58,6 +58,8 @@ paths:
           $ref: '#/components/responses/DocumentTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
         '503':
           $ref: '#/components/responses/DependencyUnavailable'
   /api/v1/documents/{documentId}:
@@ -81,6 +83,8 @@ paths:
                 $ref: '#/components/schemas/DocumentStatus'
         '404':
           $ref: '#/components/responses/DocumentNotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
         '503':
           $ref: '#/components/responses/DependencyUnavailable'
   /health:
@@ -136,6 +140,15 @@ components:
         type: string
         format: uuid
   responses:
+    InvalidRequest:
+      description: A path, header, or request-body value violates the API contract.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/InvalidRequestProblem'
     InvalidDocument:
       description: The submitted file is not a supported PDF.
       headers:
@@ -396,6 +409,22 @@ components:
         correlationId:
           type: string
           format: uuid
+    InvalidRequestProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 422
+            code:
+              type: string
+              const: INVALID_REQUEST
+      unevaluatedProperties: false
     InvalidDocumentProblem:
       type: object
       allOf:

@@ -130,6 +130,50 @@ def test_invalid_document_and_unknown_document_match_contract() -> None:
     assert missing.json()["status"] == 404
 
 
+def test_request_validation_problems_match_contract_and_skip_service() -> None:
+    client, repository, storage = make_client()
+
+    with client:
+        missing_file = client.post(
+            "/api/v1/documents",
+            data={"unexpected": "value"},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        invalid_header = client.post(
+            "/api/v1/documents",
+            files={"file": ("invoice.pdf", b"%PDF-1.7\ntest", "application/pdf")},
+            headers={CORRELATION_HEADER: "not-a-uuid"},
+        )
+        invalid_path = client.get(
+            "/api/v1/documents/not-a-uuid",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+
+    contracts = [
+        (missing_file, "/api/v1/documents", "post"),
+        (invalid_header, "/api/v1/documents", "post"),
+        (invalid_path, "/api/v1/documents/{documentId}", "get"),
+    ]
+    for response, path, method in contracts:
+        assert response.status_code == 422
+        assert_openapi_response(response, path=path, method=method)
+        assert response.headers["content-type"].startswith("application/problem+json")
+        problem = response.json()
+        assert problem["type"] == "urn:reactorfront:problem:invalid-request"
+        assert problem["title"] == "Invalid request"
+        assert problem["status"] == 422
+        assert problem["detail"] == "The request does not satisfy the API contract."
+        assert problem["code"] == "INVALID_REQUEST"
+        assert response.headers[CORRELATION_HEADER] == problem["correlationId"]
+
+    assert missing_file.headers[CORRELATION_HEADER] == str(CORRELATION_ID)
+    assert UUID(invalid_header.headers[CORRELATION_HEADER])
+    assert invalid_header.headers[CORRELATION_HEADER] != "not-a-uuid"
+    assert invalid_path.headers[CORRELATION_HEADER] == str(CORRELATION_ID)
+    assert not repository.submissions
+    assert not storage.objects
+
+
 def test_health_and_readiness_distinguish_process_from_dependencies() -> None:
     storage = FakeStorage(ready=False)
     client, _repository, _storage = make_client(storage=storage)

@@ -42,6 +42,21 @@ def configure_runtime_verification(
     monkeypatch.setattr(verifier, "show_runtime_diagnostics", lambda _docker: None)
 
 
+def test_static_checks_load_the_api_mypy_configuration(verifier: ModuleType) -> None:
+    checks = dict(verifier.static_checks(pnpm="pnpm", uv="uv", docker="docker"))
+
+    assert checks["Type-check API source"] == [
+        "uv",
+        "run",
+        "--project",
+        "apps/api",
+        "mypy",
+        "--config-file",
+        "apps/api/pyproject.toml",
+        "apps/api/src",
+    ]
+
+
 def test_verifier_returns_success_only_when_checks_and_cleanup_succeed(
     verifier: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
