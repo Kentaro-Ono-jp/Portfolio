@@ -12,6 +12,10 @@ from fastapi.responses import JSONResponse
 from reactorfront_api.domain import ProblemCode, ProcessingStatus, PublicProblem
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
 from reactorfront_api.persistence import SqlAlchemySubmissionRepository, create_database_engine
+from reactorfront_api.request_limits import (
+    MULTIPART_ENVELOPE_BYTES,
+    UploadRequestBodyLimitMiddleware,
+)
 from reactorfront_api.schemas import (
     DocumentAcceptedResponse,
     DocumentStatusResponse,
@@ -19,11 +23,12 @@ from reactorfront_api.schemas import (
     ProblemResponse,
     serialize_document_status,
 )
-from reactorfront_api.service import DocumentService
+from reactorfront_api.service import MAX_DOCUMENT_BYTES, DocumentService
 from reactorfront_api.settings import Settings, get_settings
 from reactorfront_api.storage import S3ObjectStorage
 
 CORRELATION_HEADER = "X-Correlation-ID"
+DOCUMENT_UPLOAD_PATH = "/api/v1/documents"
 PdfUpload = Annotated[UploadFile, File()]
 CorrelationIdHeader = Annotated[UUID | None, Header(alias=CORRELATION_HEADER)]
 
@@ -47,6 +52,35 @@ def build_document_service(settings: Settings) -> DocumentService:
     )
 
 
+def public_problem_response(problem: PublicProblem) -> JSONResponse:
+    body = ProblemResponse(
+        type=problem.type_uri,
+        title=problem.title,
+        status=problem.status,
+        detail=problem.detail,
+        code=problem.code.value,
+        correlationId=problem.correlation_id,
+    )
+    return JSONResponse(
+        status_code=problem.status,
+        content=jsonable_encoder(body, by_alias=True),
+        media_type="application/problem+json",
+        headers={CORRELATION_HEADER: str(problem.correlation_id)},
+    )
+
+
+def document_too_large_response(correlation_id: UUID) -> JSONResponse:
+    return public_problem_response(
+        PublicProblem(
+            status=413,
+            code=ProblemCode.DOCUMENT_TOO_LARGE,
+            title="Document too large",
+            detail="The uploaded file exceeds the 5 MiB limit.",
+            correlation_id=correlation_id,
+        )
+    )
+
+
 def create_app(*, service: DocumentService | None = None) -> FastAPI:
     owns_service = service is None
 
@@ -64,26 +98,19 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.add_middleware(
+        UploadRequestBodyLimitMiddleware,
+        path=DOCUMENT_UPLOAD_PATH,
+        max_body_bytes=MAX_DOCUMENT_BYTES + MULTIPART_ENVELOPE_BYTES,
+        response_factory=document_too_large_response,
+    )
 
     @app.exception_handler(PublicProblem)
     async def handle_public_problem(_request: Request, problem: PublicProblem) -> JSONResponse:
-        body = ProblemResponse(
-            type=problem.type_uri,
-            title=problem.title,
-            status=problem.status,
-            detail=problem.detail,
-            code=problem.code.value,
-            correlationId=problem.correlation_id,
-        )
-        return JSONResponse(
-            status_code=problem.status,
-            content=jsonable_encoder(body, by_alias=True),
-            media_type="application/problem+json",
-            headers={CORRELATION_HEADER: str(problem.correlation_id)},
-        )
+        return public_problem_response(problem)
 
     @app.post(
-        "/api/v1/documents",
+        DOCUMENT_UPLOAD_PATH,
         response_model=DocumentAcceptedResponse,
         status_code=status.HTTP_202_ACCEPTED,
         responses={
@@ -115,6 +142,7 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
     @app.get(
         "/api/v1/documents/{document_id}",
         response_model=DocumentStatusResponse,
+        response_model_exclude_none=True,
         responses={404: {"model": ProblemResponse}, 503: {"model": ProblemResponse}},
     )
     def get_document(

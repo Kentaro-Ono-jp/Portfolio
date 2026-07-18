@@ -29,9 +29,12 @@ event.
 - pytest, Ruff, strict mypy, pip-audit, and branch-aware coverage
 
 The API writes the source object first, then inserts the document, accepted job,
-and requested outbox event in one database transaction. A failed transaction
-triggers a best-effort object deletion. The submitted filename is display-only;
-the server creates the object key and persists a SHA-256 digest.
+and requested outbox event in one database transaction. A confirmed uncommitted
+transaction triggers a best-effort object deletion. If the commit response is
+lost, the repository checks all three persisted identities through a fresh
+connection and retains the source whenever the outcome cannot be reconciled.
+The submitted filename is display-only; the server creates the object key and
+persists a SHA-256 digest.
 
 The outbox dispatcher, RabbitMQ consumers, Celery worker, and ML result updates
 are deliberately outside this focused increment.
@@ -60,8 +63,8 @@ examples and are overridden inside Compose.
 | `PORTFOLIO_S3_BUCKET` | `portfolio-documents` |
 | `PORTFOLIO_S3_REGION` | `us-east-1` |
 
-These values are development-only and grant no access outside the isolated
-Compose project.
+These values are development-only. Required host ports bind to `127.0.0.1`,
+and the MinIO administration console is not published to the host.
 
 ## Verification
 

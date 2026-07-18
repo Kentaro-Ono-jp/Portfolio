@@ -28,6 +28,8 @@ from reactorfront_api.domain import (
     DocumentStatusRecord,
     DocumentSubmission,
     ProcessingStatus,
+    SubmissionCommitState,
+    SubmissionPersistenceError,
 )
 
 
@@ -142,38 +144,76 @@ class SqlAlchemySubmissionRepository:
         self._engine = engine
 
     def save(self, submission: DocumentSubmission) -> None:
-        with Session(self._engine) as session, session.begin():
-            document = DocumentRow(
-                id=submission.document_id,
-                original_filename=submission.original_filename,
-                object_key=submission.object_key,
-                sha256=submission.sha256,
-                content_type=submission.content_type,
-                size_bytes=submission.size_bytes,
-                created_at=submission.occurred_at,
-            )
-            session.add(document)
-            session.flush()
+        with Session(self._engine) as session:
+            transaction = session.begin()
+            try:
+                document = DocumentRow(
+                    id=submission.document_id,
+                    original_filename=submission.original_filename,
+                    object_key=submission.object_key,
+                    sha256=submission.sha256,
+                    content_type=submission.content_type,
+                    size_bytes=submission.size_bytes,
+                    created_at=submission.occurred_at,
+                )
+                session.add(document)
 
-            job = ProcessingJobRow(
-                id=submission.job_id,
-                document_id=submission.document_id,
-                status=ProcessingStatus.ACCEPTED.value,
-                attempt_count=0,
-                created_at=submission.occurred_at,
-            )
-            session.add(job)
-            session.flush()
+                job = ProcessingJobRow(
+                    id=submission.job_id,
+                    document_id=submission.document_id,
+                    status=ProcessingStatus.ACCEPTED.value,
+                    attempt_count=0,
+                    created_at=submission.occurred_at,
+                )
+                session.add(job)
 
-            outbox_event = OutboxEventRow(
-                event_id=submission.event_id,
-                event_type=submission.event_payload["eventType"],
-                aggregate_id=submission.job_id,
-                payload=submission.event_payload,
-                created_at=submission.occurred_at,
-                attempt_count=0,
-            )
-            session.add(outbox_event)
+                outbox_event = OutboxEventRow(
+                    event_id=submission.event_id,
+                    event_type=submission.event_payload["eventType"],
+                    aggregate_id=submission.job_id,
+                    payload=submission.event_payload,
+                    created_at=submission.occurred_at,
+                    attempt_count=0,
+                )
+                session.add(outbox_event)
+                session.flush()
+            except Exception as error:
+                transaction.rollback()
+                raise SubmissionPersistenceError(
+                    commit_state=SubmissionCommitState.NOT_COMMITTED
+                ) from error
+
+            try:
+                transaction.commit()
+            except Exception as error:
+                raise SubmissionPersistenceError(
+                    commit_state=SubmissionCommitState.UNKNOWN
+                ) from error
+
+    def get_submission_commit_state(self, submission: DocumentSubmission) -> SubmissionCommitState:
+        with Session(self._engine) as session:
+            document = session.get(DocumentRow, submission.document_id)
+            job = session.get(ProcessingJobRow, submission.job_id)
+            outbox_event = session.get(OutboxEventRow, submission.event_id)
+
+        if document is None and job is None and outbox_event is None:
+            return SubmissionCommitState.NOT_COMMITTED
+        if document is None or job is None or outbox_event is None:
+            return SubmissionCommitState.INCONSISTENT
+
+        matches_submission = (
+            document.object_key == submission.object_key
+            and document.sha256 == submission.sha256
+            and document.size_bytes == submission.size_bytes
+            and job.document_id == submission.document_id
+            and job.status == ProcessingStatus.ACCEPTED.value
+            and outbox_event.aggregate_id == submission.job_id
+            and outbox_event.event_type == submission.event_payload["eventType"]
+            and outbox_event.payload == submission.event_payload
+        )
+        if matches_submission:
+            return SubmissionCommitState.COMMITTED
+        return SubmissionCommitState.INCONSISTENT
 
     def get_status(self, document_id: UUID) -> DocumentStatusRecord | None:
         statement = (

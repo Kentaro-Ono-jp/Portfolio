@@ -20,7 +20,8 @@ The default path validates repository structure and then starts only the
 `reactorfront-portfolio` Compose project for migration, API-image, PostgreSQL,
 and S3-compatible integration checks. It stops that project afterward. GitHub
 Actions also removes the two project-scoped test volumes; local execution
-preserves them.
+preserves them. A failed teardown makes verification fail, and the workflow has
+an unconditional project-scoped teardown step as a final safety net.
 
 Use the non-container path when Docker is intentionally unavailable:
 

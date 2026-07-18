@@ -54,3 +54,9 @@ jobs:
 
       - name: Run canonical verification
         run: python scripts/verify.py
+
+      - name: Tear down the isolated Compose project
+        if: always()
+        run: >-
+          docker compose -p reactorfront-portfolio down
+          --remove-orphans --volumes

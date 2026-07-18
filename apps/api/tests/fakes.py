@@ -7,6 +7,8 @@ from reactorfront_api.domain import (
     DocumentStatusRecord,
     DocumentSubmission,
     ProcessingStatus,
+    SubmissionCommitState,
+    SubmissionPersistenceError,
 )
 
 
@@ -16,12 +18,17 @@ class FakeRepository:
     records: dict[UUID, DocumentStatusRecord] = field(default_factory=dict)
     ready: bool = True
     save_error: Exception | None = None
+    commit_acknowledgement_error: Exception | None = None
+    commit_state_error: Exception | None = None
+    commit_state_override: SubmissionCommitState | None = None
     get_error: Exception | None = None
     closed: bool = False
 
     def save(self, submission: DocumentSubmission) -> None:
         if self.save_error is not None:
-            raise self.save_error
+            raise SubmissionPersistenceError(
+                commit_state=SubmissionCommitState.NOT_COMMITTED
+            ) from self.save_error
         self.submissions.append(submission)
         self.records[submission.document_id] = DocumentStatusRecord(
             document_id=submission.document_id,
@@ -29,6 +36,19 @@ class FakeRepository:
             status=ProcessingStatus.ACCEPTED,
             created_at=submission.occurred_at,
         )
+        if self.commit_acknowledgement_error is not None:
+            raise SubmissionPersistenceError(
+                commit_state=SubmissionCommitState.UNKNOWN
+            ) from self.commit_acknowledgement_error
+
+    def get_submission_commit_state(self, submission: DocumentSubmission) -> SubmissionCommitState:
+        if self.commit_state_error is not None:
+            raise self.commit_state_error
+        if self.commit_state_override is not None:
+            return self.commit_state_override
+        if submission in self.submissions and submission.document_id in self.records:
+            return SubmissionCommitState.COMMITTED
+        return SubmissionCommitState.NOT_COMMITTED
 
     def get_status(self, document_id: UUID) -> DocumentStatusRecord | None:
         if self.get_error is not None:

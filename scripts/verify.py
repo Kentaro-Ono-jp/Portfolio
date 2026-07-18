@@ -19,9 +19,11 @@ def require_command(command: str) -> str:
     return resolved
 
 
-def run(label: str, command: list[str], *, check: bool = True) -> None:
+def run(
+    label: str, command: list[str], *, check: bool = True
+) -> subprocess.CompletedProcess[bytes]:
     print(f"\n==> {label}", flush=True)
-    subprocess.run(command, cwd=REPOSITORY_ROOT, check=check)
+    return subprocess.run(command, cwd=REPOSITORY_ROOT, check=check)
 
 
 def compose_command(docker: str, *arguments: str) -> list[str]:
@@ -186,7 +188,7 @@ def cleanup_runtime(docker: str) -> None:
     arguments = ["down", "--remove-orphans"]
     if remove_volumes:
         arguments.append("--volumes")
-    run("Stop the isolated runtime", compose_command(docker, *arguments), check=False)
+    run("Stop the isolated runtime", compose_command(docker, *arguments))
 
 
 def parse_args() -> argparse.Namespace:
@@ -204,6 +206,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     runtime_started = False
+    verification_error: RuntimeError | subprocess.CalledProcessError | None = None
+    cleanup_error: subprocess.CalledProcessError | None = None
     try:
         pnpm = require_command("pnpm")
         uv = require_command("uv")
@@ -219,12 +223,19 @@ def main() -> int:
             run_runtime_checks(uv=uv, docker=docker)
     except (RuntimeError, subprocess.CalledProcessError) as error:
         print(f"\nVerification failed: {error}", file=sys.stderr)
+        verification_error = error
         if runtime_started:
             show_runtime_diagnostics(docker)
-        return 1
     finally:
         if runtime_started:
-            cleanup_runtime(docker)
+            try:
+                cleanup_runtime(docker)
+            except subprocess.CalledProcessError as error:
+                cleanup_error = error
+                print(f"\nRuntime cleanup failed: {error}", file=sys.stderr)
+
+    if verification_error is not None or cleanup_error is not None:
+        return 1
 
     print("\nVerification passed.")
     return 0

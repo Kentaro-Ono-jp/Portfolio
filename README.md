@@ -105,9 +105,10 @@ uv run --project apps/api python scripts/prepare_integration.py
 docker compose -p reactorfront-portfolio up --detach --build --wait api
 ```
 
-The API is available at `http://localhost:58000`; MinIO's development console
-is available at `http://localhost:59001`. Host ports can be changed with the
-safe examples in [`.env.example`](.env.example).
+The API is available at `http://127.0.0.1:58000`. Required development ports
+bind only to loopback and can be changed with the safe examples in
+[`.env.example`](.env.example). The MinIO console is intentionally not
+published to the host.
 
 Submit a PDF of at most 5 MiB:
 

@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: portfolio
       POSTGRES_PASSWORD: portfolio-local-password
     ports:
-      - "${PORTFOLIO_POSTGRES_PORT:-55432}:5432"
+      - "127.0.0.1:${PORTFOLIO_POSTGRES_PORT:-55432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U portfolio -d portfolio"]
       interval: 2s
@@ -28,8 +28,7 @@ services:
       MINIO_ROOT_PASSWORD: portfolio-local-secret
     command: ["server", "/data", "--console-address", ":9001"]
     ports:
-      - "${PORTFOLIO_MINIO_PORT:-59000}:9000"
-      - "${PORTFOLIO_MINIO_CONSOLE_PORT:-59001}:9001"
+      - "127.0.0.1:${PORTFOLIO_MINIO_PORT:-59000}:9000"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:9000/minio/health/live"]
       interval: 2s
@@ -58,7 +57,7 @@ services:
         alembic -c /workspace/apps/api/alembic.ini upgrade head &&
         uvicorn reactorfront_api.main:app --host 0.0.0.0 --port 8000
     ports:
-      - "${PORTFOLIO_API_PORT:-58000}:8000"
+      - "127.0.0.1:${PORTFOLIO_API_PORT:-58000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
