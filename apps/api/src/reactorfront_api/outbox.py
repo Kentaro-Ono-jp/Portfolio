@@ -108,6 +108,7 @@ class OutboxDispatcher:
             result = self._repository.mark_published(
                 event_id=lease.event_id,
                 lease_owner=lease.lease_owner,
+                attempt_count=lease.attempt_count,
             )
         except OutboxInvariantError:
             self._schedule_retry(lease=lease, code=PublishFailureCode.INVARIANT_VIOLATION)
@@ -137,6 +138,7 @@ class OutboxDispatcher:
             recorded = self._repository.record_failure(
                 event_id=lease.event_id,
                 lease_owner=lease.lease_owner,
+                attempt_count=lease.attempt_count,
                 code=code,
                 retry_delay=delay,
             )

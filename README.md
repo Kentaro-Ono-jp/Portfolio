@@ -129,10 +129,11 @@ through focused, reviewable pull requests.
 The contract and API-owned document-submission foundations are merged. The
 current focused increment implements the API-owned transactional outbox
 dispatcher and RabbitMQ publication boundary: safe PostgreSQL leases,
-persistent Celery-compatible requested-task messages, publisher confirms,
-at-least-once retry, atomic `accepted` to `queued` state progression, restart
-recovery, and real-service CI evidence. ML processing, the API result consumer,
-and the web application remain later increments.
+attempt fencing, persistent Celery-compatible requested-task messages,
+time-bounded publisher confirms, at-least-once retry, atomic `accepted` to
+`queued` state progression, restart recovery, and real-service CI evidence. ML
+processing, the API result consumer, and the web application remain later
+increments.
 
 ## License
 

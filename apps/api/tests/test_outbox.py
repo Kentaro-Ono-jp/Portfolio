@@ -52,8 +52,10 @@ class FakeOutboxRepository:
     failure_error: Exception | None = None
     ready: bool = True
     leased_requests: list[tuple[str, timedelta, int]] = field(default_factory=list)
-    finalized: list[tuple[UUID, str]] = field(default_factory=list)
-    failures: list[tuple[UUID, str, PublishFailureCode, timedelta]] = field(default_factory=list)
+    finalized: list[tuple[UUID, str, int]] = field(default_factory=list)
+    failures: list[tuple[UUID, str, int, PublishFailureCode, timedelta]] = field(
+        default_factory=list
+    )
     closed: bool = False
 
     def lease_pending(
@@ -75,8 +77,9 @@ class FakeOutboxRepository:
         *,
         event_id: UUID,
         lease_owner: str,
+        attempt_count: int,
     ) -> PublishFinalizeResult:
-        self.finalized.append((event_id, lease_owner))
+        self.finalized.append((event_id, lease_owner, attempt_count))
         if self.finalize_error is not None:
             raise self.finalize_error
         return self.finalize_result
@@ -86,12 +89,13 @@ class FakeOutboxRepository:
         *,
         event_id: UUID,
         lease_owner: str,
+        attempt_count: int,
         code: PublishFailureCode,
         retry_delay: timedelta,
     ) -> bool:
         if self.failure_error is not None:
             raise self.failure_error
-        self.failures.append((event_id, lease_owner, code, retry_delay))
+        self.failures.append((event_id, lease_owner, attempt_count, code, retry_delay))
         return True
 
     def is_ready(self) -> bool:
@@ -148,7 +152,7 @@ def test_idle_and_confirmed_dispatch() -> None:
     repository.leases.append(lease)
     assert subject.dispatch_once() is DispatchCycleResult.DISPATCHED
     assert publisher.published == [lease]
-    assert repository.finalized == [(EVENT_ID, "dispatcher-a")]
+    assert repository.finalized == [(EVENT_ID, "dispatcher-a", 1)]
     assert not repository.failures
     assert repository.leased_requests[0] == (
         "dispatcher-a",
@@ -179,7 +183,9 @@ def test_publish_failure_schedules_sanitized_retry(
     with caplog.at_level(logging.WARNING):
         assert subject.dispatch_once() is DispatchCycleResult.RETRY_SCHEDULED
 
-    assert repository.failures == [(EVENT_ID, "dispatcher-a", expected_code, timedelta(seconds=4))]
+    assert repository.failures == [
+        (EVENT_ID, "dispatcher-a", 3, expected_code, timedelta(seconds=4))
+    ]
     assert "private broker detail" not in caplog.text
     assert expected_code.value in caplog.text
 
@@ -200,7 +206,7 @@ def test_post_confirm_failure_allows_at_least_once_retry(
 
     assert dispatcher(repository, publisher).dispatch_once() is DispatchCycleResult.RETRY_SCHEDULED
     assert publisher.published[0].event_id == EVENT_ID
-    assert repository.failures[0][2] is expected_code
+    assert repository.failures[0][3] is expected_code
 
 
 def test_lease_loss_after_confirm_is_not_overwritten() -> None:

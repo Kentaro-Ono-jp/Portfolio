@@ -2,15 +2,25 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import signal
 import socket
 from datetime import timedelta
 from threading import Event
+from uuid import uuid4
 
 from reactorfront_api.outbox import DispatcherPolicy, OutboxDispatcher
 from reactorfront_api.persistence import SqlAlchemyOutboxRepository, create_database_engine
 from reactorfront_api.rabbitmq import PikaOutboxPublisher
 from reactorfront_api.settings import Settings, get_settings
+
+MAX_LEASE_OWNER_LENGTH = 255
+
+
+def default_lease_owner() -> str:
+    suffix = f":{os.getpid()}:{uuid4().hex}"
+    hostname = socket.gethostname()
+    return f"{hostname[: MAX_LEASE_OWNER_LENGTH - len(suffix)]}{suffix}"
 
 
 def build_dispatcher(settings: Settings, *, lease_owner: str | None = None) -> OutboxDispatcher:
@@ -29,7 +39,7 @@ def build_dispatcher(settings: Settings, *, lease_owner: str | None = None) -> O
     return OutboxDispatcher(
         repository=repository,
         publisher=publisher,
-        lease_owner=lease_owner or socket.gethostname(),
+        lease_owner=lease_owner if lease_owner is not None else default_lease_owner(),
         policy=policy,
     )
 

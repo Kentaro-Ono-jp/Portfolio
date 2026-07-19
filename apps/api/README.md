@@ -25,8 +25,10 @@ committed event through an independently runnable API image role.
 - explicit Alembic migrations
 - S3-compatible source-object storage through boto3
 - canonical JSON Schema validation before outbox persistence
-- safe PostgreSQL outbox leasing with expired-lease recovery
-- persistent RabbitMQ publication with mandatory routing and publisher confirms
+- safe PostgreSQL outbox leasing with process-unique ownership, attempt fencing,
+  and expired-lease recovery
+- persistent RabbitMQ publication with mandatory routing, publisher confirms,
+  and a wall-clock confirmation deadline
 - Celery protocol v2-compatible requested-task envelopes
 - at-least-once retry with bounded backoff and stable event identity
 - atomic post-confirm outbox publication and `accepted` to `queued` transition
@@ -46,10 +48,17 @@ persists a SHA-256 digest.
 The `api-outbox` role uses the same API-owned image and persistence code. It
 leases only unpublished rows, publishes the canonical requested-event payload
 inside a Celery-compatible task message, and waits for RabbitMQ confirmation.
+Each dispatcher process has a unique owner identity, and every successful lease
+increments an attempt number used as a fencing token. Publication and failure
+updates require both the current owner and exact attempt, so a stale attempt
+cannot overwrite a lease later reacquired by the same configured owner.
 Only a positive confirmation allows one database transaction to set
 `published_at` and move the job to `queued`. A crash after confirmation but
 before that transaction may produce the same event again, so delivery remains
-explicitly at least once. The future consumer must use `eventId` idempotently.
+explicitly at least once. Waiting for a confirmation has an end-to-end
+wall-clock deadline; an unknown outcome forcibly closes the broker transport
+and leaves the event unpublished for retry. The future consumer must use
+`eventId` idempotently.
 
 The ML worker, API result-event consumer, and ML result updates remain outside
 this focused increment.
@@ -104,7 +113,7 @@ GitHub Actions runs `python scripts/verify.py` without the flag. It builds the
 fixed PostgreSQL, MinIO, and RabbitMQ environment, applies migrations, rejects
 model drift, starts the API and outbox roles, and exercises the real HTTP,
 database, object-storage, publisher-confirm, persistence, duplicate-delivery,
-and restart-recovery boundaries.
+restart-recovery, stale-attempt fencing, and confirmation-deadline boundaries.
 
 Authentication and authorization are deliberately deferred beyond the first
 vertical slice.

@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -20,6 +21,7 @@ from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import reactorfront_api.rabbitmq as rabbitmq
 from reactorfront_api.domain import (
     ProcessingStatus,
     PublicProblem,
@@ -392,6 +394,7 @@ def test_real_postgres_leases_once_and_recovers_expired_work(
     assert repository.record_failure(
         event_id=EVENT_ID,
         lease_owner=leased[0].lease_owner,
+        attempt_count=leased[0].attempt_count,
         code=PublishFailureCode.BROKER_UNAVAILABLE,
         retry_delay=timedelta(seconds=30),
     )
@@ -406,10 +409,43 @@ def test_real_postgres_leases_once_and_recovers_expired_work(
             ),
             {"event_id": EVENT_ID},
         )
-    recovered = claim("dispatcher-c")
+    recovered = claim(leased[0].lease_owner)
     assert len(recovered) == 1
-    assert recovered[0].lease_owner == "dispatcher-c"
+    assert recovered[0].lease_owner == leased[0].lease_owner
     assert recovered[0].attempt_count == 2
+
+    with engine.connect() as connection:
+        active_lease_before = connection.execute(
+            text(
+                "SELECT lease_owner, leased_until, attempt_count, last_error "
+                "FROM outbox_events WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        ).one()
+    assert (
+        repository.mark_published(
+            event_id=EVENT_ID,
+            lease_owner=leased[0].lease_owner,
+            attempt_count=leased[0].attempt_count,
+        )
+        is PublishFinalizeResult.LEASE_LOST
+    )
+    assert not repository.record_failure(
+        event_id=EVENT_ID,
+        lease_owner=leased[0].lease_owner,
+        attempt_count=leased[0].attempt_count,
+        code=PublishFailureCode.CONFIRM_TIMEOUT,
+        retry_delay=timedelta(seconds=1),
+    )
+    with engine.connect() as connection:
+        active_lease_after = connection.execute(
+            text(
+                "SELECT lease_owner, leased_until, attempt_count, last_error "
+                "FROM outbox_events WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        ).one()
+    assert tuple(active_lease_after) == tuple(active_lease_before)
 
 
 def test_real_rabbitmq_confirm_duplicate_and_atomic_queued_transition(
@@ -457,6 +493,7 @@ def test_real_rabbitmq_confirm_duplicate_and_atomic_queued_transition(
         repository.mark_published(
             event_id=EVENT_ID,
             lease_owner="dispatcher-b",
+            attempt_count=retry.attempt_count,
         )
         is PublishFinalizeResult.PUBLISHED
     )
@@ -464,6 +501,7 @@ def test_real_rabbitmq_confirm_duplicate_and_atomic_queued_transition(
         repository.mark_published(
             event_id=EVENT_ID,
             lease_owner="dispatcher-b",
+            attempt_count=retry.attempt_count,
         )
         is PublishFinalizeResult.ALREADY_PUBLISHED
     )
@@ -507,6 +545,79 @@ def test_real_rabbitmq_confirm_duplicate_and_atomic_queued_transition(
     assert persisted.last_error is None
 
 
+def test_real_confirm_deadline_returns_and_keeps_job_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+    rabbitmq_channel: pika.adapters.blocking_connection.BlockingChannel,
+) -> None:
+    del rabbitmq_channel
+    service = make_real_service(settings=settings, engine=engine, s3=s3)
+    service.submit(
+        stream=BytesIO(PDF),
+        original_filename="invoice.pdf",
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+    )
+    original_confirm_delivery = pika.channel.Channel.confirm_delivery
+
+    def suppress_delivery_confirmation(
+        channel: pika.channel.Channel,
+        _ack_nack_callback: Callable[
+            [pika.frame.Method[pika.spec.Basic.Ack | pika.spec.Basic.Nack]],
+            object,
+        ],
+        callback: Callable[[pika.frame.Method[pika.spec.Confirm.SelectOk]], object] | None = None,
+    ) -> None:
+        original_confirm_delivery(channel, lambda _frame: None, callback)
+
+    monkeypatch.setattr(
+        pika.channel.Channel,
+        "confirm_delivery",
+        suppress_delivery_confirmation,
+    )
+    repository = SqlAlchemyOutboxRepository(engine=engine)
+    publisher = PikaOutboxPublisher(
+        broker_url=settings.rabbitmq_url.get_secret_value(),
+        timeout_seconds=1.0,
+    )
+    dispatcher = OutboxDispatcher(
+        repository=repository,
+        publisher=publisher,
+        lease_owner="dispatcher-confirm-timeout-test",
+        policy=DispatcherPolicy(
+            batch_size=1,
+            lease_duration=timedelta(seconds=5),
+            poll_seconds=0.1,
+            retry_base_seconds=1,
+            retry_max_seconds=30,
+        ),
+    )
+    started = time.monotonic()
+    try:
+        assert dispatcher.dispatch_once() is DispatchCycleResult.RETRY_SCHEDULED
+        elapsed = time.monotonic() - started
+        assert 0.8 <= elapsed <= 1.75
+
+        status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+        assert status is not None
+        assert status.status is ProcessingStatus.ACCEPTED
+        with engine.connect() as connection:
+            persisted = connection.execute(
+                text(
+                    "SELECT published_at, attempt_count, last_error "
+                    "FROM outbox_events WHERE event_id = :event_id"
+                ),
+                {"event_id": EVENT_ID},
+            ).one()
+        assert persisted.published_at is None
+        assert persisted.attempt_count == 1
+        assert persisted.last_error == PublishFailureCode.CONFIRM_TIMEOUT.value
+    finally:
+        dispatcher.close()
+
+
 def test_real_unroutable_publish_stays_accepted_and_records_retry(
     monkeypatch: pytest.MonkeyPatch,
     settings: Settings,
@@ -542,16 +653,13 @@ def test_real_unroutable_publish_stays_accepted_and_records_retry(
         routing_key=REQUEST_ROUTING_KEY,
     )
 
-    def declare_exchange_only(
-        channel: pika.adapters.blocking_connection.BlockingChannel,
+    def skip_queue_binding(
+        attempt: rabbitmq._PublishAttempt,
+        _frame: pika.frame.Method[pika.spec.Queue.DeclareOk],
     ) -> None:
-        channel.exchange_declare(
-            exchange=REQUEST_EXCHANGE,
-            exchange_type="direct",
-            durable=True,
-        )
+        attempt._on_queue_bound(pika.frame.Method(1, pika.spec.Queue.BindOk()))
 
-    monkeypatch.setattr(publisher, "_declare_topology", declare_exchange_only)
+    monkeypatch.setattr(rabbitmq._PublishAttempt, "_on_queue_declared", skip_queue_binding)
     dispatcher = OutboxDispatcher(
         repository=repository,
         publisher=publisher,

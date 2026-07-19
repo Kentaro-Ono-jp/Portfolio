@@ -193,6 +193,7 @@ class OutboxRepository(Protocol):
         *,
         event_id: UUID,
         lease_owner: str,
+        attempt_count: int,
     ) -> PublishFinalizeResult: ...
 
     def record_failure(
@@ -200,6 +201,7 @@ class OutboxRepository(Protocol):
         *,
         event_id: UUID,
         lease_owner: str,
+        attempt_count: int,
         code: PublishFailureCode,
         retry_delay: timedelta,
     ) -> bool: ...

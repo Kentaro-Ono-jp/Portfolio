@@ -45,6 +45,24 @@ def test_build_dispatcher_uses_safe_settings() -> None:
         dispatcher.close()
 
 
+def test_default_lease_owner_is_unique_per_dispatcher_process_instance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(outbox_main.socket, "gethostname", lambda: "shared-host")
+    monkeypatch.setattr(outbox_main.os, "getpid", lambda: 42)
+    first = outbox_main.build_dispatcher(Settings())
+    second = outbox_main.build_dispatcher(Settings())
+    try:
+        assert first._lease_owner != second._lease_owner
+        assert first._lease_owner.startswith("shared-host:42:")
+        assert second._lease_owner.startswith("shared-host:42:")
+        assert len(first._lease_owner) <= outbox_main.MAX_LEASE_OWNER_LENGTH
+        assert len(second._lease_owner) <= outbox_main.MAX_LEASE_OWNER_LENGTH
+    finally:
+        first.close()
+        second.close()
+
+
 @pytest.mark.parametrize(("ready", "expected"), [(True, 0), (False, 1)])
 def test_check_mode_returns_readiness_and_closes(
     monkeypatch: pytest.MonkeyPatch,

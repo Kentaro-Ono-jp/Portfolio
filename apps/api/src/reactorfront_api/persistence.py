@@ -305,6 +305,7 @@ class SqlAlchemyOutboxRepository:
         *,
         event_id: UUID,
         lease_owner: str,
+        attempt_count: int,
     ) -> PublishFinalizeResult:
         with Session(self._engine) as session, session.begin():
             event = session.scalar(
@@ -330,6 +331,7 @@ class SqlAlchemyOutboxRepository:
                 raise OutboxInvariantError("Database clock is unavailable")
             if (
                 event.lease_owner != lease_owner
+                or event.attempt_count != attempt_count
                 or event.leased_until is None
                 or event.leased_until <= database_now
             ):
@@ -350,6 +352,7 @@ class SqlAlchemyOutboxRepository:
         *,
         event_id: UUID,
         lease_owner: str,
+        attempt_count: int,
         code: PublishFailureCode,
         retry_delay: timedelta,
     ) -> bool:
@@ -364,6 +367,7 @@ class SqlAlchemyOutboxRepository:
                 return False
             if (
                 event.lease_owner != lease_owner
+                or event.attempt_count != attempt_count
                 or event.leased_until is None
                 or event.leased_until <= database_now
             ):

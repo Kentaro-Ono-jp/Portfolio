@@ -192,6 +192,7 @@ def outbox_row(
     published: bool = False,
     lease_owner: str | None = "dispatcher-a",
     leased_until: datetime | None = NOW + timedelta(seconds=30),
+    attempt_count: int = 1,
 ) -> OutboxEventRow:
     candidate = submission()
     return OutboxEventRow(
@@ -203,7 +204,7 @@ def outbox_row(
         published_at=NOW if published else None,
         lease_owner=lease_owner,
         leased_until=leased_until,
-        attempt_count=1,
+        attempt_count=attempt_count,
     )
 
 
@@ -352,7 +353,11 @@ def test_outbox_mark_published_atomically_queues_the_job(
     session = FakeOutboxSession(scalar_values=[event, job, NOW])
     repository = outbox_repository_with_session(monkeypatch, session)
 
-    result = repository.mark_published(event_id=EVENT_ID, lease_owner="dispatcher-a")
+    result = repository.mark_published(
+        event_id=EVENT_ID,
+        lease_owner="dispatcher-a",
+        attempt_count=1,
+    )
 
     assert result is PublishFinalizeResult.PUBLISHED
     assert event.published_at == NOW
@@ -374,7 +379,11 @@ def test_outbox_mark_published_is_idempotent_for_matching_state(
     )
 
     assert (
-        repository.mark_published(event_id=EVENT_ID, lease_owner="dispatcher-a")
+        repository.mark_published(
+            event_id=EVENT_ID,
+            lease_owner="dispatcher-a",
+            attempt_count=1,
+        )
         is PublishFinalizeResult.ALREADY_PUBLISHED
     )
 
@@ -412,17 +421,22 @@ def test_outbox_mark_published_rejects_inconsistent_state(
     )
 
     with pytest.raises(OutboxInvariantError):
-        repository.mark_published(event_id=EVENT_ID, lease_owner="dispatcher-a")
+        repository.mark_published(
+            event_id=EVENT_ID,
+            lease_owner="dispatcher-a",
+            attempt_count=1,
+        )
 
 
 @pytest.mark.parametrize(
     "event",
     [
         outbox_row(lease_owner="dispatcher-b"),
+        outbox_row(attempt_count=2),
         outbox_row(leased_until=NOW),
     ],
 )
-def test_outbox_mark_published_refuses_stale_owner(
+def test_outbox_mark_published_refuses_stale_owner_or_attempt(
     monkeypatch: pytest.MonkeyPatch,
     event: OutboxEventRow,
 ) -> None:
@@ -432,7 +446,11 @@ def test_outbox_mark_published_refuses_stale_owner(
     )
 
     assert (
-        repository.mark_published(event_id=EVENT_ID, lease_owner="dispatcher-a")
+        repository.mark_published(
+            event_id=EVENT_ID,
+            lease_owner="dispatcher-a",
+            attempt_count=1,
+        )
         is PublishFinalizeResult.LEASE_LOST
     )
 
@@ -447,6 +465,7 @@ def test_outbox_failure_records_only_owned_active_lease(
     assert repository.record_failure(
         event_id=EVENT_ID,
         lease_owner="dispatcher-a",
+        attempt_count=1,
         code=PublishFailureCode.UNROUTABLE,
         retry_delay=timedelta(seconds=4),
     )
@@ -461,6 +480,7 @@ def test_outbox_failure_records_only_owned_active_lease(
         [None],
         [outbox_row(published=True, lease_owner=None, leased_until=None)],
         [outbox_row(lease_owner="dispatcher-b"), NOW],
+        [outbox_row(attempt_count=2), NOW],
         [outbox_row(leased_until=NOW), NOW],
         [outbox_row(), None],
     ],
@@ -477,6 +497,7 @@ def test_outbox_failure_does_not_overwrite_unowned_or_completed_state(
     assert not repository.record_failure(
         event_id=EVENT_ID,
         lease_owner="dispatcher-a",
+        attempt_count=1,
         code=PublishFailureCode.BROKER_UNAVAILABLE,
         retry_delay=timedelta(seconds=1),
     )
