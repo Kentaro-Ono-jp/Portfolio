@@ -35,6 +35,7 @@ app.conf.update(
     accept_content=["json"],
     broker_connection_retry_on_startup=True,
     broker_transport_options={"confirm_publish": True},
+    control_queue_exclusive=True,
     result_backend=None,
     task_acks_late=True,
     task_acks_on_failure_or_timeout=False,
