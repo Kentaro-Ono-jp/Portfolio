@@ -42,12 +42,42 @@ class PublishFinalizeResult(StrEnum):
     LEASE_LOST = "lease_lost"
 
 
+class ResultEventType(StrEnum):
+    STARTED = "document.processing.started.v1"
+    COMPLETED = "document.processing.completed.v1"
+    FAILED = "document.processing.failed.v1"
+
+
+class ResultApplyOutcome(StrEnum):
+    APPLIED = "applied"
+    DUPLICATE = "duplicate"
+    DEFERRED = "deferred"
+
+
+class ResultEventFailureCode(StrEnum):
+    EVENT_ID_REUSE = "EVENT_ID_REUSE"
+    IDENTITY_MISMATCH = "IDENTITY_MISMATCH"
+    INVALID_EVENT = "INVALID_EVENT"
+    INVALID_TRANSITION = "INVALID_TRANSITION"
+    TERMINAL_CONFLICT = "TERMINAL_CONFLICT"
+
+
 class OutboxInvariantError(Exception):
     pass
 
 
 class OutboxPublishError(Exception):
     def __init__(self, *, code: PublishFailureCode) -> None:
+        super().__init__(code.value)
+        self.code = code
+
+
+class InvalidResultEvent(Exception):
+    pass
+
+
+class ResultEventInvariantError(Exception):
+    def __init__(self, *, code: ResultEventFailureCode) -> None:
         super().__init__(code.value)
         self.code = code
 
@@ -138,6 +168,23 @@ class OutboxLease:
     attempt_count: int
 
 
+@dataclass(frozen=True, slots=True)
+class ResultEvent:
+    event_id: UUID
+    event_type: ResultEventType
+    occurred_at: datetime
+    correlation_id: UUID
+    document_id: UUID
+    job_id: UUID
+    object_key: str
+    source_sha256: str
+    model_version: str
+    logical_payload_sha256: str
+    classification: str | None = None
+    confidence: float | None = None
+    failure_code: str | None = None
+
+
 class ReadableUpload(Protocol):
     def read(self, size: int = -1) -> bytes: ...
 
@@ -215,6 +262,14 @@ class OutboxPublisher(Protocol):
     def publish(self, lease: OutboxLease) -> None: ...
 
     def is_ready(self) -> bool: ...
+
+
+class ResultEventRepository(Protocol):
+    def apply(self, event: ResultEvent) -> ResultApplyOutcome: ...
+
+    def is_ready(self) -> bool: ...
+
+    def close(self) -> None: ...
 
 
 BinaryDocument = BinaryIO | ReadableUpload

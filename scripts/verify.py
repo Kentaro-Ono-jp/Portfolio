@@ -54,6 +54,7 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
                 "scripts/verify.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_outbox_runtime.py",
+                "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
             ],
         ),
@@ -73,6 +74,7 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
                 "scripts/verify.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_outbox_runtime.py",
+                "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
             ],
         ),
@@ -319,6 +321,17 @@ def run_runtime_checks(*, uv: str, docker: str) -> None:
             "scripts/verify_ml_runtime.py",
         ],
     )
+    run(
+        "Prove API-owned result-event consumption and terminal persistence",
+        [
+            uv,
+            "run",
+            "--project",
+            "apps/api",
+            "python",
+            "scripts/verify_result_consumer_runtime.py",
+        ],
+    )
 
 
 def capture_runtime_diagnostic(
@@ -373,6 +386,20 @@ def show_runtime_diagnostics(docker: str) -> None:
             "--check",
         ),
         filename="ml-readiness.txt",
+    )
+    capture_runtime_diagnostic(
+        label="Show API event-consumer dependency readiness",
+        command=compose_command(
+            docker,
+            "exec",
+            "-T",
+            "api-events",
+            "python",
+            "-m",
+            "reactorfront_api.events_main",
+            "--check",
+        ),
+        filename="api-events-readiness.txt",
     )
 
 

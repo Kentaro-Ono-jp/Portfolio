@@ -4,8 +4,9 @@
 
 This area exposes the backend API and coordinates API-owned application use
 cases. It accepts and validates PDFs, stores source objects, atomically records
-a document, processing job, and transactional outbox event, and dispatches the
-committed event through an independently runnable API image role.
+a document, processing job, and transactional outbox event, dispatches the
+committed event, and consumes ML result events through independently runnable
+API image roles.
 
 ## Boundary rules
 
@@ -32,6 +33,11 @@ committed event through an independently runnable API image role.
 - Celery protocol v2-compatible requested-task envelopes
 - at-least-once retry with bounded backoff and stable event identity
 - atomic post-confirm outbox publication and `accepted` to `queued` transition
+- manual-ack result-event consumption through the durable result queue
+- canonical result transport/schema/identity validation before persistence
+- atomic result-event receipts and job-state transitions in PostgreSQL
+- logical-event deduplication that tolerates a changed redelivery timestamp
+- first-terminal-result preservation and poison-event rejection
 - stable public problem responses without raw internal errors
 - pytest, Ruff, strict mypy, pip-audit, and branch-aware coverage
 
@@ -57,12 +63,23 @@ Only a positive confirmation allows one database transaction to set
 before that transaction may produce the same event again, so delivery remains
 explicitly at least once. Waiting for a confirmation has an end-to-end
 wall-clock deadline; an unknown outcome forcibly closes the broker transport
-and leaves the event unpublished for retry. The future consumer must use
-`eventId` idempotently.
+and leaves the event unpublished for retry. The ML worker preserves `eventId`
+as the stable requested-task identity across redelivery.
 
 The independently deployable ML worker is implemented under `apps/ml` and uses
-only the documented task and result-event contracts. The API result-event
-consumer and ML result persistence remain outside this API-owned boundary.
+only the documented task and result-event contracts. The `api-events` role
+validates AMQP metadata and canonical JSON Schema before it touches API-owned
+state. A receipt keyed by `eventId` and an immutable logical-payload digest is
+committed in the same transaction as the job mutation. The digest excludes
+only `occurredAt`, because a legitimate at-least-once republication retains its
+logical ID and business result while recording a new observation time.
+
+Started events apply only after the outbox has moved the job to `queued`;
+terminal events apply only after `processing`. A valid early event is requeued
+with a bounded delay. Matching redelivery is acknowledged as a no-op, while
+event-ID reuse, cross-identity input, impossible transitions, and conflicting
+terminal results are rejected without mutation. The first committed terminal
+result therefore remains authoritative.
 
 ## Layout
 
@@ -74,6 +91,9 @@ consumer and ML result persistence remain outside this API-owned boundary.
 - `src/reactorfront_api/outbox.py`: dispatcher policy, retry, and orchestration
 - `src/reactorfront_api/rabbitmq.py`: durable topology and confirmed publisher
 - `src/reactorfront_api/outbox_main.py`: long-running and readiness process role
+- `src/reactorfront_api/result_consumer.py`: result validation, acknowledgement policy,
+  and durable consumer topology
+- `src/reactorfront_api/events_main.py`: long-running result-consumer and readiness role
 - `alembic/`: explicit database history
 - `tests/`: unit tests and real-service integration proof
 
@@ -97,6 +117,9 @@ examples and are overridden inside Compose.
 | `PORTFOLIO_OUTBOX_POLL_SECONDS` | `0.25` |
 | `PORTFOLIO_OUTBOX_RETRY_BASE_SECONDS` | `1` |
 | `PORTFOLIO_OUTBOX_RETRY_MAX_SECONDS` | `30` |
+| `PORTFOLIO_EVENTS_PREFETCH_COUNT` | `1` |
+| `PORTFOLIO_EVENTS_REQUEUE_DELAY_SECONDS` | `0.25` |
+| `PORTFOLIO_EVENTS_RECONNECT_DELAY_SECONDS` | `1` |
 
 These values are development-only. Required host ports bind to `127.0.0.1`,
 and the MinIO administration console is not published to the host.
@@ -112,9 +135,10 @@ python scripts/verify.py --static-only
 
 GitHub Actions runs `python scripts/verify.py` without the flag. It builds the
 fixed PostgreSQL, MinIO, and RabbitMQ environment, applies migrations, rejects
-model drift, starts the API, outbox, and ML worker roles, and exercises the real HTTP,
-database, object-storage, publisher-confirm, persistence, duplicate-delivery,
-restart-recovery, stale-attempt fencing, and confirmation-deadline boundaries.
+model drift, starts the API, outbox, result-consumer, and ML worker roles, and
+exercises the real HTTP, database, object-storage, publisher-confirm, result
+persistence, duplicate-delivery, ordering-race, poison-input, restart-recovery,
+stale-attempt fencing, and confirmation-deadline boundaries.
 
 Authentication and authorization are deliberately deferred beyond the first
 vertical slice.

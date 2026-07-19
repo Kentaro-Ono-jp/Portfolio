@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     outbox_poll_seconds: float = Field(default=0.25, gt=0, le=30)
     outbox_retry_base_seconds: float = Field(default=1.0, gt=0, le=60)
     outbox_retry_max_seconds: float = Field(default=30.0, gt=0, le=300)
+    events_prefetch_count: int = Field(default=1, ge=1, le=100)
+    events_requeue_delay_seconds: float = Field(default=0.25, gt=0, le=5)
+    events_reconnect_delay_seconds: float = Field(default=1.0, gt=0, le=30)
     event_contract_directory: Path = REPOSITORY_ROOT / "packages" / "contracts" / "events"
 
 

@@ -25,7 +25,7 @@ configuration, credential, or client driver.
   publication through RabbitMQ
 
 OCR, scanned or encrypted documents, empty text, multiple pages, images, GPU,
-production model-quality claims, API result persistence, and Web behavior are
+production model-quality claims, direct API state access, and Web behavior are
 not supported in this boundary. See [`MODEL_CARD.md`](MODEL_CARD.md) for the
 model identity, provenance, evaluation condition, checksum, intended use, and
 limitations.
@@ -41,8 +41,8 @@ For a valid request, the worker confirms `document.processing.started.v1`
 before inference and then confirms one logical `document.processing.completed.v1`
 or `document.processing.failed.v1` terminal outcome. Result events use the
 durable direct exchange `reactorfront.documents.v1` and durable queue
-`reactorfront.document-processing.events.v1`. The future API-owned consumer is
-deliberately absent.
+`reactorfront.document-processing.events.v1`. The separate API-owned
+`api-events` role consumes that queue without importing ML implementation.
 
 Result messages are persistent, mandatory-routed, and subject to a bounded
 wall-clock publisher-confirm outcome. The requested task is late-acknowledged;

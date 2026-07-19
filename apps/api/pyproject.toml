@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "reactorfront-api"
 version = "0.1.0"
-description = "API-owned document submission and outbox publication boundary"
+description = "API-owned document submission, outbox, and result persistence boundary"
 readme = "README.md"
 requires-python = "==3.13.*"
 license = "MIT"

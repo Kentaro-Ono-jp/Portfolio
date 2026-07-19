@@ -126,6 +126,36 @@ services:
       timeout: 8s
       retries: 30
 
+  api-events:
+    image: reactorfront-portfolio-api:local
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    environment:
+      PORTFOLIO_DATABASE_URL: postgresql+psycopg://portfolio:portfolio-local-password@postgres:5432/portfolio
+      PORTFOLIO_RABBITMQ_URL: amqp://portfolio:portfolio-local-password@rabbitmq:5672/%2F
+      PORTFOLIO_RABBITMQ_TIMEOUT_SECONDS: "5"
+      PORTFOLIO_EVENTS_PREFETCH_COUNT: "1"
+      PORTFOLIO_EVENTS_REQUEUE_DELAY_SECONDS: "0.25"
+      PORTFOLIO_EVENTS_RECONNECT_DELAY_SECONDS: "1"
+      PORTFOLIO_EVENT_CONTRACT_DIRECTORY: /workspace/packages/contracts/events
+    command: ["python", "-m", "reactorfront_api.events_main"]
+    depends_on:
+      api:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -m
+        - reactorfront_api.events_main
+        - --check
+      interval: 2s
+      timeout: 8s
+      retries: 30
+
   ml-worker:
     image: reactorfront-portfolio-ml:local
     build:

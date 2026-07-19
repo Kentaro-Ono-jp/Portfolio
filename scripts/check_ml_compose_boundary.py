@@ -38,8 +38,47 @@ def main() -> int:
         raise RuntimeError(f"ML worker has forbidden database settings: {forbidden}")
     if worker.get("ports"):
         raise RuntimeError("ML worker must not publish a host port")
-    if "api-events" in services or "web" in services:
-        raise RuntimeError("Focused ML increment includes an out-of-scope service")
+    if "web" in services:
+        raise RuntimeError(
+            "Current product boundary unexpectedly includes the Web service"
+        )
+    events = services.get("api-events")
+    if events is None:
+        raise RuntimeError("API-owned result-event consumer service is missing")
+    events_environment = events.get("environment", {})
+    if not any("DATABASE" in name.upper() for name in events_environment):
+        raise RuntimeError(
+            "API result consumer is missing its API-owned database setting"
+        )
+    forbidden_event_settings = sorted(
+        name
+        for name in events_environment
+        if name.startswith("PORTFOLIO_ML_") or "S3" in name.upper()
+    )
+    if forbidden_event_settings:
+        raise RuntimeError(
+            "API result consumer has unrelated ML/object-storage settings: "
+            f"{forbidden_event_settings}"
+        )
+    if events.get("ports"):
+        raise RuntimeError("API result consumer must not publish a host port")
+    command = events.get("command", [])
+    if "reactorfront_api.events_main" not in command:
+        raise RuntimeError("API result consumer does not run the reviewed process role")
+
+    api_source = REPOSITORY_ROOT / "apps" / "api" / "src"
+    private_ml_imports = sorted(
+        str(path.relative_to(REPOSITORY_ROOT))
+        for path in api_source.rglob("*.py")
+        if any(
+            line.lstrip().startswith(("from reactorfront_ml", "import reactorfront_ml"))
+            for line in path.read_text(encoding="utf-8").splitlines()
+        )
+    )
+    if private_ml_imports:
+        raise RuntimeError(
+            f"API source imports private ML implementation: {private_ml_imports}"
+        )
 
     dockerfile = (REPOSITORY_ROOT / "infra" / "docker" / "ml" / "Dockerfile").read_text(
         encoding="utf-8"
@@ -106,7 +145,7 @@ def main() -> int:
         raise RuntimeError("Normalized PyTorch audit identity has drifted")
     print(
         "ML boundary passed: CPU-only lock plus no database settings, host port, "
-        "unused Celery cluster topology, API result consumer, or Web service."
+        "or unused Celery cluster topology; API-owned result consumption remains isolated."
     )
     return 0
 
