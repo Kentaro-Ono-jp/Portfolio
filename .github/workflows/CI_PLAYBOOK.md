@@ -48,40 +48,68 @@ condition, not as a product or Actions failure.
 These are local orchestration rules, not additional failed Actions runs in the
 historical ledger.
 
-### Owner-approved docs-only CI skip
+### Owner-approved Markdown-only PR CI skip
 
-A final correction may use `[skip ci]` only when every condition below holds:
+Any GitHub-supported skip instruction may appear in an initial PR head or a
+later head only when every condition below holds. Every supported form is
+prohibited outside this exception.
 
-1. The owner explicitly approves the skip for that correction.
-2. The immediately preceding PR head completed the canonical runtime workflow
-   successfully.
-3. Every path changed from that passing head to the final head ends in `.md`.
-   The changes are limited to non-executable wording, evidence, links, or review
-   cleanup guidance; no workflow, script, test, configuration, dependency, or
+1. The owner explicitly approves the skip for that PR head.
+2. The exact PR base commit is the then-current `main` baseline and completed
+   the canonical default-branch workflow successfully. Record whether that
+   evidence was an automatic `push` run or an honestly labeled bounded manual
+   recovery.
+3. Every path in the complete base-to-head PR diff ends in `.md`. The changes
+   are limited to non-executable wording, evidence, links, or review cleanup
+   guidance; no workflow file, script, test, configuration, dependency, or
    application behavior changes.
-4. `python scripts/check_docs.py` and `git diff --check` pass on the final head.
-5. The final commit carries a GitHub-supported skip instruction and receives an
+4. `python scripts/check_docs.py` and `git diff --check` pass on the review head.
+5. The review-head commit carries a supported skip instruction and receives an
    independent exact-head review.
 
-Update the PR description before re-review with:
+Update the PR description before initial review or re-review with:
 
-- the final head
-- the owner's docs-only skip approval
-- the preceding passing head and workflow link
-- the exact Markdown file count and path list since that passing head
-- the final-head local documentation results
+- the current review head
+- the owner's Markdown-only skip approval
+- the exact base `main` SHA, workflow event, and successful run link
+- the exact Markdown file count and path list in the complete PR diff
+- the review-head local documentation results
 - an explicit statement that no exact-head Actions run exists or is claimed
 
-The reviewer independently verifies the file boundary and reports the missing
-exact-head run as an approved limitation, not as passing evidence. Any failed
-condition restores the normal exact-head Actions requirement. This exception
-never skips the required default-branch workflow after merge.
+The reviewer independently verifies the base, full file boundary, local proof,
+and absent run. It reports the missing exact-head run as an approved limitation,
+not as passing evidence. Any failed condition restores the normal exact-head
+Actions requirement. This exception never skips the required default-branch
+workflow after merge.
+
+#### Squash merge message boundary
+
+[GitHub skip instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs)
+suppress both `pull_request` and `push` workflows when the triggering commit
+message contains `[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`,
+`[actions skip]`, or a `skip-checks` trailer. A generated default squash body
+may copy the final correction's subject and carry that instruction into the
+new `main` commit.
+
+When an approved Markdown-only PR used a skip instruction on any head and the
+established merge method is squash:
+
+1. Pin the merge to the independently reviewed PR head.
+2. Supply an explicit squash subject and body that summarize the reviewed PR
+   without copying component commit subjects. Require both fields to contain
+   none of the supported skip strings and no `skip-checks` trailer.
+3. Do not accept the hosting service's generated default squash body.
+4. After merge, read the exact merge commit message and require the same clean
+   boundary before waiting for its automatic `push` workflow.
+
+The PR-head skip remains valid; only the new default-branch commit must be free
+of the instruction so its mandatory workflow can start.
 
 ### Post-merge knowledge reconciliation
 
 After every feature PR merge, and before the next feature increment:
 
-1. Require the exact merge commit's default-branch workflow to complete.
+1. Require the exact merge commit's automatic `push` workflow to complete.
 2. Audit that PR's failed runs and the corrective commits that followed them.
 3. Separate reusable runner knowledge from product defects and review-only
    corrections.
@@ -93,6 +121,29 @@ After every feature PR merge, and before the next feature increment:
    update before the next feature increment. If none exists, add `CI knowledge
    reconciliation: no new reusable finding` to completion evidence; do not
    create an empty documentation change.
+
+#### Bounded `workflow_dispatch` recovery
+
+If an automatic `push` run is absent, inspect the exact merge message before
+mutating anything. Manual recovery is allowed only for the known case where a
+legacy or generated squash message carried one of the supported skip
+instructions despite an otherwise valid docs-only exception.
+
+1. Require the remote `main` head to remain the same exact merge SHA.
+2. Require `verify.yml` to support `workflow_dispatch`, and query all runs for
+   that SHA. Refuse recovery when a suitable run is queued, active, or already
+   completed.
+3. Dispatch `verify.yml` once on `main`; do not create an empty trigger commit,
+   rerun an unrelated workflow, or dispatch repeatedly.
+4. Require the resulting run to report event `workflow_dispatch`, branch
+   `main`, and the same exact merge SHA. Require canonical verification and
+   unconditional project-scoped teardown to succeed.
+5. Record the run as bounded manual recovery, never as an automatic `push`
+   run, and promote the newly observed failure mode through this playbook's
+   reconciliation workflow.
+
+If the merge message is clean, `main` moved, the absence has another cause, or
+the exact-SHA query is ambiguous, stop and diagnose instead of dispatching.
 
 ## Change-driven first-push checks
 

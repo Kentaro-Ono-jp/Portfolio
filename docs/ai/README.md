@@ -108,12 +108,18 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Treat the pushed commit and Draft PR as the recoverable task checkpoint.
   Uncommitted or unpushed workspace changes are not durable handoff state.
 - Require the workflow result to target the exact pushed head.
-- The only exception is an explicitly owner-approved final docs-only correction
-  that satisfies the
-  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Record the preceding
-  passing head and run, exact final Markdown paths, final local documentation
-  proof, and absent exact-head run without calling it passing evidence. The
-  merged-main workflow remains mandatory.
+- An explicitly owner-approved Markdown-only PR may skip Actions from its
+  initial head or a later head when it satisfies the
+  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Record the exact base
+  `main` SHA and successful default-branch run, every Markdown path in the full
+  PR diff, review-head local documentation proof, and absent exact-head run
+  without calling it passing evidence. The merged-main workflow remains
+  mandatory.
+- After the initial PR description and exact-head workflow or approved absent
+  state are reconciled, provide a copyable initial-review prompt populated with
+  the repository, PR, focused Issue, expected full head SHA, review cycle,
+  previous verdict, and exact workflow evidence or limitation required by
+  [PR_REVIEW.md](PR_REVIEW.md).
 
 After every follow-up push to an existing PR, the push is not complete until
 the PR description is reconciled:
@@ -131,13 +137,24 @@ the PR description is reconciled:
 6. Read the live description back and require its declared head to match the
    live PR head before reporting a checkpoint or requesting review.
 
+After that readback, provide a newly populated prompt for every pushed head:
+
+- When no verdict exists, provide a refreshed initial-review prompt with review
+  cycle `initial` and previous verdict `none`.
+- When a verdict exists, provide a re-review prompt with review cycle
+  `re-review`, the real previous-verdict URL, every finding's disposition, and
+  the current workflow evidence or approved Markdown-only limitation.
+
+A follow-up checkpoint is not complete without the applicable prompt.
+
 ### 4. Review and correct
 
 - Request independent review with [PR_REVIEW.md](PR_REVIEW.md).
 - Judge each requested change against accepted design and concrete evidence.
 - Obtain owner approval before a material correction strategy.
-- Push approved corrections, require the new exact head to pass, and request
-  re-review. A previous approval does not cover a moved head.
+- Push approved corrections, require the new exact head to pass or satisfy the
+  approved Markdown-only exception, and request re-review. A previous approval
+  does not cover a moved head.
 - Apply the follow-up-push description reconciliation above before relying on
   the new workflow result or requesting re-review.
 
@@ -146,19 +163,28 @@ the PR description is reconciled:
 - Change Draft to Ready and merge only with explicit owner direction.
 - Pin merge to the reviewed PR head and use the repository's established merge
   method.
+- When a Markdown-only PR used a CI skip on any head and that method is squash,
+  supply an explicit squash subject and body with no supported skip instruction
+  or trailer. Do not let a generated default body copy skipped commit subjects
+  into the new `main` commit.
 
 ### 6. Reconcile and clean up
 
 1. Fast-forward clean local `main` to the exact merge commit without reset or
    discarded changes.
-2. Require the default-branch workflow for that commit to pass.
-3. Before the next feature increment, reconcile the merged PR's reusable CI
+2. Inspect the exact merge message and require its automatic `push` workflow
+   to pass for the same SHA.
+3. Use the CI playbook's bounded `workflow_dispatch` recovery only for a known
+   inherited skip instruction. Record its manual event honestly, forbid an
+   empty trigger commit or duplicate dispatch, and require the unchanged merge
+   SHA plus unconditional project-scoped teardown.
+4. Before the next feature increment, reconcile the merged PR's reusable CI
    knowledge under the [CI playbook](../../.github/workflows/CI_PLAYBOOK.md).
-4. Apply the evidence rules below to the focused Issue and Issue #1, including
+5. Apply the evidence rules below to the focused Issue and Issue #1, including
    the CI-knowledge outcome.
-5. Remove only authorized temporary data and the fully merged local branch.
-6. Keep remote-branch deletion explicit.
-7. Update this contract only if the process itself changed.
+6. Remove only authorized temporary data and the fully merged local branch.
+7. Keep remote-branch deletion explicit.
+8. Update this contract only if the process itself changed.
 
 ## Issue evidence
 
