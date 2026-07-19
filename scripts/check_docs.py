@@ -49,6 +49,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Do not list all Issues, branches, comments",
         "verify the exact target",
         "does not audit every remote and local object",
+        "recoverable task checkpoint",
     ),
     Path("docs/ai/evidence-policy.md"): (
         "Completion evidence",
@@ -65,7 +66,12 @@ REQUIRED_GOVERNANCE_TEXT = {
 }
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
-    "user home path": re.compile(r"(?i)(?:^|[\s`'\"])/(?:home|users)/[^/\s`]+"),
+    "POSIX absolute path": re.compile(r"(?<![\w/:<.~])/(?!/)[^\s`'\"><\])}]+"),
+    "UNC absolute path": re.compile(
+        r"(?<![\\\w])\\\\[^\\/\s`'\"><]+[\\/][^\\/\s`'\"><]+"
+    ),
+    "local file URI": re.compile(r"(?i)\bfile:(?:/{1,3}|\\\\)"),
+    "user-home shorthand path": re.compile(r"(?<![\w~])~[\\/]"),
     "machine-local memory path": re.compile(r"(?i)\.codex[\\/]memories"),
 }
 
@@ -126,7 +132,9 @@ def governance_failures() -> list[str]:
             for label, pattern in FORBIDDEN_GOVERNANCE_PATTERNS.items():
                 if pattern.search(content):
                     relative_path = path.relative_to(REPOSITORY_ROOT)
-                    failures.append(f"{relative_path}: contains forbidden {label}")
+                    failures.append(
+                        f"{relative_path.as_posix()}: contains forbidden {label}"
+                    )
 
     return failures
 

@@ -39,6 +39,9 @@ baseline is consistent.
 - Inspect the intended diff before explicitly staging files.
 - Commit tersely, push the focused branch, and open a Draft PR linked to the
   focused Issue and Issue #1.
+- Treat the pushed branch and Draft PR as the recoverable task checkpoint. A
+  replacement machine or fresh agent can resume only from committed, pushed
+  GitHub state; uncommitted or unpushed workspace changes are not durable.
 - Recheck the exact branch head and PR check before relying on a workflow
   result.
 

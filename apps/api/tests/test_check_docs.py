@@ -30,7 +30,13 @@ def test_repository_owned_governance_invariants_pass(
     ("content", "expected_label"),
     [
         ("Use X:/private/workspace", "Windows absolute path"),
-        ("Read /home/example/private", "user home path"),
+        ("Read /home/example/private", "POSIX absolute path"),
+        ("Read /etc/passwd", "POSIX absolute path"),
+        ("Read /tmp/private/workspace", "POSIX absolute path"),
+        ("Read /workspace/private", "POSIX absolute path"),
+        (r"Read \\server\share\private", "UNC absolute path"),
+        ("Open file:///tmp/private", "local file URI"),
+        ("Read ~/private", "user-home shorthand path"),
         ("Load .codex/memories/export", "machine-local memory path"),
     ],
 )
@@ -42,3 +48,55 @@ def test_governance_public_safety_patterns_reject_machine_local_paths(
     pattern = documentation_checker.FORBIDDEN_GOVERNANCE_PATTERNS[expected_label]
 
     assert pattern.search(content) is not None
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/docs/ai/README.md",
+        "[AI guidance](docs/ai/README.md)",
+        "[ADR index](../adr/README.md)",
+        "Compare Issue/PR/Actions evidence",
+        "</details>",
+    ],
+)
+def test_governance_public_safety_patterns_allow_portable_references(
+    documentation_checker: ModuleType,
+    content: str,
+) -> None:
+    matches = {
+        label
+        for label, pattern in documentation_checker.FORBIDDEN_GOVERNANCE_PATTERNS.items()
+        if pattern.search(content)
+    }
+
+    assert matches == set()
+
+
+@pytest.mark.parametrize(
+    ("content", "expected_label"),
+    [
+        ("Read /tmp/private/workspace", "POSIX absolute path"),
+        ("Read /workspace/private", "POSIX absolute path"),
+        (r"Read \\server\share\private", "UNC absolute path"),
+        ("Open file:///tmp/private", "local file URI"),
+        ("Read ~/private", "user-home shorthand path"),
+    ],
+)
+def test_governance_scanner_rejects_nonportable_paths_in_ai_docs(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    content: str,
+    expected_label: str,
+) -> None:
+    governance_root = tmp_path / "docs" / "ai"
+    governance_root.mkdir(parents=True)
+    (governance_root / "leak.md").write_text(content, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert any(
+        failure == f"docs/ai/leak.md: contains forbidden {expected_label}" for failure in failures
+    )
