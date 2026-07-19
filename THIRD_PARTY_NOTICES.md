@@ -10,6 +10,7 @@ under their own licenses.
 |---|---|---|---|
 | PostgreSQL | `postgres:18.4-bookworm` manifest digest in `compose.yaml` | PostgreSQL License | API-owned persistence |
 | MinIO | official source commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` | AGPL-3.0-only | separate S3-compatible test service |
+| RabbitMQ | `rabbitmq:4.3.2-alpine` manifest digest in `compose.yaml` | MPL-2.0 | durable message broker |
 | Python | `python:3.13.14-slim-bookworm` manifest digest in the API Dockerfile | Python Software Foundation License | API runtime |
 
 The MinIO image build copies the upstream license into the resulting image.

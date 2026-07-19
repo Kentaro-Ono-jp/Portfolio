@@ -55,6 +55,40 @@ def test_static_checks_load_the_api_mypy_configuration(verifier: ModuleType) -> 
         "apps/api/pyproject.toml",
         "apps/api/src",
     ]
+    assert "scripts/verify_outbox_runtime.py" in checks["Lint API source and tests"]
+
+
+def test_pytest_command_writes_machine_readable_evidence(verifier: ModuleType) -> None:
+    command = verifier.pytest_command("uv", include_integration=True)
+
+    assert "--cov-report=xml:artifacts/verification/coverage.xml" in command
+    assert "--junitxml=artifacts/verification/pytest.xml" in command
+    assert "-m" not in command
+
+
+def test_runtime_diagnostics_are_persisted(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(verifier, "ARTIFACT_DIRECTORY", tmp_path)
+    monkeypatch.setattr(
+        verifier.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["docker"],
+            returncode=1,
+            stdout=b"sanitized diagnostics\n",
+        ),
+    )
+
+    verifier.capture_runtime_diagnostic(
+        label="Capture diagnostics",
+        command=["docker", "compose", "ps"],
+        filename="compose-ps.txt",
+    )
+
+    assert (tmp_path / "compose-ps.txt").read_bytes() == b"sanitized diagnostics\n"
 
 
 def test_verifier_returns_success_only_when_checks_and_cleanup_succeed(

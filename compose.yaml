@@ -37,6 +37,25 @@ services:
     volumes:
       - minio-data:/data
 
+  rabbitmq:
+    image: rabbitmq:4.3.2-alpine@sha256:835cbc6fabceedef7a3b0ce3195a17adccb753a3ba645bdd61c5557b6e4bf580
+    environment:
+      RABBITMQ_DEFAULT_USER: portfolio
+      RABBITMQ_DEFAULT_PASS: portfolio-local-password
+    ports:
+      - "127.0.0.1:${PORTFOLIO_RABBITMQ_PORT:-55672}:5672"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          rabbitmq-diagnostics -q check_running &&
+          rabbitmq-diagnostics -q check_local_alarms
+      interval: 2s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
   api:
     image: reactorfront-portfolio-api:local
     build:
@@ -49,6 +68,7 @@ services:
       PORTFOLIO_S3_SECRET_ACCESS_KEY: portfolio-local-secret
       PORTFOLIO_S3_BUCKET: portfolio-documents
       PORTFOLIO_S3_REGION: us-east-1
+      PORTFOLIO_RABBITMQ_URL: amqp://portfolio:portfolio-local-password@rabbitmq:5672/%2F
       PORTFOLIO_EVENT_CONTRACT_DIRECTORY: /workspace/packages/contracts/events
     command:
       - /bin/sh
@@ -63,6 +83,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -73,6 +95,38 @@ services:
       timeout: 3s
       retries: 30
 
+  api-outbox:
+    image: reactorfront-portfolio-api:local
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    environment:
+      PORTFOLIO_DATABASE_URL: postgresql+psycopg://portfolio:portfolio-local-password@postgres:5432/portfolio
+      PORTFOLIO_RABBITMQ_URL: amqp://portfolio:portfolio-local-password@rabbitmq:5672/%2F
+      PORTFOLIO_RABBITMQ_TIMEOUT_SECONDS: "5"
+      PORTFOLIO_OUTBOX_BATCH_SIZE: "8"
+      PORTFOLIO_OUTBOX_LEASE_SECONDS: "30"
+      PORTFOLIO_OUTBOX_POLL_SECONDS: "0.25"
+      PORTFOLIO_OUTBOX_RETRY_BASE_SECONDS: "1"
+      PORTFOLIO_OUTBOX_RETRY_MAX_SECONDS: "30"
+    command: ["python", "-m", "reactorfront_api.outbox_main"]
+    depends_on:
+      api:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -m
+        - reactorfront_api.outbox_main
+        - --check
+      interval: 2s
+      timeout: 8s
+      retries: 30
+
 volumes:
   postgres-data:
   minio-data:
+  rabbitmq-data:

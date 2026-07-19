@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import BinaryIO, Protocol
 from uuid import UUID
@@ -24,6 +24,32 @@ class SubmissionCommitObservation(StrEnum):
     COMMITTED = "committed"
     ABSENT = "absent"
     INCONSISTENT = "inconsistent"
+
+
+class PublishFailureCode(StrEnum):
+    BROKER_UNAVAILABLE = "BROKER_UNAVAILABLE"
+    CONFIRM_NACK = "CONFIRM_NACK"
+    CONFIRM_TIMEOUT = "CONFIRM_TIMEOUT"
+    FINALIZE_FAILED = "FINALIZE_FAILED"
+    INVARIANT_VIOLATION = "INVARIANT_VIOLATION"
+    PUBLISH_UNKNOWN = "PUBLISH_UNKNOWN"
+    UNROUTABLE = "UNROUTABLE"
+
+
+class PublishFinalizeResult(StrEnum):
+    PUBLISHED = "published"
+    ALREADY_PUBLISHED = "already_published"
+    LEASE_LOST = "lease_lost"
+
+
+class OutboxInvariantError(Exception):
+    pass
+
+
+class OutboxPublishError(Exception):
+    def __init__(self, *, code: PublishFailureCode) -> None:
+        super().__init__(code.value)
+        self.code = code
 
 
 class SubmissionPersistenceError(Exception):
@@ -100,6 +126,18 @@ class DocumentStatusRecord:
     failure_code: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class OutboxLease:
+    event_id: UUID
+    event_type: str
+    job_id: UUID
+    payload: dict[str, object]
+    created_at: datetime
+    lease_owner: str
+    leased_until: datetime
+    attempt_count: int
+
+
 class ReadableUpload(Protocol):
     def read(self, size: int = -1) -> bytes: ...
 
@@ -135,6 +173,46 @@ class SubmissionRepository(Protocol):
 
 class EventContractValidator(Protocol):
     def validate(self, *, event_type: str, payload: dict[str, object]) -> None: ...
+
+
+class ReadinessProbe(Protocol):
+    def is_ready(self) -> bool: ...
+
+
+class OutboxRepository(Protocol):
+    def lease_pending(
+        self,
+        *,
+        lease_owner: str,
+        lease_duration: timedelta,
+        batch_size: int,
+    ) -> list[OutboxLease]: ...
+
+    def mark_published(
+        self,
+        *,
+        event_id: UUID,
+        lease_owner: str,
+    ) -> PublishFinalizeResult: ...
+
+    def record_failure(
+        self,
+        *,
+        event_id: UUID,
+        lease_owner: str,
+        code: PublishFailureCode,
+        retry_delay: timedelta,
+    ) -> bool: ...
+
+    def is_ready(self) -> bool: ...
+
+    def close(self) -> None: ...
+
+
+class OutboxPublisher(Protocol):
+    def publish(self, lease: OutboxLease) -> None: ...
+
+    def is_ready(self) -> bool: ...
 
 
 BinaryDocument = BinaryIO | ReadableUpload

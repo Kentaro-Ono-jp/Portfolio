@@ -76,7 +76,7 @@ environment. Local Docker Desktop is a development convenience only.
 The root [`compose.yaml`](compose.yaml) owns the isolated Compose project
 `reactorfront-portfolio`. The canonical verifier checks contracts, generated
 types, linting, formatting, static types, migrations, unit tests, and a real
-HTTP/PostgreSQL/S3-compatible integration path in GitHub Actions.
+HTTP/PostgreSQL/S3-compatible/RabbitMQ integration path in GitHub Actions.
 
 Install the pinned dependencies and run the same verification from the
 repository root:
@@ -94,15 +94,16 @@ stops it afterward. To run all checks without starting containers:
 python scripts/verify.py --static-only
 ```
 
-### Run the current API boundary
+### Run the current API and outbox boundary
 
-Start the two dependencies, create the deterministic development bucket, then
-start the migrated API:
+Start the three dependencies, create the deterministic development bucket,
+then start the migrated API and its outbox dispatcher:
 
 ```console
-docker compose -p reactorfront-portfolio up --detach --build --wait postgres minio
+docker compose -p reactorfront-portfolio up --detach --build --wait postgres minio rabbitmq
 uv run --project apps/api python scripts/prepare_integration.py
 docker compose -p reactorfront-portfolio up --detach --build --wait api
+docker compose -p reactorfront-portfolio up --detach --build --wait api-outbox
 ```
 
 The API is available at `http://127.0.0.1:58000`. Required development ports
@@ -125,11 +126,13 @@ vertical slice is tracked in
 [Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1) and proceeds
 through focused, reviewable pull requests.
 
-The contract foundation is merged. The current focused increment implements
-the API-owned document-submission boundary: validated PDF storage, atomic
-document/job/outbox persistence, status lookup, migrations, health and
-readiness probes, and real-service integration verification. Outbox dispatch,
-RabbitMQ, ML processing, and the web application remain later increments.
+The contract and API-owned document-submission foundations are merged. The
+current focused increment implements the API-owned transactional outbox
+dispatcher and RabbitMQ publication boundary: safe PostgreSQL leases,
+persistent Celery-compatible requested-task messages, publisher confirms,
+at-least-once retry, atomic `accepted` to `queued` state progression, restart
+recovery, and real-service CI evidence. ML processing, the API result consumer,
+and the web application remain later increments.
 
 ## License
 

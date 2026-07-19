@@ -15,7 +15,7 @@ from reactorfront_api.domain import (
     SubmissionCommitObservation,
 )
 from reactorfront_api.service import MAX_DOCUMENT_BYTES, REQUESTED_EVENT_TYPE, DocumentService
-from tests.fakes import FakeRepository, FakeStorage, FakeValidator
+from tests.fakes import FakeReadinessProbe, FakeRepository, FakeStorage, FakeValidator
 
 IDS = (
     UUID("22222222-2222-4222-8222-222222222222"),
@@ -32,6 +32,7 @@ def make_service(
     repository: FakeRepository | None = None,
     storage: FakeStorage | None = None,
     validator: FakeValidator | None = None,
+    broker: FakeReadinessProbe | None = None,
 ) -> tuple[DocumentService, FakeRepository, FakeStorage, FakeValidator]:
     selected_repository = repository or FakeRepository()
     selected_storage = storage or FakeStorage()
@@ -42,6 +43,7 @@ def make_service(
             repository=selected_repository,
             object_storage=selected_storage,
             event_validator=selected_validator,
+            broker_readiness=broker,
             id_factory=lambda: next(generated_ids),
             clock=lambda: NOW,
         ),
@@ -346,14 +348,25 @@ def test_get_status_returns_record_or_stable_problem() -> None:
 
 
 def test_readiness_and_close_cover_dependency_failures() -> None:
-    service, repository, storage, _validator = make_service()
+    broker = FakeReadinessProbe()
+    service, repository, storage, _validator = make_service(broker=broker)
     assert service.is_ready()
+    assert broker.calls == 1
 
     repository.ready = False
     assert not service.is_ready()
 
     repository.ready = True
     storage.readiness_error = RuntimeError("not reachable")
+    assert not service.is_ready()
+    assert broker.calls == 1
+
+    storage.readiness_error = None
+    broker.ready = False
+    assert not service.is_ready()
+
+    broker.ready = True
+    broker.error = RuntimeError("broker unavailable")
     assert not service.is_ready()
 
     service.close()

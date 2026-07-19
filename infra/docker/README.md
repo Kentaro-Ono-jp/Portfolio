@@ -1,7 +1,8 @@
 # Docker infrastructure
 
 The root `compose.yaml` is the canonical integration definition. It currently
-contains PostgreSQL, an S3-compatible MinIO server, and the API image.
+contains PostgreSQL, an S3-compatible MinIO server, RabbitMQ, and the API image
+running HTTP and outbox-dispatch process roles.
 
 - Keep one Dockerfile near each deployable area's source unless a documented
   build constraint requires another layout.
@@ -17,6 +18,9 @@ Global Docker cleanup commands are never part of this project's workflow.
 ## Fixed test infrastructure
 
 - PostgreSQL uses the official `18.4-bookworm` image pinned by manifest digest.
+- RabbitMQ uses the official `4.3.2-alpine` image pinned by manifest digest.
+  Its AMQP port is loopback-only, the management UI is not enabled, and its
+  health check proves that the broker application is running without alarms.
 - The API uses the official Python `3.13.14-slim-bookworm` image pinned by
   manifest digest and installs the exact uv lock.
 - MinIO is compiled from
@@ -30,3 +34,8 @@ The MinIO build copies its AGPL license into `/licenses/minio/LICENSE`. It is a
 separate test-infrastructure process accessed only through the S3 API; the
 repository's original code remains MIT-licensed. See
 [`THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md).
+
+RabbitMQ declares one durable requested-work exchange and queue through the API
+publisher. The `api-outbox` health check opens PostgreSQL and a confirm-capable
+broker channel. The API readiness endpoint also includes RabbitMQ as required
+by Delivery Specification 0001; `/health` remains process-only.
