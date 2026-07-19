@@ -96,6 +96,10 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Use static local verification unless local runtime work is explicitly
   authorized. GitHub Actions supplies authoritative runtime proof.
 - Inspect the complete intended diff before staging exact files.
+- After implementation and test intent are complete, stage the candidate
+  without committing and apply the
+  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Reverify and restage
+  every resulting correction before commit.
 
 ### 3. Publish a recoverable checkpoint
 
@@ -124,10 +128,13 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 1. Fast-forward clean local `main` to the exact merge commit without reset or
    discarded changes.
 2. Require the default-branch workflow for that commit to pass.
-3. Apply the evidence rules below to the focused Issue and Issue #1.
-4. Remove only authorized temporary data and the fully merged local branch.
-5. Keep remote-branch deletion explicit.
-6. Update this contract only if the process itself changed.
+3. Before the next feature increment, reconcile the merged PR's reusable CI
+   knowledge under the [CI playbook](../../.github/workflows/CI_PLAYBOOK.md).
+4. Apply the evidence rules below to the focused Issue and Issue #1, including
+   the CI-knowledge outcome.
+5. Remove only authorized temporary data and the fully merged local branch.
+6. Keep remote-branch deletion explicit.
+7. Update this contract only if the process itself changed.
 
 ## Issue evidence
 

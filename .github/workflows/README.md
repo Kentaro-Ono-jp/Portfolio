@@ -3,6 +3,10 @@
 GitHub Actions will be the authoritative build and runtime verification
 environment for this portfolio.
 
+Use the [CI playbook](CI_PLAYBOOK.md) only after a complete implementation and
+its tests have been staged without a commit. It also governs the required
+post-merge CI-knowledge reconciliation for every feature PR.
+
 `verify.yml` runs the repository-owned `scripts/verify.py` entrypoint on pull
 requests, `main`, and manual dispatch. It proves the canonical contracts,
 generated types, documentation links, static analysis, pinned API/ML dependency

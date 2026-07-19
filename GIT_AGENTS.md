@@ -42,6 +42,9 @@ earlier conversations are orientation only.
 ## Verification and Docker
 
 - Use `python scripts/verify.py` as the only root verification entrypoint.
+- For feature work, apply the
+  [CI playbook](.github/workflows/CI_PLAYBOOK.md) only to the complete staged
+  pre-commit candidate, then reconcile reusable CI knowledge after merge.
 - Install pinned JavaScript dependencies with
   `pnpm install --frozen-lockfile` before canonical verification.
 - Use `python scripts/verify.py --static-only` when local runtime verification
