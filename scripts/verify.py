@@ -90,7 +90,7 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
             ],
         ),
         (
-            "Audit the installed pinned Python dependency set",
+            "Audit the installed pinned API dependency set",
             [
                 uv,
                 "run",
@@ -101,6 +101,96 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
                 "--skip-editable",
                 "--progress-spinner=off",
             ],
+        ),
+        (
+            "Lint ML source, tests, and verification helpers",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "ruff",
+                "check",
+                "apps/ml/src",
+                "apps/ml/tests",
+                "scripts/pdf_fixture.py",
+                "scripts/check_ml_compose_boundary.py",
+                "scripts/verify_ml_model.py",
+                "scripts/verify_ml_runtime.py",
+            ],
+        ),
+        (
+            "Check ML formatting",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "ruff",
+                "format",
+                "--check",
+                "apps/ml/src",
+                "apps/ml/tests",
+                "scripts/pdf_fixture.py",
+                "scripts/check_ml_compose_boundary.py",
+                "scripts/verify_ml_model.py",
+                "scripts/verify_ml_runtime.py",
+            ],
+        ),
+        (
+            "Type-check ML source",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "mypy",
+                "--config-file",
+                "apps/ml/pyproject.toml",
+                "apps/ml/src",
+            ],
+        ),
+        (
+            "Audit the installed pinned ML dependency set",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "pip-audit",
+                "--local",
+                "--skip-editable",
+                "--progress-spinner=off",
+            ],
+        ),
+        (
+            "Audit the normalized PyTorch CPU release identity",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "pip-audit",
+                "--requirement",
+                "apps/ml/audit-requirements.txt",
+                "--disable-pip",
+                "--progress-spinner=off",
+            ],
+        ),
+        (
+            "Prove deterministic ML model generation",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "python",
+                "scripts/verify_ml_model.py",
+            ],
+        ),
+        (
+            "Validate the ML Compose boundary",
+            [sys.executable, "scripts/check_ml_compose_boundary.py"],
         ),
     ]
 
@@ -121,15 +211,33 @@ def pytest_command(uv: str, *, include_integration: bool) -> list[str]:
             "--cov=reactorfront_api",
             "--cov-branch",
             "--cov-report=term-missing",
-            "--cov-report=xml:artifacts/verification/coverage.xml",
+            "--cov-report=xml:artifacts/verification/api-coverage.xml",
             "--cov-fail-under=90",
-            "--junitxml=artifacts/verification/pytest.xml",
+            "--junitxml=artifacts/verification/api-pytest.xml",
         ]
     )
     return command
 
 
+def pytest_ml_command(uv: str) -> list[str]:
+    return [
+        uv,
+        "run",
+        "--project",
+        "apps/ml",
+        "pytest",
+        "apps/ml/tests",
+        "--cov=reactorfront_ml",
+        "--cov-branch",
+        "--cov-report=term-missing",
+        "--cov-report=xml:artifacts/verification/ml-coverage.xml",
+        "--cov-fail-under=90",
+        "--junitxml=artifacts/verification/ml-pytest.xml",
+    ]
+
+
 def run_runtime_checks(*, uv: str, docker: str) -> None:
+    run("Run ML unit tests", pytest_ml_command(uv))
     run(
         "Build and start isolated PostgreSQL, MinIO, and RabbitMQ",
         compose_command(
@@ -200,6 +308,17 @@ def run_runtime_checks(*, uv: str, docker: str) -> None:
             "scripts/verify_outbox_runtime.py",
         ],
     )
+    run(
+        "Prove the real ML worker and result-event boundary",
+        [
+            uv,
+            "run",
+            "--project",
+            "apps/ml",
+            "python",
+            "scripts/verify_ml_runtime.py",
+        ],
+    )
 
 
 def capture_runtime_diagnostic(
@@ -240,6 +359,20 @@ def show_runtime_diagnostics(docker: str) -> None:
             "500",
         ),
         filename="compose-logs.txt",
+    )
+    capture_runtime_diagnostic(
+        label="Show ML worker dependency readiness",
+        command=compose_command(
+            docker,
+            "exec",
+            "-T",
+            "ml-worker",
+            "python",
+            "-m",
+            "reactorfront_ml.health",
+            "--check",
+        ),
+        filename="ml-readiness.txt",
     )
 
 
@@ -283,6 +416,7 @@ def main() -> int:
 
         if args.static_only:
             run("Run API unit tests", pytest_command(uv, include_integration=False))
+            run("Run ML unit tests", pytest_ml_command(uv))
         else:
             runtime_started = True
             run_runtime_checks(uv=uv, docker=docker)

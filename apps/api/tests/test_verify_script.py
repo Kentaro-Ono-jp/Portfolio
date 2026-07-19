@@ -56,14 +56,37 @@ def test_static_checks_load_the_api_mypy_configuration(verifier: ModuleType) -> 
         "apps/api/src",
     ]
     assert "scripts/verify_outbox_runtime.py" in checks["Lint API source and tests"]
+    assert checks["Type-check ML source"] == [
+        "uv",
+        "run",
+        "--project",
+        "apps/ml",
+        "mypy",
+        "--config-file",
+        "apps/ml/pyproject.toml",
+        "apps/ml/src",
+    ]
+    assert (
+        "scripts/verify_ml_runtime.py" in checks["Lint ML source, tests, and verification helpers"]
+    )
 
 
 def test_pytest_command_writes_machine_readable_evidence(verifier: ModuleType) -> None:
     command = verifier.pytest_command("uv", include_integration=True)
 
-    assert "--cov-report=xml:artifacts/verification/coverage.xml" in command
-    assert "--junitxml=artifacts/verification/pytest.xml" in command
+    assert "--cov-report=xml:artifacts/verification/api-coverage.xml" in command
+    assert "--junitxml=artifacts/verification/api-pytest.xml" in command
     assert "-m" not in command
+
+
+def test_ml_pytest_command_writes_separate_branch_coverage_evidence(
+    verifier: ModuleType,
+) -> None:
+    command = verifier.pytest_ml_command("uv")
+
+    assert "--cov-branch" in command
+    assert "--cov-report=xml:artifacts/verification/ml-coverage.xml" in command
+    assert "--junitxml=artifacts/verification/ml-pytest.xml" in command
 
 
 def test_runtime_diagnostics_are_persisted(

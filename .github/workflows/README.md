@@ -5,16 +5,17 @@ environment for this portfolio.
 
 `verify.yml` runs the repository-owned `scripts/verify.py` entrypoint on pull
 requests, `main`, and manual dispatch. It proves the canonical contracts,
-generated types, documentation links, static analysis, API and dispatcher
-images, real PostgreSQL/MinIO/RabbitMQ behavior, publisher confirmation,
-at-least-once duplicate handling, and restart recovery from a clean
-GitHub-hosted runner.
+generated types, documentation links, static analysis, pinned API/ML dependency
+audits, API/dispatcher/ML images, deterministic model generation, real
+PostgreSQL/MinIO/RabbitMQ behavior, CPU PyTorch inference, publisher
+confirmation, stable ML failure, at-least-once duplicate handling, and restart
+recovery from a clean GitHub-hosted runner.
 
-When verification fails, sanitized Compose state, timestamped logs, JUnit, and
-coverage evidence are uploaded as a retained artifact. Artifact-upload failure
-cannot suppress the unconditional final step that removes only the
+When verification fails, sanitized Compose state, timestamped logs, ML
+readiness, JUnit, model/runtime proof, and branch-aware coverage evidence are
+uploaded as a retained artifact. Artifact-upload failure cannot suppress the
+unconditional final step that removes only the
 `reactorfront-portfolio` project and its three ephemeral runner volumes.
 
-The workflow will expand through later focused changes to build the Compose
-project, wait for readiness, verify the business flow, preserve failure
-evidence, and clean up only its ephemeral project resources.
+The API result consumer, public result persistence, and Web flow remain for
+later focused changes.

@@ -1,8 +1,9 @@
 # Docker infrastructure
 
 The root `compose.yaml` is the canonical integration definition. It currently
-contains PostgreSQL, an S3-compatible MinIO server, RabbitMQ, and the API image
-running HTTP and outbox-dispatch process roles.
+contains PostgreSQL, an S3-compatible MinIO server, RabbitMQ, the API image
+running HTTP and outbox-dispatch process roles, and an independent ML worker
+image.
 
 - Keep one Dockerfile near each deployable area's source unless a documented
   build constraint requires another layout.
@@ -23,6 +24,10 @@ Global Docker cleanup commands are never part of this project's workflow.
   health check proves that the broker application is running without alarms.
 - The API uses the official Python `3.13.14-slim-bookworm` image pinned by
   manifest digest and installs the exact uv lock.
+- The ML worker uses the same pinned Python base, installs its independent uv
+  lock, generates and checksum-verifies the deterministic CPU PyTorch model in
+  the build, and runs as numeric non-root user `10002` without a host port or
+  PostgreSQL configuration.
 - MinIO is compiled from
   [official source commit](https://github.com/minio/minio/tree/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a)
   `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`, corresponding to the
@@ -39,3 +44,9 @@ RabbitMQ declares one durable requested-work exchange and queue through the API
 publisher. The `api-outbox` health check opens PostgreSQL and a confirm-capable
 broker channel. The API readiness endpoint also includes RabbitMQ as required
 by Delivery Specification 0001; `/health` remains process-only.
+
+The `ml-worker` declares a durable result-event queue and routes canonical
+started/completed/failed events through confirmed persistent messages. Its
+health check verifies the model artifact, MinIO and RabbitMQ reachability, and
+an answering Celery worker process. The future `api-events` consumer and Web
+service remain absent.

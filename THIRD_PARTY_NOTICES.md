@@ -11,15 +11,24 @@ under their own licenses.
 | PostgreSQL | `postgres:18.4-bookworm` manifest digest in `compose.yaml` | PostgreSQL License | API-owned persistence |
 | MinIO | official source commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` | AGPL-3.0-only | separate S3-compatible test service |
 | RabbitMQ | `rabbitmq:4.3.2-alpine` manifest digest in `compose.yaml` | MPL-2.0 | durable message broker |
-| Python | `python:3.13.14-slim-bookworm` manifest digest in the API Dockerfile | Python Software Foundation License | API runtime |
+| Python | `python:3.13.14-slim-bookworm` manifest digest in the API and ML Dockerfiles | Python Software Foundation License | API and ML runtimes |
 
 The MinIO image build copies the upstream license into the resulting image.
-MinIO runs as a separate process and communicates with the MIT-licensed API
-through the S3 protocol.
+MinIO runs as a separate process and communicates with the MIT-licensed
+applications through the S3 protocol.
 
 ## Application and tooling dependencies
 
-Exact Python packages are declared in `apps/api/pyproject.toml` and resolved in
-`apps/api/uv.lock`. Exact JavaScript tooling is resolved in `pnpm-lock.yaml`.
-Those lockfiles and upstream package metadata are the authoritative inventories
-for their respective dependency licenses.
+Exact Python packages are declared in `apps/api/pyproject.toml` and
+`apps/ml/pyproject.toml`, then resolved in their respective `uv.lock` files.
+Exact JavaScript tooling is resolved in `pnpm-lock.yaml`. Those lockfiles and
+upstream package metadata are the authoritative inventories for transitive
+dependency licenses.
+
+The ML runtime's principal introduced packages include the CPU-only PyTorch
+wheel from the official PyTorch index (Apache-2.0 and bundled third-party
+notices), pypdf, Celery, Pika, and NumPy (BSD-family and other bundled notices),
+and boto3 (Apache-2.0). Their installed metadata and upstream distributions
+remain authoritative. The generated classifier artifact is derived only from
+repository-authored synthetic inputs and is covered by the repository MIT
+License.

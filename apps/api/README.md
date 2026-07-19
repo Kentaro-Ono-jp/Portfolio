@@ -60,8 +60,9 @@ wall-clock deadline; an unknown outcome forcibly closes the broker transport
 and leaves the event unpublished for retry. The future consumer must use
 `eventId` idempotently.
 
-The ML worker, API result-event consumer, and ML result updates remain outside
-this focused increment.
+The independently deployable ML worker is implemented under `apps/ml` and uses
+only the documented task and result-event contracts. The API result-event
+consumer and ML result persistence remain outside this API-owned boundary.
 
 ## Layout
 
@@ -111,7 +112,7 @@ python scripts/verify.py --static-only
 
 GitHub Actions runs `python scripts/verify.py` without the flag. It builds the
 fixed PostgreSQL, MinIO, and RabbitMQ environment, applies migrations, rejects
-model drift, starts the API and outbox roles, and exercises the real HTTP,
+model drift, starts the API, outbox, and ML worker roles, and exercises the real HTTP,
 database, object-storage, publisher-confirm, persistence, duplicate-delivery,
 restart-recovery, stale-attempt fencing, and confirmation-deadline boundaries.
 

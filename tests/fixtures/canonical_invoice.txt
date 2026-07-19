@@ -1,0 +1,8 @@
+REACTORFRONT SYNTHETIC INVOICE
+Invoice Number: INV-9001
+Bill To: Example Customer
+Services Rendered: Document processing verification
+Subtotal: 1200.00
+Tax: 120.00
+Total Amount Due: 1320.00
+Payment Terms: Please pay within thirty days
