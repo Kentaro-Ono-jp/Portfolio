@@ -146,19 +146,28 @@ the PR description is reconciled:
 - Change Draft to Ready and merge only with explicit owner direction.
 - Pin merge to the reviewed PR head and use the repository's established merge
   method.
+- When a final docs-only correction used a CI skip and that method is squash,
+  supply an explicit squash subject and body with no supported skip instruction
+  or trailer. Do not let a generated default body copy skipped commit subjects
+  into the new `main` commit.
 
 ### 6. Reconcile and clean up
 
 1. Fast-forward clean local `main` to the exact merge commit without reset or
    discarded changes.
-2. Require the default-branch workflow for that commit to pass.
-3. Before the next feature increment, reconcile the merged PR's reusable CI
+2. Inspect the exact merge message and require its automatic `push` workflow
+   to pass for the same SHA.
+3. Use the CI playbook's bounded `workflow_dispatch` recovery only for a known
+   inherited skip instruction. Record its manual event honestly, forbid an
+   empty trigger commit or duplicate dispatch, and require the unchanged merge
+   SHA plus unconditional project-scoped teardown.
+4. Before the next feature increment, reconcile the merged PR's reusable CI
    knowledge under the [CI playbook](../../.github/workflows/CI_PLAYBOOK.md).
-4. Apply the evidence rules below to the focused Issue and Issue #1, including
+5. Apply the evidence rules below to the focused Issue and Issue #1, including
    the CI-knowledge outcome.
-5. Remove only authorized temporary data and the fully merged local branch.
-6. Keep remote-branch deletion explicit.
-7. Update this contract only if the process itself changed.
+6. Remove only authorized temporary data and the fully merged local branch.
+7. Keep remote-branch deletion explicit.
+8. Update this contract only if the process itself changed.
 
 ## Issue evidence
 

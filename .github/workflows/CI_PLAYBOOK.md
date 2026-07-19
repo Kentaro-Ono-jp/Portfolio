@@ -77,11 +77,34 @@ exact-head run as an approved limitation, not as passing evidence. Any failed
 condition restores the normal exact-head Actions requirement. This exception
 never skips the required default-branch workflow after merge.
 
+#### Squash merge message boundary
+
+[GitHub skip instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs)
+suppress both `pull_request` and `push` workflows when the triggering commit
+message contains `[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`,
+`[actions skip]`, or a `skip-checks` trailer. A generated default squash body
+may copy the final correction's subject and carry that instruction into the
+new `main` commit.
+
+When an approved docs-only correction used a skip instruction and the
+established merge method is squash:
+
+1. Pin the merge to the independently reviewed PR head.
+2. Supply an explicit squash subject and body that summarize the reviewed PR
+   without copying component commit subjects. Require both fields to contain
+   none of the supported skip strings and no `skip-checks` trailer.
+3. Do not accept the hosting service's generated default squash body.
+4. After merge, read the exact merge commit message and require the same clean
+   boundary before waiting for its automatic `push` workflow.
+
+The PR-head skip remains valid; only the new default-branch commit must be free
+of the instruction so its mandatory workflow can start.
+
 ### Post-merge knowledge reconciliation
 
 After every feature PR merge, and before the next feature increment:
 
-1. Require the exact merge commit's default-branch workflow to complete.
+1. Require the exact merge commit's automatic `push` workflow to complete.
 2. Audit that PR's failed runs and the corrective commits that followed them.
 3. Separate reusable runner knowledge from product defects and review-only
    corrections.
@@ -93,6 +116,29 @@ After every feature PR merge, and before the next feature increment:
    update before the next feature increment. If none exists, add `CI knowledge
    reconciliation: no new reusable finding` to completion evidence; do not
    create an empty documentation change.
+
+#### Bounded `workflow_dispatch` recovery
+
+If an automatic `push` run is absent, inspect the exact merge message before
+mutating anything. Manual recovery is allowed only for the known case where a
+legacy or generated squash message carried one of the supported skip
+instructions despite an otherwise valid docs-only exception.
+
+1. Require the remote `main` head to remain the same exact merge SHA.
+2. Require `verify.yml` to support `workflow_dispatch`, and query all runs for
+   that SHA. Refuse recovery when a suitable run is queued, active, or already
+   completed.
+3. Dispatch `verify.yml` once on `main`; do not create an empty trigger commit,
+   rerun an unrelated workflow, or dispatch repeatedly.
+4. Require the resulting run to report event `workflow_dispatch`, branch
+   `main`, and the same exact merge SHA. Require canonical verification and
+   unconditional project-scoped teardown to succeed.
+5. Record the run as bounded manual recovery, never as an automatic `push`
+   run, and promote the newly observed failure mode through this playbook's
+   reconciliation workflow.
+
+If the merge message is clean, `main` moved, the absence has another cause, or
+the exact-SHA query is ambiguous, stop and diagnose instead of dispatching.
 
 ## Change-driven first-push checks
 
