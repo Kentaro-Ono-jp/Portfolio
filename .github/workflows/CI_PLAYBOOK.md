@@ -50,8 +50,9 @@ historical ledger.
 
 ### Owner-approved Markdown-only PR CI skip
 
-An initial PR head or a later head may use `[skip ci]` only when every condition
-below holds:
+Any GitHub-supported skip instruction may appear in an initial PR head or a
+later head only when every condition below holds. Every supported form is
+prohibited outside this exception.
 
 1. The owner explicitly approves the skip for that PR head.
 2. The exact PR base commit is the then-current `main` baseline and completed
@@ -63,8 +64,8 @@ below holds:
    guidance; no workflow file, script, test, configuration, dependency, or
    application behavior changes.
 4. `python scripts/check_docs.py` and `git diff --check` pass on the review head.
-5. The review-head commit carries a GitHub-supported skip instruction and
-   receives an independent exact-head review.
+5. The review-head commit carries a supported skip instruction and receives an
+   independent exact-head review.
 
 Update the PR description before initial review or re-review with:
 

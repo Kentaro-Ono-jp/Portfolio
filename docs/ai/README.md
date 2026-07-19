@@ -137,19 +137,24 @@ the PR description is reconciled:
 6. Read the live description back and require its declared head to match the
    live PR head before reporting a checkpoint or requesting review.
 
-After that readback, provide a copyable re-review prompt populated with the
-same exact inputs, the new full head SHA, the previous verdict URL, every
-finding's disposition, and the current workflow evidence or approved
-Markdown-only limitation. A follow-up checkpoint is not complete without this
-prompt.
+After that readback, provide a newly populated prompt for every pushed head:
+
+- When no verdict exists, provide a refreshed initial-review prompt with review
+  cycle `initial` and previous verdict `none`.
+- When a verdict exists, provide a re-review prompt with review cycle
+  `re-review`, the real previous-verdict URL, every finding's disposition, and
+  the current workflow evidence or approved Markdown-only limitation.
+
+A follow-up checkpoint is not complete without the applicable prompt.
 
 ### 4. Review and correct
 
 - Request independent review with [PR_REVIEW.md](PR_REVIEW.md).
 - Judge each requested change against accepted design and concrete evidence.
 - Obtain owner approval before a material correction strategy.
-- Push approved corrections, require the new exact head to pass, and request
-  re-review. A previous approval does not cover a moved head.
+- Push approved corrections, require the new exact head to pass or satisfy the
+  approved Markdown-only exception, and request re-review. A previous approval
+  does not cover a moved head.
 - Apply the follow-up-push description reconciliation above before relying on
   the new workflow result or requesting re-review.
 
