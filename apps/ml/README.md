@@ -61,6 +61,9 @@ Transient object-store failures use at most three application attempts. Missing
 objects, digest mismatch, unsupported PDFs, empty text, and deterministic model
 failures publish stable sanitized failure codes. Logs carry safe identifiers
 but never credentials, document text, raw task bodies, or raw exception text.
+If publishing a scheduled Celery retry fails, the worker records the stable
+`RETRY_PUBLISH_FAILED` code and requeues the original requested message instead
+of accepting Celery's non-requeueing publication failure default.
 
 ## Layout
 
@@ -112,5 +115,6 @@ GitHub Actions is the authoritative runtime proof. The full canonical verifier
 builds the non-root image, generates and checks the model inside that build,
 uses the real API/outbox/MinIO/RabbitMQ path, performs real PDF extraction and
 CPU PyTorch inference, verifies a stable digest-mismatch failure, exercises
-duplicate delivery and RabbitMQ restart recovery, captures evidence, and always
-tears down only the `reactorfront-portfolio` Compose project.
+duplicate delivery, RabbitMQ restart recovery, and original-message redelivery
+after an injected retry-publication failure, captures evidence, and always tears
+down only the `reactorfront-portfolio` Compose project.

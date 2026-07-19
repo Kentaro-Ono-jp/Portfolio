@@ -28,6 +28,7 @@ from reactorfront_ml.settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
 MAX_PROCESSING_ATTEMPTS: Final = 3
+RETRY_PUBLISH_FAILURE_CODE: Final = "RETRY_PUBLISH_FAILED"
 
 settings = get_settings()
 app = Celery("reactorfront_ml", broker=settings.rabbitmq_url.get_secret_value())
@@ -114,11 +115,15 @@ def process_document(task: Task[Any, Any], payload: object) -> None:
                 **fields,
                 failureCode=error.code.value,
             )
-            raise task.retry(
-                exc=error,
-                countdown=2 ** (attempt - 1),
-                max_retries=MAX_PROCESSING_ATTEMPTS - 1,
-            ) from error
+            try:
+                retry = task.retry(
+                    exc=error,
+                    countdown=2 ** (attempt - 1),
+                    max_retries=MAX_PROCESSING_ATTEMPTS - 1,
+                )
+            except Reject:
+                _reject_for_retry_publish_failure(fields=fields)
+            raise retry from error
         try:
             runtime.processor.publish_failure(
                 request=request,
@@ -154,6 +159,17 @@ def _reject_for_publish_failure(
         failureCode=error.code.value,
     )
     raise Reject(reason=error.code.value, requeue=True) from None
+
+
+def _reject_for_retry_publish_failure(*, fields: dict[str, object]) -> None:
+    log_event(
+        LOGGER,
+        logging.ERROR,
+        "ml_retry_publish_failed",
+        **fields,
+        failureCode=RETRY_PUBLISH_FAILURE_CODE,
+    )
+    raise Reject(reason=RETRY_PUBLISH_FAILURE_CODE, requeue=True) from None
 
 
 def _safe_identity_fields(payload: object) -> dict[str, object]:

@@ -157,6 +157,49 @@ def test_transient_failure_schedules_bounded_retry(
     assert observed["max_retries"] == 2
 
 
+def test_retry_publish_failure_requeues_original_without_raw_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    processor = FakeProcessor(
+        error=TransientProcessingError(code=ProcessingFailureCode.SOURCE_UNAVAILABLE)
+    )
+    install_runtime(monkeypatch, processor)
+    observed: list[tuple[str, dict[str, object]]] = []
+    requested = payload()
+
+    def retry(**_values: object) -> Retry:
+        raise Reject(
+            reason=RuntimeError("amqp://portfolio:private-password@broker"),
+            requeue=False,
+        )
+
+    def capture_log(
+        _logger: object,
+        _level: object,
+        event: str,
+        **fields: object,
+    ) -> None:
+        observed.append((event, fields))
+
+    monkeypatch.setattr(celery_app.process_document, "retry", retry)
+    monkeypatch.setattr(celery_app, "log_event", capture_log)
+
+    with pytest.raises(Reject) as raised:
+        celery_app.process_document.run(requested)
+
+    assert raised.value.requeue is True
+    assert raised.value.reason == celery_app.RETRY_PUBLISH_FAILURE_CODE
+    assert raised.value.__suppress_context__ is True
+    assert observed[-1][0] == "ml_retry_publish_failed"
+    assert observed[-1][1]["failureCode"] == celery_app.RETRY_PUBLISH_FAILURE_CODE
+    assert observed[-1][1]["attempt"] == 1
+    assert observed[-1][1]["requestedEventId"] == requested["eventId"]
+    assert observed[-1][1]["correlationId"] == requested["correlationId"]
+    assert observed[-1][1]["documentId"] == requested["documentId"]
+    assert observed[-1][1]["jobId"] == requested["jobId"]
+    assert "private-password" not in json.dumps(observed)
+
+
 def test_final_transient_attempt_publishes_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

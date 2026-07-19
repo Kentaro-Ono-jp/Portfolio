@@ -41,7 +41,9 @@ ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 CORRELATION_IDS = (
     UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1"),
     UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2"),
+    UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3"),
 )
+RETRY_PUBLISH_FAILURE_CODE = "RETRY_PUBLISH_FAILED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,6 +284,35 @@ def consume_results(
     return observed
 
 
+def set_broker_write_permissions(*, enabled: bool) -> None:
+    write_pattern = ".*" if enabled else "^$"
+    compose(
+        "exec",
+        "-T",
+        "rabbitmq",
+        "rabbitmqctl",
+        "set_permissions",
+        "-p",
+        "/",
+        "portfolio",
+        ".*",
+        write_pattern,
+        ".*",
+    )
+
+
+def wait_for_worker_log(*, event: str, failure_code: str) -> None:
+    deadline = time.monotonic() + 60
+    expected_event = f'"event":"{event}"'
+    expected_code = f'"failureCode":"{failure_code}"'
+    while time.monotonic() < deadline:
+        logs = compose("logs", "--no-color", "ml-worker", capture=True)
+        if expected_event in logs and expected_code in logs:
+            return
+        time.sleep(0.25)
+    raise RuntimeError(f"ML worker did not log {event} with the stable failure code")
+
+
 def overwrite_source(settings: Settings, *, object_key: str) -> None:
     client = boto3.client(
         "s3",
@@ -359,6 +390,27 @@ def assert_failure_events(events: list[dict[str, object]]) -> dict[str, object]:
     return failed
 
 
+def assert_retry_publish_recovery(
+    events: list[dict[str, object]],
+) -> dict[str, object]:
+    types = [event["eventType"] for event in events]
+    if types != [STARTED_EVENT_TYPE, STARTED_EVENT_TYPE, COMPLETED_EVENT_TYPE]:
+        raise RuntimeError(f"Retry publication recovery order was unexpected: {types}")
+    if events[0]["eventId"] != events[1]["eventId"]:
+        raise RuntimeError(
+            "Requeued original did not preserve the logical started event ID"
+        )
+    completed = events[-1]
+    if (
+        completed["classification"] != "invoice"
+        or float(completed["confidence"]) < 0.70
+    ):
+        raise RuntimeError(
+            "Retry publication recovery did not reach a valid terminal event"
+        )
+    return completed
+
+
 def inspect_worker_boundary() -> dict[str, object]:
     probe = (
         "import importlib.util,json,os,torch; "
@@ -396,6 +448,63 @@ def prove_dependency_readiness_recovery(service: str) -> None:
     ):
         raise RuntimeError(f"ML readiness stayed positive while {service} was stopped")
     compose("up", "--detach", "--wait", service, "ml-worker")
+
+
+def prove_retry_publish_failure_recovery(
+    settings: Settings,
+    *,
+    base_url: str,
+    invoice_pdf: bytes,
+) -> dict[str, object]:
+    compose("stop", "ml-worker", "api-outbox")
+    prepare_queues(settings)
+    compose("up", "--detach", "--wait", "api-outbox")
+
+    document_id = submit_document(
+        base_url=base_url,
+        content=invoice_pdf,
+        correlation_id=CORRELATION_IDS[2],
+    )
+    wait_for_status(base_url=base_url, document_id=document_id, expected="queued")
+    request = take_requested_message(settings)
+    compose("up", "--detach", "--wait", "ml-worker")
+
+    minio_paused = False
+    broker_write_restricted = False
+    try:
+        compose("pause", "minio")
+        minio_paused = True
+        requeue_requested_message(settings, request)
+        initial_events = consume_results(settings, expected_count=1)
+        if initial_events[0]["eventType"] != STARTED_EVENT_TYPE:
+            raise RuntimeError("Retry publication fault did not begin with started")
+
+        broker_write_restricted = True
+        set_broker_write_permissions(enabled=False)
+        # RabbitMQ authorization changes can be cached briefly. MinIO remains
+        # paused so the task cannot reach retry publication before denial settles.
+        time.sleep(6)
+        wait_for_worker_log(
+            event="ml_retry_publish_failed",
+            failure_code=RETRY_PUBLISH_FAILURE_CODE,
+        )
+    finally:
+        try:
+            if broker_write_restricted:
+                set_broker_write_permissions(enabled=True)
+                # Keep source retrieval blocked until restored publish access settles.
+                time.sleep(6)
+        finally:
+            if minio_paused:
+                compose("unpause", "minio")
+
+    compose("up", "--detach", "--wait", "minio", "rabbitmq", "ml-worker")
+    recovered_events = consume_results(settings, expected_count=2)
+    all_events = [*initial_events, *recovered_events]
+    assert_preserved_identifiers(all_events, request=request)
+    completed = assert_retry_publish_recovery(all_events)
+    wait_for_status(base_url=base_url, document_id=document_id, expected="queued")
+    return completed
 
 
 def main() -> int:
@@ -454,6 +563,12 @@ def main() -> int:
     failed = assert_failure_events(failure_events)
     wait_for_status(base_url=base_url, document_id=failure_document, expected="queued")
 
+    retry_recovery_completed = prove_retry_publish_failure_recovery(
+        settings,
+        base_url=base_url,
+        invoice_pdf=invoice_pdf,
+    )
+
     prove_dependency_readiness_recovery("minio")
     prove_dependency_readiness_recovery("rabbitmq")
 
@@ -477,6 +592,9 @@ def main() -> int:
         "cudaAvailable": worker_boundary["cudaAvailable"],
         "brokerRestartPersistence": True,
         "workerRestartRecovery": True,
+        "retryPublishFailureCode": RETRY_PUBLISH_FAILURE_CODE,
+        "retryPublishFailureOriginalRedelivery": True,
+        "retryPublishRecoveryCompletedEventId": retry_recovery_completed["eventId"],
         "dependencyReadinessRecovery": True,
     }
     (ARTIFACT_DIRECTORY / "ml-runtime-proof.json").write_text(
