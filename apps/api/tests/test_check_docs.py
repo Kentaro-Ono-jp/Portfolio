@@ -61,8 +61,13 @@ def test_governance_public_safety_patterns_reject_machine_local_paths(
             "Bearer credential",
         ),
         ("client_secret=realvalue123456", "assigned credential"),
+        ("TOKEN=opaquevalue123456", "assigned credential"),
         (
             "client-internal context: undisclosed production architecture",
+            "explicit private context",
+        ),
+        (
+            "client context: undisclosed production architecture",
             "explicit private context",
         ),
     ],
@@ -86,6 +91,7 @@ def test_governance_public_safety_patterns_reject_sensitive_content(
         "[ADR index](../adr/README.md)",
         "Compare Issue/PR/Actions evidence",
         "Use API_KEY=<redacted> and Authorization: Bearer <token>",
+        "TOKEN=${TOKEN} and client context: [redacted]",
         "Exclude credentials, private company context, and client context.",
         "Private context: [redacted]",
         "</details>",

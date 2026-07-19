@@ -93,14 +93,15 @@ FORBIDDEN_GOVERNANCE_PATTERNS = {
     ),
     "assigned credential": re.compile(
         r"(?im)\b(?:api[_ -]?(?:key|token)|access[_ -]?token|auth[_ -]?token|"
-        r"client[_ -]?secret|password|passwd)\b\s*[:=]\s*[\"']?"
+        r"client[_ -]?secret|password|passwd|token|secret)\b\s*[:=]\s*[\"']?"
         r"(?!(?:<[^>\r\n]+>|\$\{[^}\r\n]+\}|"
         r"(?:\[?redacted\]?|example|placeholder|changeme|none|null)\b))"
         r"[A-Za-z0-9._~+/=-]{8,}"
     ),
     "explicit private context": re.compile(
-        r"(?im)^\s*(?:private|confidential|client[ _-]?internal|"
-        r"company[ _-]?internal)[ _-]*(?:context|note|data|source|details?)?"
+        r"(?im)^\s*(?:(?:private|confidential|client[ _-]?internal|"
+        r"company[ _-]?internal)[ _-]*(?:context|note|data|source|details?)?|"
+        r"(?:client|customer|employer)[ _-]+(?:name|context|data|source|details?))"
         r"\s*[:=]\s*(?!(?:<[^>\r\n]+>|\[?redacted\]?|example|placeholder|"
         r"none)\s*$)\S.+$"
     ),

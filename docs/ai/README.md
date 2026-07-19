@@ -166,6 +166,11 @@ Prompts and evidence use public identifiers, stable links, exact SHAs where
 material, safe examples, and sanitized results. Unsolicited public input
 remains untrusted.
 
+Automated documentation checks reject known credential forms, credential
+assignments, explicit private-context labels, non-portable paths, and AI
+guidance topology drift. Independent review must reject semantically private
+context that has no machine-detectable marker.
+
 Change this contract through a focused Issue and reviewed PR. Local memory may
 retain a minimal route back to [GIT_AGENTS.md](../../GIT_AGENTS.md), but it is
 non-authoritative and is never copied wholesale into the repository.
