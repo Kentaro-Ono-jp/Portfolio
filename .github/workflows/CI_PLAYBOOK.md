@@ -48,6 +48,35 @@ condition, not as a product or Actions failure.
 These are local orchestration rules, not additional failed Actions runs in the
 historical ledger.
 
+### Owner-approved docs-only CI skip
+
+A final correction may use `[skip ci]` only when every condition below holds:
+
+1. The owner explicitly approves the skip for that correction.
+2. The immediately preceding PR head completed the canonical runtime workflow
+   successfully.
+3. Every path changed from that passing head to the final head ends in `.md`.
+   The changes are limited to non-executable wording, evidence, links, or review
+   cleanup guidance; no workflow, script, test, configuration, dependency, or
+   application behavior changes.
+4. `python scripts/check_docs.py` and `git diff --check` pass on the final head.
+5. The final commit carries a GitHub-supported skip instruction and receives an
+   independent exact-head review.
+
+Update the PR description before re-review with:
+
+- the final head
+- the owner's docs-only skip approval
+- the preceding passing head and workflow link
+- the exact Markdown file count and path list since that passing head
+- the final-head local documentation results
+- an explicit statement that no exact-head Actions run exists or is claimed
+
+The reviewer independently verifies the file boundary and reports the missing
+exact-head run as an approved limitation, not as passing evidence. Any failed
+condition restores the normal exact-head Actions requirement. This exception
+never skips the required default-branch workflow after merge.
+
 ### Post-merge knowledge reconciliation
 
 After every feature PR merge, and before the next feature increment:

@@ -108,6 +108,12 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Treat the pushed commit and Draft PR as the recoverable task checkpoint.
   Uncommitted or unpushed workspace changes are not durable handoff state.
 - Require the workflow result to target the exact pushed head.
+- The only exception is an explicitly owner-approved final docs-only correction
+  that satisfies the
+  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Record the preceding
+  passing head and run, exact final Markdown paths, final local documentation
+  proof, and absent exact-head run without calling it passing evidence. The
+  merged-main workflow remains mandatory.
 
 ### 4. Review and correct
 

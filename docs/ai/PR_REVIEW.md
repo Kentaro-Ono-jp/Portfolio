@@ -51,6 +51,12 @@ Do not modify implementation to fix a finding.
    accepted design, tests, and public safety.
 6. Run the smallest relevant non-Docker static verification. Do not start or
    mutate Docker Desktop. Read the exact-head Actions result and limitations.
+   When the owner approved the
+   [CI playbook's docs-only skip](../../.github/workflows/CI_PLAYBOOK.md), verify
+   the preceding passing head and run, require every path through the expected
+   head to be Markdown-only, run the final-head documentation checks, and
+   report the absent exact-head run as a limitation rather than passing
+   evidence. This narrow exception does not itself prevent approval.
 7. Classify actionable findings by severity and cite exact file/line or
    behavioral evidence. Do not request speculative scope expansion.
 8. Publish one verdict comment using the format below. Record temporary-data
@@ -74,11 +80,12 @@ Do not modify implementation to fix a finding.
     cleanup result. If cleanup fails, report the exact limitation and remaining
     path to the owner; do not make a second GitHub write.
 
-If the head moved, required review evidence is unavailable, or a prohibited
-mutation occurred before the verdict, do not approve. Report the exact
-limitation in the single verdict comment. Cleanup occurs after the verdict and
-therefore cannot change that comment; any cleanup failure is a task-level
-limitation that must be reported to the owner without another GitHub mutation.
+If the head moved, required review evidence is unavailable outside the explicit
+docs-only exception, or a prohibited mutation occurred before the verdict, do
+not approve. Report the exact limitation in the single verdict comment. Cleanup
+occurs after the verdict and therefore cannot change that comment; any cleanup
+failure is a task-level limitation that must be reported to the owner without
+another GitHub mutation.
 
 ## Verdict format
 
