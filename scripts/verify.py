@@ -10,6 +10,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
+ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 
 
 def require_command(command: str) -> str:
@@ -52,6 +53,7 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
                 "apps/api/tests",
                 "scripts/verify.py",
                 "scripts/prepare_integration.py",
+                "scripts/verify_outbox_runtime.py",
                 "scripts/check_docs.py",
             ],
         ),
@@ -70,6 +72,7 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
                 "apps/api/tests",
                 "scripts/verify.py",
                 "scripts/prepare_integration.py",
+                "scripts/verify_outbox_runtime.py",
                 "scripts/check_docs.py",
             ],
         ),
@@ -118,7 +121,9 @@ def pytest_command(uv: str, *, include_integration: bool) -> list[str]:
             "--cov=reactorfront_api",
             "--cov-branch",
             "--cov-report=term-missing",
+            "--cov-report=xml:artifacts/verification/coverage.xml",
             "--cov-fail-under=90",
+            "--junitxml=artifacts/verification/pytest.xml",
         ]
     )
     return command
@@ -126,9 +131,16 @@ def pytest_command(uv: str, *, include_integration: bool) -> list[str]:
 
 def run_runtime_checks(*, uv: str, docker: str) -> None:
     run(
-        "Build and start isolated PostgreSQL and MinIO",
+        "Build and start isolated PostgreSQL, MinIO, and RabbitMQ",
         compose_command(
-            docker, "up", "--detach", "--build", "--wait", "postgres", "minio"
+            docker,
+            "up",
+            "--detach",
+            "--build",
+            "--wait",
+            "postgres",
+            "minio",
+            "rabbitmq",
         ),
     )
     run(
@@ -177,14 +189,57 @@ def run_runtime_checks(*, uv: str, docker: str) -> None:
         "Run API unit and real-service integration tests",
         pytest_command(uv, include_integration=True),
     )
+    run(
+        "Prove outbox and RabbitMQ restart recovery",
+        [
+            uv,
+            "run",
+            "--project",
+            "apps/api",
+            "python",
+            "scripts/verify_outbox_runtime.py",
+        ],
+    )
+
+
+def capture_runtime_diagnostic(
+    *,
+    label: str,
+    command: list[str],
+    filename: str,
+) -> None:
+    print(f"\n==> {label}", flush=True)
+    result = subprocess.run(
+        command,
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    output = result.stdout or b""
+    sys.stdout.buffer.write(output)
+    sys.stdout.flush()
+    ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    (ARTIFACT_DIRECTORY / filename).write_bytes(output)
 
 
 def show_runtime_diagnostics(docker: str) -> None:
-    run("Show isolated Compose state", compose_command(docker, "ps"), check=False)
-    run(
-        "Show isolated service logs",
-        compose_command(docker, "logs", "--no-color", "--tail", "200"),
-        check=False,
+    capture_runtime_diagnostic(
+        label="Show isolated Compose state",
+        command=compose_command(docker, "ps", "--all"),
+        filename="compose-ps.txt",
+    )
+    capture_runtime_diagnostic(
+        label="Show isolated service logs",
+        command=compose_command(
+            docker,
+            "logs",
+            "--no-color",
+            "--timestamps",
+            "--tail",
+            "500",
+        ),
+        filename="compose-logs.txt",
     )
 
 
@@ -192,7 +247,7 @@ def cleanup_runtime(docker: str) -> None:
     remove_volumes = os.environ.get("GITHUB_ACTIONS") == "true"
     scope = f"Compose project {COMPOSE_PROJECT_NAME}"
     if remove_volumes:
-        scope += " including its two project-scoped data volumes"
+        scope += " including its three project-scoped data volumes"
     print(f"\n==> Cleanup target: {scope}", flush=True)
     arguments = ["down", "--remove-orphans"]
     if remove_volumes:
@@ -214,6 +269,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     runtime_started = False
     verification_error: RuntimeError | subprocess.CalledProcessError | None = None
     cleanup_error: subprocess.CalledProcessError | None = None

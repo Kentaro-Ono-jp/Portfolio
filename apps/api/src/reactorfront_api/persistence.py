@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -16,8 +16,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     create_engine,
+    func,
+    or_,
     select,
     text,
+    update,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
@@ -27,7 +30,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from reactorfront_api.domain import (
     DocumentStatusRecord,
     DocumentSubmission,
+    OutboxInvariantError,
+    OutboxLease,
     ProcessingStatus,
+    PublishFailureCode,
+    PublishFinalizeResult,
     SubmissionCommitObservation,
     SubmissionCommitOutcome,
     SubmissionPersistenceError,
@@ -230,7 +237,7 @@ class SqlAlchemySubmissionRepository:
             result = session.execute(statement).one_or_none()
             if result is None:
                 return None
-            document, job = result.tuple()
+            document, job = result._tuple()
             return DocumentStatusRecord(
                 document_id=document.id,
                 job_id=job.id,
@@ -251,3 +258,144 @@ class SqlAlchemySubmissionRepository:
 
     def close(self) -> None:
         self._engine.dispose()
+
+
+class SqlAlchemyOutboxRepository:
+    def __init__(self, *, engine: Engine) -> None:
+        self._engine = engine
+
+    def lease_pending(
+        self,
+        *,
+        lease_owner: str,
+        lease_duration: timedelta,
+        batch_size: int,
+    ) -> list[OutboxLease]:
+        eligible = (
+            select(OutboxEventRow.event_id)
+            .where(OutboxEventRow.published_at.is_(None))
+            .where(
+                or_(
+                    OutboxEventRow.leased_until.is_(None),
+                    OutboxEventRow.leased_until <= func.now(),
+                )
+            )
+            .order_by(OutboxEventRow.created_at, OutboxEventRow.event_id)
+            .limit(batch_size)
+            .with_for_update(skip_locked=True)
+            .cte("eligible_outbox_events")
+        )
+        statement = (
+            update(OutboxEventRow)
+            .where(OutboxEventRow.event_id.in_(select(eligible.c.event_id)))
+            .values(
+                lease_owner=lease_owner,
+                leased_until=func.now() + lease_duration,
+                attempt_count=OutboxEventRow.attempt_count + 1,
+            )
+            .returning(OutboxEventRow)
+        )
+        with Session(self._engine) as session, session.begin():
+            rows = list(session.scalars(statement))
+            leases = [self._lease_from_row(row) for row in rows]
+        return sorted(leases, key=lambda lease: (lease.created_at, lease.event_id))
+
+    def mark_published(
+        self,
+        *,
+        event_id: UUID,
+        lease_owner: str,
+        attempt_count: int,
+    ) -> PublishFinalizeResult:
+        with Session(self._engine) as session, session.begin():
+            event = session.scalar(
+                select(OutboxEventRow).where(OutboxEventRow.event_id == event_id).with_for_update()
+            )
+            if event is None:
+                raise OutboxInvariantError("Outbox event does not exist")
+            job = session.scalar(
+                select(ProcessingJobRow)
+                .where(ProcessingJobRow.id == event.aggregate_id)
+                .with_for_update()
+            )
+            if job is None:
+                raise OutboxInvariantError("Outbox job does not exist")
+
+            if event.published_at is not None:
+                if job.status != ProcessingStatus.QUEUED.value:
+                    raise OutboxInvariantError("Published event does not have a queued job")
+                return PublishFinalizeResult.ALREADY_PUBLISHED
+
+            database_now = session.scalar(select(func.now()))
+            if database_now is None:
+                raise OutboxInvariantError("Database clock is unavailable")
+            if (
+                event.lease_owner != lease_owner
+                or event.attempt_count != attempt_count
+                or event.leased_until is None
+                or event.leased_until <= database_now
+            ):
+                return PublishFinalizeResult.LEASE_LOST
+            if job.status != ProcessingStatus.ACCEPTED.value:
+                raise OutboxInvariantError("Unpublished event does not have an accepted job")
+
+            event.published_at = database_now
+            event.leased_until = None
+            event.lease_owner = None
+            event.last_error = None
+            job.status = ProcessingStatus.QUEUED.value
+            session.flush()
+            return PublishFinalizeResult.PUBLISHED
+
+    def record_failure(
+        self,
+        *,
+        event_id: UUID,
+        lease_owner: str,
+        attempt_count: int,
+        code: PublishFailureCode,
+        retry_delay: timedelta,
+    ) -> bool:
+        with Session(self._engine) as session, session.begin():
+            event = session.scalar(
+                select(OutboxEventRow).where(OutboxEventRow.event_id == event_id).with_for_update()
+            )
+            if event is None or event.published_at is not None:
+                return False
+            database_now = session.scalar(select(func.now()))
+            if database_now is None:
+                return False
+            if (
+                event.lease_owner != lease_owner
+                or event.attempt_count != attempt_count
+                or event.leased_until is None
+                or event.leased_until <= database_now
+            ):
+                return False
+            event.leased_until = database_now + retry_delay
+            event.last_error = code.value
+            session.flush()
+            return True
+
+    def is_ready(self) -> bool:
+        with self._engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return True
+
+    def close(self) -> None:
+        self._engine.dispose()
+
+    @staticmethod
+    def _lease_from_row(row: OutboxEventRow) -> OutboxLease:
+        if row.lease_owner is None or row.leased_until is None:
+            raise OutboxInvariantError("Leased event has incomplete lease metadata")
+        return OutboxLease(
+            event_id=row.event_id,
+            event_type=row.event_type,
+            job_id=row.aggregate_id,
+            payload=dict(row.payload),
+            created_at=row.created_at,
+            lease_owner=row.lease_owner,
+            leased_until=row.leased_until,
+            attempt_count=row.attempt_count,
+        )

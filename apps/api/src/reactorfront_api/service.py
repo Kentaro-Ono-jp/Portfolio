@@ -16,6 +16,7 @@ from reactorfront_api.domain import (
     ProblemCode,
     ProcessingStatus,
     PublicProblem,
+    ReadinessProbe,
     SubmissionCommitObservation,
     SubmissionCommitOutcome,
     SubmissionPersistenceError,
@@ -38,12 +39,14 @@ class DocumentService:
         repository: SubmissionRepository,
         object_storage: ObjectStorage,
         event_validator: EventContractValidator,
+        broker_readiness: ReadinessProbe | None = None,
         id_factory: Callable[[], UUID] = uuid4,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._object_storage = object_storage
         self._event_validator = event_validator
+        self._broker_readiness = broker_readiness
         self._id_factory = id_factory
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -197,7 +200,10 @@ class DocumentService:
 
     def is_ready(self) -> bool:
         try:
-            return self._repository.is_ready() and self._object_storage.is_ready()
+            dependencies_ready = self._repository.is_ready() and self._object_storage.is_ready()
+            if self._broker_readiness is not None:
+                dependencies_ready = dependencies_ready and self._broker_readiness.is_ready()
+            return dependencies_ready
         except Exception:
             LOGGER.exception("Dependency readiness check failed")
             return False

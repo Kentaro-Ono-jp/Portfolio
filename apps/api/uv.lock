@@ -582,6 +582,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pika"
+version = "1.4.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/09/8c42dd00c4b3e09ebd174455d30823c261eefef9d2b7e94ae9ca779704c1/pika-1.4.1.tar.gz", hash = "sha256:e851f3e4992adfbf8eb64e9b86d94e3382f92ba0200055abedbb29676b8e713b", size = 154268, upload-time = "2026-05-22T18:01:24.855Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/7b/a09c0d378ee8604220902c58103104b2304ef99744c4b7fc45312d280484/pika-1.4.1-py3-none-any.whl", hash = "sha256:2daae7bd422a0fc4f4879fd48c9a1932ed74a0bc7172e1e5f9bde63a101ed074", size = 164962, upload-time = "2026-05-22T18:01:23.429Z" },
+]
+
+[[package]]
 name = "pip"
 version = "26.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -861,6 +870,7 @@ dependencies = [
     { name = "boto3" },
     { name = "fastapi" },
     { name = "jsonschema" },
+    { name = "pika" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -881,6 +891,7 @@ dev = [
     { name = "pyyaml" },
     { name = "ruff" },
     { name = "types-jsonschema" },
+    { name = "types-pika-ts" },
     { name = "types-pyyaml" },
 ]
 
@@ -890,6 +901,7 @@ requires-dist = [
     { name = "boto3", specifier = "==1.43.51" },
     { name = "fastapi", specifier = "==0.139.2" },
     { name = "jsonschema", specifier = "==4.26.0" },
+    { name = "pika", specifier = "==1.4.1" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.4" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pydantic-settings", specifier = "==2.14.2" },
@@ -910,6 +922,7 @@ dev = [
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "ruff", specifier = "==0.15.22" },
     { name = "types-jsonschema", specifier = "==4.26.0.20260518" },
+    { name = "types-pika-ts", specifier = "==1.4.0.20260518" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260518" },
 ]
 
@@ -1119,6 +1132,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/46/73b6a5d61a61015c4248030a8cb07e5bdddb4041430fae9e585a68692578/types_jsonschema-4.26.0.20260518.tar.gz", hash = "sha256:e1dd53dc97a64f5eccdd6fa9839666e09bb500a8ebba2db6fdaf1789faea81a6", size = 16638, upload-time = "2026-05-18T06:06:44.106Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/d5/134f8a147dcecda10db7f60cfc6af0578a25a5c53c87b3907a64385e0184/types_jsonschema-4.26.0.20260518-py3-none-any.whl", hash = "sha256:30b30a518c7fe335df85c919fcbcc631b69c03d4a4b5b632fa916bea03065307", size = 16072, upload-time = "2026-05-18T06:06:43.264Z" },
+]
+
+[[package]]
+name = "types-pika-ts"
+version = "1.4.0.20260518"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/bf/4a67eca6e02daed5979ae0482b41b4db8cf0fb3ebc2bc2d14b451680343a/types_pika_ts-1.4.0.20260518.tar.gz", hash = "sha256:c60d69838065c1271af71ac2404759b274075716f30c0a21d4fe09570e3f60aa", size = 24705, upload-time = "2026-05-18T06:01:54.433Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/3d/1ffd14733105bf2aa146b6061b7885d2a30a30739cc55711805ce3737c3a/types_pika_ts-1.4.0.20260518-py3-none-any.whl", hash = "sha256:8038b065b766cd6c4c75a96f7b7affed0961c88bd4b03594f4c5fdb6fa6e02ba", size = 32125, upload-time = "2026-05-18T06:01:53.578Z" },
 ]
 
 [[package]]

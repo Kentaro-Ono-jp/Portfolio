@@ -14,6 +14,19 @@ from reactorfront_api.domain import (
 
 
 @dataclass
+class FakeReadinessProbe:
+    ready: bool = True
+    error: Exception | None = None
+    calls: int = 0
+
+    def is_ready(self) -> bool:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return self.ready
+
+
+@dataclass
 class FakeRepository:
     submissions: list[DocumentSubmission] = field(default_factory=list)
     records: dict[UUID, DocumentStatusRecord] = field(default_factory=dict)

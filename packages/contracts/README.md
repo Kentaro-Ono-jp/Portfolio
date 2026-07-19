@@ -27,6 +27,30 @@ boundaries:
 - The web application consumes generated TypeScript types or a generated client.
 - Contract and event names are explicitly versioned.
 
+## Requested-event RabbitMQ transport
+
+The API-owned outbox dispatcher publishes requested work through this durable
+direct topology:
+
+| Element | Value |
+|---|---|
+| Exchange | `reactorfront.documents.v1` |
+| Queue | `reactorfront.document-processing.requested.v1` |
+| Routing key | `document.processing.requested.v1` |
+| Celery task | `reactorfront_ml.process_document` |
+
+The broker message uses Celery protocol v2 with JSON encoding. The canonical
+`document.processing.requested.v1` object is the first positional task
+argument; it is not replaced by a private Python model. The outbox `eventId`
+is both the Celery task ID and AMQP message ID. The application
+`correlationId` is carried as the Celery root ID and an explicit header.
+
+The exchange and queue are durable, messages use persistent delivery mode,
+routing is mandatory, and the dispatcher waits for publisher confirmation.
+Confirmation followed by an unknown database result may publish the same event
+again, so consumers must treat `eventId` idempotently. This boundary does not
+claim exactly-once delivery.
+
 ## Verification and generation
 
 From the repository root:

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from reactorfront_api.domain import ProblemCode, ProcessingStatus, PublicProblem
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
 from reactorfront_api.persistence import SqlAlchemySubmissionRepository, create_database_engine
+from reactorfront_api.rabbitmq import PikaOutboxPublisher
 from reactorfront_api.request_limits import (
     MULTIPART_ENVELOPE_BYTES,
     UploadRequestBodyLimitMiddleware,
@@ -46,10 +47,15 @@ def build_document_service(settings: Settings) -> DocumentService:
         region=settings.s3_region,
     )
     event_validator = JsonSchemaEventValidator(contract_directory=settings.event_contract_directory)
+    broker_readiness = PikaOutboxPublisher(
+        broker_url=settings.rabbitmq_url.get_secret_value(),
+        timeout_seconds=settings.rabbitmq_timeout_seconds,
+    )
     return DocumentService(
         repository=repository,
         object_storage=object_storage,
         event_validator=event_validator,
+        broker_readiness=broker_readiness,
     )
 
 

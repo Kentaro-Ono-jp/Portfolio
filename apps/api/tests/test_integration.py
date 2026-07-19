@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
-from collections.abc import Iterator
-from datetime import UTC, datetime
+import time
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from uuid import UUID
 
 import boto3
 import httpx2 as httpx
+import pika
 import pytest
 from botocore.config import Config
 from botocore.exceptions import ClientError
@@ -17,13 +21,32 @@ from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from reactorfront_api.domain import ProcessingStatus, PublicProblem
+import reactorfront_api.rabbitmq as rabbitmq
+from reactorfront_api.domain import (
+    ProcessingStatus,
+    PublicProblem,
+    PublishFailureCode,
+    PublishFinalizeResult,
+)
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
+from reactorfront_api.outbox import (
+    DispatchCycleResult,
+    DispatcherPolicy,
+    OutboxDispatcher,
+)
 from reactorfront_api.persistence import (
     DocumentRow,
     OutboxEventRow,
     ProcessingJobRow,
+    SqlAlchemyOutboxRepository,
     SqlAlchemySubmissionRepository,
+)
+from reactorfront_api.rabbitmq import (
+    REQUEST_EXCHANGE,
+    REQUEST_QUEUE,
+    REQUEST_ROUTING_KEY,
+    REQUEST_TASK_NAME,
+    PikaOutboxPublisher,
 )
 from reactorfront_api.request_limits import MULTIPART_ENVELOPE_BYTES
 from reactorfront_api.service import MAX_DOCUMENT_BYTES, DocumentService
@@ -48,12 +71,15 @@ def settings() -> Settings:
 @pytest.fixture
 def engine(settings: Settings) -> Iterator[Engine]:
     database_engine = create_engine(settings.database_url)
-    with database_engine.begin() as connection:
-        connection.execute(
-            text("TRUNCATE outbox_events, processing_jobs, documents RESTART IDENTITY CASCADE")
-        )
-    yield database_engine
-    database_engine.dispose()
+    truncate = text("TRUNCATE outbox_events, processing_jobs, documents RESTART IDENTITY CASCADE")
+    try:
+        with database_engine.begin() as connection:
+            connection.execute(truncate)
+        yield database_engine
+    finally:
+        with database_engine.begin() as connection:
+            connection.execute(truncate)
+        database_engine.dispose()
 
 
 @pytest.fixture
@@ -71,6 +97,21 @@ def s3(settings: Settings) -> Iterator[S3Client]:
     if objects:
         client.delete_objects(Bucket=settings.s3_bucket, Delete={"Objects": objects})
     yield client
+
+
+@pytest.fixture
+def rabbitmq_channel(
+    settings: Settings,
+) -> Iterator[pika.adapters.blocking_connection.BlockingChannel]:
+    connection = pika.BlockingConnection(
+        pika.URLParameters(settings.rabbitmq_url.get_secret_value())
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue=REQUEST_QUEUE, durable=True)
+    channel.queue_purge(queue=REQUEST_QUEUE)
+    yield channel
+    channel.queue_purge(queue=REQUEST_QUEUE)
+    connection.close()
 
 
 def table_count(engine: Engine, table_name: str) -> int:
@@ -319,6 +360,341 @@ def test_commit_acknowledgement_loss_reconciles_real_postgres_and_keeps_source(
         Key=f"documents/{DOCUMENT_ID}/source.pdf",
     )
     assert stored["Body"].read() == PDF
+
+
+def test_real_postgres_leases_once_and_recovers_expired_work(
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+) -> None:
+    service = make_real_service(settings=settings, engine=engine, s3=s3)
+    service.submit(
+        stream=BytesIO(PDF),
+        original_filename="invoice.pdf",
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+    )
+    repository = SqlAlchemyOutboxRepository(engine=engine)
+
+    def claim(owner: str) -> list[object]:
+        return repository.lease_pending(
+            lease_owner=owner,
+            lease_duration=timedelta(seconds=30),
+            batch_size=1,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        claims = list(executor.map(claim, ["dispatcher-a", "dispatcher-b"]))
+
+    leased = [lease for owner_claims in claims for lease in owner_claims]
+    assert len(leased) == 1
+    assert leased[0].event_id == EVENT_ID
+    assert leased[0].attempt_count == 1
+
+    assert repository.record_failure(
+        event_id=EVENT_ID,
+        lease_owner=leased[0].lease_owner,
+        attempt_count=leased[0].attempt_count,
+        code=PublishFailureCode.BROKER_UNAVAILABLE,
+        retry_delay=timedelta(seconds=30),
+    )
+    assert not claim("dispatcher-c")
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE outbox_events "
+                "SET leased_until = CURRENT_TIMESTAMP - INTERVAL '1 second' "
+                "WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        )
+    recovered = claim(leased[0].lease_owner)
+    assert len(recovered) == 1
+    assert recovered[0].lease_owner == leased[0].lease_owner
+    assert recovered[0].attempt_count == 2
+
+    with engine.connect() as connection:
+        active_lease_before = connection.execute(
+            text(
+                "SELECT lease_owner, leased_until, attempt_count, last_error "
+                "FROM outbox_events WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        ).one()
+    assert (
+        repository.mark_published(
+            event_id=EVENT_ID,
+            lease_owner=leased[0].lease_owner,
+            attempt_count=leased[0].attempt_count,
+        )
+        is PublishFinalizeResult.LEASE_LOST
+    )
+    assert not repository.record_failure(
+        event_id=EVENT_ID,
+        lease_owner=leased[0].lease_owner,
+        attempt_count=leased[0].attempt_count,
+        code=PublishFailureCode.CONFIRM_TIMEOUT,
+        retry_delay=timedelta(seconds=1),
+    )
+    with engine.connect() as connection:
+        active_lease_after = connection.execute(
+            text(
+                "SELECT lease_owner, leased_until, attempt_count, last_error "
+                "FROM outbox_events WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        ).one()
+    assert tuple(active_lease_after) == tuple(active_lease_before)
+
+
+def test_real_rabbitmq_confirm_duplicate_and_atomic_queued_transition(
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+    rabbitmq_channel: pika.adapters.blocking_connection.BlockingChannel,
+) -> None:
+    service = make_real_service(settings=settings, engine=engine, s3=s3)
+    service.submit(
+        stream=BytesIO(PDF),
+        original_filename="invoice.pdf",
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+    )
+    repository = SqlAlchemyOutboxRepository(engine=engine)
+    publisher = PikaOutboxPublisher(
+        broker_url=settings.rabbitmq_url.get_secret_value(),
+        timeout_seconds=settings.rabbitmq_timeout_seconds,
+    )
+
+    first = repository.lease_pending(
+        lease_owner="dispatcher-a",
+        lease_duration=timedelta(seconds=30),
+        batch_size=1,
+    )[0]
+    publisher.publish(first)
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE outbox_events "
+                "SET leased_until = CURRENT_TIMESTAMP - INTERVAL '1 second' "
+                "WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        )
+    retry = repository.lease_pending(
+        lease_owner="dispatcher-b",
+        lease_duration=timedelta(seconds=30),
+        batch_size=1,
+    )[0]
+    publisher.publish(retry)
+    assert (
+        repository.mark_published(
+            event_id=EVENT_ID,
+            lease_owner="dispatcher-b",
+            attempt_count=retry.attempt_count,
+        )
+        is PublishFinalizeResult.PUBLISHED
+    )
+    assert (
+        repository.mark_published(
+            event_id=EVENT_ID,
+            lease_owner="dispatcher-b",
+            attempt_count=retry.attempt_count,
+        )
+        is PublishFinalizeResult.ALREADY_PUBLISHED
+    )
+
+    deliveries: list[tuple[pika.spec.Basic.Deliver, pika.BasicProperties, bytes]] = []
+    for _ in range(2):
+        method, properties, body = rabbitmq_channel.basic_get(
+            queue=REQUEST_QUEUE,
+            auto_ack=False,
+        )
+        assert method is not None
+        assert properties is not None
+        assert body is not None
+        deliveries.append((method, properties, body))
+        rabbitmq_channel.basic_ack(delivery_tag=method.delivery_tag)
+
+    assert {item[1].message_id for item in deliveries} == {str(EVENT_ID)}
+    for _method, properties, body in deliveries:
+        assert properties.delivery_mode == 2
+        assert properties.headers["task"] == REQUEST_TASK_NAME
+        assert properties.headers["root_id"] == str(CORRELATION_ID)
+        task_body = json.loads(body)
+        assert task_body[0][0]["eventType"] == REQUEST_ROUTING_KEY
+        assert task_body[0][0]["eventId"] == str(EVENT_ID)
+
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    assert status is not None
+    assert status.status is ProcessingStatus.QUEUED
+    with engine.connect() as connection:
+        persisted = connection.execute(
+            text(
+                "SELECT published_at, lease_owner, leased_until, attempt_count, last_error "
+                "FROM outbox_events WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        ).one()
+    assert persisted.published_at is not None
+    assert persisted.lease_owner is None
+    assert persisted.leased_until is None
+    assert persisted.attempt_count == 2
+    assert persisted.last_error is None
+
+
+def test_real_confirm_deadline_returns_and_keeps_job_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+    rabbitmq_channel: pika.adapters.blocking_connection.BlockingChannel,
+) -> None:
+    del rabbitmq_channel
+    service = make_real_service(settings=settings, engine=engine, s3=s3)
+    service.submit(
+        stream=BytesIO(PDF),
+        original_filename="invoice.pdf",
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+    )
+    original_confirm_delivery = pika.channel.Channel.confirm_delivery
+
+    def suppress_delivery_confirmation(
+        channel: pika.channel.Channel,
+        _ack_nack_callback: Callable[
+            [pika.frame.Method[pika.spec.Basic.Ack | pika.spec.Basic.Nack]],
+            object,
+        ],
+        callback: Callable[[pika.frame.Method[pika.spec.Confirm.SelectOk]], object] | None = None,
+    ) -> None:
+        original_confirm_delivery(channel, lambda _frame: None, callback)
+
+    monkeypatch.setattr(
+        pika.channel.Channel,
+        "confirm_delivery",
+        suppress_delivery_confirmation,
+    )
+    repository = SqlAlchemyOutboxRepository(engine=engine)
+    publisher = PikaOutboxPublisher(
+        broker_url=settings.rabbitmq_url.get_secret_value(),
+        timeout_seconds=1.0,
+    )
+    dispatcher = OutboxDispatcher(
+        repository=repository,
+        publisher=publisher,
+        lease_owner="dispatcher-confirm-timeout-test",
+        policy=DispatcherPolicy(
+            batch_size=1,
+            lease_duration=timedelta(seconds=5),
+            poll_seconds=0.1,
+            retry_base_seconds=1,
+            retry_max_seconds=30,
+        ),
+    )
+    started = time.monotonic()
+    try:
+        assert dispatcher.dispatch_once() is DispatchCycleResult.RETRY_SCHEDULED
+        elapsed = time.monotonic() - started
+        assert 0.8 <= elapsed <= 1.75
+
+        status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+        assert status is not None
+        assert status.status is ProcessingStatus.ACCEPTED
+        with engine.connect() as connection:
+            persisted = connection.execute(
+                text(
+                    "SELECT published_at, attempt_count, last_error "
+                    "FROM outbox_events WHERE event_id = :event_id"
+                ),
+                {"event_id": EVENT_ID},
+            ).one()
+        assert persisted.published_at is None
+        assert persisted.attempt_count == 1
+        assert persisted.last_error == PublishFailureCode.CONFIRM_TIMEOUT.value
+    finally:
+        dispatcher.close()
+
+
+def test_real_unroutable_publish_stays_accepted_and_records_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+    rabbitmq_channel: pika.adapters.blocking_connection.BlockingChannel,
+) -> None:
+    service = make_real_service(settings=settings, engine=engine, s3=s3)
+    service.submit(
+        stream=BytesIO(PDF),
+        original_filename="invoice.pdf",
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+    )
+    repository = SqlAlchemyOutboxRepository(engine=engine)
+    publisher = PikaOutboxPublisher(
+        broker_url=settings.rabbitmq_url.get_secret_value(),
+        timeout_seconds=settings.rabbitmq_timeout_seconds,
+    )
+    rabbitmq_channel.exchange_declare(
+        exchange=REQUEST_EXCHANGE,
+        exchange_type="direct",
+        durable=True,
+    )
+    rabbitmq_channel.queue_bind(
+        queue=REQUEST_QUEUE,
+        exchange=REQUEST_EXCHANGE,
+        routing_key=REQUEST_ROUTING_KEY,
+    )
+    rabbitmq_channel.queue_unbind(
+        queue=REQUEST_QUEUE,
+        exchange=REQUEST_EXCHANGE,
+        routing_key=REQUEST_ROUTING_KEY,
+    )
+
+    def skip_queue_binding(
+        attempt: rabbitmq._PublishAttempt,
+        _frame: pika.frame.Method[pika.spec.Queue.DeclareOk],
+    ) -> None:
+        attempt._on_queue_bound(pika.frame.Method(1, pika.spec.Queue.BindOk()))
+
+    monkeypatch.setattr(rabbitmq._PublishAttempt, "_on_queue_declared", skip_queue_binding)
+    dispatcher = OutboxDispatcher(
+        repository=repository,
+        publisher=publisher,
+        lease_owner="dispatcher-unroutable-test",
+        policy=DispatcherPolicy(
+            batch_size=1,
+            lease_duration=timedelta(seconds=30),
+            poll_seconds=0.1,
+            retry_base_seconds=1,
+            retry_max_seconds=30,
+        ),
+    )
+    try:
+        assert dispatcher.dispatch_once() is DispatchCycleResult.RETRY_SCHEDULED
+    finally:
+        rabbitmq_channel.queue_bind(
+            queue=REQUEST_QUEUE,
+            exchange=REQUEST_EXCHANGE,
+            routing_key=REQUEST_ROUTING_KEY,
+        )
+
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    assert status is not None
+    assert status.status is ProcessingStatus.ACCEPTED
+    with engine.connect() as connection:
+        persisted = connection.execute(
+            text(
+                "SELECT published_at, attempt_count, last_error "
+                "FROM outbox_events WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        ).one()
+    assert persisted.published_at is None
+    assert persisted.attempt_count == 1
+    assert persisted.last_error == PublishFailureCode.UNROUTABLE.value
 
 
 def make_real_service(*, settings: Settings, engine: Engine, s3: S3Client) -> DocumentService:
