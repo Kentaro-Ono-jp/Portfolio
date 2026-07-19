@@ -27,7 +27,7 @@ from reactorfront_ml.rabbitmq import (
 )
 from reactorfront_ml.model import MODEL_VERSION
 from reactorfront_ml.settings import Settings
-from scripts.pdf_fixture import build_fixture
+from pdf_fixture import build_fixture
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
