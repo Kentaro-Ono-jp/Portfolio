@@ -41,6 +41,20 @@ def main() -> int:
     if "api-events" in services or "web" in services:
         raise RuntimeError("Focused ML increment includes an out-of-scope service")
 
+    dockerfile = (REPOSITORY_ROOT / "infra" / "docker" / "ml" / "Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    missing_worker_flags = [
+        flag
+        for flag in ("--without-gossip", "--without-mingle")
+        if flag not in dockerfile
+    ]
+    if missing_worker_flags:
+        raise RuntimeError(
+            "ML worker enables unused Celery cluster topology: "
+            f"missing {missing_worker_flags}"
+        )
+
     lock = tomllib.loads(
         (REPOSITORY_ROOT / "apps" / "ml" / "uv.lock").read_text(encoding="utf-8")
     )
@@ -92,7 +106,7 @@ def main() -> int:
         raise RuntimeError("Normalized PyTorch audit identity has drifted")
     print(
         "ML boundary passed: CPU-only lock plus no database settings, host port, "
-        "API result consumer, or Web service."
+        "unused Celery cluster topology, API result consumer, or Web service."
     )
     return 0
 

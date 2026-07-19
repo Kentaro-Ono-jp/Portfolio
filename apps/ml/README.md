@@ -51,10 +51,11 @@ can repeat inference and publication, so event IDs are derived deterministically
 from the requested `eventId` and event type. This is at-least-once behavior and
 does not claim exactly-once execution.
 
-Celery control, health-probe, and gossip event queues are transient and
-exclusive. Their lifetime is tied to one connection, avoiding RabbitMQ's
-deprecated transient non-exclusive queue mode without changing the durable
-requested/result queues.
+Celery control and health-probe queues are transient and exclusive. Their
+lifetime is tied to one connection, avoiding RabbitMQ's deprecated transient
+non-exclusive queue mode. The single-purpose worker disables unused cluster
+gossip and mingle bootsteps; event-receiver queues remain explicitly exclusive
+if enabled later. None of this changes the durable requested/result queues.
 
 Transient object-store failures use at most three application attempts. Missing
 objects, digest mismatch, unsupported PDFs, empty text, and deterministic model

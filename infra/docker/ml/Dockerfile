@@ -42,4 +42,4 @@ COPY --chown=10002:10002 apps/ml/MODEL_CARD.md /opt/reactorfront/model/MODEL_CAR
 COPY --chown=10002:10002 packages/contracts/events /workspace/packages/contracts/events
 
 USER 10002:10002
-CMD ["/bin/sh", "-c", "python -m reactorfront_ml.health --check && exec celery -A reactorfront_ml.celery_app:app worker --loglevel=INFO --concurrency=1 --pool=solo"]
+CMD ["/bin/sh", "-c", "python -m reactorfront_ml.health --check && exec celery -A reactorfront_ml.celery_app:app worker --loglevel=INFO --concurrency=1 --pool=solo --without-gossip --without-mingle"]

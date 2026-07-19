@@ -48,5 +48,7 @@ by Delivery Specification 0001; `/health` remains process-only.
 The `ml-worker` declares a durable result-event queue and routes canonical
 started/completed/failed events through confirmed persistent messages. Its
 health check verifies the model artifact, MinIO and RabbitMQ reachability, and
-an answering Celery worker process. The future `api-events` consumer and Web
-service remain absent.
+an answering Celery worker process. The dedicated worker disables Celery's
+unused gossip and mingle cluster bootsteps, while its health-probe control
+queues are connection-exclusive for RabbitMQ 4.3 compatibility. The future
+`api-events` consumer and Web service remain absent.
