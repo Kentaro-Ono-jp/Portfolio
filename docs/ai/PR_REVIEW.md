@@ -24,8 +24,9 @@ The review agent must:
 - shallow-clone only the exact PR head with `--depth 1` and `--no-tags`
 - use GitHub reads and non-Docker static verification as needed
 - make exactly one top-level verdict comment for this review cycle
-- remove the clone and every generated temporary file, then verify the
-  temporary path no longer exists
+- after that comment, remove the clone and every generated temporary file,
+  verify the temporary path no longer exists, and report the result in the
+  review task's final response
 
 The only permitted GitHub write is that verdict comment. Do not push, create
 or delete branches, edit or close an Issue or PR, resolve threads, change Draft
@@ -52,13 +53,26 @@ Do not modify implementation to fix a finding.
    mutate Docker Desktop. Read the exact-head Actions result and limitations.
 7. Classify actionable findings by severity and cite exact file/line or
    behavioral evidence. Do not request speculative scope expansion.
-8. Delete the shallow clone and generated data. Verify cleanup before the
-   GitHub write.
-9. Publish one verdict comment using the format below.
+8. Publish one verdict comment using the format below. Record temporary-data
+   cleanup as `scheduled immediately after this comment`; do not claim it is
+   already complete.
+9. Delete the shallow clone and generated data after the GitHub write:
+   - first require the deletion target to be the already verified, uniquely
+     named child created for this review under the platform temporary root
+   - use the environment's ordinary scoped deletion mechanism first
+   - if shell or execution policy rejects that mechanism, use a standard
+     library directory API in the same process against that exact validated
+     path only; do not broaden the target or run global cleanup
+   - verify the temporary path no longer exists
+10. In the review task's final response, report the verdict URL and actual
+    cleanup result. If cleanup fails, report the exact limitation and remaining
+    path to the owner; do not make a second GitHub write.
 
-If the head moved, required evidence is unavailable, cleanup cannot be proved,
-or a prohibited mutation occurred, do not approve. Report the exact limitation
-in the single verdict comment.
+If the head moved, required review evidence is unavailable, or a prohibited
+mutation occurred before the verdict, do not approve. Report the exact
+limitation in the single verdict comment. Cleanup occurs after the verdict and
+therefore cannot change that comment; any cleanup failure is a task-level
+limitation that must be reported to the owner without another GitHub mutation.
 
 ## Verdict format
 
@@ -79,6 +93,6 @@ Previous verdict: `<URL | none>`
 - exact-head GitHub Actions: `<result>`
 - canonical workspace: untouched
 - GitHub mutations: verdict comment only
-- temporary clone and generated data: removed
+- temporary clone and generated data: cleanup scheduled immediately after this comment
 - limitations: `<result | none>`
 ```

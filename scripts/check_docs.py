@@ -15,6 +15,12 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("docs/ai/README.md"),
     Path("docs/ai/PR_REVIEW.md"),
 )
+EXPECTED_AI_GUIDANCE_FILES = frozenset(
+    {
+        Path("README.md"),
+        Path("PR_REVIEW.md"),
+    }
+)
 REQUIRED_GOVERNANCE_TEXT = {
     Path("GIT_AGENTS.md"): (
         "explicit, tracked entrypoint",
@@ -58,6 +64,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "complete pull request diff",
         "Do not modify implementation",
         "temporary path no longer exists",
+        "cleanup scheduled immediately after this comment",
     ),
     Path("docs/adr/0006-consolidate-ai-guidance.md"): (
         "GIT_AGENTS.md",
@@ -76,6 +83,27 @@ FORBIDDEN_GOVERNANCE_PATTERNS = {
     "local file URI": re.compile(r"(?i)\bfile:(?:/{1,3}|\\\\)"),
     "user-home shorthand path": re.compile(r"(?<![\w~])~[\\/]"),
     "machine-local memory path": re.compile(r"(?i)\.codex[\\/]memories"),
+    "PEM private key": re.compile(r"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----"),
+    "GitHub credential": re.compile(
+        r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+    ),
+    "cloud access credential": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    "Bearer credential": re.compile(
+        r"(?i)\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/=-]{16,}"
+    ),
+    "assigned credential": re.compile(
+        r"(?im)\b(?:api[_ -]?(?:key|token)|access[_ -]?token|auth[_ -]?token|"
+        r"client[_ -]?secret|password|passwd)\b\s*[:=]\s*[\"']?"
+        r"(?!(?:<[^>\r\n]+>|\$\{[^}\r\n]+\}|"
+        r"(?:\[?redacted\]?|example|placeholder|changeme|none|null)\b))"
+        r"[A-Za-z0-9._~+/=-]{8,}"
+    ),
+    "explicit private context": re.compile(
+        r"(?im)^\s*(?:private|confidential|client[ _-]?internal|"
+        r"company[ _-]?internal)[ _-]*(?:context|note|data|source|details?)?"
+        r"\s*[:=]\s*(?!(?:<[^>\r\n]+>|\[?redacted\]?|example|placeholder|"
+        r"none)\s*$)\S.+$"
+    ),
 }
 
 
@@ -135,6 +163,23 @@ def governance_failures() -> list[str]:
     ]
     governance_root = REPOSITORY_ROOT / "docs" / "ai"
     if governance_root.is_dir():
+        actual_ai_guidance_files = frozenset(
+            path.relative_to(governance_root)
+            for path in governance_root.rglob("*")
+            if path.is_file()
+        )
+        for unexpected_path in sorted(
+            actual_ai_guidance_files - EXPECTED_AI_GUIDANCE_FILES
+        ):
+            failures.append(
+                f"docs/ai contains unexpected file {unexpected_path.as_posix()}"
+            )
+        for missing_path in sorted(
+            EXPECTED_AI_GUIDANCE_FILES - actual_ai_guidance_files
+        ):
+            failures.append(
+                f"docs/ai is missing required file {missing_path.as_posix()}"
+            )
         governance_paths.extend(sorted(governance_root.rglob("*.md")))
 
     for path in governance_paths:
