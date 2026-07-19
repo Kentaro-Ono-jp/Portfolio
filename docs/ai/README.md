@@ -66,8 +66,8 @@ Always verify the exact target at a mutation boundary:
   and evidence for each finding
 - merge: reviewed head, passing exact-head check, approved merge method, and
   explicit owner direction
-- checklist update: exact merge commit, successful default-branch run, and
-  criterion-by-criterion proof
+- checklist update: exact merge commit, successful default-branch run or the
+  approved Markdown-only exception, and criterion-by-criterion proof
 - cleanup: identified target, authorization, and recoverable scope
 
 A moved head, unexpected dirty file, contradictory Issue, prohibited review
@@ -113,8 +113,8 @@ Do not infer current PR, Issue, check, or merge state from local memory.
   [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Record the exact base
   `main` SHA and successful default-branch run, every Markdown path in the full
   PR diff, review-head local documentation proof, and absent exact-head run
-  without calling it passing evidence. The merged-main workflow remains
-  mandatory.
+  without calling it passing evidence. The same approved exception applies to
+  the Markdown-only merge commit; its absent run is also not passing evidence.
 - After the initial PR description and exact-head workflow or approved absent
   state are reconciled, provide a copyable initial-review prompt populated with
   the repository, PR, focused Issue, expected full head SHA, review cycle,
@@ -163,21 +163,21 @@ A follow-up checkpoint is not complete without the applicable prompt.
 - Change Draft to Ready and merge only with explicit owner direction.
 - Pin merge to the reviewed PR head and use the repository's established merge
   method.
-- When a Markdown-only PR used a CI skip on any head and that method is squash,
-  supply an explicit squash subject and body with no supported skip instruction
-  or trailer. Do not let a generated default body copy skipped commit subjects
-  into the new `main` commit.
+- When a Markdown-only PR uses the approved CI skip and the merge method is
+  squash, supply an explicit squash subject and body containing one supported
+  skip instruction. Do not rely on a generated default body to carry the
+  instruction into the new `main` commit.
 
 ### 6. Reconcile and clean up
 
 1. Fast-forward clean local `main` to the exact merge commit without reset or
    discarded changes.
-2. Inspect the exact merge message and require its automatic `push` workflow
-   to pass for the same SHA.
-3. Use the CI playbook's bounded `workflow_dispatch` recovery only for a known
-   inherited skip instruction. Record its manual event honestly, forbid an
-   empty trigger commit or duplicate dispatch, and require the unchanged merge
-   SHA plus unconditional project-scoped teardown.
+2. Inspect the exact merge message. Require its automatic `push` workflow to
+   pass for the same SHA unless the approved Markdown-only exception applies;
+   for that exception, require the intended skip instruction and confirm that
+   no run exists for the merge SHA.
+3. Do not dispatch a workflow, rerun a workflow, or create a trigger commit for
+   an approved Markdown-only merge.
 4. Before the next feature increment, reconcile the merged PR's reusable CI
    knowledge under the [CI playbook](../../.github/workflows/CI_PLAYBOOK.md).
 5. Apply the evidence rules below to the focused Issue and Issue #1, including
@@ -189,7 +189,8 @@ A follow-up checkpoint is not complete without the applicable prompt.
 ## Issue evidence
 
 Reconcile a focused Issue only after its PR is merged and the exact merge
-commit passes the default-branch workflow.
+commit passes the default-branch workflow or satisfies the approved
+Markdown-only exception.
 
 - Map every acceptance criterion to implementation, review, PR-run, main-run,
   failure-path, scope, and cleanup evidence as applicable.

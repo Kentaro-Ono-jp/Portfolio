@@ -8,9 +8,9 @@ its tests have been staged without a commit. It also governs the required
 post-merge CI-knowledge reconciliation for every feature PR.
 
 An owner-approved Markdown-only PR may skip Actions from its initial head under
-the playbook's base-main evidence boundary. At merge, use its explicit squash
-message boundary so the new `main` commit remains free of skip instructions and
-starts its mandatory automatic workflow.
+the playbook's evidence boundary. At merge, use its explicit squash-message
+boundary so the Markdown-only `main` commit also skips Actions. Neither the PR
+head nor merged-main run is required for this narrow exception.
 
 `verify.yml` runs the repository-owned `scripts/verify.py` entrypoint on pull
 requests, `main`, and manual dispatch. It proves the canonical contracts,
