@@ -44,6 +44,9 @@ Do not modify implementation to fix a finding.
    Verify each prior finding against the new code; do not limit review to those
    findings.
 3. Resolve the live PR head and require it to equal the expected full SHA.
+   Require the PR description's current-review head to equal the same SHA and
+   its workflow evidence to distinguish exact-head, preceding, superseded, and
+   intentionally absent results accurately.
 4. Create the isolated shallow clone. Require `git rev-parse HEAD` to equal the
    expected SHA.
 5. Inspect the complete pull request diff against its stated base. Judge
@@ -80,7 +83,8 @@ Do not modify implementation to fix a finding.
     cleanup result. If cleanup fails, report the exact limitation and remaining
     path to the owner; do not make a second GitHub write.
 
-If the head moved, required review evidence is unavailable outside the explicit
+If the head moved, the PR description is stale or mislabels older evidence as
+exact-head proof, required review evidence is unavailable outside the explicit
 docs-only exception, or a prohibited mutation occurred before the verdict, do
 not approve. Report the exact limitation in the single verdict comment. Cleanup
 occurs after the verdict and therefore cannot change that comment; any cleanup

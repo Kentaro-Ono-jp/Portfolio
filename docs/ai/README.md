@@ -115,6 +115,22 @@ Do not infer current PR, Issue, check, or merge state from local memory.
   proof, and absent exact-head run without calling it passing evidence. The
   merged-main workflow remains mandatory.
 
+After every follow-up push to an existing PR, the push is not complete until
+the PR description is reconciled:
+
+1. Require the live PR head to equal the full pushed SHA.
+2. Replace the current-review head with that SHA and summarize why it moved and
+   the exact delta from the prior head.
+3. Record the previous verdict and each finding's disposition, or `none` before
+   initial review.
+4. Record current-head local proof and the exact-head workflow state and link as
+   pending, successful, failed, or intentionally absent. Relabel older runs as
+   preceding or superseded; never present them as current-head proof.
+5. State whether scope, non-targets, failure model, or acceptance criteria
+   changed. Include every docs-only skip field when that exception applies.
+6. Read the live description back and require its declared head to match the
+   live PR head before reporting a checkpoint or requesting review.
+
 ### 4. Review and correct
 
 - Request independent review with [PR_REVIEW.md](PR_REVIEW.md).
@@ -122,6 +138,8 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Obtain owner approval before a material correction strategy.
 - Push approved corrections, require the new exact head to pass, and request
   re-review. A previous approval does not cover a moved head.
+- Apply the follow-up-push description reconciliation above before relying on
+  the new workflow result or requesting re-review.
 
 ### 5. Ready and merge
 
