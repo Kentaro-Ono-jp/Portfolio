@@ -4,6 +4,8 @@
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml)
 
+> AI-assisted work starts with [`GIT_AGENTS.md`](GIT_AGENTS.md).
+
 This repository is ReactorFront's public engineering portfolio. It is not a
 static profile site or a collection of disconnected demos. It will contain one
 reproducible, production-oriented system that exposes product reasoning,
@@ -65,7 +67,10 @@ Portfolio/
 - [ADR-0002: Target an AI-enabled document intelligence platform](docs/adr/0002-target-document-intelligence-platform.md)
 - [ADR-0003: Adopt the initial technology stack](docs/adr/0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](docs/adr/0004-api-state-ownership-and-transactional-outbox.md)
-- [ADR-0005: Make AI collaboration guidance repository-owned](docs/adr/0005-repository-owned-ai-collaboration.md)
+- [ADR-0006: Consolidate repository-owned AI guidance](docs/adr/0006-consolidate-ai-guidance.md)
+
+Superseded decisions remain under [`docs/adr/`](docs/adr/README.md) as design
+history.
 
 ## Delivery specifications
 
@@ -74,10 +79,10 @@ Portfolio/
 ## AI-assisted engineering evidence
 
 The repository treats AI collaboration rules and reusable prompts as reviewed
-engineering artifacts rather than machine-local memory. The shared
-[`docs/ai/README.md`](docs/ai/README.md) entrypoint defines the source-of-truth
-order, authorized implementation and review roles, bounded live-state checks,
-Issue evidence policy, and curated task prompts.
+engineering artifacts rather than machine-local memory. The explicit
+[`GIT_AGENTS.md`](GIT_AGENTS.md) entrypoint routes implementation work to the
+consolidated [`docs/ai/README.md`](docs/ai/README.md) contract and review work
+to [`docs/ai/PR_REVIEW.md`](docs/ai/PR_REVIEW.md).
 
 The independent reviewer uses an isolated temporary shallow clone, runs
 non-Docker static verification, and has comment-only GitHub write authority.
@@ -151,9 +156,9 @@ Celery task consumption, source-integrity checks, single-page PDF extraction,
 reproducible CPU PyTorch classification, and confirmed at-least-once
 started/completed/failed result publication.
 
-[Issue #9](https://github.com/Kentaro-Ono-jp/Portfolio/issues/9) establishes the
-repository-owned AI collaboration contract before the next runtime boundary.
-The leading product candidate is the API-owned result-event consumer and
+Repository-owned AI collaboration is defined by
+[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`. The
+leading product candidate is the API-owned result-event consumer and
 idempotent terminal state persistence; the Web application remains a later
 focused increment.
 

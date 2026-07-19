@@ -18,4 +18,8 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0002: Target an AI-enabled document intelligence platform](0002-target-document-intelligence-platform.md)
 - [ADR-0003: Adopt the initial technology stack](0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](0004-api-state-ownership-and-transactional-outbox.md)
+- [ADR-0006: Consolidate repository-owned AI guidance](0006-consolidate-ai-guidance.md)
+
+## Superseded records
+
 - [ADR-0005: Make AI collaboration guidance repository-owned](0005-repository-owned-ai-collaboration.md)

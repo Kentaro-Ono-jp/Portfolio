@@ -54,6 +54,7 @@ def test_governance_public_safety_patterns_reject_machine_local_paths(
     "content",
     [
         "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/docs/ai/README.md",
+        "[Repository guidance](GIT_AGENTS.md)",
         "[AI guidance](docs/ai/README.md)",
         "[ADR index](../adr/README.md)",
         "Compare Issue/PR/Actions evidence",
@@ -99,4 +100,19 @@ def test_governance_scanner_rejects_nonportable_paths_in_ai_docs(
 
     assert any(
         failure == f"docs/ai/leak.md: contains forbidden {expected_label}" for failure in failures
+    )
+
+
+def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "GIT_AGENTS.md").write_text("Read X:/private/workspace", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert any(
+        failure == "GIT_AGENTS.md: contains forbidden Windows absolute path" for failure in failures
     )

@@ -1,6 +1,6 @@
 # ADR-0005: Make AI collaboration guidance repository-owned
 
-- Status: Accepted
+- Status: Superseded by [ADR-0006](0006-consolidate-ai-guidance.md)
 - Date: 2026-07-19
 
 ## Context
@@ -43,8 +43,8 @@ Keep fast-changing status in the live GitHub ledger instead of duplicating it
 across tracked status files. A fresh task reads the repository-owned contract,
 then checks only the relevant live Issue, PR, head, and workflow evidence.
 
-Record the owner-provided actor assumptions and mutation boundaries in
-`docs/ai/operating-contract.md`. In particular, the independent review agent:
+Record the owner-provided actor assumptions and mutation boundaries in the
+repository-owned AI contract. In particular, the independent review agent:
 
 - leaves the canonical workspace untouched
 - reviews an exact PR head from an isolated temporary shallow clone
