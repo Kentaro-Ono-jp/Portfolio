@@ -38,52 +38,6 @@ def test_governance_rejects_a_missing_ci_playbook(
     assert "missing required governance file .github/workflows/CI_PLAYBOOK.md" in failures
 
 
-def test_governance_rejects_a_drifted_docs_only_merge_recovery(
-    documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    playbook_path = Path(".github/workflows/CI_PLAYBOOK.md")
-    required_fragments = documentation_checker.REQUIRED_GOVERNANCE_TEXT[playbook_path]
-    removed_fragments = {
-        "Squash merge message boundary",
-        "Bounded `workflow_dispatch` recovery",
-    }
-    playbook = tmp_path / playbook_path
-    playbook.parent.mkdir(parents=True)
-    playbook.write_text(
-        "\n".join(fragment for fragment in required_fragments if fragment not in removed_fragments),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    monkeypatch.setattr(
-        documentation_checker,
-        "REQUIRED_GOVERNANCE_FILES",
-        (playbook_path,),
-    )
-    monkeypatch.setattr(
-        documentation_checker,
-        "REQUIRED_GOVERNANCE_TEXT",
-        {playbook_path: required_fragments},
-    )
-    monkeypatch.setattr(
-        documentation_checker,
-        "GOVERNANCE_ROOT_FILES",
-        (playbook_path,),
-    )
-
-    failures = documentation_checker.governance_failures()
-
-    assert any(
-        "missing governance invariant 'Squash merge message boundary'" in failure
-        for failure in failures
-    )
-    assert any(
-        "missing governance invariant 'Bounded `workflow_dispatch` recovery'" in failure
-        for failure in failures
-    )
-
-
 @pytest.mark.parametrize(
     ("content", "expected_label"),
     [

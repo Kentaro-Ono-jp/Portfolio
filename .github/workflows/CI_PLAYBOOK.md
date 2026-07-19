@@ -48,34 +48,38 @@ condition, not as a product or Actions failure.
 These are local orchestration rules, not additional failed Actions runs in the
 historical ledger.
 
-### Owner-approved docs-only CI skip
+### Owner-approved Markdown-only PR CI skip
 
-A final correction may use `[skip ci]` only when every condition below holds:
+An initial PR head or a later head may use `[skip ci]` only when every condition
+below holds:
 
-1. The owner explicitly approves the skip for that correction.
-2. The immediately preceding PR head completed the canonical runtime workflow
-   successfully.
-3. Every path changed from that passing head to the final head ends in `.md`.
-   The changes are limited to non-executable wording, evidence, links, or review
-   cleanup guidance; no workflow, script, test, configuration, dependency, or
+1. The owner explicitly approves the skip for that PR head.
+2. The exact PR base commit is the then-current `main` baseline and completed
+   the canonical default-branch workflow successfully. Record whether that
+   evidence was an automatic `push` run or an honestly labeled bounded manual
+   recovery.
+3. Every path in the complete base-to-head PR diff ends in `.md`. The changes
+   are limited to non-executable wording, evidence, links, or review cleanup
+   guidance; no workflow file, script, test, configuration, dependency, or
    application behavior changes.
-4. `python scripts/check_docs.py` and `git diff --check` pass on the final head.
-5. The final commit carries a GitHub-supported skip instruction and receives an
-   independent exact-head review.
+4. `python scripts/check_docs.py` and `git diff --check` pass on the review head.
+5. The review-head commit carries a GitHub-supported skip instruction and
+   receives an independent exact-head review.
 
-Update the PR description before re-review with:
+Update the PR description before initial review or re-review with:
 
-- the final head
-- the owner's docs-only skip approval
-- the preceding passing head and workflow link
-- the exact Markdown file count and path list since that passing head
-- the final-head local documentation results
+- the current review head
+- the owner's Markdown-only skip approval
+- the exact base `main` SHA, workflow event, and successful run link
+- the exact Markdown file count and path list in the complete PR diff
+- the review-head local documentation results
 - an explicit statement that no exact-head Actions run exists or is claimed
 
-The reviewer independently verifies the file boundary and reports the missing
-exact-head run as an approved limitation, not as passing evidence. Any failed
-condition restores the normal exact-head Actions requirement. This exception
-never skips the required default-branch workflow after merge.
+The reviewer independently verifies the base, full file boundary, local proof,
+and absent run. It reports the missing exact-head run as an approved limitation,
+not as passing evidence. Any failed condition restores the normal exact-head
+Actions requirement. This exception never skips the required default-branch
+workflow after merge.
 
 #### Squash merge message boundary
 
@@ -86,7 +90,7 @@ message contains `[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`,
 may copy the final correction's subject and carry that instruction into the
 new `main` commit.
 
-When an approved docs-only correction used a skip instruction and the
+When an approved Markdown-only PR used a skip instruction on any head and the
 established merge method is squash:
 
 1. Pin the merge to the independently reviewed PR head.

@@ -55,11 +55,13 @@ Do not modify implementation to fix a finding.
 6. Run the smallest relevant non-Docker static verification. Do not start or
    mutate Docker Desktop. Read the exact-head Actions result and limitations.
    When the owner approved the
-   [CI playbook's docs-only skip](../../.github/workflows/CI_PLAYBOOK.md), verify
-   the preceding passing head and run, require every path through the expected
-   head to be Markdown-only, run the final-head documentation checks, and
-   report the absent exact-head run as a limitation rather than passing
-   evidence. This narrow exception does not itself prevent approval.
+   [CI playbook's Markdown-only skip](../../.github/workflows/CI_PLAYBOOK.md),
+   verify the exact base `main` SHA and its successful default-branch run,
+   require every path in the complete base-to-expected-head PR diff to be
+   Markdown-only, run the review-head documentation checks, and report the
+   absent exact-head run as a limitation rather than passing evidence. This
+   narrow exception applies to initial review and re-review and does not itself
+   prevent approval.
 7. Classify actionable findings by severity and cite exact file/line or
    behavioral evidence. Do not request speculative scope expansion.
 8. Publish one verdict comment using the format below. Record temporary-data

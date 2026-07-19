@@ -108,12 +108,18 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Treat the pushed commit and Draft PR as the recoverable task checkpoint.
   Uncommitted or unpushed workspace changes are not durable handoff state.
 - Require the workflow result to target the exact pushed head.
-- The only exception is an explicitly owner-approved final docs-only correction
-  that satisfies the
-  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Record the preceding
-  passing head and run, exact final Markdown paths, final local documentation
-  proof, and absent exact-head run without calling it passing evidence. The
-  merged-main workflow remains mandatory.
+- An explicitly owner-approved Markdown-only PR may skip Actions from its
+  initial head or a later head when it satisfies the
+  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Record the exact base
+  `main` SHA and successful default-branch run, every Markdown path in the full
+  PR diff, review-head local documentation proof, and absent exact-head run
+  without calling it passing evidence. The merged-main workflow remains
+  mandatory.
+- After the initial PR description and exact-head workflow or approved absent
+  state are reconciled, provide a copyable initial-review prompt populated with
+  the repository, PR, focused Issue, expected full head SHA, review cycle,
+  previous verdict, and exact workflow evidence or limitation required by
+  [PR_REVIEW.md](PR_REVIEW.md).
 
 After every follow-up push to an existing PR, the push is not complete until
 the PR description is reconciled:
@@ -131,6 +137,12 @@ the PR description is reconciled:
 6. Read the live description back and require its declared head to match the
    live PR head before reporting a checkpoint or requesting review.
 
+After that readback, provide a copyable re-review prompt populated with the
+same exact inputs, the new full head SHA, the previous verdict URL, every
+finding's disposition, and the current workflow evidence or approved
+Markdown-only limitation. A follow-up checkpoint is not complete without this
+prompt.
+
 ### 4. Review and correct
 
 - Request independent review with [PR_REVIEW.md](PR_REVIEW.md).
@@ -146,7 +158,7 @@ the PR description is reconciled:
 - Change Draft to Ready and merge only with explicit owner direction.
 - Pin merge to the reviewed PR head and use the repository's established merge
   method.
-- When a final docs-only correction used a CI skip and that method is squash,
+- When a Markdown-only PR used a CI skip on any head and that method is squash,
   supply an explicit squash subject and body with no supported skip instruction
   or trailer. Do not let a generated default body copy skipped commit subjects
   into the new `main` commit.
