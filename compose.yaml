@@ -155,7 +155,7 @@ services:
           celery -A reactorfront_ml.celery_app:app inspect ping
           --destination "celery@$$(hostname)" --timeout 3 | grep -q pong
       interval: 5s
-      timeout: 12s
+      timeout: 20s
       retries: 30
 
 volumes:
