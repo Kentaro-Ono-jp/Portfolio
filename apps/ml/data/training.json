@@ -1,0 +1,53 @@
+{
+  "description": "Repository-authored synthetic English business-document snippets for the first-slice invoice/report classifier.",
+  "examples": [
+    {
+      "label": "invoice",
+      "text": "Invoice number INV-1001 amount due subtotal tax total payment terms vendor customer"
+    },
+    {
+      "label": "invoice",
+      "text": "Tax invoice bill to remit payment quantity unit price line item balance due"
+    },
+    {
+      "label": "invoice",
+      "text": "Invoice date purchase order supplier account total payable bank transfer"
+    },
+    {
+      "label": "invoice",
+      "text": "Commercial invoice description quantity price subtotal sales tax grand total"
+    },
+    {
+      "label": "invoice",
+      "text": "Billing statement invoice recipient due date payment reference outstanding balance"
+    },
+    {
+      "label": "invoice",
+      "text": "Invoice services rendered hours rate amount tax total please pay within thirty days"
+    },
+    {
+      "label": "report",
+      "text": "Quarterly report executive summary objectives findings analysis conclusion recommendations"
+    },
+    {
+      "label": "report",
+      "text": "Research report methodology observations results discussion limitations and conclusion"
+    },
+    {
+      "label": "report",
+      "text": "Operations report period overview performance indicators incidents risks actions"
+    },
+    {
+      "label": "report",
+      "text": "Project status report accomplishments schedule variance issues next steps"
+    },
+    {
+      "label": "report",
+      "text": "Annual report management review business performance outlook and strategic priorities"
+    },
+    {
+      "label": "report",
+      "text": "Assessment report scope evidence evaluation summary findings and recommended improvements"
+    }
+  ]
+}

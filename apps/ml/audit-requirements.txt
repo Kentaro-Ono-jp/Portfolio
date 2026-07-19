@@ -1,0 +1,6 @@
+# The official CPU wheel reports the local version `2.13.0+cpu`, which
+# pip-audit cannot map to PyPI advisory records. Audit the identical public
+# PyTorch release number separately while the installed-environment audit
+# covers every resolved transitive package. The hash is the locked Linux x86-64
+# CPU wheel used by the canonical GitHub Actions runner.
+torch==2.13.0 --hash=sha256:3fbf9c9d1f3c10c2d59d04aca426dee9ccc6ceb32d255c61e93acc3b4f75fae6

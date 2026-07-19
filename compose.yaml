@@ -126,6 +126,38 @@ services:
       timeout: 8s
       retries: 30
 
+  ml-worker:
+    image: reactorfront-portfolio-ml:local
+    build:
+      context: .
+      dockerfile: infra/docker/ml/Dockerfile
+    environment:
+      PORTFOLIO_ML_S3_ENDPOINT_URL: http://minio:9000
+      PORTFOLIO_ML_S3_ACCESS_KEY_ID: portfolio-local-access
+      PORTFOLIO_ML_S3_SECRET_ACCESS_KEY: portfolio-local-secret
+      PORTFOLIO_ML_S3_BUCKET: portfolio-documents
+      PORTFOLIO_ML_S3_REGION: us-east-1
+      PORTFOLIO_ML_RABBITMQ_URL: amqp://portfolio:portfolio-local-password@rabbitmq:5672/%2F
+      PORTFOLIO_ML_RABBITMQ_TIMEOUT_SECONDS: "5"
+      PORTFOLIO_ML_MODEL_ARTIFACT_PATH: /opt/reactorfront/model/model.json
+      PORTFOLIO_ML_MODEL_CHECKSUM_PATH: /opt/reactorfront/model/model.sha256
+      PORTFOLIO_ML_EVENT_CONTRACT_DIRECTORY: /workspace/packages/contracts/events
+    depends_on:
+      minio:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -m reactorfront_ml.health --check &&
+          celery -A reactorfront_ml.celery_app:app inspect ping
+          --destination "celery@$$(hostname)" --timeout 3 | grep -q pong
+      interval: 5s
+      timeout: 20s
+      retries: 30
+
 volumes:
   postgres-data:
   minio-data:

@@ -16,9 +16,9 @@ concurrency:
 
 jobs:
   verify:
-    name: API outbox boundary and repository checks
+    name: ML worker boundary and repository checks
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Check out repository
@@ -44,13 +44,18 @@ jobs:
         with:
           version: 0.11.29
           enable-cache: true
-          cache-dependency-glob: apps/api/uv.lock
+          cache-dependency-glob: |
+            apps/api/uv.lock
+            apps/ml/uv.lock
 
       - name: Install pinned dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Install pinned API dependencies
         run: uv sync --project apps/api --frozen
+
+      - name: Install pinned ML dependencies
+        run: uv sync --project apps/ml --frozen
 
       - name: Run canonical verification
         run: python scripts/verify.py

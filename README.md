@@ -1,6 +1,6 @@
 # ReactorFront Portfolio
 
-> Status: first vertical slice in implementation — 2026-07-18
+> Status: first vertical slice in implementation — 2026-07-19
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml)
 
@@ -84,6 +84,7 @@ repository root:
 ```console
 pnpm install --frozen-lockfile
 uv sync --project apps/api --frozen
+uv sync --project apps/ml --frozen
 python scripts/verify.py
 ```
 
@@ -94,16 +95,17 @@ stops it afterward. To run all checks without starting containers:
 python scripts/verify.py --static-only
 ```
 
-### Run the current API and outbox boundary
+### Run the current API, outbox, and ML worker boundary
 
 Start the three dependencies, create the deterministic development bucket,
-then start the migrated API and its outbox dispatcher:
+then start the migrated API, its outbox dispatcher, and the ML worker:
 
 ```console
 docker compose -p reactorfront-portfolio up --detach --build --wait postgres minio rabbitmq
 uv run --project apps/api python scripts/prepare_integration.py
 docker compose -p reactorfront-portfolio up --detach --build --wait api
 docker compose -p reactorfront-portfolio up --detach --build --wait api-outbox
+docker compose -p reactorfront-portfolio up --detach --build --wait ml-worker
 ```
 
 The API is available at `http://127.0.0.1:58000`. Required development ports
@@ -126,14 +128,12 @@ vertical slice is tracked in
 [Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1) and proceeds
 through focused, reviewable pull requests.
 
-The contract and API-owned document-submission foundations are merged. The
-current focused increment implements the API-owned transactional outbox
-dispatcher and RabbitMQ publication boundary: safe PostgreSQL leases,
-attempt fencing, persistent Celery-compatible requested-task messages,
-time-bounded publisher confirms, at-least-once retry, atomic `accepted` to
-`queued` state progression, restart recovery, and real-service CI evidence. ML
-processing, the API result consumer, and the web application remain later
-increments.
+The contract, API-owned document submission, and transactional outbox
+foundations are merged. The current focused increment implements the independent
+ML worker boundary: canonical Celery task consumption, source-integrity checks,
+single-page PDF extraction, reproducible CPU PyTorch classification, and
+confirmed at-least-once started/completed/failed result publication. The API
+result consumer and the Web application remain later increments.
 
 ## License
 
