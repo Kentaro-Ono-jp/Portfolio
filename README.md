@@ -45,8 +45,10 @@ Portfolio/
 |-- packages/
 |   `-- contracts/           # Language-neutral cross-service contracts
 |-- docs/
+|   |-- ai/                  # AI collaboration contract and prompt evidence
 |   |-- architecture/        # Architecture documentation
-|   `-- adr/                 # Architecture Decision Records
+|   |-- adr/                 # Architecture Decision Records
+|   `-- delivery/            # Accepted delivery specifications
 |-- tests/
 |   |-- integration/         # Cross-service integration tests
 |   `-- e2e/                 # Whole-system browser tests
@@ -63,10 +65,25 @@ Portfolio/
 - [ADR-0002: Target an AI-enabled document intelligence platform](docs/adr/0002-target-document-intelligence-platform.md)
 - [ADR-0003: Adopt the initial technology stack](docs/adr/0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](docs/adr/0004-api-state-ownership-and-transactional-outbox.md)
+- [ADR-0005: Make AI collaboration guidance repository-owned](docs/adr/0005-repository-owned-ai-collaboration.md)
 
 ## Delivery specifications
 
 - [Delivery Specification 0001: First end-to-end vertical slice](docs/delivery/0001-first-vertical-slice.md)
+
+## AI-assisted engineering evidence
+
+The repository treats AI collaboration rules and reusable prompts as reviewed
+engineering artifacts rather than machine-local memory. The shared
+[`docs/ai/README.md`](docs/ai/README.md) entrypoint defines the source-of-truth
+order, authorized implementation and review roles, bounded live-state checks,
+Issue evidence policy, and curated task prompts.
+
+The independent reviewer uses an isolated temporary shallow clone, runs
+non-Docker static verification, and has comment-only GitHub write authority.
+Fast-changing status remains in Issue #1, focused Issues, PRs, commits, and
+Actions runs instead of being duplicated across local handoffs. Raw chats,
+hidden reasoning, personal data, and private context are not published.
 
 ## Verification model
 
@@ -128,12 +145,17 @@ vertical slice is tracked in
 [Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1) and proceeds
 through focused, reviewable pull requests.
 
-The contract, API-owned document submission, and transactional outbox
-foundations are merged. The current focused increment implements the independent
-ML worker boundary: canonical Celery task consumption, source-integrity checks,
-single-page PDF extraction, reproducible CPU PyTorch classification, and
-confirmed at-least-once started/completed/failed result publication. The API
-result consumer and the Web application remain later increments.
+The contract, API-owned document submission, transactional outbox, and
+independent ML worker boundaries are merged. The worker now proves canonical
+Celery task consumption, source-integrity checks, single-page PDF extraction,
+reproducible CPU PyTorch classification, and confirmed at-least-once
+started/completed/failed result publication.
+
+[Issue #9](https://github.com/Kentaro-Ono-jp/Portfolio/issues/9) establishes the
+repository-owned AI collaboration contract before the next runtime boundary.
+The leading product candidate is the API-owned result-event consumer and
+idempotent terminal state persistence; the Web application remains a later
+focused increment.
 
 ## License
 

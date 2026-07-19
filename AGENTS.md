@@ -11,17 +11,35 @@ Before application coding, satisfy the `Pre-implementation gates` in Delivery
 Specification 0001. Recheck live Git and GitHub state rather than assuming an
 older readiness snapshot is still current.
 
+AI-assisted work also follows the shared repository-owned contract under
+`docs/ai/`. Local memory, task conversations, and handoff text are orientation
+only and do not override repository or live GitHub evidence.
+
 ## Source of truth
 
 Read these documents before making structural changes:
 
 1. `README.md`
-2. Accepted ADRs under `docs/adr/`, in numeric order
-3. `docs/delivery/0001-first-vertical-slice.md`
-4. The nearest area-specific `README.md`
+2. `docs/ai/README.md` for the collaboration and evidence workflow
+3. Accepted ADRs under `docs/adr/`, in numeric order
+4. `docs/delivery/0001-first-vertical-slice.md`
+5. The nearest area-specific `README.md`
 
 When a structural decision changes, update or supersede the relevant ADR in the
 same change.
+
+## AI collaboration
+
+Follow [`docs/ai/README.md`](docs/ai/README.md) as the shared entrypoint for
+authorized roles, bounded live-state checks, independent review, task
+lifecycle, and Issue evidence. Issue #1 and the active focused Issue/PR/Actions
+records are the live project ledger.
+
+Use narrow, exact checks for the current task. Do not enumerate every branch,
+Issue, comment, or history entry solely to detect an unknown writer while the
+declared actor model is consistent. Exact checks remain mandatory before
+branching, push, merge, evidence reconciliation, and destructive cleanup; a
+discrepancy stops mutation and triggers targeted investigation.
 
 ## Repository boundaries
 
@@ -58,7 +76,8 @@ Use `python scripts/verify.py` as the canonical verification entrypoint for
 humans, coding agents, and GitHub Actions. Install the pinned JavaScript
 dependencies with `pnpm install --frozen-lockfile` before running it.
 
-Until services exist, this entrypoint validates canonical contracts, generated
-type drift, documentation links, and `docker compose config` without starting
-Docker. Expand this same entrypoint as runnable services are introduced; do not
-create a competing verification path.
+The `--static-only` path validates canonical contracts, generated type drift,
+documentation and governance links, application quality gates, deterministic
+model evidence, and `docker compose config` without starting Docker. Expand the
+same root entrypoint as services are introduced; do not create a competing
+verification path.

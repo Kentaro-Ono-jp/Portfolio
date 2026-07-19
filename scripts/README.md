@@ -39,7 +39,9 @@ python scripts/verify.py --static-only
 
 Supporting scripts are implementation details of that entrypoint:
 
-- `check_docs.py` rejects broken local Markdown links.
+- `check_docs.py` rejects broken local Markdown links and drift in the required
+  repository-owned AI governance topology, critical review boundaries, agent
+  entrypoint references, and public-safe path rules.
 - `check_ml_compose_boundary.py` proves the CPU-only lock and that the worker has
   no database setting, host port, API result consumer, or Web service.
 - `apps/ml/audit-requirements.txt` normalizes the CPU wheel's local version label
