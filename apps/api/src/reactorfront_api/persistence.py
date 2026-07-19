@@ -237,7 +237,7 @@ class SqlAlchemySubmissionRepository:
             result = session.execute(statement).one_or_none()
             if result is None:
                 return None
-            document, job = result.tuple()
+            document, job = result._tuple()
             return DocumentStatusRecord(
                 document_id=document.id,
                 job_id=job.id,

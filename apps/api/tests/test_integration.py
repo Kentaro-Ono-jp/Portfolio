@@ -69,12 +69,15 @@ def settings() -> Settings:
 @pytest.fixture
 def engine(settings: Settings) -> Iterator[Engine]:
     database_engine = create_engine(settings.database_url)
-    with database_engine.begin() as connection:
-        connection.execute(
-            text("TRUNCATE outbox_events, processing_jobs, documents RESTART IDENTITY CASCADE")
-        )
-    yield database_engine
-    database_engine.dispose()
+    truncate = text("TRUNCATE outbox_events, processing_jobs, documents RESTART IDENTITY CASCADE")
+    try:
+        with database_engine.begin() as connection:
+            connection.execute(truncate)
+        yield database_engine
+    finally:
+        with database_engine.begin() as connection:
+            connection.execute(truncate)
+        database_engine.dispose()
 
 
 @pytest.fixture
