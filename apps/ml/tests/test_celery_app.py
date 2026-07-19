@@ -82,6 +82,8 @@ def test_celery_configuration_preserves_late_ack_and_fixed_route() -> None:
     assert celery_app.app.conf.broker_transport_options["confirm_publish"] is True
     assert celery_app.app.conf.control_queue_durable is False
     assert celery_app.app.conf.control_queue_exclusive is True
+    assert celery_app.app.conf.event_queue_durable is False
+    assert celery_app.app.conf.event_queue_exclusive is True
 
 
 def test_valid_request_runs_processor(monkeypatch: pytest.MonkeyPatch) -> None:
