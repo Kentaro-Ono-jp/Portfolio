@@ -77,6 +77,8 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path(".github/workflows/CI_PLAYBOOK.md"): (
         "Staged pre-commit hardening",
+        "Local rehearsal boundaries",
+        "External timeout termination is not verification evidence",
         "Post-merge knowledge reconciliation",
         "After every feature PR merge",
         "no new reusable finding",

@@ -26,6 +26,28 @@ implementation and verification scripts.
 The first staging is a review snapshot, not permission to commit stale index
 content after later edits.
 
+### Local rehearsal boundaries
+
+Treat a missing command or host-tool version mismatch as a local preflight
+condition, not as a product or Actions failure.
+
+- Resolve `pnpm`, `uv`, and `docker` before starting the canonical verifier.
+  Compare the available Node and Python versions with `.node-version` and
+  `.python-version`, and use the `uv` version pinned by the workflow.
+- When the host must remain unchanged, install a missing exact-version tool in
+  a unique, verified system temporary directory. Remove only that directory
+  after verification and confirm that it no longer exists.
+- Do not impose an arbitrary 60-second process timeout on
+  `scripts/verify.py --static-only`. Give the verifier enough lifetime for
+  dependency audits, model proof, and both test suites; yield or poll output
+  without terminating the subprocess. External timeout termination is not
+  verification evidence.
+- Disclose a local runtime mismatch instead of hiding it. GitHub Actions on the
+  repository-pinned versions remains the authoritative proof.
+
+These are local orchestration rules, not additional failed Actions runs in the
+historical ledger.
+
 ### Post-merge knowledge reconciliation
 
 After every feature PR merge, and before the next feature increment:
