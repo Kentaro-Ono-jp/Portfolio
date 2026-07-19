@@ -26,6 +26,18 @@ def test_repository_owned_governance_invariants_pass(
     assert documentation_checker.governance_failures() == []
 
 
+def test_governance_rejects_a_missing_ci_playbook(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert "missing required governance file .github/workflows/CI_PLAYBOOK.md" in failures
+
+
 @pytest.mark.parametrize(
     ("content", "expected_label"),
     [

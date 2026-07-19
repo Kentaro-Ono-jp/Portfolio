@@ -44,6 +44,9 @@ Do not modify implementation to fix a finding.
    Verify each prior finding against the new code; do not limit review to those
    findings.
 3. Resolve the live PR head and require it to equal the expected full SHA.
+   Require the PR description's current-review head to equal the same SHA and
+   its workflow evidence to distinguish exact-head, preceding, superseded, and
+   intentionally absent results accurately.
 4. Create the isolated shallow clone. Require `git rev-parse HEAD` to equal the
    expected SHA.
 5. Inspect the complete pull request diff against its stated base. Judge
@@ -51,6 +54,12 @@ Do not modify implementation to fix a finding.
    accepted design, tests, and public safety.
 6. Run the smallest relevant non-Docker static verification. Do not start or
    mutate Docker Desktop. Read the exact-head Actions result and limitations.
+   When the owner approved the
+   [CI playbook's docs-only skip](../../.github/workflows/CI_PLAYBOOK.md), verify
+   the preceding passing head and run, require every path through the expected
+   head to be Markdown-only, run the final-head documentation checks, and
+   report the absent exact-head run as a limitation rather than passing
+   evidence. This narrow exception does not itself prevent approval.
 7. Classify actionable findings by severity and cite exact file/line or
    behavioral evidence. Do not request speculative scope expansion.
 8. Publish one verdict comment using the format below. Record temporary-data
@@ -63,16 +72,24 @@ Do not modify implementation to fix a finding.
    - if shell or execution policy rejects that mechanism, use a standard
      library directory API in the same process against that exact validated
      path only; do not broaden the target or run global cleanup
+   - if that exact deletion fails only on read-only descendants, revalidate
+     that every residual entry remains under the same target, do not traverse
+     reparse-point targets, clear only the `ReadOnly` attribute with the same
+     process's standard library, and retry deletion of the same fixed root
+   - do not change access-control lists, take ownership, terminate processes,
+     or expand the deletion target to force cleanup
    - verify the temporary path no longer exists
 10. In the review task's final response, report the verdict URL and actual
     cleanup result. If cleanup fails, report the exact limitation and remaining
     path to the owner; do not make a second GitHub write.
 
-If the head moved, required review evidence is unavailable, or a prohibited
-mutation occurred before the verdict, do not approve. Report the exact
-limitation in the single verdict comment. Cleanup occurs after the verdict and
-therefore cannot change that comment; any cleanup failure is a task-level
-limitation that must be reported to the owner without another GitHub mutation.
+If the head moved, the PR description is stale or mislabels older evidence as
+exact-head proof, required review evidence is unavailable outside the explicit
+docs-only exception, or a prohibited mutation occurred before the verdict, do
+not approve. Report the exact limitation in the single verdict comment. Cleanup
+occurs after the verdict and therefore cannot change that comment; any cleanup
+failure is a task-level limitation that must be reported to the owner without
+another GitHub mutation.
 
 ## Verdict format
 

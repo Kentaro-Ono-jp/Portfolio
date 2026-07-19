@@ -7,6 +7,12 @@ The accepted first-slice specification names `scripts/verify.py` as the
 canonical verification entrypoint used by humans, coding agents, and GitHub
 Actions.
 
+After a complete implementation and its verification changes are staged but
+not committed, use the
+[GitHub Actions CI playbook](../.github/workflows/CI_PLAYBOOK.md) to harden the
+candidate without changing what the accepted test must prove. Reverify and
+restage any correction before commit.
+
 Run it from the repository root after installing the pinned dependency sets:
 
 ```console

@@ -96,6 +96,10 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Use static local verification unless local runtime work is explicitly
   authorized. GitHub Actions supplies authoritative runtime proof.
 - Inspect the complete intended diff before staging exact files.
+- After implementation and test intent are complete, stage the candidate
+  without committing and apply the
+  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Reverify and restage
+  every resulting correction before commit.
 
 ### 3. Publish a recoverable checkpoint
 
@@ -104,6 +108,28 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Treat the pushed commit and Draft PR as the recoverable task checkpoint.
   Uncommitted or unpushed workspace changes are not durable handoff state.
 - Require the workflow result to target the exact pushed head.
+- The only exception is an explicitly owner-approved final docs-only correction
+  that satisfies the
+  [CI playbook](../../.github/workflows/CI_PLAYBOOK.md). Record the preceding
+  passing head and run, exact final Markdown paths, final local documentation
+  proof, and absent exact-head run without calling it passing evidence. The
+  merged-main workflow remains mandatory.
+
+After every follow-up push to an existing PR, the push is not complete until
+the PR description is reconciled:
+
+1. Require the live PR head to equal the full pushed SHA.
+2. Replace the current-review head with that SHA and summarize why it moved and
+   the exact delta from the prior head.
+3. Record the previous verdict and each finding's disposition, or `none` before
+   initial review.
+4. Record current-head local proof and the exact-head workflow state and link as
+   pending, successful, failed, or intentionally absent. Relabel older runs as
+   preceding or superseded; never present them as current-head proof.
+5. State whether scope, non-targets, failure model, or acceptance criteria
+   changed. Include every docs-only skip field when that exception applies.
+6. Read the live description back and require its declared head to match the
+   live PR head before reporting a checkpoint or requesting review.
 
 ### 4. Review and correct
 
@@ -112,6 +138,8 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Obtain owner approval before a material correction strategy.
 - Push approved corrections, require the new exact head to pass, and request
   re-review. A previous approval does not cover a moved head.
+- Apply the follow-up-push description reconciliation above before relying on
+  the new workflow result or requesting re-review.
 
 ### 5. Ready and merge
 
@@ -124,10 +152,13 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 1. Fast-forward clean local `main` to the exact merge commit without reset or
    discarded changes.
 2. Require the default-branch workflow for that commit to pass.
-3. Apply the evidence rules below to the focused Issue and Issue #1.
-4. Remove only authorized temporary data and the fully merged local branch.
-5. Keep remote-branch deletion explicit.
-6. Update this contract only if the process itself changed.
+3. Before the next feature increment, reconcile the merged PR's reusable CI
+   knowledge under the [CI playbook](../../.github/workflows/CI_PLAYBOOK.md).
+4. Apply the evidence rules below to the focused Issue and Issue #1, including
+   the CI-knowledge outcome.
+5. Remove only authorized temporary data and the fully merged local branch.
+6. Keep remote-branch deletion explicit.
+7. Update this contract only if the process itself changed.
 
 ## Issue evidence
 

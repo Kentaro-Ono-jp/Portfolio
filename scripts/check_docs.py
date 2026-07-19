@@ -14,6 +14,7 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("AI_GUIDANCE.md"),
     Path("docs/ai/README.md"),
     Path("docs/ai/PR_REVIEW.md"),
+    Path(".github/workflows/CI_PLAYBOOK.md"),
 )
 EXPECTED_AI_GUIDANCE_FILES = frozenset(
     {
@@ -29,6 +30,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Issue #1 and only the focused Issue",
         "Local memory and earlier conversations are orientation only",
         "python scripts/verify.py",
+        ".github/workflows/CI_PLAYBOOK.md",
         "Never use global Docker cleanup",
         "Stop the pending mutation",
     ),
@@ -48,6 +50,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Do not enumerate every branch",
         "Explicit owner direction is required",
         "recoverable task checkpoint",
+        ".github/workflows/CI_PLAYBOOK.md",
         "Completion evidence",
         "umbrella gate",
         "remote-branch deletion",
@@ -72,8 +75,24 @@ REQUIRED_GOVERNANCE_TEXT = {
         "will not auto-discover",
         "one authoritative home",
     ),
+    Path(".github/workflows/CI_PLAYBOOK.md"): (
+        "Staged pre-commit hardening",
+        "Local rehearsal boundaries",
+        "External timeout termination is not verification evidence",
+        "Post-merge knowledge reconciliation",
+        "After every feature PR merge",
+        "no new reusable finding",
+        "Change-driven first-push checks",
+        "Failed-run triage and promotion",
+        "Historical evidence ledger",
+        "total 11",
+    ),
 }
-GOVERNANCE_ROOT_FILES = (Path("GIT_AGENTS.md"), Path("AI_GUIDANCE.md"))
+GOVERNANCE_ROOT_FILES = (
+    Path("GIT_AGENTS.md"),
+    Path("AI_GUIDANCE.md"),
+    Path(".github/workflows/CI_PLAYBOOK.md"),
+)
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
     "POSIX absolute path": re.compile(r"(?<![\w/:<.~])/(?!/)[^\s`'\"><\])}]+"),
