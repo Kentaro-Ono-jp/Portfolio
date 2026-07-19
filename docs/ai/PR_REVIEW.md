@@ -63,6 +63,12 @@ Do not modify implementation to fix a finding.
    - if shell or execution policy rejects that mechanism, use a standard
      library directory API in the same process against that exact validated
      path only; do not broaden the target or run global cleanup
+   - if that exact deletion fails only on read-only descendants, revalidate
+     that every residual entry remains under the same target, do not traverse
+     reparse-point targets, clear only the `ReadOnly` attribute with the same
+     process's standard library, and retry deletion of the same fixed root
+   - do not change access-control lists, take ownership, terminate processes,
+     or expand the deletion target to force cleanup
    - verify the temporary path no longer exists
 10. In the review task's final response, report the verdict URL and actual
     cleanup result. If cleanup fails, report the exact limitation and remaining
