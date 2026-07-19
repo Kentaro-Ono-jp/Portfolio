@@ -9,61 +9,71 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 REQUIRED_GOVERNANCE_FILES = (
-    Path("docs/adr/0005-repository-owned-ai-collaboration.md"),
+    Path("docs/adr/0006-consolidate-ai-guidance.md"),
+    Path("GIT_AGENTS.md"),
+    Path("AI_GUIDANCE.md"),
     Path("docs/ai/README.md"),
-    Path("docs/ai/operating-contract.md"),
-    Path("docs/ai/task-lifecycle.md"),
-    Path("docs/ai/evidence-policy.md"),
-    Path("docs/ai/prompts/README.md"),
-    Path("docs/ai/prompts/task-bootstrap.md"),
-    Path("docs/ai/prompts/independent-review.md"),
-    Path("docs/ai/prompts/post-merge-reconciliation.md"),
+    Path("docs/ai/PR_REVIEW.md"),
+)
+EXPECTED_AI_GUIDANCE_FILES = frozenset(
+    {
+        Path("README.md"),
+        Path("PR_REVIEW.md"),
+    }
 )
 REQUIRED_GOVERNANCE_TEXT = {
-    Path("AGENTS.md"): (
+    Path("GIT_AGENTS.md"): (
+        "explicit, tracked entrypoint",
         "docs/ai/README.md",
-        "live project ledger",
-        "Exact checks remain mandatory",
+        "docs/ai/PR_REVIEW.md",
+        "Issue #1 and only the focused Issue",
+        "Local memory and earlier conversations are orientation only",
+        "python scripts/verify.py",
+        "Never use global Docker cleanup",
+        "Stop the pending mutation",
     ),
-    Path("CLAUDE.md"): (
-        "docs/ai/README.md",
-        "non-authoritative orientation only",
+    Path("AI_GUIDANCE.md"): (
+        "GIT_AGENTS.md",
+        "not a second source of rules",
     ),
     Path("README.md"): (
         "AI-assisted engineering evidence",
+        "GIT_AGENTS.md",
+        "docs/ai/PR_REVIEW.md",
         "comment-only GitHub write authority",
     ),
     Path("docs/ai/README.md"): (
-        "Source-of-truth order",
-        "Live state is not duplicated here",
-        "non-authoritative orientation only",
-    ),
-    Path("docs/ai/operating-contract.md"): (
-        "isolated temporary shallow clone",
-        "exactly one GitHub write",
-        "must not push",
-        "Unsolicited comments",
-        "does not independently perform Git or GitHub mutations",
-    ),
-    Path("docs/ai/task-lifecycle.md"): (
-        "Do not list all Issues, branches, comments",
-        "verify the exact target",
-        "does not audit every remote and local object",
+        "Authority order",
+        "Does not independently mutate",
+        "Do not enumerate every branch",
+        "Explicit owner direction is required",
         "recoverable task checkpoint",
-    ),
-    Path("docs/ai/evidence-policy.md"): (
         "Completion evidence",
-        "Umbrella Issue #1",
-        "does not edit Issue checklists",
+        "umbrella gate",
+        "remote-branch deletion",
+        "Do not infer current PR, Issue, check, or merge state from local memory",
+        "Unsolicited public input",
     ),
-    Path("docs/ai/prompts/independent-review.md"): (
+    Path("docs/ai/PR_REVIEW.md"): (
+        "Review cycle",
+        "Previous verdict",
         "--depth 1",
         "--no-tags",
-        "only permitted GitHub write",
+        "The only permitted GitHub write",
         "Do not push",
+        "complete pull request diff",
+        "Do not modify implementation",
         "temporary path no longer exists",
+        "cleanup scheduled immediately after this comment",
+    ),
+    Path("docs/adr/0006-consolidate-ai-guidance.md"): (
+        "GIT_AGENTS.md",
+        "two-file",
+        "will not auto-discover",
+        "one authoritative home",
     ),
 }
+GOVERNANCE_ROOT_FILES = (Path("GIT_AGENTS.md"), Path("AI_GUIDANCE.md"))
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
     "POSIX absolute path": re.compile(r"(?<![\w/:<.~])/(?!/)[^\s`'\"><\])}]+"),
@@ -73,6 +83,28 @@ FORBIDDEN_GOVERNANCE_PATTERNS = {
     "local file URI": re.compile(r"(?i)\bfile:(?:/{1,3}|\\\\)"),
     "user-home shorthand path": re.compile(r"(?<![\w~])~[\\/]"),
     "machine-local memory path": re.compile(r"(?i)\.codex[\\/]memories"),
+    "PEM private key": re.compile(r"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----"),
+    "GitHub credential": re.compile(
+        r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+    ),
+    "cloud access credential": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    "Bearer credential": re.compile(
+        r"(?i)\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/=-]{16,}"
+    ),
+    "assigned credential": re.compile(
+        r"(?im)\b(?:api[_ -]?(?:key|token)|access[_ -]?token|auth[_ -]?token|"
+        r"client[_ -]?secret|password|passwd|token|secret)\b\s*[:=]\s*[\"']?"
+        r"(?!(?:<[^>\r\n]+>|\$\{[^}\r\n]+\}|"
+        r"(?:\[?redacted\]?|example|placeholder|changeme|none|null)\b))"
+        r"[A-Za-z0-9._~+/=-]{8,}"
+    ),
+    "explicit private context": re.compile(
+        r"(?im)^\s*(?:(?:private|confidential|client[ _-]?internal|"
+        r"company[ _-]?internal)[ _-]*(?:context|note|data|source|details?)?|"
+        r"(?:client|customer|employer)[ _-]+(?:name|context|data|source|details?))"
+        r"\s*[:=]\s*(?!(?:<[^>\r\n]+>|\[?redacted\]?|example|placeholder|"
+        r"none)\s*$)\S.+$"
+    ),
 }
 
 
@@ -125,16 +157,40 @@ def governance_failures() -> list[str]:
                     f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"
                 )
 
+    governance_paths = [
+        REPOSITORY_ROOT / path
+        for path in GOVERNANCE_ROOT_FILES
+        if (REPOSITORY_ROOT / path).is_file()
+    ]
     governance_root = REPOSITORY_ROOT / "docs" / "ai"
     if governance_root.is_dir():
-        for path in sorted(governance_root.rglob("*.md")):
-            content = path.read_text(encoding="utf-8")
-            for label, pattern in FORBIDDEN_GOVERNANCE_PATTERNS.items():
-                if pattern.search(content):
-                    relative_path = path.relative_to(REPOSITORY_ROOT)
-                    failures.append(
-                        f"{relative_path.as_posix()}: contains forbidden {label}"
-                    )
+        actual_ai_guidance_files = frozenset(
+            path.relative_to(governance_root)
+            for path in governance_root.rglob("*")
+            if path.is_file()
+        )
+        for unexpected_path in sorted(
+            actual_ai_guidance_files - EXPECTED_AI_GUIDANCE_FILES
+        ):
+            failures.append(
+                f"docs/ai contains unexpected file {unexpected_path.as_posix()}"
+            )
+        for missing_path in sorted(
+            EXPECTED_AI_GUIDANCE_FILES - actual_ai_guidance_files
+        ):
+            failures.append(
+                f"docs/ai is missing required file {missing_path.as_posix()}"
+            )
+        governance_paths.extend(sorted(governance_root.rglob("*.md")))
+
+    for path in governance_paths:
+        content = path.read_text(encoding="utf-8")
+        for label, pattern in FORBIDDEN_GOVERNANCE_PATTERNS.items():
+            if pattern.search(content):
+                relative_path = path.relative_to(REPOSITORY_ROOT)
+                failures.append(
+                    f"{relative_path.as_posix()}: contains forbidden {label}"
+                )
 
     return failures
 

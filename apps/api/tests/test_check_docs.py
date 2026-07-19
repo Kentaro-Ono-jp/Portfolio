@@ -51,12 +51,49 @@ def test_governance_public_safety_patterns_reject_machine_local_paths(
 
 
 @pytest.mark.parametrize(
+    ("content", "expected_label"),
+    [
+        ("-----BEGIN PRIVATE KEY-----", "PEM private key"),
+        ("ghp_abcdefghijklmnopqrstuvwxyz123456", "GitHub credential"),
+        ("AKIAIOSFODNN7EXAMPLE", "cloud access credential"),
+        (
+            "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
+            "Bearer credential",
+        ),
+        ("client_secret=realvalue123456", "assigned credential"),
+        ("TOKEN=opaquevalue123456", "assigned credential"),
+        (
+            "client-internal context: undisclosed production architecture",
+            "explicit private context",
+        ),
+        (
+            "client context: undisclosed production architecture",
+            "explicit private context",
+        ),
+    ],
+)
+def test_governance_public_safety_patterns_reject_sensitive_content(
+    documentation_checker: ModuleType,
+    content: str,
+    expected_label: str,
+) -> None:
+    pattern = documentation_checker.FORBIDDEN_GOVERNANCE_PATTERNS[expected_label]
+
+    assert pattern.search(content) is not None
+
+
+@pytest.mark.parametrize(
     "content",
     [
         "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/docs/ai/README.md",
+        "[Repository guidance](GIT_AGENTS.md)",
         "[AI guidance](docs/ai/README.md)",
         "[ADR index](../adr/README.md)",
         "Compare Issue/PR/Actions evidence",
+        "Use API_KEY=<redacted> and Authorization: Bearer <token>",
+        "TOKEN=${TOKEN} and client context: [redacted]",
+        "Exclude credentials, private company context, and client context.",
+        "Private context: [redacted]",
         "</details>",
     ],
 )
@@ -100,3 +137,65 @@ def test_governance_scanner_rejects_nonportable_paths_in_ai_docs(
     assert any(
         failure == f"docs/ai/leak.md: contains forbidden {expected_label}" for failure in failures
     )
+
+
+def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "GIT_AGENTS.md").write_text("Read X:/private/workspace", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert any(
+        failure == "GIT_AGENTS.md: contains forbidden Windows absolute path" for failure in failures
+    )
+
+
+@pytest.mark.parametrize(
+    ("content", "expected_label"),
+    [
+        ("password=production-password", "assigned credential"),
+        (
+            "confidential context: unreleased client migration",
+            "explicit private context",
+        ),
+    ],
+)
+def test_governance_scanner_rejects_sensitive_content_in_ai_docs(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    content: str,
+    expected_label: str,
+) -> None:
+    governance_root = tmp_path / "docs" / "ai"
+    governance_root.mkdir(parents=True)
+    (governance_root / "README.md").write_text(content, encoding="utf-8")
+    (governance_root / "PR_REVIEW.md").write_text("safe", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert any(
+        failure == f"docs/ai/README.md: contains forbidden {expected_label}" for failure in failures
+    )
+
+
+def test_governance_scanner_rejects_an_extra_ai_guidance_file(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    governance_root = tmp_path / "docs" / "ai"
+    governance_root.mkdir(parents=True)
+    (governance_root / "README.md").write_text("safe", encoding="utf-8")
+    (governance_root / "PR_REVIEW.md").write_text("safe", encoding="utf-8")
+    (governance_root / "EXTRA.md").write_text("safe", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert "docs/ai contains unexpected file EXTRA.md" in failures
