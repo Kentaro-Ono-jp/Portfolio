@@ -313,6 +313,23 @@ def wait_for_worker_log(*, event: str, failure_code: str) -> None:
     raise RuntimeError(f"ML worker did not log {event} with the stable failure code")
 
 
+def wait_for_minio_liveness() -> None:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if compose_succeeds(
+            "exec",
+            "-T",
+            "minio",
+            "wget",
+            "--quiet",
+            "--output-document=-",
+            "http://127.0.0.1:9000/minio/health/live",
+        ):
+            return
+        time.sleep(0.25)
+    raise RuntimeError("MinIO liveness did not recover after the injected pause")
+
+
 def overwrite_source(settings: Settings, *, object_key: str) -> None:
     client = boto3.client(
         "s3",
@@ -498,7 +515,7 @@ def prove_retry_publish_failure_recovery(
             if minio_paused:
                 compose("unpause", "minio")
 
-    compose("up", "--detach", "--wait", "minio", "rabbitmq", "ml-worker")
+    wait_for_minio_liveness()
     recovered_events = consume_results(settings, expected_count=2)
     all_events = [*initial_events, *recovered_events]
     assert_preserved_identifiers(all_events, request=request)
