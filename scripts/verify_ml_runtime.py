@@ -305,12 +305,19 @@ def wait_for_worker_log(*, event: str, failure_code: str) -> None:
     deadline = time.monotonic() + 60
     expected_event = f'"event":"{event}"'
     expected_code = f'"failureCode":"{failure_code}"'
+    expected_requeue = f"reject requeue=True: {failure_code}"
     while time.monotonic() < deadline:
         logs = compose("logs", "--no-color", "ml-worker", capture=True)
-        if expected_event in logs and expected_code in logs:
+        if (
+            expected_event in logs
+            and expected_code in logs
+            and expected_requeue in logs
+        ):
             return
         time.sleep(0.25)
-    raise RuntimeError(f"ML worker did not log {event} with the stable failure code")
+    raise RuntimeError(
+        f"ML worker did not log {event} and reject the original with requeue enabled"
+    )
 
 
 def wait_for_minio_liveness() -> None:
@@ -505,6 +512,10 @@ def prove_retry_publish_failure_recovery(
             event="ml_retry_publish_failed",
             failure_code=RETRY_PUBLISH_FAILURE_CODE,
         )
+        # The broker has acknowledged requeue=True at this point. Stop the worker
+        # before restoring access so this proof also covers restart recovery without
+        # allowing the deliberately broad permission fault to churn its connections.
+        compose("stop", "ml-worker")
     finally:
         try:
             if broker_write_restricted:
@@ -516,6 +527,10 @@ def prove_retry_publish_failure_recovery(
                 compose("unpause", "minio")
 
     wait_for_minio_liveness()
+    # MinIO liveness is checked explicitly above. Avoid Compose acting on a stale
+    # dependency health state; the worker's composite readiness checks both MinIO
+    # and RabbitMQ before this command succeeds.
+    compose("up", "--detach", "--no-deps", "--wait", "ml-worker")
     recovered_events = consume_results(settings, expected_count=2)
     all_events = [*initial_events, *recovered_events]
     assert_preserved_identifiers(all_events, request=request)
