@@ -164,7 +164,9 @@ curl --request POST http://localhost:58000/api/v1/documents \
 The first vertical slice is complete and remains traceable through
 [Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1),
 [Issue #24](https://github.com/Kentaro-Ono-jp/Portfolio/issues/24), and
-[PR #25](https://github.com/Kentaro-Ono-jp/Portfolio/pull/25). The independently
+[PR #25](https://github.com/Kentaro-Ono-jp/Portfolio/pull/25), with the final
+delivery record published through
+[PR #26](https://github.com/Kentaro-Ono-jp/Portfolio/pull/26). The independently
 reviewed implementation head passed the complete nine-group clean-runner
 [verification](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29731595926),
 and the exact squash merge passed the default-branch

@@ -497,8 +497,9 @@ following are true:
   [#17](https://github.com/Kentaro-Ono-jp/Portfolio/pull/17),
   [#19](https://github.com/Kentaro-Ono-jp/Portfolio/pull/19),
   [#21](https://github.com/Kentaro-Ono-jp/Portfolio/pull/21),
-  [#23](https://github.com/Kentaro-Ono-jp/Portfolio/pull/23), and
-  [#25](https://github.com/Kentaro-Ono-jp/Portfolio/pull/25).
+  [#23](https://github.com/Kentaro-Ono-jp/Portfolio/pull/23),
+  [#25](https://github.com/Kentaro-Ono-jp/Portfolio/pull/25), and the completion
+  record in [#26](https://github.com/Kentaro-Ono-jp/Portfolio/pull/26).
 - PR #25 head
   [`53a46b868c49d023fa6a37dc5df6d214c0786141`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/53a46b868c49d023fa6a37dc5df6d214c0786141)
   received an independent
