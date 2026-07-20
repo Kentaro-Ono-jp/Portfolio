@@ -120,10 +120,11 @@ Do not infer current PR, Issue, check, or merge state from local memory.
   delta; carry forward only successful unaffected evidence, stop before setup
   when baseline proof is unavailable, and record selected, executed, carried,
   and skipped groups plus both N/NN counts in Issue and PR evidence.
-- Docker-backed `compose` and runtime groups are prohibited by default. Select
-  them only when the focused Issue requires real-service, Compose, or E2E proof
-  and the owner explicitly approves those groups for the exact candidate head;
-  otherwise carry successful evidence or stop without starting Docker.
+- Record an intentionally omitted affected group as skipped without evidence,
+  with focused-Issue rationale and an exact-head `Verification-Skip` trailer;
+  never relabel affected evidence as carried.
+- Docker-backed groups follow the same smallest-sufficient rule as other groups
+  and require no separate owner approval to execute.
 - Use static local verification unless local runtime work is explicitly
   authorized. GitHub Actions supplies authoritative runtime proof.
 - Inspect the complete intended diff before staging exact files.

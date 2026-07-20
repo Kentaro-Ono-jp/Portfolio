@@ -6,12 +6,6 @@ on:
       - main
   pull_request:
   workflow_dispatch:
-    inputs:
-      approved_docker_groups:
-        description: >-
-          Owner-approved comma-separated Docker groups for this exact head
-        required: false
-        default: ""
 
 permissions:
   actions: read
@@ -47,7 +41,6 @@ jobs:
           CURRENT_SHA: ${{ github.sha }}
           ACTOR: ${{ github.actor }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
-          DISPATCH_DOCKER_APPROVAL: ${{ inputs.approved_docker_groups }}
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -64,7 +57,12 @@ jobs:
           trailer_value() {
             local candidate_sha="$1"
             local key="$2"
-            git show -s --format=%B "$candidate_sha" |
+            if git cat-file -e "$candidate_sha^{commit}" 2>/dev/null; then
+              git show -s --format=%B "$candidate_sha"
+            else
+              gh api "repos/$REPOSITORY/commits/$candidate_sha" \
+                --jq '.commit.message'
+            fi |
               git interpret-trailers --parse |
               sed -n "s/^$key: //p" |
               tail -n 1
@@ -80,8 +78,7 @@ jobs:
 
           plan_arguments=(--plan)
           base_reason=""
-          carried_request=""
-          docker_approval=""
+          skip_request=""
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             if [[ "$EVENT_ACTION" == "synchronize" && -n "$BEFORE_SHA" ]]; then
@@ -99,17 +96,15 @@ jobs:
             plan_arguments+=(--base "$base" --baseline-proven)
 
             if [[ "$PR_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
-              carried_request="$(trailer_value "$PR_HEAD_SHA" "Verification-Carry")"
-              docker_approval="$(trailer_value \
-                "$PR_HEAD_SHA" "Verification-Docker-Approved")"
+              skip_request="$(trailer_value "$PR_HEAD_SHA" "Verification-Skip")"
             fi
           elif [[ "$EVENT_NAME" == "push" ]]; then
             merged_pr="$(gh api --method GET \
               "repos/$REPOSITORY/commits/$CURRENT_SHA/pulls" \
-              --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0] | if . == null then "" else [.number, .head.sha] | @tsv end' \
+              --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0] | if . == null then "" else [.number, .head.sha, .user.login] | @tsv end' \
               2>/dev/null || true)"
-            pr_head="${merged_pr#*$'\t'}"
-            if [[ -n "$merged_pr" && "$pr_head" != "$merged_pr" ]]; then
+            IFS=$'\t' read -r _pr_number pr_head pr_author <<< "$merged_pr"
+            if [[ -n "$pr_head" ]]; then
               current_tree="$(git rev-parse 'HEAD^{tree}')"
               pr_tree="$(gh api "repos/$REPOSITORY/git/commits/$pr_head" \
                 --jq '.tree.sha' 2>/dev/null || true)"
@@ -117,6 +112,10 @@ jobs:
                 latest_run_succeeded "$pr_head"; then
                 plan_arguments+=(--carry-all --baseline-proven)
                 base_reason="tree-identical successful PR head $pr_head"
+                if [[ "$pr_author" == "$REPOSITORY_OWNER" ]]; then
+                  skip_request="$(trailer_value \
+                    "$pr_head" "Verification-Skip")"
+                fi
               fi
             fi
 
@@ -132,38 +131,22 @@ jobs:
               plan_arguments+=(--base "$BEFORE_SHA" --baseline-proven)
               base_reason="successful main baseline $BEFORE_SHA"
               if [[ "$ACTOR" == "$REPOSITORY_OWNER" ]]; then
-                carried_request="$(trailer_value "$CURRENT_SHA" "Verification-Carry")"
-                docker_approval="$(trailer_value \
-                  "$CURRENT_SHA" "Verification-Docker-Approved")"
+                skip_request="$(trailer_value \
+                  "$CURRENT_SHA" "Verification-Skip")"
               fi
             fi
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             plan_arguments+=(--full)
             base_reason="owner-dispatched full verification"
-            if [[ "$ACTOR" == "$REPOSITORY_OWNER" ]]; then
-              docker_approval="$DISPATCH_DOCKER_APPROVAL"
-            fi
           else
             stop_without_docker "unsupported workflow event $EVENT_NAME"
           fi
 
-          if [[ -n "$carried_request" ]]; then
-            plan_arguments+=(--carried-groups "$carried_request")
+          if [[ -n "$skip_request" ]]; then
+            plan_arguments+=(--skipped-groups "$skip_request")
           fi
           python3 scripts/verify.py "${plan_arguments[@]}" \
             --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
-
-          docker_groups="$(sed -n 's/^docker_groups=//p' "$GITHUB_OUTPUT" | tail -n 1)"
-          if [[ -n "$docker_groups" ]]; then
-            normalized_approval=",${docker_approval// /},"
-            IFS=',' read -ra required_groups <<< "$docker_groups"
-            for group in "${required_groups[@]}"; do
-              if [[ "$normalized_approval" != *",$group,"* ]]; then
-                stop_without_docker \
-                  "Docker group $group lacks owner approval for this exact head; no Docker was started."
-              fi
-            done
-          fi
           printf '\n- Selection baseline: %s\n' "$base_reason" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install pnpm

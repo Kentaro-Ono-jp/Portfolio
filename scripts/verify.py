@@ -73,18 +73,18 @@ def plan_with_baseline_evidence(
     )
 
 
-def move_groups_to_carried(
+def move_groups_to_skipped(
     plan: VerificationPlan, groups: frozenset[str]
 ) -> VerificationPlan:
     missing = groups - plan.groups
     if missing:
         raise RuntimeError(
-            "Cannot carry groups not selected by this delta: "
+            "Cannot skip groups not selected by this delta: "
             f"{', '.join(ordered_groups(missing))}"
         )
     return VerificationPlan(
         groups=plan.groups - groups,
-        carried_groups=plan.carried_groups | groups,
+        carried_groups=plan.carried_groups,
         changed_files=plan.changed_files,
         reason=plan.reason,
         base=plan.base,
@@ -909,7 +909,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--carried-groups",
-        help="Comma-separated selected groups covered by prior successful evidence.",
+        help="Comma-separated unaffected groups carried into explicit-run evidence.",
+    )
+    parser.add_argument(
+        "--skipped-groups",
+        help="Comma-separated selected groups intentionally skipped without evidence.",
     )
     parser.add_argument(
         "--github-output",
@@ -940,12 +944,20 @@ def parse_group_selection(
 
 def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
     if args.groups:
+        if args.skipped_groups:
+            raise RuntimeError("--skipped-groups is only valid while planning.")
         carried = (
             parse_group_selection(args.carried_groups, expand_dependencies=False)
             if args.carried_groups
             else frozenset()
         )
-        selected = parse_group_selection(args.groups) - carried
+        selected = parse_group_selection(args.groups)
+        overlap = selected & carried
+        if overlap:
+            raise RuntimeError(
+                "Executed and carried groups overlap: "
+                f"{', '.join(ordered_groups(overlap))}"
+            )
         return VerificationPlan(
             groups=selected,
             carried_groups=carried,
@@ -961,9 +973,14 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
     if args.carry_all:
         if not args.baseline_proven:
             raise RuntimeError("--carry-all requires --baseline-proven.")
+        skipped = (
+            parse_group_selection(args.skipped_groups, expand_dependencies=False)
+            if args.skipped_groups
+            else frozenset()
+        )
         return VerificationPlan(
             groups=frozenset(),
-            carried_groups=ALL_GROUPS,
+            carried_groups=ALL_GROUPS - skipped,
             changed_files=(),
             reason="Identical tree is covered by a successful exact-head baseline.",
         )
@@ -980,13 +997,13 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
             reason="Full canonical verification requested.",
         )
     if args.carried_groups:
-        if not args.baseline_proven:
-            raise RuntimeError(
-                "--carried-groups requires --baseline-proven when planning."
-            )
-        plan = move_groups_to_carried(
+        raise RuntimeError(
+            "--carried-groups is only valid with --groups for explicit-run evidence."
+        )
+    if args.skipped_groups:
+        plan = move_groups_to_skipped(
             plan,
-            parse_group_selection(args.carried_groups, expand_dependencies=False),
+            parse_group_selection(args.skipped_groups, expand_dependencies=False),
         )
     return plan
 

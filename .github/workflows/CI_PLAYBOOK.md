@@ -28,11 +28,11 @@ implementation and verification scripts.
 The first staging is a review snapshot, not permission to commit stale index
 content after later edits.
 
-Docker-backed `compose` and runtime groups are denied unless the focused Issue
-requires them and the owner approves the exact candidate. Record an approved
-carry as `Verification-Carry: <groups>` and approved execution as
-`Verification-Docker-Approved: <groups>` in that candidate's commit trailers;
-never add either trailer speculatively.
+Carry only successful unaffected evidence. Record an intentionally omitted
+affected group as `Verification-Skip: <groups>` in the exact candidate's commit
+trailers and disclose it as skipped without evidence; never relabel it as
+carried. Docker-backed groups follow the same selection rule and require no
+separate owner approval to execute.
 
 ### Local rehearsal boundaries
 

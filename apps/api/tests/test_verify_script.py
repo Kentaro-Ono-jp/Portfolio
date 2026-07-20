@@ -23,6 +23,7 @@ def verifier_args(**overrides: object) -> argparse.Namespace:
         "carry_all": False,
         "baseline_proven": False,
         "carried_groups": None,
+        "skipped_groups": None,
         "github_output": None,
         "summary": None,
     }
@@ -183,19 +184,40 @@ def test_identical_tree_can_carry_every_group(verifier: ModuleType) -> None:
     assert plan.skipped_groups == set()
 
 
-def test_proven_baseline_can_carry_explicit_docker_groups(
+def test_affected_groups_cannot_be_relabelled_as_carried(
     verifier: ModuleType,
 ) -> None:
-    plan = verifier.plan_for_paths(
-        ["scripts/verify.py"],
-        baseline_proven=True,
+    args = verifier_args(
+        groups="contracts,compose",
+        carried_groups="compose",
     )
 
-    plan = verifier.move_groups_to_carried(plan, verifier.DOCKER_GROUPS)
+    with pytest.raises(RuntimeError, match="Executed and carried groups overlap: compose"):
+        verifier.resolve_selection(args)
+
+
+def test_planning_rejects_explicit_carry_override(verifier: ModuleType) -> None:
+    args = verifier_args(
+        plan=True,
+        full=True,
+        baseline_proven=True,
+        carried_groups="compose",
+    )
+
+    with pytest.raises(RuntimeError, match="only valid with --groups"):
+        verifier.resolve_selection(args)
+
+
+def test_selected_docker_groups_can_be_reported_as_skipped(
+    verifier: ModuleType,
+) -> None:
+    plan = verifier.plan_for_paths(["scripts/verify.py"], baseline_proven=True)
+
+    plan = verifier.move_groups_to_skipped(plan, verifier.DOCKER_GROUPS)
 
     assert plan.groups == verifier.STATIC_GROUPS - {"compose"}
-    assert plan.carried_groups == verifier.DOCKER_GROUPS
-    assert plan.skipped_groups == set()
+    assert plan.carried_groups == set()
+    assert plan.skipped_groups == verifier.DOCKER_GROUPS
 
 
 def test_web_health_change_selects_web_runtime(verifier: ModuleType) -> None:
@@ -240,7 +262,7 @@ def test_plan_output_drives_conditional_dependency_setup(
     assert values["skipped_groups"] != ""
 
 
-def test_carried_docker_groups_do_not_request_docker_setup(
+def test_skipped_docker_groups_do_not_request_docker_setup(
     verifier: ModuleType,
     tmp_path: Path,
 ) -> None:
@@ -249,7 +271,7 @@ def test_carried_docker_groups_do_not_request_docker_setup(
         ["scripts/verify.py"],
         baseline_proven=True,
     )
-    plan = verifier.move_groups_to_carried(plan, verifier.DOCKER_GROUPS)
+    plan = verifier.move_groups_to_skipped(plan, verifier.DOCKER_GROUPS)
 
     verifier.write_plan_outputs(plan, output)
 
@@ -257,8 +279,8 @@ def test_carried_docker_groups_do_not_request_docker_setup(
         line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
     )
     assert values["groups"] == "contracts,docs,web-static,api-static,ml-static"
-    assert values["carried_groups"] == "compose,web-runtime,api-runtime,ml-runtime"
-    assert values["skipped_groups"] == ""
+    assert values["carried_groups"] == ""
+    assert values["skipped_groups"] == "compose,web-runtime,api-runtime,ml-runtime"
     assert values["docker_groups"] == ""
     assert values["needs_docker"] == "false"
     assert values["has_execution"] == "true"
@@ -286,6 +308,32 @@ def test_identical_tree_carry_requests_no_setup(
     assert values["needs_node"] == "false"
     assert values["needs_api"] == "false"
     assert values["needs_ml"] == "false"
+    assert values["needs_docker"] == "false"
+
+
+def test_identical_tree_preserves_intentional_docker_skips(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    plan = verifier.resolve_selection(
+        verifier_args(
+            plan=True,
+            carry_all=True,
+            baseline_proven=True,
+            skipped_groups="compose,web-runtime,api-runtime,ml-runtime",
+        )
+    )
+
+    verifier.write_plan_outputs(plan, output)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert values["groups"] == ""
+    assert values["carried_groups"] == ("contracts,docs,web-static,api-static,ml-static")
+    assert values["skipped_groups"] == ("compose,web-runtime,api-runtime,ml-runtime")
+    assert values["has_execution"] == "false"
     assert values["needs_docker"] == "false"
 
 
