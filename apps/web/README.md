@@ -31,8 +31,9 @@ private upstream address from entering the client bundle.
 - A numeric non-root standalone Node.js container exposed on loopback by
   Compose
 
-Authentication and browser-level Playwright coverage remain deliberately
-outside this focused boundary.
+Authentication remains outside this slice. Browser-level Playwright coverage
+is owned by `tests/e2e` because it crosses Web, API, broker, ML, persistence,
+and browser boundaries rather than belonging to Web internals.
 
 ## Configuration
 
@@ -65,4 +66,5 @@ pnpm audit --prod --audit-level moderate
 ```
 
 The canonical `python scripts/verify.py` entrypoint owns the combined static
-and Compose proof.
+and Compose proof. AI-agent local work uses `--static-only`; GitHub Actions
+owns the Docker-backed Playwright proof.

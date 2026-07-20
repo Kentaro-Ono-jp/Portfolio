@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from pathlib import PurePosixPath
+from uuid import UUID
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,19 @@ ALL_GROUPS = frozenset(VERIFICATION_GROUPS)
 STATIC_GROUPS = frozenset(VERIFICATION_GROUPS[:6])
 RUNTIME_GROUPS = frozenset(VERIFICATION_GROUPS[6:])
 DOCKER_GROUPS = frozenset({"compose"}) | RUNTIME_GROUPS
+LOCAL_STATIC_GROUPS = STATIC_GROUPS - DOCKER_GROUPS
+EXPECTED_COMPOSE_SERVICES = frozenset(
+    {
+        "postgres",
+        "minio",
+        "rabbitmq",
+        "api",
+        "api-outbox",
+        "api-events",
+        "ml-worker",
+        "web",
+    }
+)
 GROUP_DEPENDENCIES = {
     "web-runtime": frozenset({"compose", "web-static"}),
     "api-runtime": frozenset({"compose", "api-static"}),
@@ -49,6 +64,23 @@ class VerificationPlan:
             raise ValueError("Verification plan contains an unknown group.")
         if groups & carried_groups:
             raise ValueError("Executed and carried groups must be disjoint.")
+        for group in groups:
+            missing_dependencies = GROUP_DEPENDENCIES.get(group, frozenset()) - groups
+            if missing_dependencies:
+                raise ValueError(
+                    f"Selected group {group} lacks required dependencies: "
+                    f"{', '.join(sorted(missing_dependencies))}"
+                )
+        covered_groups = groups | carried_groups
+        for group in carried_groups:
+            missing_dependencies = (
+                GROUP_DEPENDENCIES.get(group, frozenset()) - covered_groups
+            )
+            if missing_dependencies:
+                raise ValueError(
+                    f"Carried group {group} lacks covered dependencies: "
+                    f"{', '.join(sorted(missing_dependencies))}"
+                )
         self.groups = groups
         self.carried_groups = carried_groups
         self.changed_files = changed_files
@@ -61,9 +93,20 @@ class VerificationPlan:
 
 
 def plan_with_baseline_evidence(
-    plan: VerificationPlan, *, baseline_proven: bool
+    plan: VerificationPlan,
+    *,
+    baseline_proven: bool,
+    baseline_skipped_groups: frozenset[str] = frozenset(),
 ) -> VerificationPlan:
-    carried = ALL_GROUPS - plan.groups if baseline_proven else frozenset()
+    if not baseline_skipped_groups <= ALL_GROUPS:
+        raise ValueError("Baseline evidence contains an unknown group.")
+    if baseline_skipped_groups and not baseline_proven:
+        raise ValueError("Baseline skips require proven baseline evidence.")
+    carried = (
+        ALL_GROUPS - plan.groups - baseline_skipped_groups
+        if baseline_proven
+        else frozenset()
+    )
     return VerificationPlan(
         groups=plan.groups,
         carried_groups=carried,
@@ -76,12 +119,26 @@ def plan_with_baseline_evidence(
 def move_groups_to_skipped(
     plan: VerificationPlan, groups: frozenset[str]
 ) -> VerificationPlan:
-    missing = groups - plan.groups
-    if missing:
+    if not groups <= ALL_GROUPS:
+        raise ValueError("Skipped selection contains an unknown group.")
+    carried = groups & plan.carried_groups
+    if carried:
         raise RuntimeError(
-            "Cannot skip groups not selected by this delta: "
-            f"{', '.join(ordered_groups(missing))}"
+            "Cannot relabel carried baseline evidence as skipped: "
+            f"{', '.join(ordered_groups(carried))}"
         )
+    remaining = plan.groups - groups
+    broken_dependencies = {
+        group: GROUP_DEPENDENCIES[group] - remaining
+        for group in remaining
+        if GROUP_DEPENDENCIES.get(group, frozenset()) - remaining
+    }
+    if broken_dependencies:
+        details = "; ".join(
+            f"{group} requires {','.join(sorted(missing))}"
+            for group, missing in sorted(broken_dependencies.items())
+        )
+        raise RuntimeError(f"Skipped groups break selected dependencies: {details}")
     return VerificationPlan(
         groups=plan.groups - groups,
         carried_groups=plan.carried_groups,
@@ -89,6 +146,50 @@ def move_groups_to_skipped(
         reason=plan.reason,
         base=plan.base,
     )
+
+
+def promote_groups_to_execution(
+    plan: VerificationPlan, groups: frozenset[str]
+) -> VerificationPlan:
+    if not groups <= ALL_GROUPS:
+        raise ValueError("Required execution selection contains an unknown group.")
+    promoted = set(groups)
+    while True:
+        previous = promoted.copy()
+        promoted.update(
+            group
+            for group, dependencies in GROUP_DEPENDENCIES.items()
+            if dependencies & promoted
+        )
+        promoted.update(expand_group_dependencies(promoted))
+        if promoted == previous:
+            break
+    promoted_groups = frozenset(promoted)
+    return VerificationPlan(
+        groups=plan.groups | promoted_groups,
+        carried_groups=plan.carried_groups - promoted_groups,
+        changed_files=plan.changed_files,
+        reason=f"{plan.reason} Baseline evidence gaps were promoted to execution.",
+        base=plan.base,
+    )
+
+
+def apply_skip_lineage(
+    plan: VerificationPlan,
+    *,
+    baseline_skipped_groups: frozenset[str],
+    current_skipped_groups: frozenset[str],
+) -> VerificationPlan:
+    inherited = baseline_skipped_groups - plan.groups
+    missing = inherited - current_skipped_groups
+    if missing:
+        raise RuntimeError(
+            "Current Verification-Skip omits inherited skipped groups that are "
+            f"not selected for execution: {', '.join(ordered_groups(missing))}"
+        )
+    if not current_skipped_groups:
+        return plan
+    return move_groups_to_skipped(plan, current_skipped_groups)
 
 
 def expand_group_dependencies(groups: set[str] | frozenset[str]) -> frozenset[str]:
@@ -112,7 +213,10 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
     if path.suffix.lower() == ".md":
         return frozenset({"docs"})
 
-    if normalized == "scripts/verify.py" or normalized.startswith(".github/workflows/"):
+    if normalized in {
+        "scripts/verify.py",
+        "scripts/plan_ci.py",
+    } or normalized.startswith(".github/workflows/"):
         return ALL_GROUPS
 
     if normalized.startswith("packages/contracts/"):
@@ -201,6 +305,7 @@ def plan_for_paths(
     *,
     base: str | None = None,
     baseline_proven: bool = False,
+    baseline_skipped_groups: frozenset[str] = frozenset(),
 ) -> VerificationPlan:
     normalized = tuple(dict.fromkeys(path.replace("\\", "/") for path in changed_files))
     if not normalized:
@@ -212,6 +317,7 @@ def plan_for_paths(
                 base=base,
             ),
             baseline_proven=baseline_proven,
+            baseline_skipped_groups=baseline_skipped_groups,
         )
 
     selected: set[str] = set()
@@ -229,6 +335,7 @@ def plan_for_paths(
                     base=base,
                 ),
                 baseline_proven=baseline_proven,
+                baseline_skipped_groups=baseline_skipped_groups,
             )
         selected.update(path_groups)
 
@@ -240,13 +347,43 @@ def plan_for_paths(
             base=base,
         ),
         baseline_proven=baseline_proven,
+        baseline_skipped_groups=baseline_skipped_groups,
     )
+
+
+def paths_from_name_status(output: bytes) -> list[str]:
+    fields = [field for field in output.split(b"\0") if field]
+    paths: list[str] = []
+    index = 0
+    while index < len(fields):
+        status = os.fsdecode(fields[index])
+        index += 1
+        path_count = 2 if status.startswith(("R", "C")) else 1
+        if (
+            not status
+            or status[0] not in "ACDMRTUXB"
+            or index + path_count > len(fields)
+        ):
+            raise ValueError("Git returned malformed --name-status -z output.")
+        for field in fields[index : index + path_count]:
+            paths.append(os.fsdecode(field))
+        index += path_count
+    return paths
 
 
 def changed_files_from_git(
     *, base: str | None = None, staged: bool = False
 ) -> list[str]:
-    command = ["git", "diff", "--name-only", "--diff-filter=ACDMRTUXB", "-z"]
+    command = [
+        "git",
+        "diff",
+        "--name-status",
+        "--find-renames",
+        "--find-copies",
+        "--find-copies-harder",
+        "--diff-filter=ACDMRTUXB",
+        "-z",
+    ]
     if staged:
         command.append("--cached")
     elif base is not None:
@@ -260,7 +397,7 @@ def changed_files_from_git(
         check=True,
         stdout=subprocess.PIPE,
     )
-    return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path]
+    return paths_from_name_status(result.stdout)
 
 
 def plan_from_git(
@@ -268,6 +405,7 @@ def plan_from_git(
     base: str | None = None,
     staged: bool = False,
     baseline_proven: bool = False,
+    baseline_skipped_groups: frozenset[str] = frozenset(),
 ) -> VerificationPlan:
     try:
         changed_files = changed_files_from_git(base=base, staged=staged)
@@ -282,6 +420,7 @@ def plan_from_git(
         changed_files,
         base=base,
         baseline_proven=baseline_proven,
+        baseline_skipped_groups=baseline_skipped_groups,
     )
 
 
@@ -300,13 +439,22 @@ def test_file_inventory() -> tuple[tuple[str, str], ...]:
     for service, group in (("api", "api-static"), ("ml", "ml-static")):
         for path in (REPOSITORY_ROOT / "apps" / service / "tests").glob("test_*.py"):
             inventory.append((group, path.relative_to(REPOSITORY_ROOT).as_posix()))
+    for path in (REPOSITORY_ROOT / "tests" / "e2e").glob("*.spec.ts"):
+        inventory.append(("e2e", path.relative_to(REPOSITORY_ROOT).as_posix()))
     return tuple(sorted(inventory))
 
 
 def selected_test_files(groups: frozenset[str]) -> tuple[str, ...]:
-    selected_owners = groups & {"web-static", "api-static", "ml-static"}
+    selected_owners = groups & {
+        "web-static",
+        "api-static",
+        "ml-static",
+        "web-runtime",
+    }
     return tuple(
-        path for owner, path in test_file_inventory() if owner in selected_owners
+        path
+        for owner, path in test_file_inventory()
+        if owner in selected_owners or (owner == "e2e" and RUNTIME_GROUPS <= groups)
     )
 
 
@@ -348,6 +496,7 @@ def write_plan_outputs(plan: VerificationPlan, path: Path) -> None:
         "needs_ml": bool(selected & {"ml-static", "ml-runtime"}),
         "needs_docker": bool(selected & DOCKER_GROUPS),
         "needs_runtime": bool(selected & RUNTIME_GROUPS),
+        "needs_e2e": RUNTIME_GROUPS <= selected,
     }
     with path.open("a", encoding="utf-8") as output:
         for key, value in values.items():
@@ -425,6 +574,14 @@ def static_checks(
             ],
         ),
         (
+            "Check browser E2E formatting",
+            [pnpm, "e2e:format:check"],
+        ),
+        (
+            "Type-check browser E2E source",
+            [pnpm, "e2e:typecheck"],
+        ),
+        (
             "Lint API source and tests",
             [
                 uv,
@@ -437,6 +594,7 @@ def static_checks(
                 "apps/api/alembic",
                 "apps/api/tests",
                 "scripts/verify.py",
+                "scripts/plan_ci.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
@@ -457,6 +615,7 @@ def static_checks(
                 "apps/api/alembic",
                 "apps/api/tests",
                 "scripts/verify.py",
+                "scripts/plan_ci.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
@@ -590,6 +749,8 @@ def static_checks(
         "Run Web branch-aware tests": "web-static",
         "Build the production Web application": "web-static",
         "Audit the pinned Web production dependency set": "web-static",
+        "Check browser E2E formatting": "web-static",
+        "Type-check browser E2E source": "web-static",
         "Lint API source and tests": "api-static",
         "Check API formatting": "api-static",
         "Type-check API source": "api-static",
@@ -653,7 +814,98 @@ def pytest_ml_command(uv: str) -> list[str]:
     ]
 
 
-def run_runtime_checks(*, groups: frozenset[str], uv: str, docker: str) -> None:
+def prove_complete_compose_readiness(docker: str) -> None:
+    result = subprocess.run(
+        compose_command(docker, "ps", "--services", "--status", "running"),
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    running = frozenset(result.stdout.decode("utf-8").splitlines())
+    if running != EXPECTED_COMPOSE_SERVICES:
+        missing = EXPECTED_COMPOSE_SERVICES - running
+        unexpected = running - EXPECTED_COMPOSE_SERVICES
+        raise RuntimeError(
+            "Complete Compose readiness did not expose the exact eight services; "
+            f"missing={','.join(sorted(missing)) or 'none'}, "
+            f"unexpected={','.join(sorted(unexpected)) or 'none'}."
+        )
+    capture_runtime_diagnostic(
+        label="Record complete eight-service readiness",
+        command=compose_command(docker, "ps", "--all"),
+        filename="compose-ready.txt",
+    )
+
+
+def _e2e_upload_correlation(payload: object, phase: str) -> str:
+    if not isinstance(payload, dict):
+        raise RuntimeError("Browser E2E evidence is not a JSON object.")
+    phase_evidence = payload.get(phase)
+    if not isinstance(phase_evidence, dict):
+        raise RuntimeError(f"Browser E2E evidence is missing {phase}.")
+    correlation = phase_evidence.get("uploadCorrelation")
+    if not isinstance(correlation, dict):
+        raise RuntimeError(
+            f"Browser E2E evidence is missing {phase} upload correlation."
+        )
+    request_id = correlation.get("request")
+    response_id = correlation.get("response")
+    if not isinstance(request_id, str) or request_id != response_id:
+        raise RuntimeError(f"Browser E2E {phase} correlation is inconsistent.")
+    try:
+        UUID(request_id)
+    except ValueError as error:
+        raise RuntimeError(f"Browser E2E {phase} correlation is not a UUID.") from error
+    return request_id
+
+
+def prove_e2e_correlation(docker: str) -> None:
+    evidence_path = ARTIFACT_DIRECTORY / "e2e-result.json"
+    try:
+        payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("Browser E2E result evidence is unavailable.") from error
+    correlations = {
+        phase: _e2e_upload_correlation(payload, phase)
+        for phase in ("completed", "failed")
+    }
+    proof: dict[str, dict[str, bool]] = {}
+    for service in ("api-outbox", "ml-worker", "api-events"):
+        result = subprocess.run(
+            compose_command(docker, "logs", "--no-color", service),
+            cwd=REPOSITORY_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        output = result.stdout.decode("utf-8", errors="replace")
+        observations = {
+            phase: correlation in output for phase, correlation in correlations.items()
+        }
+        if not all(observations.values()):
+            missing = [
+                phase for phase, observed in observations.items() if not observed
+            ]
+            raise RuntimeError(
+                f"{service} logs lack E2E correlation evidence for {', '.join(missing)}."
+            )
+        proof[service] = observations
+    (ARTIFACT_DIRECTORY / "e2e-correlation-proof.json").write_text(
+        json.dumps(proof, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print("E2E correlations crossed api-outbox, ml-worker, and api-events.")
+
+
+def run_runtime_checks(
+    *, groups: frozenset[str], pnpm: str, uv: str, docker: str
+) -> None:
+    full_e2e = RUNTIME_GROUPS <= groups
+    if full_e2e:
+        run(
+            "Build every source-owned Compose image with fresh bases",
+            compose_command(docker, "build", "--pull"),
+        )
     run(
         "Build and start isolated PostgreSQL, MinIO, and RabbitMQ",
         compose_command(
@@ -768,6 +1020,23 @@ def run_runtime_checks(*, groups: frozenset[str], uv: str, docker: str) -> None:
                 "scripts/verify_ml_runtime.py",
             ],
         )
+    if full_e2e:
+        run(
+            "Start the complete eight-service Compose environment",
+            compose_command(
+                docker,
+                "up",
+                "--detach",
+                "--wait",
+                *sorted(EXPECTED_COMPOSE_SERVICES),
+            ),
+        )
+        prove_complete_compose_readiness(docker)
+        run(
+            "Prove browser-to-ML-to-browser completed and failed workflows",
+            [pnpm, "e2e:test"],
+        )
+        prove_e2e_correlation(docker)
 
 
 def capture_runtime_diagnostic(
@@ -874,7 +1143,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--static-only",
         action="store_true",
-        help="Skip container startup and real-service integration tests.",
+        help="Run the five non-Docker groups without resolving the Docker CLI.",
     )
     parser.add_argument(
         "--groups",
@@ -906,6 +1175,21 @@ def parse_args() -> argparse.Namespace:
         "--baseline-proven",
         action="store_true",
         help="Mark unselected groups as carried from a successful baseline.",
+    )
+    parser.add_argument(
+        "--baseline-skipped-groups",
+        help=(
+            "Comma-separated groups skipped without evidence by the proven baseline; "
+            "they remain skipped unless selected by the current delta."
+        ),
+    )
+    parser.add_argument(
+        "--close-baseline-gaps",
+        action="store_true",
+        help=(
+            "Execute inherited baseline-skipped groups instead of requiring their "
+            "current-head restatement."
+        ),
     )
     parser.add_argument(
         "--carried-groups",
@@ -943,9 +1227,31 @@ def parse_group_selection(
 
 
 def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
+    if args.carried_groups and not args.groups:
+        raise RuntimeError(
+            "--carried-groups is only valid with --groups for explicit-run evidence."
+        )
+    if args.carried_groups and not args.baseline_proven:
+        raise RuntimeError("--carried-groups requires --baseline-proven.")
+    if args.skipped_groups and (args.groups or args.static_only):
+        raise RuntimeError(
+            "--skipped-groups is only valid with --base, --staged, --full, "
+            "or --carry-all."
+        )
+    if args.baseline_skipped_groups and (args.groups or args.static_only):
+        raise RuntimeError(
+            "--baseline-skipped-groups is only valid with --base, --staged, "
+            "or --carry-all."
+        )
+    if args.close_baseline_gaps and not (args.base or args.staged):
+        raise RuntimeError("--close-baseline-gaps requires --base or --staged.")
+    if args.close_baseline_gaps and not args.baseline_proven:
+        raise RuntimeError("--close-baseline-gaps requires --baseline-proven.")
+    if args.close_baseline_gaps and args.skipped_groups:
+        raise RuntimeError(
+            "--close-baseline-gaps cannot be combined with --skipped-groups."
+        )
     if args.groups:
-        if args.skipped_groups:
-            raise RuntimeError("--skipped-groups is only valid while planning.")
         carried = (
             parse_group_selection(args.carried_groups, expand_dependencies=False)
             if args.carried_groups
@@ -966,46 +1272,65 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
         )
     if args.static_only:
         return VerificationPlan(
-            groups=STATIC_GROUPS,
+            groups=LOCAL_STATIC_GROUPS,
             changed_files=(),
-            reason="Static-only verification requested.",
+            reason="Non-Docker static-only verification requested.",
         )
+    baseline_skipped = (
+        parse_group_selection(args.baseline_skipped_groups, expand_dependencies=False)
+        if args.baseline_skipped_groups
+        else frozenset()
+    )
+    current_skipped = (
+        parse_group_selection(args.skipped_groups, expand_dependencies=False)
+        if args.skipped_groups
+        else frozenset()
+    )
+    if baseline_skipped and not args.baseline_proven:
+        raise RuntimeError("--baseline-skipped-groups requires --baseline-proven.")
     if args.carry_all:
         if not args.baseline_proven:
             raise RuntimeError("--carry-all requires --baseline-proven.")
-        skipped = (
-            parse_group_selection(args.skipped_groups, expand_dependencies=False)
-            if args.skipped_groups
-            else frozenset()
+        plan = plan_with_baseline_evidence(
+            VerificationPlan(
+                groups=frozenset(),
+                changed_files=(),
+                reason="Identical tree is covered by a successful exact-head baseline.",
+            ),
+            baseline_proven=True,
+            baseline_skipped_groups=baseline_skipped,
         )
-        return VerificationPlan(
-            groups=frozenset(),
-            carried_groups=ALL_GROUPS - skipped,
-            changed_files=(),
-            reason="Identical tree is covered by a successful exact-head baseline.",
+        return apply_skip_lineage(
+            plan,
+            baseline_skipped_groups=baseline_skipped,
+            current_skipped_groups=current_skipped,
+        )
+    if baseline_skipped and not (args.base or args.staged):
+        raise RuntimeError(
+            "--baseline-skipped-groups is only valid with --base or --staged."
         )
     if args.base or args.staged:
         plan = plan_from_git(
             base=args.base,
             staged=args.staged,
             baseline_proven=args.baseline_proven,
+            baseline_skipped_groups=(
+                frozenset() if args.close_baseline_gaps else baseline_skipped
+            ),
         )
+        if args.close_baseline_gaps and baseline_skipped:
+            plan = promote_groups_to_execution(plan, baseline_skipped)
     else:
         plan = VerificationPlan(
             groups=ALL_GROUPS,
             changed_files=(),
             reason="Full canonical verification requested.",
         )
-    if args.carried_groups:
-        raise RuntimeError(
-            "--carried-groups is only valid with --groups for explicit-run evidence."
-        )
-    if args.skipped_groups:
-        plan = move_groups_to_skipped(
-            plan,
-            parse_group_selection(args.skipped_groups, expand_dependencies=False),
-        )
-    return plan
+    return apply_skip_lineage(
+        plan,
+        baseline_skipped_groups=baseline_skipped,
+        current_skipped_groups=current_skipped,
+    )
 
 
 def main() -> int:
@@ -1023,33 +1348,46 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    if args.plan and not (args.base or args.staged or args.full or args.carry_all):
+    if args.plan and not (
+        args.groups
+        or args.static_only
+        or args.base
+        or args.staged
+        or args.full
+        or args.carry_all
+    ):
         print(
-            "\nVerification failed: --plan requires --base, --staged, or --full.",
+            "\nVerification failed: --plan requires --base, --staged, --full, "
+            "or --carry-all.",
             file=sys.stderr,
         )
         return 1
 
     try:
         plan = resolve_selection(args)
-    except RuntimeError as error:
+        for line in plan_lines(plan):
+            print(line)
+        if args.github_output is not None:
+            write_plan_outputs(plan, args.github_output)
+        if args.summary is not None:
+            write_plan_summary(plan, args.summary)
+    except (RuntimeError, ValueError, OSError) as error:
         print(f"\nVerification failed: {error}", file=sys.stderr)
         return 1
-    for line in plan_lines(plan):
-        print(line)
-    if args.github_output is not None:
-        write_plan_outputs(plan, args.github_output)
-    if args.summary is not None:
-        write_plan_summary(plan, args.summary)
     if args.plan:
         return 0
 
-    ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     runtime_started = False
-    verification_error: RuntimeError | subprocess.CalledProcessError | None = None
-    cleanup_error: subprocess.CalledProcessError | None = None
+    verification_error: (
+        RuntimeError | subprocess.CalledProcessError | OSError | None
+    ) = None
+    diagnostics_error: RuntimeError | subprocess.CalledProcessError | OSError | None = (
+        None
+    )
+    cleanup_error: subprocess.CalledProcessError | OSError | None = None
     docker = ""
     try:
+        ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
         pnpm = (
             require_command("pnpm") if plan.groups & {"contracts", "web-static"} else ""
         )
@@ -1070,21 +1408,36 @@ def main() -> int:
 
         if plan.groups & RUNTIME_GROUPS:
             runtime_started = True
-            run_runtime_checks(groups=plan.groups, uv=uv, docker=docker)
-    except (RuntimeError, subprocess.CalledProcessError) as error:
+            run_runtime_checks(groups=plan.groups, pnpm=pnpm, uv=uv, docker=docker)
+    except (RuntimeError, subprocess.CalledProcessError, OSError) as error:
         print(f"\nVerification failed: {error}", file=sys.stderr)
         verification_error = error
         if runtime_started:
-            show_runtime_diagnostics(docker)
+            try:
+                show_runtime_diagnostics(docker)
+            except (
+                RuntimeError,
+                subprocess.CalledProcessError,
+                OSError,
+            ) as diagnostic_failure:
+                diagnostics_error = diagnostic_failure
+                print(
+                    f"\nRuntime diagnostics failed: {diagnostic_failure}",
+                    file=sys.stderr,
+                )
     finally:
         if runtime_started:
             try:
                 cleanup_runtime(docker)
-            except subprocess.CalledProcessError as error:
+            except (subprocess.CalledProcessError, OSError) as error:
                 cleanup_error = error
                 print(f"\nRuntime cleanup failed: {error}", file=sys.stderr)
 
-    if verification_error is not None or cleanup_error is not None:
+    if (
+        verification_error is not None
+        or diagnostics_error is not None
+        or cleanup_error is not None
+    ):
         return 1
 
     print("\nVerification passed.")

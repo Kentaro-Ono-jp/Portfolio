@@ -101,21 +101,25 @@ types, Web linting, formatting, static types, coverage, production dependency
 advisories, migrations, unit tests, and a real
 Web/HTTP/PostgreSQL/S3-compatible/RabbitMQ integration path in GitHub Actions.
 
-Install the pinned dependencies and run the same verification from the
-repository root:
+Install the pinned dependencies and run local static verification from the
+repository root. The static-only path neither resolves nor invokes the Docker
+CLI. AI-agent work does not start or mutate local Docker Desktop:
 
 ```console
 pnpm install --frozen-lockfile
 uv sync --project apps/api --frozen
 uv sync --project apps/ml --frozen
-python scripts/verify.py
+python scripts/verify.py --static-only
 ```
 
-The full command builds and starts only this repository's Compose project and
-stops it afterward. To run all checks without starting containers:
+GitHub Actions runs `python scripts/verify.py` without the flag. That full path
+builds and starts only this repository's Compose project, proves the complete
+eight-service environment and browser E2E, and stops the project afterward. A
+human reviewer may deliberately run the same full command with local Docker,
+but it is not the default AI-agent workflow:
 
 ```console
-python scripts/verify.py --static-only
+python scripts/verify.py
 ```
 
 ### Run the current Web, API, outbox, result-consumer, and ML worker boundary
@@ -167,10 +171,12 @@ completed, or failed state through the existing API.
 
 The Web uses generated OpenAPI types plus runtime Zod validation, keeps the API
 base URL server-only behind same-origin route handlers, and presents accessible
-queued, processing, completed, failed, retry, and reset states. Repository-owned
-AI collaboration is defined by
-[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`. Browser E2E
-and the complete eight-service proof remain later focused work.
+queued, processing, completed, failed, retry, and reset states. The final
+verification candidate adds Playwright coverage for the real browser upload,
+completed invoice result, terminal ML failure, invalid-file rejection, and
+cross-service correlation evidence against the complete eight-service Compose
+environment. Repository-owned AI collaboration is defined by
+[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`.
 
 ## License
 

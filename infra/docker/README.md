@@ -65,3 +65,9 @@ The `web` role exposes only its loopback-bound HTTP port. Its server-side proxy
 uses the internal `api:8000` boundary and has no PostgreSQL, RabbitMQ, object
 storage, or ML settings. The health check exercises the Web-owned `/health`
 route from inside the container.
+
+The canonical Actions runtime source-builds the application images, waits for
+the exact eight declared services, and then runs Playwright on the hosted
+runner as an external browser client. Playwright is not a ninth Compose
+service. AI-agent local verification remains static-only unless the owner
+explicitly authorizes local Docker for the exact task.

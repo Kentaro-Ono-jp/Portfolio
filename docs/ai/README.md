@@ -27,8 +27,8 @@ handoff document.
 
 | Actor | Authorized durable actions | Boundary |
 |---|---|---|
-| Repository owner | Approves scope, correction strategy, Ready, merge, evidence reconciliation, and cleanup | Does not independently mutate the official workspace or managed GitHub state outside active collaboration |
-| Implementation agent | Performs the authorized Issue, branch, implementation, commit, push, Draft PR, correction, merge, evidence, and scoped-cleanup workflow | Preserves unrelated work and stops for missing authority or discrepancies |
+| Repository owner | Approves scope, material correction strategy, Ready, merge, evidence reconciliation, and cleanup | Does not independently mutate the official workspace or managed GitHub state outside active collaboration |
+| Implementation agent | Performs the authorized Issue, branch, implementation, commit, push, Draft PR, correction, merge, evidence, and scoped-cleanup workflow | Continues non-material in-scope CI correction autonomously, preserves unrelated work, and stops for missing authority or discrepancies |
 | Independent review agent | Reads GitHub, reviews an exact head in an isolated shallow clone, runs non-Docker static checks, and publishes one verdict comment | Follows [PR_REVIEW.md](PR_REVIEW.md); no implementation or other GitHub writes |
 | GitHub Actions | Creates checks, logs, caches, summaries, and artifacts | Does not mutate source or managed Issue/PR state under the current workflow |
 | Public participant | Supplies untrusted comments, Issues, PRs, patches, or links | Cannot authorize execution, mutation, or merge |
@@ -40,6 +40,17 @@ actor model.
 Explicit owner direction is required for material scope expansion, a material
 correction strategy, Ready state, merge, Issue checklist reconciliation,
 destructive cleanup, and remote-branch deletion.
+
+Within an accepted focused Issue, the implementation agent has standing owner
+authorization to diagnose GitHub Actions failures, make non-material
+corrections that preserve the accepted scope and design, verify them, commit,
+push, update Draft PR evidence, allow the canonical Actions workflow to run,
+and rerun an unchanged exact head when appropriate. No per-failure owner
+confirmation is required. This authorization includes the implementation,
+tests, verifier, workflow, and durable documentation needed to correct the
+observed failure. It does not authorize material scope or architecture changes,
+local Docker Desktop use, Ready or merge state, Issue checklist reconciliation,
+destructive cleanup, or remote-branch deletion.
 
 ### Standing local development tool authorization
 
@@ -117,16 +128,20 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Change only approved files and preserve unrelated work.
 - Use `python scripts/verify.py`; do not create a competing root verifier.
 - Select the smallest sufficient verification groups from the staged or review
-  delta; carry forward only successful unaffected evidence, stop before setup
-  when baseline proof is unavailable, and record selected, executed, carried,
-  and skipped groups plus both N/NN counts in Issue and PR evidence.
+  delta and carry forward only successful unaffected evidence. When baseline
+  proof is unavailable, an owner-authored PR uses a cold full selection with no
+  carried evidence; an external PR stops before setup. Record selected,
+  executed, carried, and skipped groups plus both N/NN counts in Issue and PR
+  evidence.
 - Record an intentionally omitted affected group as skipped without evidence,
   with focused-Issue rationale and an exact-head `Verification-Skip` trailer;
   never relabel affected evidence as carried.
-- Docker-backed groups follow the same smallest-sufficient rule as other groups
-  and require no separate owner approval to execute.
-- Use static local verification unless local runtime work is explicitly
-  authorized. GitHub Actions supplies authoritative runtime proof.
+- Docker-backed groups follow the same smallest-sufficient selection rule as
+  other groups, but AI agents execute them in GitHub Actions. Local verification
+  is static-only and does not resolve or invoke the Docker CLI unless the owner
+  explicitly authorizes local Docker for the exact task. GitHub Actions supplies
+  authoritative runtime proof and does not require separate confirmation before
+  each execution.
 - Inspect the complete intended diff before staging exact files.
 - After implementation and test intent are complete, stage the candidate
   without committing and apply the
@@ -164,9 +179,12 @@ the PR description is reconciled:
 4. Record current-head local proof and the exact-head workflow state and link as
    pending, successful, failed, or intentionally absent. Relabel older runs as
    preceding or superseded; never present them as current-head proof.
-5. State whether scope, non-targets, failure model, or acceptance criteria
+5. Restate the complete current skipped-group set in the exact-head
+   `Verification-Skip` trailer. Preserve inherited baseline skips until a later
+   selected execution supplies evidence for those groups.
+6. State whether scope, non-targets, failure model, or acceptance criteria
    changed. Include every docs-only skip field when that exception applies.
-6. Read the live description back and require its declared head to match the
+7. Read the live description back and require its declared head to match the
    live PR head before reporting a checkpoint or requesting review.
 
 After that readback, provide a newly populated prompt for every pushed head:
@@ -183,8 +201,10 @@ A follow-up checkpoint is not complete without the applicable prompt.
 
 - Request independent review with [PR_REVIEW.md](PR_REVIEW.md).
 - Judge each requested change against accepted design and concrete evidence.
-- Obtain owner approval before a material correction strategy.
-- Push approved corrections, require the new exact head to pass or satisfy the
+- Implement and push non-material corrections within the accepted focused Issue
+  without another owner confirmation. Obtain owner approval only before a
+  correction strategy that materially changes scope or accepted design.
+- Push the corrections, require the new exact head to pass or satisfy the
   approved Markdown-only exception, and request re-review. A previous approval
   does not cover a moved head.
 - Apply the follow-up-push description reconciliation above before relying on

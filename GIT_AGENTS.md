@@ -47,8 +47,10 @@ earlier conversations are orientation only.
   pre-commit candidate, then reconcile reusable CI knowledge after merge.
 - Install pinned JavaScript dependencies with
   `pnpm install --frozen-lockfile` before canonical verification.
-- Use `python scripts/verify.py --static-only` when local runtime verification
-  is not explicitly authorized.
+- AI-agent local verification uses `python scripts/verify.py --static-only`.
+  Docker-backed groups run in GitHub Actions. Do not start or mutate local
+  Docker Desktop unless the owner explicitly authorizes local Docker for the
+  exact task.
 - GitHub Actions is the authoritative runtime proof.
 - The Compose project name is `reactorfront-portfolio`.
 - Never use global Docker cleanup or prune commands. Scope operations and

@@ -17,8 +17,9 @@ implementation and verification scripts.
    committing.
 2. Run `python scripts/verify.py --plan --staged`, record both N/NN counts and
    the selected, executed, carried, and skipped groups, then inspect only the
-   applicable change-driven boundaries below; missing baseline evidence stops
-   verification before dependency setup.
+   applicable change-driven boundaries below. Missing baseline evidence
+   forbids carried results: an owner-authored PR runs a cold full selection,
+   while an external PR stops before dependency setup.
 3. Correct portability, dependency, real-service, recovery, evidence, or
    teardown risks without weakening the intended proof.
 4. Rerun the required verification after any correction.
@@ -28,20 +29,47 @@ implementation and verification scripts.
 The first staging is a review snapshot, not permission to commit stale index
 content after later edits.
 
+Within an accepted focused Issue, steps 3 through 5, the resulting commit and
+push, and execution or monitoring of the canonical GitHub Actions workflow are
+covered by standing owner authorization. No per-failure owner confirmation is
+required while the correction preserves the accepted scope and design. Stop
+for owner direction only when the correction would materially change scope or
+accepted design, use local Docker Desktop, change Ready or merge state,
+reconcile Issue checklists, perform destructive cleanup, or delete a remote
+branch.
+
 Carry only successful unaffected evidence. Record an intentionally omitted
 affected group as `Verification-Skip: <groups>` in the exact candidate's commit
 trailers and disclose it as skipped without evidence; never relabel it as
-carried. Docker-backed groups follow the same selection rule and require no
-separate owner approval to execute.
+carried. Every follow-up head must restate its complete current skipped-group
+set in that trailer so a later head and a tree-identical merge preserve the
+evidence gap. The planner must reject a head whose trailer omits an inherited
+skip that the current delta does not select for execution. Rename and copy
+selection must explicitly enable Git detection for both operations, including
+unmodified copy sources, and must select both paths. Docker-backed groups
+follow the same selection rule, run in GitHub Actions, and require explicit
+exact-task owner direction before any local Docker Desktop use.
+
+The event planner keeps baseline and current-head trust separate. A successful
+PR base or main baseline is trusted regardless of the current PR author. An
+owner PR may use its previous successful head incrementally and may declare the
+current skip trailer; an external PR always replans from its trusted PR base,
+ignores external head trailers, and promotes inherited evidence gaps plus their
+dependent groups to execution. A tree-identical owner merge may carry exact-head
+evidence only after reading both the owner PR-head and current merge-commit
+trailers and applying the same lineage check as a changed tree. Other merges
+replan from the successful main baseline.
 
 ### Local rehearsal boundaries
 
 Treat a missing command or host-tool version mismatch as a local preflight
 condition, not as a product or Actions failure.
 
-- Resolve `pnpm`, `uv`, and `docker` before starting the canonical verifier.
-  Compare the available Node and Python versions with `.node-version` and
-  `.python-version`, and use the `uv` version pinned by the workflow.
+- Resolve only the tools required by the selected plan before starting the
+  canonical verifier. The static-only path resolves `pnpm` and `uv` but does
+  not resolve or invoke the Docker CLI. Compare the available Node and Python
+  versions with `.node-version` and `.python-version`, and use the `uv` version
+  pinned by the workflow.
 - On an owner-managed persistent workstation, use the owner's
   [standing authorization](../../docs/ai/README.md#standing-local-development-tool-authorization)
   to install an ordinary missing development tool or runtime persistently in
@@ -143,8 +171,9 @@ After every feature PR merge, and before the next feature increment:
 | Python imports or dependency groups | A runtime module must not import a dev- or type-only package. | Isolate type imports with `TYPE_CHECKING`; smoke-import the installed application inside its production image. |
 | Directly executed Python scripts | Resolve imports using the exact documented command and working directory, without an unrecorded `PYTHONPATH`. | Exercise the same script path through the canonical verifier; lint every verification helper. |
 | Persistence and migrations | Check real PostgreSQL constraints, transaction order, commit/rollback boundaries, and server-specific types. | Flush dependency rows explicitly where ordering is contractual; prove the order and the real database path. |
-| Runtime fixtures and fault data | A check must select records it created, not whichever global row happens to match. | Use deterministic identifiers and clean owned data both before the check and in `finally`. |
+| Runtime fixtures and fault data | A check must select records it created, not whichever global row happens to match. A queue-depth proof must not race an unrelated consumer left running by an earlier verifier. | Use deterministic identifiers, quiesce competing consumers before purging or asserting queue ownership, and clean owned data both before the check and in `finally`. |
 | RabbitMQ or Celery topology | Check the pinned broker's queue durability, exclusivity, auto-delete behavior, and removed/deprecated features. | Keep business queues durable; make transient control/event queues exclusive; disable cluster topology the worker does not use. |
+| Browser E2E locators | Accessible-name substring matching can resolve both a landmark and a control whose names share the same words. Framework-owned live regions can also share the intended ARIA role. | Prefer exact accessible-name matching for reviewed labels and filter role locators by the expected user-visible message; keep strict locator mode as the uniqueness guard. |
 | Health and readiness | The health timeout must exceed the legitimate worst-case probe duration. Recovery may precede Docker's aggregate health update. | Budget the full probe; after fault injection poll the affected dependency's direct liveness signal. |
 | Retry and recovery proof | Broad faults plus automatic requeue can create connection churn and obscure the one transition under test. | Capture the exact semantic event, quiesce the actor, restore the dependency, then restart only the target service when possible. |
 | Diagnostics, artifacts, and teardown | The first causal failure must survive even when diagnostics or cleanup also fail. | Sanitize and upload evidence; keep teardown unconditional and scoped only to `reactorfront-portfolio`. |
