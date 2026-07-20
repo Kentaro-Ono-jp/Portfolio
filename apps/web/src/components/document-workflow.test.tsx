@@ -1,5 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -56,11 +60,15 @@ async function submit(file = pdf()) {
 }
 
 beforeEach(() => {
+  onlineManager.setOnline(true);
   vi.mocked(createDocument).mockReset();
   vi.mocked(getDocument).mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  onlineManager.setOnline(true);
+});
 
 describe("DocumentWorkflow", () => {
   it("validates missing, wrong-type, and oversized files before requesting", async () => {
@@ -160,6 +168,34 @@ describe("DocumentWorkflow", () => {
       screen.queryByLabelText("Polling for status"),
     ).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["completed", completedStatus, "invoice"],
+    ["failed", failedStatus, "Failed"],
+  ])(
+    "does not refetch a %s terminal result after reconnecting",
+    async (_name, status, label) => {
+      vi.mocked(createDocument).mockResolvedValue(acceptedDocument);
+      vi.mocked(getDocument)
+        .mockResolvedValueOnce(status)
+        .mockResolvedValue(queuedStatus);
+      renderWorkflow();
+      await submit();
+
+      expect(await screen.findByText(label)).toBeInTheDocument();
+      expect(getDocument).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        onlineManager.setOnline(false);
+      });
+      await act(async () => {
+        onlineManager.setOnline(true);
+      });
+
+      expect(getDocument).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(label)).toBeInTheDocument();
+    },
+  );
 
   it("shows submission problems without leaking raw errors", async () => {
     vi.mocked(createDocument).mockRejectedValue(

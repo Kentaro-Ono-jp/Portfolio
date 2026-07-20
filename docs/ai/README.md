@@ -41,6 +41,26 @@ Explicit owner direction is required for material scope expansion, a material
 correction strategy, Ready state, merge, Issue checklist reconciliation,
 destructive cleanup, and remote-branch deletion.
 
+### Standing local development tool authorization
+
+The repository owner gives implementation and independent review agents
+standing authorization, during implementation, PR creation, correction
+commits, initial review, re-review, and post-merge evidence work, to install
+ordinary local development tools and runtimes when they are reasonably likely
+to materially reduce implementation or review cost. No strict proof or
+separate per-install approval is required.
+
+- On an owner-managed persistent workstation, prefer a persistent user-scoped
+  installation. Use the repository-pinned version when one exists; otherwise,
+  use a compatible stable version from an official package manager or source.
+- A successful installation and basic version check are sufficient unless a
+  stronger repository or security instruction applies.
+- Use an isolated temporary installation only when the host must remain
+  unchanged, a persistent installation is unavailable, or versions conflict.
+- This authorization does not cover elevated privileges, reboots, drivers,
+  background services, credentials, paid licenses, Docker runtime mutation, or
+  unrelated upgrades. Those actions still require explicit owner direction.
+
 ## Bounded live checks
 
 At cold start:

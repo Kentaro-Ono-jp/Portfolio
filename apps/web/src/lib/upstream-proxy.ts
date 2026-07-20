@@ -92,13 +92,17 @@ async function upstreamJson(response: Response): Promise<unknown> {
 
 async function validatedUpstreamResponse<T>(
   response: Response,
+  expectedCorrelationId: string,
   successStatus: number,
   successSchema: z.ZodType<T>,
 ): Promise<Response> {
   const upstreamCorrelation = correlationIdSchema.safeParse(
     response.headers.get("X-Correlation-ID"),
   );
-  if (!upstreamCorrelation.success) {
+  if (
+    !upstreamCorrelation.success ||
+    upstreamCorrelation.data !== expectedCorrelationId
+  ) {
     throw new InvalidUpstreamResponseError();
   }
 
@@ -165,6 +169,7 @@ async function callUpstream<T>(
     );
     return await validatedUpstreamResponse(
       response,
+      correlationId,
       successStatus,
       successSchema,
     );

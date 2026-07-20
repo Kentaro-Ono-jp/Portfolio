@@ -61,6 +61,9 @@ export function DocumentWorkflow() {
     enabled: accepted !== null,
     refetchInterval: (query) =>
       statusPollInterval(query.state.data, query.state.status === "error"),
+    refetchOnReconnect: (query) =>
+      statusPollInterval(query.state.data, query.state.status === "error") !==
+      false,
   });
 
   const currentStatus = statusQuery.data?.status ?? accepted?.status;

@@ -31,12 +31,13 @@ function upstreamJson(
   body: unknown,
   status: number,
   problem = false,
+  correlationId = CORRELATION_ID,
 ): Response {
   return Response.json(body, {
     status,
     headers: {
       "Content-Type": problem ? "application/problem+json" : "application/json",
-      "X-Correlation-ID": CORRELATION_ID,
+      "X-Correlation-ID": correlationId,
     },
   });
 }
@@ -187,11 +188,18 @@ describe("upstream document proxy", () => {
         headers: { "Content-Type": "application/json" },
       }),
       upstreamJson(completedStatus, 201),
+      upstreamJson(completedStatus, 200, false, DOCUMENT_ID),
       upstreamJson({ ...canonicalProblem, status: 400 }, 415, true),
       upstreamJson(
         { ...canonicalProblem, correlationId: DOCUMENT_ID },
         415,
         true,
+      ),
+      upstreamJson(
+        { ...canonicalProblem, correlationId: DOCUMENT_ID },
+        415,
+        true,
+        DOCUMENT_ID,
       ),
     ];
 
