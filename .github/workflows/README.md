@@ -22,6 +22,11 @@ recovery, complete eight-service readiness, and the Playwright
 browser-to-ML-to-browser completed and failed paths from a clean GitHub-hosted
 runner.
 
+A PR carries only unaffected evidence from an exact successful baseline. When
+that baseline is unavailable, a repository-owner PR falls back to a cold full
+selection with no carried evidence; an external PR stops before dependency or
+Docker setup.
+
 When verification fails, sanitized Compose state, timestamped logs, ML
 readiness, Playwright trace/screenshot/video/report output, JUnit,
 model/runtime proof, and branch-aware coverage evidence are uploaded as a

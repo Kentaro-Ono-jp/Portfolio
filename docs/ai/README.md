@@ -117,9 +117,11 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Change only approved files and preserve unrelated work.
 - Use `python scripts/verify.py`; do not create a competing root verifier.
 - Select the smallest sufficient verification groups from the staged or review
-  delta; carry forward only successful unaffected evidence, stop before setup
-  when baseline proof is unavailable, and record selected, executed, carried,
-  and skipped groups plus both N/NN counts in Issue and PR evidence.
+  delta and carry forward only successful unaffected evidence. When baseline
+  proof is unavailable, an owner-authored PR uses a cold full selection with no
+  carried evidence; an external PR stops before setup. Record selected,
+  executed, carried, and skipped groups plus both N/NN counts in Issue and PR
+  evidence.
 - Record an intentionally omitted affected group as skipped without evidence,
   with focused-Issue rationale and an exact-head `Verification-Skip` trailer;
   never relabel affected evidence as carried.

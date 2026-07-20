@@ -17,8 +17,9 @@ implementation and verification scripts.
    committing.
 2. Run `python scripts/verify.py --plan --staged`, record both N/NN counts and
    the selected, executed, carried, and skipped groups, then inspect only the
-   applicable change-driven boundaries below; missing baseline evidence stops
-   verification before dependency setup.
+   applicable change-driven boundaries below. Missing baseline evidence
+   forbids carried results: an owner-authored PR runs a cold full selection,
+   while an external PR stops before dependency setup.
 3. Correct portability, dependency, real-service, recovery, evidence, or
    teardown risks without weakening the intended proof.
 4. Rerun the required verification after any correction.

@@ -90,15 +90,21 @@ jobs:
               base_reason="PR base"
             fi
 
-            if ! latest_run_succeeded "$base"; then
+            if latest_run_succeeded "$base"; then
+              plan_arguments+=(--base "$base" --baseline-proven)
+              if [[ "$PR_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
+                baseline_skip_request="$(trailer_value \
+                  "$base" "Verification-Skip")"
+              fi
+            elif [[ "$PR_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
+              plan_arguments+=(--full)
+              base_reason="owner cold full; $base_reason $base lacks a successful Verify run"
+            else
               stop_without_docker \
                 "$base_reason $base lacks a latest successful Verify run; no checks or Docker were started."
             fi
-            plan_arguments+=(--base "$base" --baseline-proven)
 
             if [[ "$PR_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
-              baseline_skip_request="$(trailer_value \
-                "$base" "Verification-Skip")"
               skip_request="$(trailer_value "$PR_HEAD_SHA" "Verification-Skip")"
             fi
           elif [[ "$EVENT_NAME" == "push" ]]; then
