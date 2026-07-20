@@ -55,6 +55,9 @@ separate per-install approval is required.
   use a compatible stable version from an official package manager or source.
 - A successful installation and basic version check are sufficient unless a
   stronger repository or security instruction applies.
+- After a replacement is installed and verified, a superseded user-scoped
+  version of the same tool may be removed when no active repository process
+  depends on its old path.
 - Use an isolated temporary installation only when the host must remain
   unchanged, a persistent installation is unavailable, or versions conflict.
 - This authorization does not cover elevated privileges, reboots, drivers,
@@ -113,6 +116,11 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 
 - Change only approved files and preserve unrelated work.
 - Use `python scripts/verify.py`; do not create a competing root verifier.
+- Select the smallest sufficient verification groups from the staged or review
+  delta; carry forward only successful unaffected evidence, fail closed to full
+  verification when uncertain or the prior head did not pass, and record
+  selected, executed, carried, and skipped groups plus both N/NN counts in
+  Issue and PR evidence.
 - Use static local verification unless local runtime work is explicitly
   authorized. GitHub Actions supplies authoritative runtime proof.
 - Inspect the complete intended diff before staging exact files.

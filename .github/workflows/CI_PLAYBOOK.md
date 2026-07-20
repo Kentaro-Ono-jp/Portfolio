@@ -15,8 +15,10 @@ implementation and verification scripts.
 
 1. Inspect the complete intended diff and stage the exact candidate without
    committing.
-2. Read the change-driven checks below and inspect only the applicable
-   boundaries.
+2. Run `python scripts/verify.py --plan --staged`, record both N/NN counts and
+   the selected, executed, carried, and skipped groups, then inspect only the
+   applicable change-driven boundaries below; any uncertainty restores full
+   verification.
 3. Correct portability, dependency, real-service, recovery, evidence, or
    teardown risks without weakening the intended proof.
 4. Rerun the required verification after any correction.

@@ -33,7 +33,16 @@ def configure_runtime_verification(
     monkeypatch.setattr(
         verifier,
         "parse_args",
-        lambda: argparse.Namespace(static_only=False),
+        lambda: argparse.Namespace(
+            static_only=False,
+            groups=None,
+            plan=False,
+            base=None,
+            staged=False,
+            full=False,
+            github_output=None,
+            summary=None,
+        ),
     )
     monkeypatch.setattr(verifier, "require_command", lambda command: command)
     monkeypatch.setattr(verifier, "static_checks", lambda **_commands: [])
@@ -87,6 +96,164 @@ def test_ml_pytest_command_writes_separate_branch_coverage_evidence(
     assert "--cov-branch" in command
     assert "--cov-report=xml:artifacts/verification/ml-coverage.xml" in command
     assert "--junitxml=artifacts/verification/ml-pytest.xml" in command
+
+
+def test_web_test_change_selects_only_web_static_group(verifier: ModuleType) -> None:
+    plan = verifier.plan_for_paths(
+        ["apps/web/src/lib/polling.test.ts"],
+        base="baseline",
+    )
+
+    assert plan.groups == {"web-static"}
+    assert plan.base == "baseline"
+
+
+def test_api_source_change_selects_static_runtime_and_compose(
+    verifier: ModuleType,
+) -> None:
+    plan = verifier.plan_for_paths(
+        ["apps/api/src/reactorfront_api/service.py"],
+    )
+
+    assert plan.groups == {"compose", "api-static", "api-runtime"}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/contracts/events/job-requested.schema.json",
+        "scripts/verify.py",
+        ".github/workflows/verify.yml",
+        "unmapped-config.toml",
+    ],
+)
+def test_cross_cutting_or_unknown_change_fails_closed_to_every_group(
+    verifier: ModuleType,
+    path: str,
+) -> None:
+    plan = verifier.plan_for_paths([path])
+
+    assert plan.groups == verifier.ALL_GROUPS
+    assert "full verification" in plan.reason
+
+
+def test_documentation_change_selects_only_documentation(verifier: ModuleType) -> None:
+    plan = verifier.plan_for_paths(["docs/ai/README.md"])
+
+    assert plan.groups == {"docs"}
+
+
+def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
+    inventory = verifier.test_file_inventory()
+    plan = verifier.VerificationPlan(
+        groups=frozenset({"web-static"}),
+        changed_files=("apps/web/src/lib/polling.ts",),
+        reason="test",
+    )
+
+    assert len(inventory) == 34
+    assert len(verifier.selected_test_files(plan.groups)) == 9
+    assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
+    assert "Test files: 9/34 selected" in verifier.plan_lines(plan)
+
+
+def test_plan_output_drives_conditional_dependency_setup(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    plan = verifier.plan_for_paths(["apps/ml/tests/test_model.py"])
+
+    verifier.write_plan_outputs(plan, output)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert values["groups"] == "ml-static"
+    assert values["needs_node"] == "false"
+    assert values["needs_api"] == "false"
+    assert values["needs_ml"] == "true"
+    assert values["needs_docker"] == "false"
+
+
+def test_docs_group_does_not_require_unrelated_toolchains(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels: list[str] = []
+    monkeypatch.setattr(
+        verifier,
+        "parse_args",
+        lambda: argparse.Namespace(
+            static_only=False,
+            groups="docs",
+            plan=False,
+            base=None,
+            staged=False,
+            full=False,
+            github_output=None,
+            summary=None,
+        ),
+    )
+    monkeypatch.setattr(
+        verifier,
+        "require_command",
+        lambda command: pytest.fail(f"unexpected tool requirement: {command}"),
+    )
+    monkeypatch.setattr(
+        verifier,
+        "run",
+        lambda label, _command: labels.append(label),
+    )
+
+    assert verifier.main() == 0
+    assert labels == ["Validate documentation links"]
+
+
+def test_unknown_explicit_group_returns_a_clean_failure(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        verifier,
+        "parse_args",
+        lambda: argparse.Namespace(
+            static_only=False,
+            groups="unknown",
+            plan=False,
+            base=None,
+            staged=False,
+            full=False,
+            github_output=None,
+            summary=None,
+        ),
+    )
+
+    assert verifier.main() == 1
+    assert "Unknown verification groups: unknown" in capsys.readouterr().err
+
+
+def test_runtime_groups_skip_unselected_service_proofs(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels: list[str] = []
+    monkeypatch.setattr(
+        verifier,
+        "run",
+        lambda label, _command: labels.append(label),
+    )
+
+    verifier.run_runtime_checks(
+        groups=frozenset({"web-runtime"}),
+        uv="uv",
+        docker="docker",
+    )
+
+    assert "Prove the Web container is healthy and non-root" in labels
+    assert "Run API unit and real-service integration tests" not in labels
+    assert "Prove the real ML worker and result-event boundary" not in labels
 
 
 def test_runtime_diagnostics_are_persisted(

@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -23,11 +24,59 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Plan selective verification
+        id: plan
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          base=""
+          base_reason="manual run without a diff baseline"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            if [[ "$EVENT_ACTION" == "synchronize" && -n "$BEFORE_SHA" ]]; then
+              if successful_runs="$(gh api --method GET \
+                "repos/$REPOSITORY/actions/workflows/verify.yml/runs" \
+                -f head_sha="$BEFORE_SHA" -f event="pull_request" \
+                -f status="success" -f per_page=1 \
+                --jq '.workflow_runs | length')" && [[ "$successful_runs" -gt 0 ]]; then
+                base="$BEFORE_SHA"
+                base_reason="previous PR head has successful workflow evidence"
+              else
+                base="$PR_BASE_SHA"
+                base_reason="previous PR head lacks successful evidence; use full PR diff"
+              fi
+            else
+              base="$PR_BASE_SHA"
+              base_reason="initial or reopened PR; use full PR diff"
+            fi
+          elif [[ "$EVENT_NAME" == "push" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+            base="$BEFORE_SHA"
+            base_reason="main push diff"
+          fi
+
+          if [[ -n "$base" ]]; then
+            python3 scripts/verify.py --plan --base "$base" \
+              --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          else
+            python3 scripts/verify.py --plan --full \
+              --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          fi
+          printf '\n- Selection baseline: %s\n' "$base_reason" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install pnpm
+        if: steps.plan.outputs.needs_node == 'true'
         uses: pnpm/action-setup@v6
 
       - name: Set up Node.js
+        if: steps.plan.outputs.needs_node == 'true'
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -35,11 +84,13 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Python
+        if: steps.plan.outputs.needs_python == 'true'
         uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
 
       - name: Install uv
+        if: steps.plan.outputs.needs_uv == 'true'
         uses: astral-sh/setup-uv@v7
         with:
           version: 0.11.29
@@ -49,16 +100,19 @@ jobs:
             apps/ml/uv.lock
 
       - name: Install pinned dependencies
+        if: steps.plan.outputs.needs_node == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Install pinned API dependencies
+        if: steps.plan.outputs.needs_api == 'true'
         run: uv sync --project apps/api --frozen
 
       - name: Install pinned ML dependencies
+        if: steps.plan.outputs.needs_ml == 'true'
         run: uv sync --project apps/ml --frozen
 
       - name: Run canonical verification
-        run: python scripts/verify.py
+        run: python scripts/verify.py --groups "${{ steps.plan.outputs.groups }}"
 
       - name: Upload failure evidence
         if: failure()
@@ -71,7 +125,7 @@ jobs:
           retention-days: 14
 
       - name: Tear down the isolated Compose project
-        if: always()
+        if: always() && steps.plan.outputs.needs_runtime == 'true'
         run: >-
           docker compose -p reactorfront-portfolio down
           --remove-orphans --volumes
