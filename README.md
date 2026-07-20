@@ -1,6 +1,6 @@
 # ReactorFront Portfolio
 
-> Status: first vertical slice in implementation — 2026-07-19
+> Status: first vertical slice in implementation — 2026-07-20
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml)
 
@@ -117,16 +117,18 @@ stops it afterward. To run all checks without starting containers:
 python scripts/verify.py --static-only
 ```
 
-### Run the current API, outbox, and ML worker boundary
+### Run the current API, outbox, result-consumer, and ML worker boundary
 
 Start the three dependencies, create the deterministic development bucket,
-then start the migrated API, its outbox dispatcher, and the ML worker:
+then start the migrated API, its outbox dispatcher, result consumer, and the ML
+worker:
 
 ```console
 docker compose -p reactorfront-portfolio up --detach --build --wait postgres minio rabbitmq
 uv run --project apps/api python scripts/prepare_integration.py
 docker compose -p reactorfront-portfolio up --detach --build --wait api
 docker compose -p reactorfront-portfolio up --detach --build --wait api-outbox
+docker compose -p reactorfront-portfolio up --detach --build --wait api-events
 docker compose -p reactorfront-portfolio up --detach --build --wait ml-worker
 ```
 
@@ -150,17 +152,19 @@ vertical slice is tracked in
 [Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1) and proceeds
 through focused, reviewable pull requests.
 
-The contract, API-owned document submission, transactional outbox, and
-independent ML worker boundaries are merged. The worker now proves canonical
-Celery task consumption, source-integrity checks, single-page PDF extraction,
-reproducible CPU PyTorch classification, and confirmed at-least-once
-started/completed/failed result publication.
+The contract, API-owned document submission, transactional outbox, independent
+ML worker, and API-owned result persistence boundaries are implemented. The
+worker proves canonical Celery task consumption, source-integrity checks,
+single-page PDF extraction, reproducible CPU PyTorch classification, and
+confirmed at-least-once started/completed/failed result publication. The
+`api-events` role validates those messages, commits event receipts and job
+transitions atomically, deduplicates logical redelivery, and exposes processing,
+completed, or failed state through the existing API.
 
 Repository-owned AI collaboration is defined by
-[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`. The
-leading product candidate is the API-owned result-event consumer and
-idempotent terminal state persistence; the Web application remains a later
-focused increment.
+[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`. The Web
+upload, progress, and terminal-result workflow is the next product boundary;
+browser E2E and the complete eight-service proof remain later focused work.
 
 ## License
 

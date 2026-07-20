@@ -25,15 +25,16 @@ python scripts/verify.py
 The default path validates repository structure and then starts only the
 `reactorfront-portfolio` Compose project for migration, API and ML images,
 PostgreSQL, S3-compatible storage, RabbitMQ, publisher-confirm, model,
-duplicate-delivery, and restart-recovery checks. It stops that project afterward.
+result-event persistence, duplicate-delivery, and restart-recovery checks. It
+stops that project afterward.
 GitHub Actions also removes
 the three project-scoped test volumes; local execution preserves them. A failed
 teardown makes verification fail, and the workflow has an unconditional
 project-scoped teardown step as a final safety net.
 
 On runtime failure, the verifier writes sanitized Compose state, timestamped
-service logs, ML readiness output, JUnit output, model/runtime proof, and
-branch-aware coverage XML under
+service logs, ML and API event-consumer readiness output, JUnit output,
+model/runtime proof, result-persistence proof, and branch-aware coverage XML under
 `artifacts/verification/`. GitHub Actions uploads that directory before its
 unconditional teardown step.
 
@@ -48,8 +49,9 @@ Supporting scripts are implementation details of that entrypoint:
 - `check_docs.py` rejects broken local Markdown links and drift in the required
   repository-owned AI governance topology, critical review boundaries, agent
   entrypoint references, and public-safe path rules.
-- `check_ml_compose_boundary.py` proves the CPU-only lock and that the worker has
-  no database setting, host port, API result consumer, or Web service.
+- `check_ml_compose_boundary.py` proves the CPU-only lock, keeps the worker free
+  of database settings and host ports, and verifies that `api-events` remains a
+  separate API-owned role while Web is absent.
 - `apps/ml/audit-requirements.txt` normalizes the CPU wheel's local version label
   so pip-audit can check the corresponding public PyTorch advisory identity;
   the verifier rejects drift from `pyproject.toml`.
@@ -63,6 +65,9 @@ Supporting scripts are implementation details of that entrypoint:
 - `verify_ml_runtime.py` proves the real API-to-outbox-to-worker path, source
   integrity, result contracts, stable failure, duplicate delivery, persistent
   result messages, and RabbitMQ/worker recovery.
+- `verify_result_consumer_runtime.py` proves outbox/result ordering recovery,
+  atomic API-owned receipts and terminal persistence, logical deduplication,
+  poison/conflict rejection, broker/consumer restart, and dependency readiness.
 - `verify_outbox_runtime.py` proves expired-lease recovery, dispatcher restart,
   RabbitMQ restart, persistent delivery, and the queued-state transition.
 - `validate-openapi.mjs` proves valid state variants and rejects impossible

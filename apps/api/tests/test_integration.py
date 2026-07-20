@@ -6,9 +6,10 @@ import os
 import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import boto3
 import httpx2 as httpx
@@ -27,6 +28,11 @@ from reactorfront_api.domain import (
     PublicProblem,
     PublishFailureCode,
     PublishFinalizeResult,
+    ResultApplyOutcome,
+    ResultEvent,
+    ResultEventFailureCode,
+    ResultEventInvariantError,
+    ResultEventType,
 )
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
 from reactorfront_api.outbox import (
@@ -39,6 +45,7 @@ from reactorfront_api.persistence import (
     OutboxEventRow,
     ProcessingJobRow,
     SqlAlchemyOutboxRepository,
+    SqlAlchemyResultEventRepository,
     SqlAlchemySubmissionRepository,
 )
 from reactorfront_api.rabbitmq import (
@@ -71,7 +78,10 @@ def settings() -> Settings:
 @pytest.fixture
 def engine(settings: Settings) -> Iterator[Engine]:
     database_engine = create_engine(settings.database_url)
-    truncate = text("TRUNCATE outbox_events, processing_jobs, documents RESTART IDENTITY CASCADE")
+    truncate = text(
+        "TRUNCATE result_event_receipts, outbox_events, processing_jobs, documents "
+        "RESTART IDENTITY CASCADE"
+    )
     try:
         with database_engine.begin() as connection:
             connection.execute(truncate)
@@ -115,7 +125,12 @@ def rabbitmq_channel(
 
 
 def table_count(engine: Engine, table_name: str) -> int:
-    allowed_tables = {"documents", "processing_jobs", "outbox_events"}
+    allowed_tables = {
+        "documents",
+        "processing_jobs",
+        "outbox_events",
+        "result_event_receipts",
+    }
     if table_name not in allowed_tables:
         raise ValueError(f"Unexpected table name: {table_name}")
     with engine.connect() as connection:
@@ -708,3 +723,122 @@ def make_real_service(*, settings: Settings, engine: Engine, s3: S3Client) -> Do
         id_factory=lambda: next(generated_ids),
         clock=lambda: NOW,
     )
+
+
+def integration_result_event(
+    event_type: ResultEventType,
+    *,
+    occurred_at: datetime,
+) -> ResultEvent:
+    return ResultEvent(
+        event_id=uuid5(EVENT_ID, event_type.value),
+        event_type=event_type,
+        occurred_at=occurred_at,
+        correlation_id=CORRELATION_ID,
+        document_id=DOCUMENT_ID,
+        job_id=JOB_ID,
+        object_key=f"documents/{DOCUMENT_ID}/source.pdf",
+        source_sha256=hashlib.sha256(PDF).hexdigest(),
+        model_version="document-type-v1",
+        logical_payload_sha256={
+            ResultEventType.STARTED: "1" * 64,
+            ResultEventType.COMPLETED: "2" * 64,
+            ResultEventType.FAILED: "3" * 64,
+        }[event_type],
+        classification="invoice" if event_type is ResultEventType.COMPLETED else None,
+        confidence=0.9876 if event_type is ResultEventType.COMPLETED else None,
+        failure_code="SOURCE_DIGEST_MISMATCH" if event_type is ResultEventType.FAILED else None,
+    )
+
+
+def seed_queued_integration_job(
+    *,
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+) -> None:
+    service = make_real_service(settings=settings, engine=engine, s3=s3)
+    service.submit(
+        stream=BytesIO(PDF),
+        original_filename="invoice.pdf",
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE outbox_events SET published_at = CURRENT_TIMESTAMP "
+                "WHERE event_id = :event_id"
+            ),
+            {"event_id": EVENT_ID},
+        )
+        connection.execute(
+            text("UPDATE processing_jobs SET status = 'queued' WHERE id = :job_id"),
+            {"job_id": JOB_ID},
+        )
+
+
+def test_result_events_commit_idempotently_and_preserve_first_terminal_state(
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+) -> None:
+    seed_queued_integration_job(settings=settings, engine=engine, s3=s3)
+    repository = SqlAlchemyResultEventRepository(engine=engine)
+    started = integration_result_event(ResultEventType.STARTED, occurred_at=NOW)
+    completed = integration_result_event(
+        ResultEventType.COMPLETED,
+        occurred_at=NOW + timedelta(seconds=1),
+    )
+
+    assert repository.apply(started) is ResultApplyOutcome.APPLIED
+    assert (
+        repository.apply(replace(started, occurred_at=NOW + timedelta(milliseconds=10)))
+        is ResultApplyOutcome.DUPLICATE
+    )
+    assert repository.apply(completed) is ResultApplyOutcome.APPLIED
+    assert repository.apply(completed) is ResultApplyOutcome.DUPLICATE
+
+    failed = integration_result_event(
+        ResultEventType.FAILED,
+        occurred_at=NOW + timedelta(seconds=2),
+    )
+    with pytest.raises(ResultEventInvariantError) as captured:
+        repository.apply(failed)
+    assert captured.value.code is ResultEventFailureCode.TERMINAL_CONFLICT
+
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    assert status is not None
+    assert status.status is ProcessingStatus.COMPLETED
+    assert status.predicted_class == "invoice"
+    assert status.confidence == pytest.approx(0.9876)
+    assert status.model_version == "document-type-v1"
+    assert status.failure_code is None
+    assert table_count(engine, "result_event_receipts") == 2
+
+
+def test_result_event_transaction_rolls_back_receipt_and_invalid_result(
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+) -> None:
+    seed_queued_integration_job(settings=settings, engine=engine, s3=s3)
+    repository = SqlAlchemyResultEventRepository(engine=engine)
+    started = integration_result_event(ResultEventType.STARTED, occurred_at=NOW)
+    assert repository.apply(started) is ResultApplyOutcome.APPLIED
+
+    invalid = replace(
+        integration_result_event(
+            ResultEventType.COMPLETED,
+            occurred_at=NOW + timedelta(seconds=1),
+        ),
+        classification="memo",
+    )
+    with pytest.raises(IntegrityError):
+        repository.apply(invalid)
+
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    assert status is not None
+    assert status.status is ProcessingStatus.PROCESSING
+    assert status.predicted_class is None
+    assert table_count(engine, "result_event_receipts") == 1

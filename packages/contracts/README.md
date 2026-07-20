@@ -73,10 +73,13 @@ publisher confirms. The requested task is acknowledged only after the required
 result event confirms.
 
 Duplicate requested delivery may produce duplicate result messages. Logical
-event IDs are deterministic for the requested event and result type so the
-future `api-events` consumer can apply them idempotently. The transport remains
-explicitly at least once; this change does not introduce that consumer or claim
-exactly-once publication.
+event IDs are deterministic for the requested event and result type. The
+API-owned `api-events` consumer stores one receipt per logical ID and compares
+an immutable-payload digest before treating redelivery as a no-op. Only
+`occurredAt` is excluded from that digest because a legitimate republication
+records a new observation time. Receipt and job mutation commit atomically,
+and acknowledgement follows that commit. The transport remains explicitly at
+least once and does not claim exactly-once publication.
 
 ## Verification and generation
 

@@ -2,8 +2,8 @@
 
 The root `compose.yaml` is the canonical integration definition. It currently
 contains PostgreSQL, an S3-compatible MinIO server, RabbitMQ, the API image
-running HTTP and outbox-dispatch process roles, and an independent ML worker
-image.
+running HTTP, outbox-dispatch, and result-consumer process roles, and an
+independent ML worker image.
 
 - Keep one Dockerfile near each deployable area's source unless a documented
   build constraint requires another layout.
@@ -50,5 +50,10 @@ started/completed/failed events through confirmed persistent messages. Its
 health check verifies the model artifact, MinIO and RabbitMQ reachability, and
 an answering Celery worker process. The dedicated worker disables Celery's
 unused gossip and mingle cluster bootsteps, while its health-probe control
-queues are connection-exclusive for RabbitMQ 4.3 compatibility. The future
-`api-events` consumer and Web service remain absent.
+queues are connection-exclusive for RabbitMQ 4.3 compatibility.
+
+The `api-events` role uses the API image without a host port. Its health check
+proves PostgreSQL and RabbitMQ result-topology reachability. It manually
+acknowledges only after an atomic receipt/state commit or a verified logical
+duplicate; valid ordering races are requeued with a bounded delay and poison
+events are rejected without an unbounded loop. The Web service remains absent.

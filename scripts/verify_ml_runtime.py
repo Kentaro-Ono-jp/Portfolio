@@ -480,7 +480,7 @@ def prove_retry_publish_failure_recovery(
     base_url: str,
     invoice_pdf: bytes,
 ) -> dict[str, object]:
-    compose("stop", "ml-worker", "api-outbox")
+    compose("stop", "ml-worker", "api-outbox", "api-events")
     prepare_queues(settings)
     compose("up", "--detach", "--wait", "api-outbox")
 

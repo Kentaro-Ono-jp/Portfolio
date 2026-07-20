@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 
@@ -24,6 +25,25 @@ def test_repository_owned_governance_invariants_pass(
     documentation_checker: ModuleType,
 ) -> None:
     assert documentation_checker.governance_failures() == []
+
+
+def test_markdown_scan_prunes_excluded_directories_before_descending(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_walk(root: Path, *, topdown: bool) -> Iterator[tuple[str, list[str], list[str]]]:
+        assert root == tmp_path
+        assert topdown is True
+        directory_names = [".venv", "docs"]
+        yield str(root), directory_names, []
+        assert directory_names == ["docs"]
+        yield str(root / "docs"), [], ["guide.md"]
+
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    monkeypatch.setattr(documentation_checker.os, "walk", fake_walk)
+
+    assert documentation_checker.iter_markdown_files() == [tmp_path / "docs" / "guide.md"]
 
 
 def test_governance_rejects_a_missing_ci_playbook(

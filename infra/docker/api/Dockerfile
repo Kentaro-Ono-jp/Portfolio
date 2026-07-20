@@ -16,7 +16,8 @@ COPY apps/api/alembic /workspace/apps/api/alembic
 COPY packages/contracts/events /workspace/packages/contracts/events
 
 RUN uv sync --project /workspace/apps/api --frozen --no-dev --no-editable && \
-    /workspace/apps/api/.venv/bin/python -c "import reactorfront_api.main" && \
+    /workspace/apps/api/.venv/bin/python -c \
+        "import reactorfront_api.events_main; import reactorfront_api.main" && \
     chown -R portfolio:portfolio /workspace
 
 USER 10001:10001

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from sqlalchemy import (
     CheckConstraint,
@@ -22,7 +22,7 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -35,6 +35,11 @@ from reactorfront_api.domain import (
     ProcessingStatus,
     PublishFailureCode,
     PublishFinalizeResult,
+    ResultApplyOutcome,
+    ResultEvent,
+    ResultEventFailureCode,
+    ResultEventInvariantError,
+    ResultEventType,
     SubmissionCommitObservation,
     SubmissionCommitOutcome,
     SubmissionPersistenceError,
@@ -141,6 +146,38 @@ class OutboxEventRow(Base):
     lease_owner: Mapped[str | None] = mapped_column(String(255))
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class ResultEventReceiptRow(Base):
+    __tablename__ = "result_event_receipts"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('document.processing.started.v1', "
+            "'document.processing.completed.v1', 'document.processing.failed.v1')",
+            name="ck_result_event_receipts_type",
+        ),
+        CheckConstraint(
+            "logical_payload_sha256 ~ '^[a-f0-9]{64}$'",
+            name="ck_result_event_receipts_payload_sha256",
+        ),
+        Index("ix_result_event_receipts_job", "job_id", "occurred_at"),
+    )
+
+    event_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(255))
+    document_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    job_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("processing_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    logical_payload_sha256: Mapped[str] = mapped_column(String(64))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 def create_database_engine(database_url: str) -> Engine:
@@ -399,3 +436,160 @@ class SqlAlchemyOutboxRepository:
             leased_until=row.leased_until,
             attempt_count=row.attempt_count,
         )
+
+
+class SqlAlchemyResultEventRepository:
+    def __init__(self, *, engine: Engine) -> None:
+        self._engine = engine
+
+    def apply(self, event: ResultEvent) -> ResultApplyOutcome:
+        with Session(self._engine) as session, session.begin():
+            job = session.scalar(
+                select(ProcessingJobRow)
+                .where(ProcessingJobRow.id == event.job_id)
+                .with_for_update()
+            )
+            if job is None:
+                raise ResultEventInvariantError(code=ResultEventFailureCode.IDENTITY_MISMATCH)
+
+            receipt = session.get(ResultEventReceiptRow, event.event_id)
+            if receipt is not None:
+                return self._duplicate_outcome(receipt=receipt, event=event)
+
+            document = session.get(DocumentRow, event.document_id)
+            requested = session.scalar(
+                select(OutboxEventRow)
+                .where(OutboxEventRow.aggregate_id == event.job_id)
+                .where(OutboxEventRow.event_type == "document.processing.requested.v1")
+            )
+            self._require_identity(
+                event=event,
+                document=document,
+                job=job,
+                requested=requested,
+            )
+
+            if self._must_defer(event=event, job=job):
+                return ResultApplyOutcome.DEFERRED
+            self._require_transition(event=event, job=job)
+
+            inserted_event_id = session.scalar(
+                insert(ResultEventReceiptRow)
+                .values(
+                    event_id=event.event_id,
+                    event_type=event.event_type.value,
+                    document_id=event.document_id,
+                    job_id=event.job_id,
+                    logical_payload_sha256=event.logical_payload_sha256,
+                    occurred_at=event.occurred_at,
+                    received_at=func.now(),
+                )
+                .on_conflict_do_nothing(index_elements=[ResultEventReceiptRow.event_id])
+                .returning(ResultEventReceiptRow.event_id)
+            )
+            if inserted_event_id is None:
+                concurrent_receipt = session.get(ResultEventReceiptRow, event.event_id)
+                if concurrent_receipt is None:
+                    raise ResultEventInvariantError(code=ResultEventFailureCode.EVENT_ID_REUSE)
+                return self._duplicate_outcome(receipt=concurrent_receipt, event=event)
+
+            self._apply_transition(event=event, job=job)
+            session.flush()
+            return ResultApplyOutcome.APPLIED
+
+    def is_ready(self) -> bool:
+        with self._engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return True
+
+    def close(self) -> None:
+        self._engine.dispose()
+
+    @staticmethod
+    def _duplicate_outcome(
+        *,
+        receipt: ResultEventReceiptRow,
+        event: ResultEvent,
+    ) -> ResultApplyOutcome:
+        matches = (
+            receipt.event_type == event.event_type.value
+            and receipt.document_id == event.document_id
+            and receipt.job_id == event.job_id
+            and receipt.logical_payload_sha256 == event.logical_payload_sha256
+        )
+        if not matches:
+            raise ResultEventInvariantError(code=ResultEventFailureCode.EVENT_ID_REUSE)
+        return ResultApplyOutcome.DUPLICATE
+
+    @staticmethod
+    def _require_identity(
+        *,
+        event: ResultEvent,
+        document: DocumentRow | None,
+        job: ProcessingJobRow,
+        requested: OutboxEventRow | None,
+    ) -> None:
+        if document is None or requested is None:
+            raise ResultEventInvariantError(code=ResultEventFailureCode.IDENTITY_MISMATCH)
+        requested_payload = requested.payload
+        matches = (
+            job.document_id == event.document_id
+            and document.object_key == event.object_key
+            and document.sha256 == event.source_sha256
+            and requested_payload.get("eventId") == str(requested.event_id)
+            and uuid5(requested.event_id, event.event_type.value) == event.event_id
+            and requested_payload.get("correlationId") == str(event.correlation_id)
+            and requested_payload.get("documentId") == str(event.document_id)
+            and requested_payload.get("jobId") == str(event.job_id)
+            and requested_payload.get("objectKey") == event.object_key
+            and requested_payload.get("sourceSha256") == event.source_sha256
+        )
+        if not matches:
+            raise ResultEventInvariantError(code=ResultEventFailureCode.IDENTITY_MISMATCH)
+
+    @staticmethod
+    def _must_defer(*, event: ResultEvent, job: ProcessingJobRow) -> bool:
+        status = ProcessingStatus(job.status)
+        if event.event_type is ResultEventType.STARTED:
+            return status is ProcessingStatus.ACCEPTED
+        return status in {ProcessingStatus.ACCEPTED, ProcessingStatus.QUEUED}
+
+    @staticmethod
+    def _require_transition(*, event: ResultEvent, job: ProcessingJobRow) -> None:
+        status = ProcessingStatus(job.status)
+        if event.event_type is ResultEventType.STARTED:
+            if status is ProcessingStatus.QUEUED:
+                return
+        elif status is ProcessingStatus.PROCESSING:
+            if job.model_version != event.model_version:
+                raise ResultEventInvariantError(code=ResultEventFailureCode.IDENTITY_MISMATCH)
+            if job.started_at is not None and event.occurred_at < job.started_at:
+                raise ResultEventInvariantError(code=ResultEventFailureCode.INVALID_TRANSITION)
+            return
+
+        if status in {ProcessingStatus.COMPLETED, ProcessingStatus.FAILED}:
+            raise ResultEventInvariantError(code=ResultEventFailureCode.TERMINAL_CONFLICT)
+        raise ResultEventInvariantError(code=ResultEventFailureCode.INVALID_TRANSITION)
+
+    @staticmethod
+    def _apply_transition(*, event: ResultEvent, job: ProcessingJobRow) -> None:
+        if event.event_type is ResultEventType.STARTED:
+            job.status = ProcessingStatus.PROCESSING.value
+            job.attempt_count += 1
+            job.model_version = event.model_version
+            job.started_at = event.occurred_at
+            return
+
+        job.completed_at = event.occurred_at
+        if event.event_type is ResultEventType.COMPLETED:
+            if event.classification is None or event.confidence is None:
+                raise ResultEventInvariantError(code=ResultEventFailureCode.INVALID_EVENT)
+            job.status = ProcessingStatus.COMPLETED.value
+            job.predicted_class = event.classification
+            job.confidence = Decimal(str(event.confidence))
+            return
+
+        if event.failure_code is None:
+            raise ResultEventInvariantError(code=ResultEventFailureCode.INVALID_EVENT)
+        job.status = ProcessingStatus.FAILED.value
+        job.failure_code = event.failure_code
