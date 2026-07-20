@@ -1,6 +1,6 @@
 # ReactorFront Portfolio
 
-> Status: first vertical slice in implementation — 2026-07-20
+> Status: first vertical slice completed — 2026-07-20
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml)
 
@@ -24,7 +24,7 @@ be used. Private client or employer materials are outside the project scope.
 
 ## Engineering evidence
 
-The completed repository is intended to demonstrate:
+The completed first vertical slice demonstrates:
 
 - strict TypeScript and React/Next.js application development
 - Python API and applied PyTorch ML engineering
@@ -33,7 +33,6 @@ The completed repository is intended to demonstrate:
 - Docker Compose-based reproducibility
 - tests, static analysis, supply-chain checks, and GitHub Actions verification
 - observability, failure diagnosis, migrations, and recovery design
-- AWS and Terraform architecture with documented tradeoffs
 - focused issues, pull requests, ADRs, and release history
 
 ## Repository structure
@@ -75,6 +74,14 @@ history.
 ## Delivery specifications
 
 - [Delivery Specification 0001: First end-to-end vertical slice](docs/delivery/0001-first-vertical-slice.md)
+
+## Contributing and security
+
+- Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing a change.
+- Report vulnerabilities through the private process in
+  [`SECURITY.md`](SECURITY.md), never through a public Issue.
+- Use only repository-owned synthetic fixtures. Do not submit client,
+  employer, personal, or otherwise confidential documents.
 
 ## AI-assisted engineering evidence
 
@@ -152,12 +159,18 @@ curl --request POST http://localhost:58000/api/v1/documents \
   --form "file=@sample.pdf;type=application/pdf"
 ```
 
-## Current stage
+## Completed first vertical slice
 
-The public documentation baseline is published. Implementation of the first
-vertical slice is tracked in
-[Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1) and proceeds
-through focused, reviewable pull requests.
+The first vertical slice is complete and remains traceable through
+[Issue #1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1),
+[Issue #24](https://github.com/Kentaro-Ono-jp/Portfolio/issues/24), and
+[PR #25](https://github.com/Kentaro-Ono-jp/Portfolio/pull/25), with the final
+delivery record published through
+[PR #26](https://github.com/Kentaro-Ono-jp/Portfolio/pull/26). The independently
+reviewed implementation head passed the complete nine-group clean-runner
+[verification](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29731595926),
+and the exact squash merge passed the default-branch
+[workflow](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29734332826).
 
 The contract, API-owned document submission, transactional outbox, independent
 ML worker, API-owned result persistence, and Web upload/progress/result
@@ -172,10 +185,15 @@ completed, or failed state through the existing API.
 The Web uses generated OpenAPI types plus runtime Zod validation, keeps the API
 base URL server-only behind same-origin route handlers, and presents accessible
 queued, processing, completed, failed, retry, and reset states. The final
-verification candidate adds Playwright coverage for the real browser upload,
+verification adds Playwright coverage for the real browser upload,
 completed invoice result, terminal ML failure, invalid-file rejection, and
 cross-service correlation evidence against the complete eight-service Compose
-environment. Repository-owned AI collaboration is defined by
+environment. A final manual full
+[main verification](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29734521272)
+re-proved the completed tree without maintainer-specific state. After the
+`main` Actions caches were removed, a second
+[cold-cache dispatch](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29735196072)
+re-proved the same exact tree. Repository-owned AI collaboration is defined by
 [ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`.
 
 ## License
