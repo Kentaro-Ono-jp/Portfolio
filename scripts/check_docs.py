@@ -64,6 +64,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Does not independently mutate",
         "Do not enumerate every branch",
         "Explicit owner direction is required",
+        "No per-failure owner confirmation is required",
         "recoverable task checkpoint",
         ".github/workflows/CI_PLAYBOOK.md",
         "Completion evidence",

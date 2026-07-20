@@ -29,6 +29,15 @@ implementation and verification scripts.
 The first staging is a review snapshot, not permission to commit stale index
 content after later edits.
 
+Within an accepted focused Issue, steps 3 through 5, the resulting commit and
+push, and execution or monitoring of the canonical GitHub Actions workflow are
+covered by standing owner authorization. No per-failure owner confirmation is
+required while the correction preserves the accepted scope and design. Stop
+for owner direction only when the correction would materially change scope or
+accepted design, use local Docker Desktop, change Ready or merge state,
+reconcile Issue checklists, perform destructive cleanup, or delete a remote
+branch.
+
 Carry only successful unaffected evidence. Record an intentionally omitted
 affected group as `Verification-Skip: <groups>` in the exact candidate's commit
 trailers and disclose it as skipped without evidence; never relabel it as
