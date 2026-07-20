@@ -1,9 +1,10 @@
 # Delivery Specification 0001: First end-to-end vertical slice
 
-- Status: In Progress
+- Status: Completed
 - Date: 2026-07-18
 - Accepted: 2026-07-18
 - Started: 2026-07-18
+- Completed: 2026-07-20
 - Owner: ReactorFront
 - Tracking issue: [#1](https://github.com/Kentaro-Ono-jp/Portfolio/issues/1)
 - Related decisions:
@@ -481,6 +482,63 @@ following are true:
 - The README, architecture documentation, contracts, and actual behavior agree.
 - This file records completion date, implementation PRs, final workflow run,
   known limitations, and follow-up slices.
+
+## Completion evidence
+
+- Implementation was delivered through focused PRs
+  [#2](https://github.com/Kentaro-Ono-jp/Portfolio/pull/2),
+  [#4](https://github.com/Kentaro-Ono-jp/Portfolio/pull/4),
+  [#6](https://github.com/Kentaro-Ono-jp/Portfolio/pull/6),
+  [#8](https://github.com/Kentaro-Ono-jp/Portfolio/pull/8),
+  [#10](https://github.com/Kentaro-Ono-jp/Portfolio/pull/10),
+  [#12](https://github.com/Kentaro-Ono-jp/Portfolio/pull/12),
+  [#14](https://github.com/Kentaro-Ono-jp/Portfolio/pull/14),
+  [#16](https://github.com/Kentaro-Ono-jp/Portfolio/pull/16),
+  [#17](https://github.com/Kentaro-Ono-jp/Portfolio/pull/17),
+  [#19](https://github.com/Kentaro-Ono-jp/Portfolio/pull/19),
+  [#21](https://github.com/Kentaro-Ono-jp/Portfolio/pull/21),
+  [#23](https://github.com/Kentaro-Ono-jp/Portfolio/pull/23), and
+  [#25](https://github.com/Kentaro-Ono-jp/Portfolio/pull/25).
+- PR #25 head
+  [`53a46b868c49d023fa6a37dc5df6d214c0786141`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/53a46b868c49d023fa6a37dc5df6d214c0786141)
+  received an independent
+  [approval](https://github.com/Kentaro-Ono-jp/Portfolio/pull/25#issuecomment-5021086629)
+  after the complete diff, accepted design, Issues, and exact-head evidence were
+  re-reviewed.
+- The exact PR head passed the complete clean-runner
+  [run 29731595926](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29731595926):
+  9/9 verification groups, 36/36 test files, all eight services ready,
+  Playwright browser upload through real PyTorch classification and persisted
+  terminal display, stable completed and failed correlations, failure
+  artifacts, and project-scoped teardown.
+- Squash merge
+  [`efbcedaee5d530ebd8a1c01f24f39fc58e503ac3`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/efbcedaee5d530ebd8a1c01f24f39fc58e503ac3)
+  passed its exact-SHA default-branch
+  [run 29734332826](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29734332826),
+  correctly carrying all nine successful groups from the tree-identical PR head
+  with no skipped evidence.
+- A manual full dispatch on the completed implementation tree passed
+  [run 29734521272](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29734521272),
+  re-executing all nine groups without a secret, maintainer-specific local
+  state, local Docker state, or manual intervention.
+- The six existing `main`-scoped pnpm and uv caches were then deleted by exact
+  ID and an empty `refs/heads/main` cache listing was confirmed. The resulting
+  cold-cache
+  [run 29735196072](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29735196072)
+  re-executed all nine groups at the same exact merge SHA and passed without
+  maintainer intervention.
+- Failed PR runs exercised and preserved diagnostic evidence for a missing
+  baseline, competing queue consumer, and ambiguous accessible locators. Their
+  fixes are protected by the event planner, isolated runtime verifier, strict
+  Playwright locators, regression tests, and the CI playbook. Both successful
+  and failed runtime paths completed project-scoped teardown.
+- Known limitations remain the accepted exclusions: no authentication,
+  persistent public hosting, scanned-PDF OCR, multi-page processing, human
+  review, semantic retrieval, cloud deployment, or production model-quality
+  claim. The classifier and fixtures are deliberately synthetic.
+- Follow-up capabilities require new accepted delivery specifications and, when
+  architecture changes materially, new ADRs. They are not silently implied by
+  completion of this slice.
 
 ## Change control
 
