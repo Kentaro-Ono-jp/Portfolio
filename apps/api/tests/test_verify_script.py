@@ -12,6 +12,25 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
+def verifier_args(**overrides: object) -> argparse.Namespace:
+    values: dict[str, object] = {
+        "static_only": False,
+        "groups": None,
+        "plan": False,
+        "base": None,
+        "staged": False,
+        "full": False,
+        "carry_all": False,
+        "baseline_proven": False,
+        "carried_groups": None,
+        "skipped_groups": None,
+        "github_output": None,
+        "summary": None,
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
 @pytest.fixture
 def verifier() -> ModuleType:
     path = REPOSITORY_ROOT / "scripts" / "verify.py"
@@ -33,7 +52,7 @@ def configure_runtime_verification(
     monkeypatch.setattr(
         verifier,
         "parse_args",
-        lambda: argparse.Namespace(static_only=False),
+        verifier_args,
     )
     monkeypatch.setattr(verifier, "require_command", lambda command: command)
     monkeypatch.setattr(verifier, "static_checks", lambda **_commands: [])
@@ -87,6 +106,318 @@ def test_ml_pytest_command_writes_separate_branch_coverage_evidence(
     assert "--cov-branch" in command
     assert "--cov-report=xml:artifacts/verification/ml-coverage.xml" in command
     assert "--junitxml=artifacts/verification/ml-pytest.xml" in command
+
+
+def test_web_test_change_selects_only_web_static_group(verifier: ModuleType) -> None:
+    plan = verifier.plan_for_paths(
+        ["apps/web/src/lib/polling.test.ts"],
+        base="baseline",
+    )
+
+    assert plan.groups == {"web-static"}
+    assert plan.base == "baseline"
+
+
+def test_api_source_change_selects_static_runtime_and_compose(
+    verifier: ModuleType,
+) -> None:
+    plan = verifier.plan_for_paths(
+        ["apps/api/src/reactorfront_api/service.py"],
+    )
+
+    assert plan.groups == {"compose", "api-static", "api-runtime"}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/contracts/events/job-requested.schema.json",
+        "scripts/verify.py",
+        ".github/workflows/verify.yml",
+        "unmapped-config.toml",
+    ],
+)
+def test_cross_cutting_or_unknown_change_fails_closed_to_every_group(
+    verifier: ModuleType,
+    path: str,
+) -> None:
+    plan = verifier.plan_for_paths([path])
+
+    assert plan.groups == verifier.ALL_GROUPS
+    assert "full verification" in plan.reason
+
+
+def test_documentation_change_selects_only_documentation(verifier: ModuleType) -> None:
+    plan = verifier.plan_for_paths(["docs/ai/README.md"])
+
+    assert plan.groups == {"docs"}
+    assert plan.carried_groups == set()
+    assert plan.skipped_groups == verifier.ALL_GROUPS - {"docs"}
+
+
+def test_successful_baseline_marks_unaffected_groups_as_carried(
+    verifier: ModuleType,
+) -> None:
+    plan = verifier.plan_for_paths(
+        ["docs/ai/README.md"],
+        base="successful-head",
+        baseline_proven=True,
+    )
+
+    assert plan.groups == {"docs"}
+    assert plan.carried_groups == verifier.ALL_GROUPS - {"docs"}
+    assert plan.skipped_groups == set()
+    assert any(
+        line.startswith("Carried from successful baseline: contracts")
+        for line in verifier.plan_lines(plan)
+    )
+    assert "Skipped without evidence: none" in verifier.plan_lines(plan)
+
+
+def test_identical_tree_can_carry_every_group(verifier: ModuleType) -> None:
+    args = verifier_args(plan=True, carry_all=True, baseline_proven=True)
+
+    plan = verifier.resolve_selection(args)
+
+    assert plan.groups == set()
+    assert plan.carried_groups == verifier.ALL_GROUPS
+    assert plan.skipped_groups == set()
+
+
+def test_affected_groups_cannot_be_relabelled_as_carried(
+    verifier: ModuleType,
+) -> None:
+    args = verifier_args(
+        groups="contracts,compose",
+        carried_groups="compose",
+    )
+
+    with pytest.raises(RuntimeError, match="Executed and carried groups overlap: compose"):
+        verifier.resolve_selection(args)
+
+
+def test_planning_rejects_explicit_carry_override(verifier: ModuleType) -> None:
+    args = verifier_args(
+        plan=True,
+        full=True,
+        baseline_proven=True,
+        carried_groups="compose",
+    )
+
+    with pytest.raises(RuntimeError, match="only valid with --groups"):
+        verifier.resolve_selection(args)
+
+
+def test_selected_docker_groups_can_be_reported_as_skipped(
+    verifier: ModuleType,
+) -> None:
+    plan = verifier.plan_for_paths(["scripts/verify.py"], baseline_proven=True)
+
+    plan = verifier.move_groups_to_skipped(plan, verifier.DOCKER_GROUPS)
+
+    assert plan.groups == verifier.STATIC_GROUPS - {"compose"}
+    assert plan.carried_groups == set()
+    assert plan.skipped_groups == verifier.DOCKER_GROUPS
+
+
+def test_web_health_change_selects_web_runtime(verifier: ModuleType) -> None:
+    plan = verifier.plan_for_paths(["apps/web/src/app/health/route.ts"])
+
+    assert plan.groups == {"compose", "web-static", "web-runtime"}
+
+
+def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
+    inventory = verifier.test_file_inventory()
+    plan = verifier.VerificationPlan(
+        groups=frozenset({"web-static"}),
+        changed_files=("apps/web/src/lib/polling.ts",),
+        reason="test",
+    )
+
+    assert len(inventory) == 34
+    assert len(verifier.selected_test_files(plan.groups)) == 9
+    assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
+    assert "Test files: 9/34 selected" in verifier.plan_lines(plan)
+
+
+def test_plan_output_drives_conditional_dependency_setup(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    plan = verifier.plan_for_paths(["apps/ml/tests/test_model.py"])
+
+    verifier.write_plan_outputs(plan, output)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert values["groups"] == "ml-static"
+    assert values["needs_node"] == "false"
+    assert values["needs_api"] == "false"
+    assert values["needs_ml"] == "true"
+    assert values["needs_docker"] == "false"
+    assert values["executed_groups"] == "ml-static"
+    assert values["carried_groups"] == ""
+    assert values["skipped_groups"] != ""
+
+
+def test_skipped_docker_groups_do_not_request_docker_setup(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    plan = verifier.plan_for_paths(
+        ["scripts/verify.py"],
+        baseline_proven=True,
+    )
+    plan = verifier.move_groups_to_skipped(plan, verifier.DOCKER_GROUPS)
+
+    verifier.write_plan_outputs(plan, output)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert values["groups"] == "contracts,docs,web-static,api-static,ml-static"
+    assert values["carried_groups"] == ""
+    assert values["skipped_groups"] == "compose,web-runtime,api-runtime,ml-runtime"
+    assert values["docker_groups"] == ""
+    assert values["needs_docker"] == "false"
+    assert values["has_execution"] == "true"
+
+
+def test_identical_tree_carry_requests_no_setup(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    plan = verifier.resolve_selection(
+        verifier_args(plan=True, carry_all=True, baseline_proven=True)
+    )
+
+    verifier.write_plan_outputs(plan, output)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert values["groups"] == ""
+    assert values["carried_groups"] == ",".join(verifier.VERIFICATION_GROUPS)
+    assert values["skipped_groups"] == ""
+    assert values["docker_groups"] == ""
+    assert values["has_execution"] == "false"
+    assert values["needs_node"] == "false"
+    assert values["needs_api"] == "false"
+    assert values["needs_ml"] == "false"
+    assert values["needs_docker"] == "false"
+
+
+def test_identical_tree_preserves_intentional_docker_skips(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    plan = verifier.resolve_selection(
+        verifier_args(
+            plan=True,
+            carry_all=True,
+            baseline_proven=True,
+            skipped_groups="compose,web-runtime,api-runtime,ml-runtime",
+        )
+    )
+
+    verifier.write_plan_outputs(plan, output)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert values["groups"] == ""
+    assert values["carried_groups"] == ("contracts,docs,web-static,api-static,ml-static")
+    assert values["skipped_groups"] == ("compose,web-runtime,api-runtime,ml-runtime")
+    assert values["has_execution"] == "false"
+    assert values["needs_docker"] == "false"
+
+
+def test_docs_group_does_not_require_unrelated_toolchains(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels: list[str] = []
+    monkeypatch.setattr(
+        verifier,
+        "parse_args",
+        lambda: verifier_args(groups="docs"),
+    )
+    monkeypatch.setattr(
+        verifier,
+        "require_command",
+        lambda command: pytest.fail(f"unexpected tool requirement: {command}"),
+    )
+    monkeypatch.setattr(
+        verifier,
+        "run",
+        lambda label, _command: labels.append(label),
+    )
+
+    assert verifier.main() == 0
+    assert labels == ["Validate documentation links"]
+
+
+def test_unknown_explicit_group_returns_a_clean_failure(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        verifier,
+        "parse_args",
+        lambda: verifier_args(groups="unknown"),
+    )
+
+    assert verifier.main() == 1
+    assert "Unknown verification groups: unknown" in capsys.readouterr().err
+
+
+def test_runtime_groups_skip_unselected_service_proofs(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels: list[str] = []
+    monkeypatch.setattr(
+        verifier,
+        "run",
+        lambda label, _command: labels.append(label),
+    )
+
+    verifier.run_runtime_checks(
+        groups=frozenset({"web-runtime"}),
+        uv="uv",
+        docker="docker",
+    )
+
+    assert "Prove the Web container is healthy and non-root" in labels
+    assert "Run API unit and real-service integration tests" not in labels
+    assert "Prove the real ML worker and result-event boundary" not in labels
+
+
+def test_api_runtime_owns_result_consumer_proof(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels: list[str] = []
+    monkeypatch.setattr(
+        verifier,
+        "run",
+        lambda label, _command: labels.append(label),
+    )
+
+    verifier.run_runtime_checks(
+        groups=frozenset({"api-runtime"}),
+        uv="uv",
+        docker="docker",
+    )
+
+    assert "Prove API-owned result-event consumption and terminal persistence" in labels
+    assert "Prove the real ML worker and result-event boundary" not in labels
 
 
 def test_runtime_diagnostics_are_persisted(

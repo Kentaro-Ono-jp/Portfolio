@@ -6,11 +6,360 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from pathlib import PurePosixPath
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
+
+VERIFICATION_GROUPS = (
+    "contracts",
+    "docs",
+    "compose",
+    "web-static",
+    "api-static",
+    "ml-static",
+    "web-runtime",
+    "api-runtime",
+    "ml-runtime",
+)
+ALL_GROUPS = frozenset(VERIFICATION_GROUPS)
+STATIC_GROUPS = frozenset(VERIFICATION_GROUPS[:6])
+RUNTIME_GROUPS = frozenset(VERIFICATION_GROUPS[6:])
+DOCKER_GROUPS = frozenset({"compose"}) | RUNTIME_GROUPS
+GROUP_DEPENDENCIES = {
+    "web-runtime": frozenset({"compose", "web-static"}),
+    "api-runtime": frozenset({"compose", "api-static"}),
+    "ml-runtime": frozenset({"compose", "ml-static"}),
+}
+
+
+class VerificationPlan:
+    def __init__(
+        self,
+        *,
+        groups: frozenset[str],
+        changed_files: tuple[str, ...],
+        reason: str,
+        base: str | None = None,
+        carried_groups: frozenset[str] = frozenset(),
+    ) -> None:
+        if not groups <= ALL_GROUPS or not carried_groups <= ALL_GROUPS:
+            raise ValueError("Verification plan contains an unknown group.")
+        if groups & carried_groups:
+            raise ValueError("Executed and carried groups must be disjoint.")
+        self.groups = groups
+        self.carried_groups = carried_groups
+        self.changed_files = changed_files
+        self.reason = reason
+        self.base = base
+
+    @property
+    def skipped_groups(self) -> frozenset[str]:
+        return ALL_GROUPS - self.groups - self.carried_groups
+
+
+def plan_with_baseline_evidence(
+    plan: VerificationPlan, *, baseline_proven: bool
+) -> VerificationPlan:
+    carried = ALL_GROUPS - plan.groups if baseline_proven else frozenset()
+    return VerificationPlan(
+        groups=plan.groups,
+        carried_groups=carried,
+        changed_files=plan.changed_files,
+        reason=plan.reason,
+        base=plan.base,
+    )
+
+
+def move_groups_to_skipped(
+    plan: VerificationPlan, groups: frozenset[str]
+) -> VerificationPlan:
+    missing = groups - plan.groups
+    if missing:
+        raise RuntimeError(
+            "Cannot skip groups not selected by this delta: "
+            f"{', '.join(ordered_groups(missing))}"
+        )
+    return VerificationPlan(
+        groups=plan.groups - groups,
+        carried_groups=plan.carried_groups,
+        changed_files=plan.changed_files,
+        reason=plan.reason,
+        base=plan.base,
+    )
+
+
+def expand_group_dependencies(groups: set[str] | frozenset[str]) -> frozenset[str]:
+    expanded = set(groups)
+    for group in tuple(expanded):
+        expanded.update(GROUP_DEPENDENCIES.get(group, ()))
+    return frozenset(expanded)
+
+
+def ordered_groups(groups: set[str] | frozenset[str]) -> tuple[str, ...]:
+    return tuple(group for group in VERIFICATION_GROUPS if group in groups)
+
+
+def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
+    normalized = raw_path.strip().replace("\\", "/")
+    path = PurePosixPath(normalized)
+    parts = path.parts
+    if not normalized or path.is_absolute() or ".." in parts:
+        return None
+
+    if path.suffix.lower() == ".md":
+        return frozenset({"docs"})
+
+    if normalized == "scripts/verify.py" or normalized.startswith(".github/workflows/"):
+        return ALL_GROUPS
+
+    if normalized.startswith("packages/contracts/"):
+        return ALL_GROUPS
+
+    if normalized in {
+        ".node-version",
+        ".python-version",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "pyproject.toml",
+    }:
+        return ALL_GROUPS
+
+    if normalized == "compose.yaml":
+        return ALL_GROUPS
+
+    if normalized == "scripts/check_docs.py":
+        return frozenset({"docs", "api-static"})
+
+    api_runtime_helpers = {
+        "scripts/prepare_integration.py",
+        "scripts/verify_outbox_runtime.py",
+        "scripts/verify_result_consumer_runtime.py",
+    }
+    if normalized in api_runtime_helpers:
+        return expand_group_dependencies({"api-runtime"})
+
+    if normalized in {
+        "scripts/pdf_fixture.py",
+        "scripts/verify_ml_runtime.py",
+    }:
+        return expand_group_dependencies({"ml-runtime"})
+
+    if normalized == "scripts/verify_ml_model.py":
+        return frozenset({"ml-static"})
+
+    if normalized == "scripts/check_ml_compose_boundary.py":
+        return frozenset({"compose", "ml-static"})
+
+    if normalized.startswith("apps/web/"):
+        groups = {"web-static"}
+        if normalized in {
+            "apps/web/next.config.ts",
+            "apps/web/package.json",
+            "apps/web/src/app/health/route.ts",
+        }:
+            groups.add("web-runtime")
+        return expand_group_dependencies(groups)
+
+    if normalized.startswith("apps/api/tests/"):
+        if normalized == "apps/api/tests/test_integration.py":
+            return expand_group_dependencies({"api-runtime"})
+        return frozenset({"api-static"})
+
+    if normalized.startswith("apps/api/"):
+        return expand_group_dependencies({"api-runtime"})
+
+    if normalized.startswith("apps/ml/tests/"):
+        return frozenset({"ml-static"})
+
+    if normalized.startswith("apps/ml/"):
+        return expand_group_dependencies({"ml-runtime"})
+
+    if normalized.startswith("infra/docker/web/"):
+        return expand_group_dependencies({"web-runtime"})
+
+    if normalized.startswith("infra/docker/api/"):
+        return expand_group_dependencies({"api-runtime"})
+
+    if normalized.startswith("infra/docker/ml/"):
+        return expand_group_dependencies({"ml-runtime"})
+
+    if normalized.startswith("infra/docker/"):
+        return ALL_GROUPS
+
+    if normalized.startswith(("tests/integration/", "tests/e2e/")):
+        return ALL_GROUPS
+
+    return None
+
+
+def plan_for_paths(
+    changed_files: list[str] | tuple[str, ...],
+    *,
+    base: str | None = None,
+    baseline_proven: bool = False,
+) -> VerificationPlan:
+    normalized = tuple(dict.fromkeys(path.replace("\\", "/") for path in changed_files))
+    if not normalized:
+        return plan_with_baseline_evidence(
+            VerificationPlan(
+                groups=ALL_GROUPS,
+                changed_files=normalized,
+                reason="No changed path was available; full verification is required.",
+                base=base,
+            ),
+            baseline_proven=baseline_proven,
+        )
+
+    selected: set[str] = set()
+    for path in normalized:
+        path_groups = groups_for_changed_path(path)
+        if path_groups is None or path_groups == ALL_GROUPS:
+            return plan_with_baseline_evidence(
+                VerificationPlan(
+                    groups=ALL_GROUPS,
+                    changed_files=normalized,
+                    reason=(
+                        f"{path} is cross-cutting or unmapped; "
+                        "fail closed to full verification."
+                    ),
+                    base=base,
+                ),
+                baseline_proven=baseline_proven,
+            )
+        selected.update(path_groups)
+
+    return plan_with_baseline_evidence(
+        VerificationPlan(
+            groups=expand_group_dependencies(selected),
+            changed_files=normalized,
+            reason="Selected from the changed path boundaries.",
+            base=base,
+        ),
+        baseline_proven=baseline_proven,
+    )
+
+
+def changed_files_from_git(
+    *, base: str | None = None, staged: bool = False
+) -> list[str]:
+    command = ["git", "diff", "--name-only", "--diff-filter=ACDMRTUXB", "-z"]
+    if staged:
+        command.append("--cached")
+    elif base is not None:
+        command.append(f"{base}...HEAD")
+    else:
+        raise ValueError("A Git base or --staged is required.")
+
+    result = subprocess.run(
+        command,
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path]
+
+
+def plan_from_git(
+    *,
+    base: str | None = None,
+    staged: bool = False,
+    baseline_proven: bool = False,
+) -> VerificationPlan:
+    try:
+        changed_files = changed_files_from_git(base=base, staged=staged)
+    except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        return VerificationPlan(
+            groups=ALL_GROUPS,
+            changed_files=(),
+            reason=f"Git diff was unavailable ({error}); fail closed to full verification.",
+            base=base,
+        )
+    return plan_for_paths(
+        changed_files,
+        base=base,
+        baseline_proven=baseline_proven,
+    )
+
+
+def test_file_inventory() -> tuple[tuple[str, str], ...]:
+    inventory: list[tuple[str, str]] = []
+    web_root = REPOSITORY_ROOT / "apps" / "web"
+    for directory, child_directories, filenames in os.walk(web_root):
+        child_directories[:] = [
+            name for name in child_directories if name not in {"node_modules", ".next"}
+        ]
+        for filename in filenames:
+            if ".test." in filename or ".spec." in filename:
+                path = Path(directory) / filename
+                relative = path.relative_to(REPOSITORY_ROOT)
+                inventory.append(("web-static", relative.as_posix()))
+    for service, group in (("api", "api-static"), ("ml", "ml-static")):
+        for path in (REPOSITORY_ROOT / "apps" / service / "tests").glob("test_*.py"):
+            inventory.append((group, path.relative_to(REPOSITORY_ROOT).as_posix()))
+    return tuple(sorted(inventory))
+
+
+def selected_test_files(groups: frozenset[str]) -> tuple[str, ...]:
+    selected_owners = groups & {"web-static", "api-static", "ml-static"}
+    return tuple(
+        path for owner, path in test_file_inventory() if owner in selected_owners
+    )
+
+
+def plan_lines(plan: VerificationPlan) -> list[str]:
+    selected = ordered_groups(plan.groups)
+    carried = ordered_groups(plan.carried_groups)
+    skipped = ordered_groups(plan.skipped_groups)
+    inventory = test_file_inventory()
+    tests = selected_test_files(plan.groups)
+    lines = [
+        f"Verification groups: {len(selected)}/{len(VERIFICATION_GROUPS)} selected",
+        f"Test files: {len(tests)}/{len(inventory)} selected",
+        f"Selected: {', '.join(selected) or 'none'}",
+        f"Executed on success: {', '.join(selected) or 'none'}",
+        f"Carried from successful baseline: {', '.join(carried) or 'none'}",
+        f"Skipped without evidence: {', '.join(skipped) or 'none'}",
+        f"Reason: {plan.reason}",
+    ]
+    if plan.base is not None:
+        lines.append(f"Base: {plan.base}")
+    lines.append(f"Changed files: {len(plan.changed_files)}")
+    return lines
+
+
+def write_plan_outputs(plan: VerificationPlan, path: Path) -> None:
+    selected = set(plan.groups)
+    values = {
+        "groups": ",".join(ordered_groups(plan.groups)),
+        "executed_groups": ",".join(ordered_groups(plan.groups)),
+        "carried_groups": ",".join(ordered_groups(plan.carried_groups)),
+        "skipped_groups": ",".join(ordered_groups(plan.skipped_groups)),
+        "docker_groups": ",".join(ordered_groups(plan.groups & DOCKER_GROUPS)),
+        "has_execution": bool(selected),
+        "needs_node": bool(selected & {"contracts", "web-static"}),
+        "needs_python": bool(selected),
+        "needs_uv": bool(selected & {"api-static", "ml-static"})
+        or bool(selected & RUNTIME_GROUPS),
+        "needs_api": "api-static" in selected or bool(selected & RUNTIME_GROUPS),
+        "needs_ml": bool(selected & {"ml-static", "ml-runtime"}),
+        "needs_docker": bool(selected & DOCKER_GROUPS),
+        "needs_runtime": bool(selected & RUNTIME_GROUPS),
+    }
+    with path.open("a", encoding="utf-8") as output:
+        for key, value in values.items():
+            rendered = str(value).lower() if isinstance(value, bool) else value
+            output.write(f"{key}={rendered}\n")
+
+
+def write_plan_summary(plan: VerificationPlan, path: Path) -> None:
+    with path.open("a", encoding="utf-8") as summary:
+        summary.write("## Selective verification plan\n\n")
+        for line in plan_lines(plan):
+            summary.write(f"- {line}\n")
 
 
 def require_command(command: str) -> str:
@@ -31,8 +380,14 @@ def compose_command(docker: str, *arguments: str) -> list[str]:
     return [docker, "compose", "-p", COMPOSE_PROJECT_NAME, *arguments]
 
 
-def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[str]]]:
-    return [
+def static_checks(
+    *,
+    pnpm: str,
+    uv: str,
+    docker: str,
+    groups: frozenset[str] = STATIC_GROUPS,
+) -> list[tuple[str, list[str]]]:
+    checks = [
         ("Validate canonical contracts", [pnpm, "contracts:check"]),
         ("Validate documentation links", [sys.executable, "scripts/check_docs.py"]),
         (
@@ -225,6 +580,36 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
             [sys.executable, "scripts/check_ml_compose_boundary.py"],
         ),
     ]
+    check_groups = {
+        "Validate canonical contracts": "contracts",
+        "Validate documentation links": "docs",
+        "Validate the isolated Compose definition": "compose",
+        "Lint Web source and tests": "web-static",
+        "Check Web formatting": "web-static",
+        "Type-check Web source": "web-static",
+        "Run Web branch-aware tests": "web-static",
+        "Build the production Web application": "web-static",
+        "Audit the pinned Web production dependency set": "web-static",
+        "Lint API source and tests": "api-static",
+        "Check API formatting": "api-static",
+        "Type-check API source": "api-static",
+        "Audit the installed pinned API dependency set": "api-static",
+        "Lint ML source, tests, and verification helpers": "ml-static",
+        "Check ML formatting": "ml-static",
+        "Type-check ML source": "ml-static",
+        "Audit the installed pinned ML dependency set": "ml-static",
+        "Audit the normalized PyTorch CPU release identity": "ml-static",
+        "Prove deterministic ML model generation": "ml-static",
+        "Validate deployable Compose boundaries": "compose",
+    }
+    filtered = [check for check in checks if check_groups[check[0]] in groups]
+    if "api-static" in groups:
+        filtered.append(
+            ("Run API unit tests", pytest_command(uv, include_integration=False))
+        )
+    if "ml-static" in groups:
+        filtered.append(("Run ML unit tests", pytest_ml_command(uv)))
+    return filtered
 
 
 def pytest_command(uv: str, *, include_integration: bool) -> list[str]:
@@ -268,8 +653,7 @@ def pytest_ml_command(uv: str) -> list[str]:
     ]
 
 
-def run_runtime_checks(*, uv: str, docker: str) -> None:
-    run("Run ML unit tests", pytest_ml_command(uv))
+def run_runtime_checks(*, groups: frozenset[str], uv: str, docker: str) -> None:
     run(
         "Build and start isolated PostgreSQL, MinIO, and RabbitMQ",
         compose_command(
@@ -325,62 +709,65 @@ def run_runtime_checks(*, uv: str, docker: str) -> None:
         "Build and start the migrated API container",
         compose_command(docker, "up", "--detach", "--build", "--wait", "api"),
     )
-    run(
-        "Build and start the source-owned Web container",
-        compose_command(docker, "up", "--detach", "--build", "--wait", "web"),
-    )
-    run(
-        "Prove the Web container is healthy and non-root",
-        compose_command(
-            docker,
-            "exec",
-            "-T",
-            "web",
-            "node",
-            "-e",
-            "if (process.getuid?.() === 0) process.exit(1); "
-            "fetch('http://127.0.0.1:3000/health')"
-            ".then((response) => { if (!response.ok) process.exit(1); })"
-            ".catch(() => process.exit(1));",
-        ),
-    )
-    run(
-        "Run API unit and real-service integration tests",
-        pytest_command(uv, include_integration=True),
-    )
-    run(
-        "Prove outbox and RabbitMQ restart recovery",
-        [
-            uv,
-            "run",
-            "--project",
-            "apps/api",
-            "python",
-            "scripts/verify_outbox_runtime.py",
-        ],
-    )
-    run(
-        "Prove the real ML worker and result-event boundary",
-        [
-            uv,
-            "run",
-            "--project",
-            "apps/ml",
-            "python",
-            "scripts/verify_ml_runtime.py",
-        ],
-    )
-    run(
-        "Prove API-owned result-event consumption and terminal persistence",
-        [
-            uv,
-            "run",
-            "--project",
-            "apps/api",
-            "python",
-            "scripts/verify_result_consumer_runtime.py",
-        ],
-    )
+    if "web-runtime" in groups:
+        run(
+            "Build and start the source-owned Web container",
+            compose_command(docker, "up", "--detach", "--build", "--wait", "web"),
+        )
+        run(
+            "Prove the Web container is healthy and non-root",
+            compose_command(
+                docker,
+                "exec",
+                "-T",
+                "web",
+                "node",
+                "-e",
+                "if (process.getuid?.() === 0) process.exit(1); "
+                "fetch('http://127.0.0.1:3000/health')"
+                ".then((response) => { if (!response.ok) process.exit(1); })"
+                ".catch(() => process.exit(1));",
+            ),
+        )
+    if "api-runtime" in groups:
+        run(
+            "Run API unit and real-service integration tests",
+            pytest_command(uv, include_integration=True),
+        )
+        run(
+            "Prove outbox and RabbitMQ restart recovery",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/api",
+                "python",
+                "scripts/verify_outbox_runtime.py",
+            ],
+        )
+        run(
+            "Prove API-owned result-event consumption and terminal persistence",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/api",
+                "python",
+                "scripts/verify_result_consumer_runtime.py",
+            ],
+        )
+    if "ml-runtime" in groups:
+        run(
+            "Prove the real ML worker and result-event boundary",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "python",
+                "scripts/verify_ml_runtime.py",
+            ],
+        )
 
 
 def capture_runtime_diagnostic(
@@ -489,29 +876,201 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip container startup and real-service integration tests.",
     )
+    parser.add_argument(
+        "--groups",
+        help="Run a comma-separated verification group selection.",
+    )
+    parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Print a verification plan without running checks.",
+    )
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--base", help="Plan from the merge-base diff to HEAD.")
+    source.add_argument(
+        "--staged",
+        action="store_true",
+        help="Plan from the exact staged diff.",
+    )
+    source.add_argument(
+        "--full",
+        action="store_true",
+        help="Select every verification group.",
+    )
+    source.add_argument(
+        "--carry-all",
+        action="store_true",
+        help="Carry every group from a proven identical baseline.",
+    )
+    parser.add_argument(
+        "--baseline-proven",
+        action="store_true",
+        help="Mark unselected groups as carried from a successful baseline.",
+    )
+    parser.add_argument(
+        "--carried-groups",
+        help="Comma-separated unaffected groups carried into explicit-run evidence.",
+    )
+    parser.add_argument(
+        "--skipped-groups",
+        help="Comma-separated selected groups intentionally skipped without evidence.",
+    )
+    parser.add_argument(
+        "--github-output",
+        type=Path,
+        help="Append machine-readable selection outputs for GitHub Actions.",
+    )
+    parser.add_argument(
+        "--summary",
+        type=Path,
+        help="Append the human-readable plan to a Markdown summary.",
+    )
     return parser.parse_args()
+
+
+def parse_group_selection(
+    value: str, *, expand_dependencies: bool = True
+) -> frozenset[str]:
+    requested = {group.strip() for group in value.split(",") if group.strip()}
+    unknown = requested - ALL_GROUPS
+    if unknown:
+        raise RuntimeError(f"Unknown verification groups: {', '.join(sorted(unknown))}")
+    if not requested:
+        raise RuntimeError("At least one verification group is required.")
+    if expand_dependencies:
+        return expand_group_dependencies(requested)
+    return frozenset(requested)
+
+
+def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
+    if args.groups:
+        if args.skipped_groups:
+            raise RuntimeError("--skipped-groups is only valid while planning.")
+        carried = (
+            parse_group_selection(args.carried_groups, expand_dependencies=False)
+            if args.carried_groups
+            else frozenset()
+        )
+        selected = parse_group_selection(args.groups)
+        overlap = selected & carried
+        if overlap:
+            raise RuntimeError(
+                "Executed and carried groups overlap: "
+                f"{', '.join(ordered_groups(overlap))}"
+            )
+        return VerificationPlan(
+            groups=selected,
+            carried_groups=carried,
+            changed_files=(),
+            reason="Explicit verification group selection.",
+        )
+    if args.static_only:
+        return VerificationPlan(
+            groups=STATIC_GROUPS,
+            changed_files=(),
+            reason="Static-only verification requested.",
+        )
+    if args.carry_all:
+        if not args.baseline_proven:
+            raise RuntimeError("--carry-all requires --baseline-proven.")
+        skipped = (
+            parse_group_selection(args.skipped_groups, expand_dependencies=False)
+            if args.skipped_groups
+            else frozenset()
+        )
+        return VerificationPlan(
+            groups=frozenset(),
+            carried_groups=ALL_GROUPS - skipped,
+            changed_files=(),
+            reason="Identical tree is covered by a successful exact-head baseline.",
+        )
+    if args.base or args.staged:
+        plan = plan_from_git(
+            base=args.base,
+            staged=args.staged,
+            baseline_proven=args.baseline_proven,
+        )
+    else:
+        plan = VerificationPlan(
+            groups=ALL_GROUPS,
+            changed_files=(),
+            reason="Full canonical verification requested.",
+        )
+    if args.carried_groups:
+        raise RuntimeError(
+            "--carried-groups is only valid with --groups for explicit-run evidence."
+        )
+    if args.skipped_groups:
+        plan = move_groups_to_skipped(
+            plan,
+            parse_group_selection(args.skipped_groups, expand_dependencies=False),
+        )
+    return plan
 
 
 def main() -> int:
     args = parse_args()
+    selection_modes = sum(
+        (
+            bool(args.groups),
+            args.static_only,
+            bool(args.base or args.staged or args.full or args.carry_all),
+        )
+    )
+    if selection_modes > 1:
+        print(
+            "\nVerification failed: choose only one selection mode.",
+            file=sys.stderr,
+        )
+        return 1
+    if args.plan and not (args.base or args.staged or args.full or args.carry_all):
+        print(
+            "\nVerification failed: --plan requires --base, --staged, or --full.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        plan = resolve_selection(args)
+    except RuntimeError as error:
+        print(f"\nVerification failed: {error}", file=sys.stderr)
+        return 1
+    for line in plan_lines(plan):
+        print(line)
+    if args.github_output is not None:
+        write_plan_outputs(plan, args.github_output)
+    if args.summary is not None:
+        write_plan_summary(plan, args.summary)
+    if args.plan:
+        return 0
+
     ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     runtime_started = False
     verification_error: RuntimeError | subprocess.CalledProcessError | None = None
     cleanup_error: subprocess.CalledProcessError | None = None
+    docker = ""
     try:
-        pnpm = require_command("pnpm")
-        uv = require_command("uv")
-        docker = require_command("docker")
+        pnpm = (
+            require_command("pnpm") if plan.groups & {"contracts", "web-static"} else ""
+        )
+        uv = (
+            require_command("uv")
+            if plan.groups & {"api-static", "ml-static"} or plan.groups & RUNTIME_GROUPS
+            else ""
+        )
+        docker = require_command("docker") if plan.groups & DOCKER_GROUPS else ""
 
-        for label, command in static_checks(pnpm=pnpm, uv=uv, docker=docker):
+        for label, command in static_checks(
+            pnpm=pnpm,
+            uv=uv,
+            docker=docker,
+            groups=plan.groups,
+        ):
             run(label, command)
 
-        if args.static_only:
-            run("Run API unit tests", pytest_command(uv, include_integration=False))
-            run("Run ML unit tests", pytest_ml_command(uv))
-        else:
+        if plan.groups & RUNTIME_GROUPS:
             runtime_started = True
-            run_runtime_checks(uv=uv, docker=docker)
+            run_runtime_checks(groups=plan.groups, uv=uv, docker=docker)
     except (RuntimeError, subprocess.CalledProcessError) as error:
         print(f"\nVerification failed: {error}", file=sys.stderr)
         verification_error = error

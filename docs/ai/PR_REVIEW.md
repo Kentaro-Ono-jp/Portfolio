@@ -62,7 +62,13 @@ Do not modify implementation to fix a finding.
    behavior against scope, non-targets, failure model, acceptance criteria,
    accepted design, tests, and public safety.
 6. Run the smallest relevant non-Docker static verification. Do not start or
-   mutate Docker Desktop. Read the exact-head Actions result and limitations.
+   mutate Docker Desktop. Require the PR evidence to justify its selected,
+   executed, carried, and skipped groups with both N/NN counts, and reject a
+   carry without successful unaffected evidence. Require affected omissions to
+   be justified in the focused Issue or PR and reported as skipped without
+   evidence, never carried. Apply the same rule to Docker-backed groups without
+   requiring separate owner approval to execute them. Read the exact-head
+   Actions result and limitations.
    When the owner approved the
    [CI playbook's Markdown-only skip](../../.github/workflows/CI_PLAYBOOK.md),
    verify the exact base `main` SHA and its successful default-branch run,

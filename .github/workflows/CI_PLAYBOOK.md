@@ -15,8 +15,10 @@ implementation and verification scripts.
 
 1. Inspect the complete intended diff and stage the exact candidate without
    committing.
-2. Read the change-driven checks below and inspect only the applicable
-   boundaries.
+2. Run `python scripts/verify.py --plan --staged`, record both N/NN counts and
+   the selected, executed, carried, and skipped groups, then inspect only the
+   applicable change-driven boundaries below; missing baseline evidence stops
+   verification before dependency setup.
 3. Correct portability, dependency, real-service, recovery, evidence, or
    teardown risks without weakening the intended proof.
 4. Rerun the required verification after any correction.
@@ -25,6 +27,12 @@ implementation and verification scripts.
 
 The first staging is a review snapshot, not permission to commit stale index
 content after later edits.
+
+Carry only successful unaffected evidence. Record an intentionally omitted
+affected group as `Verification-Skip: <groups>` in the exact candidate's commit
+trailers and disclose it as skipped without evidence; never relabel it as
+carried. Docker-backed groups follow the same selection rule and require no
+separate owner approval to execute.
 
 ### Local rehearsal boundaries
 
