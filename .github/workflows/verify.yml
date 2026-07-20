@@ -6,10 +6,17 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      approved_docker_groups:
+        description: >-
+          Owner-approved comma-separated Docker groups for this exact head
+        required: false
+        default: ""
 
 permissions:
   actions: read
   contents: read
+  pull-requests: read
 
 concurrency:
   group: verify-${{ github.workflow }}-${{ github.ref }}
@@ -34,40 +41,128 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_ACTION: ${{ github.event.action }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          DISPATCH_DOCKER_APPROVAL: ${{ inputs.approved_docker_groups }}
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          base=""
-          base_reason="manual run without a diff baseline"
+          latest_run_succeeded() {
+            local candidate_sha="$1"
+            local conclusion
+            conclusion="$(gh api --method GET \
+              "repos/$REPOSITORY/actions/workflows/verify.yml/runs" \
+              -f head_sha="$candidate_sha" -f per_page=1 \
+              --jq '.workflow_runs[0].conclusion // ""')" || return 1
+            [[ "$conclusion" == "success" ]]
+          }
+
+          trailer_value() {
+            local candidate_sha="$1"
+            local key="$2"
+            git show -s --format=%B "$candidate_sha" |
+              git interpret-trailers --parse |
+              sed -n "s/^$key: //p" |
+              tail -n 1
+          }
+
+          stop_without_docker() {
+            local message="$1"
+            printf '## Selective verification stopped\n\n- %s\n' "$message" \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$message"
+            exit 1
+          }
+
+          plan_arguments=(--plan)
+          base_reason=""
+          carried_request=""
+          docker_approval=""
+
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             if [[ "$EVENT_ACTION" == "synchronize" && -n "$BEFORE_SHA" ]]; then
-              if successful_runs="$(gh api --method GET \
-                "repos/$REPOSITORY/actions/workflows/verify.yml/runs" \
-                -f head_sha="$BEFORE_SHA" -f event="pull_request" \
-                -f status="success" -f per_page=1 \
-                --jq '.workflow_runs | length')" && [[ "$successful_runs" -gt 0 ]]; then
-                base="$BEFORE_SHA"
-                base_reason="previous PR head has successful workflow evidence"
-              else
-                base="$PR_BASE_SHA"
-                base_reason="previous PR head lacks successful evidence; use full PR diff"
-              fi
+              base="$BEFORE_SHA"
+              base_reason="previous PR head"
             else
               base="$PR_BASE_SHA"
-              base_reason="initial or reopened PR; use full PR diff"
+              base_reason="PR base"
             fi
-          elif [[ "$EVENT_NAME" == "push" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
-            base="$BEFORE_SHA"
-            base_reason="main push diff"
+
+            if ! latest_run_succeeded "$base"; then
+              stop_without_docker \
+                "$base_reason $base lacks a latest successful Verify run; no checks or Docker were started."
+            fi
+            plan_arguments+=(--base "$base" --baseline-proven)
+
+            if [[ "$PR_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
+              carried_request="$(trailer_value "$PR_HEAD_SHA" "Verification-Carry")"
+              docker_approval="$(trailer_value \
+                "$PR_HEAD_SHA" "Verification-Docker-Approved")"
+            fi
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            merged_pr="$(gh api --method GET \
+              "repos/$REPOSITORY/commits/$CURRENT_SHA/pulls" \
+              --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0] | if . == null then "" else [.number, .head.sha] | @tsv end' \
+              2>/dev/null || true)"
+            pr_head="${merged_pr#*$'\t'}"
+            if [[ -n "$merged_pr" && "$pr_head" != "$merged_pr" ]]; then
+              current_tree="$(git rev-parse 'HEAD^{tree}')"
+              pr_tree="$(gh api "repos/$REPOSITORY/git/commits/$pr_head" \
+                --jq '.tree.sha' 2>/dev/null || true)"
+              if [[ -n "$pr_tree" && "$current_tree" == "$pr_tree" ]] && \
+                latest_run_succeeded "$pr_head"; then
+                plan_arguments+=(--carry-all --baseline-proven)
+                base_reason="tree-identical successful PR head $pr_head"
+              fi
+            fi
+
+            if [[ ${#plan_arguments[@]} -eq 1 ]]; then
+              if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+                stop_without_docker \
+                  "main push has no usable baseline; no checks or Docker were started."
+              fi
+              if ! latest_run_succeeded "$BEFORE_SHA"; then
+                stop_without_docker \
+                  "main baseline $BEFORE_SHA lacks a latest successful Verify run; no checks or Docker were started."
+              fi
+              plan_arguments+=(--base "$BEFORE_SHA" --baseline-proven)
+              base_reason="successful main baseline $BEFORE_SHA"
+              if [[ "$ACTOR" == "$REPOSITORY_OWNER" ]]; then
+                carried_request="$(trailer_value "$CURRENT_SHA" "Verification-Carry")"
+                docker_approval="$(trailer_value \
+                  "$CURRENT_SHA" "Verification-Docker-Approved")"
+              fi
+            fi
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            plan_arguments+=(--full)
+            base_reason="owner-dispatched full verification"
+            if [[ "$ACTOR" == "$REPOSITORY_OWNER" ]]; then
+              docker_approval="$DISPATCH_DOCKER_APPROVAL"
+            fi
+          else
+            stop_without_docker "unsupported workflow event $EVENT_NAME"
           fi
 
-          if [[ -n "$base" ]]; then
-            python3 scripts/verify.py --plan --base "$base" \
-              --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
-          else
-            python3 scripts/verify.py --plan --full \
-              --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$carried_request" ]]; then
+            plan_arguments+=(--carried-groups "$carried_request")
+          fi
+          python3 scripts/verify.py "${plan_arguments[@]}" \
+            --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+          docker_groups="$(sed -n 's/^docker_groups=//p' "$GITHUB_OUTPUT" | tail -n 1)"
+          if [[ -n "$docker_groups" ]]; then
+            normalized_approval=",${docker_approval// /},"
+            IFS=',' read -ra required_groups <<< "$docker_groups"
+            for group in "${required_groups[@]}"; do
+              if [[ "$normalized_approval" != *",$group,"* ]]; then
+                stop_without_docker \
+                  "Docker group $group lacks owner approval for this exact head; no Docker was started."
+              fi
+            done
           fi
           printf '\n- Selection baseline: %s\n' "$base_reason" >> "$GITHUB_STEP_SUMMARY"
 
@@ -112,7 +207,11 @@ jobs:
         run: uv sync --project apps/ml --frozen
 
       - name: Run canonical verification
-        run: python scripts/verify.py --groups "${{ steps.plan.outputs.groups }}"
+        if: steps.plan.outputs.has_execution == 'true'
+        run: >-
+          python scripts/verify.py
+          --groups "${{ steps.plan.outputs.groups }}"
+          --carried-groups "${{ steps.plan.outputs.carried_groups }}"
 
       - name: Upload failure evidence
         if: failure()

@@ -64,8 +64,9 @@ Do not modify implementation to fix a finding.
 6. Run the smallest relevant non-Docker static verification. Do not start or
    mutate Docker Desktop. Require the PR evidence to justify its selected,
    executed, carried, and skipped groups with both N/NN counts, and reject a
-   carry without successful unaffected evidence. Read the exact-head Actions
-   result and limitations.
+   carry without successful unaffected evidence. Reject a Docker-backed group
+   without a focused-Issue requirement and explicit owner approval for the
+   reviewed candidate. Read the exact-head Actions result and limitations.
    When the owner approved the
    [CI playbook's Markdown-only skip](../../.github/workflows/CI_PLAYBOOK.md),
    verify the exact base `main` SHA and its successful default-branch run,

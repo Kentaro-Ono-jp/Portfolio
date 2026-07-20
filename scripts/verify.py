@@ -27,6 +27,7 @@ VERIFICATION_GROUPS = (
 ALL_GROUPS = frozenset(VERIFICATION_GROUPS)
 STATIC_GROUPS = frozenset(VERIFICATION_GROUPS[:6])
 RUNTIME_GROUPS = frozenset(VERIFICATION_GROUPS[6:])
+DOCKER_GROUPS = frozenset({"compose"}) | RUNTIME_GROUPS
 GROUP_DEPENDENCIES = {
     "web-runtime": frozenset({"compose", "web-static"}),
     "api-runtime": frozenset({"compose", "api-static"}),
@@ -42,11 +43,52 @@ class VerificationPlan:
         changed_files: tuple[str, ...],
         reason: str,
         base: str | None = None,
+        carried_groups: frozenset[str] = frozenset(),
     ) -> None:
+        if not groups <= ALL_GROUPS or not carried_groups <= ALL_GROUPS:
+            raise ValueError("Verification plan contains an unknown group.")
+        if groups & carried_groups:
+            raise ValueError("Executed and carried groups must be disjoint.")
         self.groups = groups
+        self.carried_groups = carried_groups
         self.changed_files = changed_files
         self.reason = reason
         self.base = base
+
+    @property
+    def skipped_groups(self) -> frozenset[str]:
+        return ALL_GROUPS - self.groups - self.carried_groups
+
+
+def plan_with_baseline_evidence(
+    plan: VerificationPlan, *, baseline_proven: bool
+) -> VerificationPlan:
+    carried = ALL_GROUPS - plan.groups if baseline_proven else frozenset()
+    return VerificationPlan(
+        groups=plan.groups,
+        carried_groups=carried,
+        changed_files=plan.changed_files,
+        reason=plan.reason,
+        base=plan.base,
+    )
+
+
+def move_groups_to_carried(
+    plan: VerificationPlan, groups: frozenset[str]
+) -> VerificationPlan:
+    missing = groups - plan.groups
+    if missing:
+        raise RuntimeError(
+            "Cannot carry groups not selected by this delta: "
+            f"{', '.join(ordered_groups(missing))}"
+        )
+    return VerificationPlan(
+        groups=plan.groups - groups,
+        carried_groups=plan.carried_groups | groups,
+        changed_files=plan.changed_files,
+        reason=plan.reason,
+        base=plan.base,
+    )
 
 
 def expand_group_dependencies(groups: set[str] | frozenset[str]) -> frozenset[str]:
@@ -117,6 +159,7 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
         if normalized in {
             "apps/web/next.config.ts",
             "apps/web/package.json",
+            "apps/web/src/app/health/route.ts",
         }:
             groups.add("web-runtime")
         return expand_group_dependencies(groups)
@@ -154,34 +197,49 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
 
 
 def plan_for_paths(
-    changed_files: list[str] | tuple[str, ...], *, base: str | None = None
+    changed_files: list[str] | tuple[str, ...],
+    *,
+    base: str | None = None,
+    baseline_proven: bool = False,
 ) -> VerificationPlan:
     normalized = tuple(dict.fromkeys(path.replace("\\", "/") for path in changed_files))
     if not normalized:
-        return VerificationPlan(
-            groups=ALL_GROUPS,
-            changed_files=normalized,
-            reason="No changed path was available; full verification is required.",
-            base=base,
+        return plan_with_baseline_evidence(
+            VerificationPlan(
+                groups=ALL_GROUPS,
+                changed_files=normalized,
+                reason="No changed path was available; full verification is required.",
+                base=base,
+            ),
+            baseline_proven=baseline_proven,
         )
 
     selected: set[str] = set()
     for path in normalized:
         path_groups = groups_for_changed_path(path)
         if path_groups is None or path_groups == ALL_GROUPS:
-            return VerificationPlan(
-                groups=ALL_GROUPS,
-                changed_files=normalized,
-                reason=f"{path} is cross-cutting or unmapped; fail closed to full verification.",
-                base=base,
+            return plan_with_baseline_evidence(
+                VerificationPlan(
+                    groups=ALL_GROUPS,
+                    changed_files=normalized,
+                    reason=(
+                        f"{path} is cross-cutting or unmapped; "
+                        "fail closed to full verification."
+                    ),
+                    base=base,
+                ),
+                baseline_proven=baseline_proven,
             )
         selected.update(path_groups)
 
-    return VerificationPlan(
-        groups=expand_group_dependencies(selected),
-        changed_files=normalized,
-        reason="Selected from the changed path boundaries.",
-        base=base,
+    return plan_with_baseline_evidence(
+        VerificationPlan(
+            groups=expand_group_dependencies(selected),
+            changed_files=normalized,
+            reason="Selected from the changed path boundaries.",
+            base=base,
+        ),
+        baseline_proven=baseline_proven,
     )
 
 
@@ -205,7 +263,12 @@ def changed_files_from_git(
     return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path]
 
 
-def plan_from_git(*, base: str | None = None, staged: bool = False) -> VerificationPlan:
+def plan_from_git(
+    *,
+    base: str | None = None,
+    staged: bool = False,
+    baseline_proven: bool = False,
+) -> VerificationPlan:
     try:
         changed_files = changed_files_from_git(base=base, staged=staged)
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
@@ -215,7 +278,11 @@ def plan_from_git(*, base: str | None = None, staged: bool = False) -> Verificat
             reason=f"Git diff was unavailable ({error}); fail closed to full verification.",
             base=base,
         )
-    return plan_for_paths(changed_files, base=base)
+    return plan_for_paths(
+        changed_files,
+        base=base,
+        baseline_proven=baseline_proven,
+    )
 
 
 def test_file_inventory() -> tuple[tuple[str, str], ...]:
@@ -245,14 +312,17 @@ def selected_test_files(groups: frozenset[str]) -> tuple[str, ...]:
 
 def plan_lines(plan: VerificationPlan) -> list[str]:
     selected = ordered_groups(plan.groups)
-    skipped = ordered_groups(ALL_GROUPS - plan.groups)
+    carried = ordered_groups(plan.carried_groups)
+    skipped = ordered_groups(plan.skipped_groups)
     inventory = test_file_inventory()
     tests = selected_test_files(plan.groups)
     lines = [
         f"Verification groups: {len(selected)}/{len(VERIFICATION_GROUPS)} selected",
         f"Test files: {len(tests)}/{len(inventory)} selected",
         f"Selected: {', '.join(selected) or 'none'}",
-        f"Skipped (requires prior successful evidence): {', '.join(skipped) or 'none'}",
+        f"Executed on success: {', '.join(selected) or 'none'}",
+        f"Carried from successful baseline: {', '.join(carried) or 'none'}",
+        f"Skipped without evidence: {', '.join(skipped) or 'none'}",
         f"Reason: {plan.reason}",
     ]
     if plan.base is not None:
@@ -265,13 +335,18 @@ def write_plan_outputs(plan: VerificationPlan, path: Path) -> None:
     selected = set(plan.groups)
     values = {
         "groups": ",".join(ordered_groups(plan.groups)),
+        "executed_groups": ",".join(ordered_groups(plan.groups)),
+        "carried_groups": ",".join(ordered_groups(plan.carried_groups)),
+        "skipped_groups": ",".join(ordered_groups(plan.skipped_groups)),
+        "docker_groups": ",".join(ordered_groups(plan.groups & DOCKER_GROUPS)),
+        "has_execution": bool(selected),
         "needs_node": bool(selected & {"contracts", "web-static"}),
         "needs_python": bool(selected),
         "needs_uv": bool(selected & {"api-static", "ml-static"})
         or bool(selected & RUNTIME_GROUPS),
         "needs_api": "api-static" in selected or bool(selected & RUNTIME_GROUPS),
         "needs_ml": bool(selected & {"ml-static", "ml-runtime"}),
-        "needs_docker": bool(selected & ({"compose"} | set(RUNTIME_GROUPS))),
+        "needs_docker": bool(selected & DOCKER_GROUPS),
         "needs_runtime": bool(selected & RUNTIME_GROUPS),
     }
     with path.open("a", encoding="utf-8") as output:
@@ -670,6 +745,17 @@ def run_runtime_checks(*, groups: frozenset[str], uv: str, docker: str) -> None:
                 "scripts/verify_outbox_runtime.py",
             ],
         )
+        run(
+            "Prove API-owned result-event consumption and terminal persistence",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/api",
+                "python",
+                "scripts/verify_result_consumer_runtime.py",
+            ],
+        )
     if "ml-runtime" in groups:
         run(
             "Prove the real ML worker and result-event boundary",
@@ -680,17 +766,6 @@ def run_runtime_checks(*, groups: frozenset[str], uv: str, docker: str) -> None:
                 "apps/ml",
                 "python",
                 "scripts/verify_ml_runtime.py",
-            ],
-        )
-        run(
-            "Prove API-owned result-event consumption and terminal persistence",
-            [
-                uv,
-                "run",
-                "--project",
-                "apps/api",
-                "python",
-                "scripts/verify_result_consumer_runtime.py",
             ],
         )
 
@@ -822,6 +897,20 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Select every verification group.",
     )
+    source.add_argument(
+        "--carry-all",
+        action="store_true",
+        help="Carry every group from a proven identical baseline.",
+    )
+    parser.add_argument(
+        "--baseline-proven",
+        action="store_true",
+        help="Mark unselected groups as carried from a successful baseline.",
+    )
+    parser.add_argument(
+        "--carried-groups",
+        help="Comma-separated selected groups covered by prior successful evidence.",
+    )
     parser.add_argument(
         "--github-output",
         type=Path,
@@ -835,20 +924,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_group_selection(value: str) -> frozenset[str]:
+def parse_group_selection(
+    value: str, *, expand_dependencies: bool = True
+) -> frozenset[str]:
     requested = {group.strip() for group in value.split(",") if group.strip()}
     unknown = requested - ALL_GROUPS
     if unknown:
         raise RuntimeError(f"Unknown verification groups: {', '.join(sorted(unknown))}")
     if not requested:
         raise RuntimeError("At least one verification group is required.")
-    return expand_group_dependencies(requested)
+    if expand_dependencies:
+        return expand_group_dependencies(requested)
+    return frozenset(requested)
 
 
 def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
     if args.groups:
+        carried = (
+            parse_group_selection(args.carried_groups, expand_dependencies=False)
+            if args.carried_groups
+            else frozenset()
+        )
+        selected = parse_group_selection(args.groups) - carried
         return VerificationPlan(
-            groups=parse_group_selection(args.groups),
+            groups=selected,
+            carried_groups=carried,
             changed_files=(),
             reason="Explicit verification group selection.",
         )
@@ -858,13 +958,37 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
             changed_files=(),
             reason="Static-only verification requested.",
         )
+    if args.carry_all:
+        if not args.baseline_proven:
+            raise RuntimeError("--carry-all requires --baseline-proven.")
+        return VerificationPlan(
+            groups=frozenset(),
+            carried_groups=ALL_GROUPS,
+            changed_files=(),
+            reason="Identical tree is covered by a successful exact-head baseline.",
+        )
     if args.base or args.staged:
-        return plan_from_git(base=args.base, staged=args.staged)
-    return VerificationPlan(
-        groups=ALL_GROUPS,
-        changed_files=(),
-        reason="Full canonical verification requested.",
-    )
+        plan = plan_from_git(
+            base=args.base,
+            staged=args.staged,
+            baseline_proven=args.baseline_proven,
+        )
+    else:
+        plan = VerificationPlan(
+            groups=ALL_GROUPS,
+            changed_files=(),
+            reason="Full canonical verification requested.",
+        )
+    if args.carried_groups:
+        if not args.baseline_proven:
+            raise RuntimeError(
+                "--carried-groups requires --baseline-proven when planning."
+            )
+        plan = move_groups_to_carried(
+            plan,
+            parse_group_selection(args.carried_groups, expand_dependencies=False),
+        )
+    return plan
 
 
 def main() -> int:
@@ -873,7 +997,7 @@ def main() -> int:
         (
             bool(args.groups),
             args.static_only,
-            bool(args.base or args.staged or args.full),
+            bool(args.base or args.staged or args.full or args.carry_all),
         )
     )
     if selection_modes > 1:
@@ -882,7 +1006,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    if args.plan and not (args.base or args.staged or args.full):
+    if args.plan and not (args.base or args.staged or args.full or args.carry_all):
         print(
             "\nVerification failed: --plan requires --base, --staged, or --full.",
             file=sys.stderr,
@@ -917,11 +1041,7 @@ def main() -> int:
             if plan.groups & {"api-static", "ml-static"} or plan.groups & RUNTIME_GROUPS
             else ""
         )
-        docker = (
-            require_command("docker")
-            if plan.groups & ({"compose"} | set(RUNTIME_GROUPS))
-            else ""
-        )
+        docker = require_command("docker") if plan.groups & DOCKER_GROUPS else ""
 
         for label, command in static_checks(
             pnpm=pnpm,

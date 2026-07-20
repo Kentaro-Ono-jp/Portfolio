@@ -17,8 +17,8 @@ implementation and verification scripts.
    committing.
 2. Run `python scripts/verify.py --plan --staged`, record both N/NN counts and
    the selected, executed, carried, and skipped groups, then inspect only the
-   applicable change-driven boundaries below; any uncertainty restores full
-   verification.
+   applicable change-driven boundaries below; missing baseline evidence stops
+   verification before dependency setup.
 3. Correct portability, dependency, real-service, recovery, evidence, or
    teardown risks without weakening the intended proof.
 4. Rerun the required verification after any correction.
@@ -27,6 +27,12 @@ implementation and verification scripts.
 
 The first staging is a review snapshot, not permission to commit stale index
 content after later edits.
+
+Docker-backed `compose` and runtime groups are denied unless the focused Issue
+requires them and the owner approves the exact candidate. Record an approved
+carry as `Verification-Carry: <groups>` and approved execution as
+`Verification-Docker-Approved: <groups>` in that candidate's commit trailers;
+never add either trailer speculatively.
 
 ### Local rehearsal boundaries
 

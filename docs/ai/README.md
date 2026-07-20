@@ -117,10 +117,13 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Change only approved files and preserve unrelated work.
 - Use `python scripts/verify.py`; do not create a competing root verifier.
 - Select the smallest sufficient verification groups from the staged or review
-  delta; carry forward only successful unaffected evidence, fail closed to full
-  verification when uncertain or the prior head did not pass, and record
-  selected, executed, carried, and skipped groups plus both N/NN counts in
-  Issue and PR evidence.
+  delta; carry forward only successful unaffected evidence, stop before setup
+  when baseline proof is unavailable, and record selected, executed, carried,
+  and skipped groups plus both N/NN counts in Issue and PR evidence.
+- Docker-backed `compose` and runtime groups are prohibited by default. Select
+  them only when the focused Issue requires real-service, Compose, or E2E proof
+  and the owner explicitly approves those groups for the exact candidate head;
+  otherwise carry successful evidence or stop without starting Docker.
 - Use static local verification unless local runtime work is explicitly
   authorized. GitHub Actions supplies authoritative runtime proof.
 - Inspect the complete intended diff before staging exact files.
