@@ -38,10 +38,31 @@ def main() -> int:
         raise RuntimeError(f"ML worker has forbidden database settings: {forbidden}")
     if worker.get("ports"):
         raise RuntimeError("ML worker must not publish a host port")
-    if "web" in services:
+    web = services.get("web")
+    if web is None:
+        raise RuntimeError("Web service is missing")
+    web_environment = web.get("environment", {})
+    if web_environment.get("PORTFOLIO_API_BASE_URL") != "http://api:8000":
+        raise RuntimeError("Web service does not use the internal API HTTP boundary")
+    forbidden_web_settings = sorted(
+        name
+        for name in web_environment
+        if "DATABASE" in name.upper()
+        or "POSTGRES" in name.upper()
+        or "RABBIT" in name.upper()
+        or name.startswith("PORTFOLIO_ML_")
+    )
+    if forbidden_web_settings:
         raise RuntimeError(
-            "Current product boundary unexpectedly includes the Web service"
+            f"Web service has private persistence/worker settings: {forbidden_web_settings}"
         )
+    web_ports = web.get("ports", [])
+    if len(web_ports) != 1 or web_ports[0].get("host_ip") != "127.0.0.1":
+        raise RuntimeError(
+            "Web service must publish one loopback-only development port"
+        )
+    if "api" not in web.get("depends_on", {}):
+        raise RuntimeError("Web service does not declare its API readiness dependency")
     events = services.get("api-events")
     if events is None:
         raise RuntimeError("API-owned result-event consumer service is missing")
@@ -79,6 +100,31 @@ def main() -> int:
         raise RuntimeError(
             f"API source imports private ML implementation: {private_ml_imports}"
         )
+
+    web_source = REPOSITORY_ROOT / "apps" / "web" / "src"
+    private_service_imports = sorted(
+        str(path.relative_to(REPOSITORY_ROOT))
+        for path in web_source.rglob("*.ts*")
+        if any(
+            private_name in path.read_text(encoding="utf-8")
+            for private_name in ("reactorfront_api", "reactorfront_ml")
+        )
+    )
+    if private_service_imports:
+        raise RuntimeError(
+            f"Web source imports private service implementation: {private_service_imports}"
+        )
+    web_dockerfile = (
+        REPOSITORY_ROOT / "infra" / "docker" / "web" / "Dockerfile"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "node:24.18.0-bookworm-slim@sha256:",
+        "pnpm@11.14.0",
+        "USER 10003:10003",
+        'CMD ["node", "apps/web/server.js"]',
+    ):
+        if required not in web_dockerfile:
+            raise RuntimeError(f"Web image boundary is missing: {required}")
 
     dockerfile = (REPOSITORY_ROOT / "infra" / "docker" / "ml" / "Dockerfile").read_text(
         encoding="utf-8"
@@ -144,8 +190,9 @@ def main() -> int:
     if audited_entries != {expected_audit_entry}:
         raise RuntimeError("Normalized PyTorch audit identity has drifted")
     print(
-        "ML boundary passed: CPU-only lock plus no database settings, host port, "
-        "or unused Celery cluster topology; API-owned result consumption remains isolated."
+        "Deployable boundaries passed: CPU-only ML without database or host port; "
+        "API-owned result consumption remains isolated; Web uses only the HTTP contract "
+        "and one loopback development port."
     )
     return 0
 

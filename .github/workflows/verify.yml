@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   verify:
-    name: ML worker boundary and repository checks
+    name: Web and service-boundary repository checks
     runs-on: ubuntu-latest
     timeout-minutes: 40
 

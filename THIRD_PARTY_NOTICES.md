@@ -12,6 +12,7 @@ under their own licenses.
 | MinIO | official source commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` | AGPL-3.0-only | separate S3-compatible test service |
 | RabbitMQ | `rabbitmq:4.3.2-alpine` manifest digest in `compose.yaml` | MPL-2.0 | durable message broker |
 | Python | `python:3.13.14-slim-bookworm` manifest digest in the API and ML Dockerfiles | Python Software Foundation License | API and ML runtimes |
+| Node.js | `node:24.18.0-bookworm-slim` manifest digest in the Web Dockerfile | MIT and bundled third-party licenses | Next.js Web runtime |
 
 The MinIO image build copies the upstream license into the resulting image.
 MinIO runs as a separate process and communicates with the MIT-licensed
@@ -24,6 +25,10 @@ Exact Python packages are declared in `apps/api/pyproject.toml` and
 Exact JavaScript tooling is resolved in `pnpm-lock.yaml`. Those lockfiles and
 upstream package metadata are the authoritative inventories for transitive
 dependency licenses.
+
+The Web runtime's principal introduced packages are Next.js, React, TanStack
+Query, Zod, and Tailwind CSS. Their package metadata, bundled notices, and the
+exact `pnpm-lock.yaml` resolution remain authoritative.
 
 The ML runtime's principal introduced packages include the CPU-only PyTorch
 wheel from the official PyTorch index (Apache-2.0 and bundled third-party
