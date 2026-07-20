@@ -13,20 +13,24 @@ not committed, use the
 candidate without changing what the accepted test must prove. Reverify and
 restage any correction before commit.
 
-Run it from the repository root after installing the pinned dependency sets:
+For AI-agent local work, run the static path from the repository root after
+installing the pinned dependency sets:
 
 ```console
 pnpm install --frozen-lockfile
 uv sync --project apps/api --frozen
 uv sync --project apps/ml --frozen
-python scripts/verify.py
+python scripts/verify.py --static-only
 ```
 
-The default path validates repository structure and then starts only the
+GitHub Actions runs the default path without `--static-only`. It validates
+repository structure and then starts only the
 `reactorfront-portfolio` Compose project for migration, API and ML images,
 PostgreSQL, S3-compatible storage, RabbitMQ, publisher-confirm, model, Web,
-result-event persistence, duplicate-delivery, and restart-recovery checks. It
-stops that project afterward.
+result-event persistence, duplicate-delivery, restart-recovery, exact
+eight-service readiness, and Playwright browser checks. It stops that project
+afterward. AI agents do not start or mutate local Docker Desktop unless the
+owner explicitly authorizes local Docker for the exact task.
 GitHub Actions also removes
 the three project-scoped test volumes; local execution preserves them. A failed
 teardown makes verification fail, and the workflow has an unconditional
@@ -70,6 +74,10 @@ Supporting scripts are implementation details of that entrypoint:
   poison/conflict rejection, broker/consumer restart, and dependency readiness.
 - `verify_outbox_runtime.py` proves expired-lease recovery, dispatcher restart,
   RabbitMQ restart, persistent delivery, and the queued-state transition.
+- `tests/e2e/document-classification.spec.ts` proves the browser-visible
+  completed and failed workflows, correlation propagation, and non-PDF
+  rejection while Playwright retains failure traces, screenshots, video, and
+  JUnit/HTML reports under `artifacts/verification/`.
 - `validate-openapi.mjs` proves valid state variants and rejects impossible
   document states or unstable problem-response combinations.
 - `validate-events.mjs` validates canonical event examples and representative

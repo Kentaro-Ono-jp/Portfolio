@@ -31,8 +31,11 @@ content after later edits.
 Carry only successful unaffected evidence. Record an intentionally omitted
 affected group as `Verification-Skip: <groups>` in the exact candidate's commit
 trailers and disclose it as skipped without evidence; never relabel it as
-carried. Docker-backed groups follow the same selection rule and require no
-separate owner approval to execute.
+carried. Every follow-up head must restate its complete current skipped-group
+set in that trailer so a later head and a tree-identical merge preserve the
+evidence gap. Docker-backed groups follow the same selection rule, run in
+GitHub Actions, and require explicit exact-task owner direction before any
+local Docker Desktop use.
 
 ### Local rehearsal boundaries
 

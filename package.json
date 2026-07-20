@@ -14,13 +14,20 @@
     "contracts:validate-events": "node scripts/validate-events.mjs",
     "contracts:generate": "openapi-typescript packages/contracts/openapi/openapi.yaml -o packages/contracts/generated/api.d.ts && node scripts/stamp-generated-contract.mjs",
     "contracts:check": "pnpm contracts:lint && pnpm contracts:validate-openapi && pnpm contracts:validate-events && node scripts/check-generated-contract.mjs",
+    "e2e:format:check": "prettier --check playwright.config.ts tests/e2e",
+    "e2e:typecheck": "tsc --project tests/e2e/tsconfig.json",
+    "e2e:test": "playwright test",
     "verify": "python scripts/verify.py"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@redocly/cli": "2.39.0",
+    "@types/node": "24.13.3",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "openapi-typescript": "7.13.0",
+    "prettier": "3.9.5",
+    "typescript": "5.9.3",
     "yaml": "2.9.0"
   }
 }

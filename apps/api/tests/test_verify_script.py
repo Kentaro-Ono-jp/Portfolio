@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -22,6 +23,7 @@ def verifier_args(**overrides: object) -> argparse.Namespace:
         "full": False,
         "carry_all": False,
         "baseline_proven": False,
+        "baseline_skipped_groups": None,
         "carried_groups": None,
         "skipped_groups": None,
         "github_output": None,
@@ -220,6 +222,78 @@ def test_selected_docker_groups_can_be_reported_as_skipped(
     assert plan.skipped_groups == verifier.DOCKER_GROUPS
 
 
+def test_docs_follow_up_preserves_groups_skipped_by_successful_baseline(
+    verifier: ModuleType,
+) -> None:
+    initial = verifier.plan_for_paths(["scripts/verify.py"], baseline_proven=True)
+    initial = verifier.move_groups_to_skipped(initial, verifier.DOCKER_GROUPS)
+
+    follow_up = verifier.plan_for_paths(
+        ["docs/ai/README.md"],
+        baseline_proven=True,
+        baseline_skipped_groups=initial.skipped_groups,
+    )
+    follow_up = verifier.move_groups_to_skipped(
+        follow_up,
+        initial.skipped_groups,
+    )
+
+    assert follow_up.groups == {"docs"}
+    assert follow_up.carried_groups == {
+        "contracts",
+        "web-static",
+        "api-static",
+        "ml-static",
+    }
+    assert follow_up.skipped_groups == verifier.DOCKER_GROUPS
+
+
+def test_current_skip_cannot_replace_carried_baseline_evidence(
+    verifier: ModuleType,
+) -> None:
+    plan = verifier.plan_for_paths(
+        ["docs/ai/README.md"],
+        baseline_proven=True,
+    )
+
+    with pytest.raises(RuntimeError, match="Cannot relabel carried baseline evidence"):
+        verifier.move_groups_to_skipped(plan, frozenset({"compose"}))
+
+
+def test_cross_boundary_rename_selects_old_and_new_path_groups(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def completed(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        assert "--name-status" in command
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout=(b"R100\0apps/api/src/reactorfront_api/legacy.py\0docs/legacy.md\0"),
+        )
+
+    monkeypatch.setattr(verifier.subprocess, "run", completed)
+
+    plan = verifier.plan_from_git(base="baseline")
+
+    assert plan.changed_files == (
+        "apps/api/src/reactorfront_api/legacy.py",
+        "docs/legacy.md",
+    )
+    assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
+
+
+def test_baseline_skips_require_a_diff_plan(verifier: ModuleType) -> None:
+    with pytest.raises(RuntimeError, match="only valid with --base or --staged"):
+        verifier.resolve_selection(
+            verifier_args(
+                groups="docs",
+                baseline_proven=True,
+                baseline_skipped_groups="compose",
+            )
+        )
+
+
 def test_web_health_change_selects_web_runtime(verifier: ModuleType) -> None:
     plan = verifier.plan_for_paths(["apps/web/src/app/health/route.ts"])
 
@@ -234,10 +308,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 34
+    assert len(inventory) == 35
     assert len(verifier.selected_test_files(plan.groups)) == 9
     assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 9/34 selected" in verifier.plan_lines(plan)
+    assert "Test files: 9/35 selected" in verifier.plan_lines(plan)
 
 
 def test_plan_output_drives_conditional_dependency_setup(
@@ -257,6 +331,7 @@ def test_plan_output_drives_conditional_dependency_setup(
     assert values["needs_api"] == "false"
     assert values["needs_ml"] == "true"
     assert values["needs_docker"] == "false"
+    assert values["needs_e2e"] == "false"
     assert values["executed_groups"] == "ml-static"
     assert values["carried_groups"] == ""
     assert values["skipped_groups"] != ""
@@ -283,6 +358,7 @@ def test_skipped_docker_groups_do_not_request_docker_setup(
     assert values["skipped_groups"] == "compose,web-runtime,api-runtime,ml-runtime"
     assert values["docker_groups"] == ""
     assert values["needs_docker"] == "false"
+    assert values["needs_e2e"] == "false"
     assert values["has_execution"] == "true"
 
 
@@ -390,6 +466,7 @@ def test_runtime_groups_skip_unselected_service_proofs(
 
     verifier.run_runtime_checks(
         groups=frozenset({"web-runtime"}),
+        pnpm="pnpm",
         uv="uv",
         docker="docker",
     )
@@ -412,12 +489,78 @@ def test_api_runtime_owns_result_consumer_proof(
 
     verifier.run_runtime_checks(
         groups=frozenset({"api-runtime"}),
+        pnpm="pnpm",
         uv="uv",
         docker="docker",
     )
 
     assert "Prove API-owned result-event consumption and terminal persistence" in labels
     assert "Prove the real ML worker and result-event boundary" not in labels
+
+
+def test_complete_compose_readiness_requires_exactly_eight_running_services(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_diagnostics = False
+
+    def completed(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            args=["docker"],
+            returncode=0,
+            stdout=("\n".join(sorted(verifier.EXPECTED_COMPOSE_SERVICES)) + "\n").encode(),
+        )
+
+    def capture(**_kwargs: object) -> None:
+        nonlocal observed_diagnostics
+        observed_diagnostics = True
+
+    monkeypatch.setattr(verifier.subprocess, "run", completed)
+    monkeypatch.setattr(verifier, "capture_runtime_diagnostic", capture)
+
+    verifier.prove_complete_compose_readiness("docker")
+
+    assert observed_diagnostics
+
+
+def test_e2e_correlation_proof_requires_both_paths_in_every_service(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    completed_correlation = "11111111-1111-4111-8111-111111111111"
+    failed_correlation = "22222222-2222-4222-8222-222222222222"
+    evidence = {
+        "completed": {
+            "uploadCorrelation": {
+                "request": completed_correlation,
+                "response": completed_correlation,
+            }
+        },
+        "failed": {
+            "uploadCorrelation": {
+                "request": failed_correlation,
+                "response": failed_correlation,
+            }
+        },
+    }
+    (tmp_path / "e2e-result.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    def completed(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            args=["docker"],
+            returncode=0,
+            stdout=f"{completed_correlation}\n{failed_correlation}\n".encode(),
+        )
+
+    monkeypatch.setattr(verifier, "ARTIFACT_DIRECTORY", tmp_path)
+    monkeypatch.setattr(verifier.subprocess, "run", completed)
+
+    verifier.prove_e2e_correlation("docker")
+
+    proof = json.loads((tmp_path / "e2e-correlation-proof.json").read_text(encoding="utf-8"))
+    assert set(proof) == {"api-outbox", "ml-worker", "api-events"}
+    assert all(all(observations.values()) for observations in proof.values())
 
 
 def test_runtime_diagnostics_are_persisted(

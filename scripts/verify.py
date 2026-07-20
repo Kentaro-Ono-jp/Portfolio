@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from pathlib import PurePosixPath
+from uuid import UUID
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,18 @@ ALL_GROUPS = frozenset(VERIFICATION_GROUPS)
 STATIC_GROUPS = frozenset(VERIFICATION_GROUPS[:6])
 RUNTIME_GROUPS = frozenset(VERIFICATION_GROUPS[6:])
 DOCKER_GROUPS = frozenset({"compose"}) | RUNTIME_GROUPS
+EXPECTED_COMPOSE_SERVICES = frozenset(
+    {
+        "postgres",
+        "minio",
+        "rabbitmq",
+        "api",
+        "api-outbox",
+        "api-events",
+        "ml-worker",
+        "web",
+    }
+)
 GROUP_DEPENDENCIES = {
     "web-runtime": frozenset({"compose", "web-static"}),
     "api-runtime": frozenset({"compose", "api-static"}),
@@ -61,9 +75,20 @@ class VerificationPlan:
 
 
 def plan_with_baseline_evidence(
-    plan: VerificationPlan, *, baseline_proven: bool
+    plan: VerificationPlan,
+    *,
+    baseline_proven: bool,
+    baseline_skipped_groups: frozenset[str] = frozenset(),
 ) -> VerificationPlan:
-    carried = ALL_GROUPS - plan.groups if baseline_proven else frozenset()
+    if not baseline_skipped_groups <= ALL_GROUPS:
+        raise ValueError("Baseline evidence contains an unknown group.")
+    if baseline_skipped_groups and not baseline_proven:
+        raise ValueError("Baseline skips require proven baseline evidence.")
+    carried = (
+        ALL_GROUPS - plan.groups - baseline_skipped_groups
+        if baseline_proven
+        else frozenset()
+    )
     return VerificationPlan(
         groups=plan.groups,
         carried_groups=carried,
@@ -76,11 +101,11 @@ def plan_with_baseline_evidence(
 def move_groups_to_skipped(
     plan: VerificationPlan, groups: frozenset[str]
 ) -> VerificationPlan:
-    missing = groups - plan.groups
-    if missing:
+    carried = groups & plan.carried_groups
+    if carried:
         raise RuntimeError(
-            "Cannot skip groups not selected by this delta: "
-            f"{', '.join(ordered_groups(missing))}"
+            "Cannot relabel carried baseline evidence as skipped: "
+            f"{', '.join(ordered_groups(carried))}"
         )
     return VerificationPlan(
         groups=plan.groups - groups,
@@ -201,6 +226,7 @@ def plan_for_paths(
     *,
     base: str | None = None,
     baseline_proven: bool = False,
+    baseline_skipped_groups: frozenset[str] = frozenset(),
 ) -> VerificationPlan:
     normalized = tuple(dict.fromkeys(path.replace("\\", "/") for path in changed_files))
     if not normalized:
@@ -212,6 +238,7 @@ def plan_for_paths(
                 base=base,
             ),
             baseline_proven=baseline_proven,
+            baseline_skipped_groups=baseline_skipped_groups,
         )
 
     selected: set[str] = set()
@@ -229,6 +256,7 @@ def plan_for_paths(
                     base=base,
                 ),
                 baseline_proven=baseline_proven,
+                baseline_skipped_groups=baseline_skipped_groups,
             )
         selected.update(path_groups)
 
@@ -240,13 +268,34 @@ def plan_for_paths(
             base=base,
         ),
         baseline_proven=baseline_proven,
+        baseline_skipped_groups=baseline_skipped_groups,
     )
+
+
+def paths_from_name_status(output: bytes) -> list[str]:
+    fields = [field for field in output.split(b"\0") if field]
+    paths: list[str] = []
+    index = 0
+    while index < len(fields):
+        status = os.fsdecode(fields[index])
+        index += 1
+        path_count = 2 if status.startswith(("R", "C")) else 1
+        if (
+            not status
+            or status[0] not in "ACDMRTUXB"
+            or index + path_count > len(fields)
+        ):
+            raise ValueError("Git returned malformed --name-status -z output.")
+        for field in fields[index : index + path_count]:
+            paths.append(os.fsdecode(field))
+        index += path_count
+    return paths
 
 
 def changed_files_from_git(
     *, base: str | None = None, staged: bool = False
 ) -> list[str]:
-    command = ["git", "diff", "--name-only", "--diff-filter=ACDMRTUXB", "-z"]
+    command = ["git", "diff", "--name-status", "--diff-filter=ACDMRTUXB", "-z"]
     if staged:
         command.append("--cached")
     elif base is not None:
@@ -260,7 +309,7 @@ def changed_files_from_git(
         check=True,
         stdout=subprocess.PIPE,
     )
-    return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path]
+    return paths_from_name_status(result.stdout)
 
 
 def plan_from_git(
@@ -268,6 +317,7 @@ def plan_from_git(
     base: str | None = None,
     staged: bool = False,
     baseline_proven: bool = False,
+    baseline_skipped_groups: frozenset[str] = frozenset(),
 ) -> VerificationPlan:
     try:
         changed_files = changed_files_from_git(base=base, staged=staged)
@@ -282,6 +332,7 @@ def plan_from_git(
         changed_files,
         base=base,
         baseline_proven=baseline_proven,
+        baseline_skipped_groups=baseline_skipped_groups,
     )
 
 
@@ -300,11 +351,18 @@ def test_file_inventory() -> tuple[tuple[str, str], ...]:
     for service, group in (("api", "api-static"), ("ml", "ml-static")):
         for path in (REPOSITORY_ROOT / "apps" / service / "tests").glob("test_*.py"):
             inventory.append((group, path.relative_to(REPOSITORY_ROOT).as_posix()))
+    for path in (REPOSITORY_ROOT / "tests" / "e2e").glob("*.spec.ts"):
+        inventory.append(("web-runtime", path.relative_to(REPOSITORY_ROOT).as_posix()))
     return tuple(sorted(inventory))
 
 
 def selected_test_files(groups: frozenset[str]) -> tuple[str, ...]:
-    selected_owners = groups & {"web-static", "api-static", "ml-static"}
+    selected_owners = groups & {
+        "web-static",
+        "api-static",
+        "ml-static",
+        "web-runtime",
+    }
     return tuple(
         path for owner, path in test_file_inventory() if owner in selected_owners
     )
@@ -348,6 +406,7 @@ def write_plan_outputs(plan: VerificationPlan, path: Path) -> None:
         "needs_ml": bool(selected & {"ml-static", "ml-runtime"}),
         "needs_docker": bool(selected & DOCKER_GROUPS),
         "needs_runtime": bool(selected & RUNTIME_GROUPS),
+        "needs_e2e": RUNTIME_GROUPS <= selected,
     }
     with path.open("a", encoding="utf-8") as output:
         for key, value in values.items():
@@ -423,6 +482,14 @@ def static_checks(
                 "--audit-level",
                 "moderate",
             ],
+        ),
+        (
+            "Check browser E2E formatting",
+            [pnpm, "e2e:format:check"],
+        ),
+        (
+            "Type-check browser E2E source",
+            [pnpm, "e2e:typecheck"],
         ),
         (
             "Lint API source and tests",
@@ -590,6 +657,8 @@ def static_checks(
         "Run Web branch-aware tests": "web-static",
         "Build the production Web application": "web-static",
         "Audit the pinned Web production dependency set": "web-static",
+        "Check browser E2E formatting": "web-static",
+        "Type-check browser E2E source": "web-static",
         "Lint API source and tests": "api-static",
         "Check API formatting": "api-static",
         "Type-check API source": "api-static",
@@ -653,7 +722,98 @@ def pytest_ml_command(uv: str) -> list[str]:
     ]
 
 
-def run_runtime_checks(*, groups: frozenset[str], uv: str, docker: str) -> None:
+def prove_complete_compose_readiness(docker: str) -> None:
+    result = subprocess.run(
+        compose_command(docker, "ps", "--services", "--status", "running"),
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    running = frozenset(result.stdout.decode("utf-8").splitlines())
+    if running != EXPECTED_COMPOSE_SERVICES:
+        missing = EXPECTED_COMPOSE_SERVICES - running
+        unexpected = running - EXPECTED_COMPOSE_SERVICES
+        raise RuntimeError(
+            "Complete Compose readiness did not expose the exact eight services; "
+            f"missing={','.join(sorted(missing)) or 'none'}, "
+            f"unexpected={','.join(sorted(unexpected)) or 'none'}."
+        )
+    capture_runtime_diagnostic(
+        label="Record complete eight-service readiness",
+        command=compose_command(docker, "ps", "--all"),
+        filename="compose-ready.txt",
+    )
+
+
+def _e2e_upload_correlation(payload: object, phase: str) -> str:
+    if not isinstance(payload, dict):
+        raise RuntimeError("Browser E2E evidence is not a JSON object.")
+    phase_evidence = payload.get(phase)
+    if not isinstance(phase_evidence, dict):
+        raise RuntimeError(f"Browser E2E evidence is missing {phase}.")
+    correlation = phase_evidence.get("uploadCorrelation")
+    if not isinstance(correlation, dict):
+        raise RuntimeError(
+            f"Browser E2E evidence is missing {phase} upload correlation."
+        )
+    request_id = correlation.get("request")
+    response_id = correlation.get("response")
+    if not isinstance(request_id, str) or request_id != response_id:
+        raise RuntimeError(f"Browser E2E {phase} correlation is inconsistent.")
+    try:
+        UUID(request_id)
+    except ValueError as error:
+        raise RuntimeError(f"Browser E2E {phase} correlation is not a UUID.") from error
+    return request_id
+
+
+def prove_e2e_correlation(docker: str) -> None:
+    evidence_path = ARTIFACT_DIRECTORY / "e2e-result.json"
+    try:
+        payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("Browser E2E result evidence is unavailable.") from error
+    correlations = {
+        phase: _e2e_upload_correlation(payload, phase)
+        for phase in ("completed", "failed")
+    }
+    proof: dict[str, dict[str, bool]] = {}
+    for service in ("api-outbox", "ml-worker", "api-events"):
+        result = subprocess.run(
+            compose_command(docker, "logs", "--no-color", service),
+            cwd=REPOSITORY_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        output = result.stdout.decode("utf-8", errors="replace")
+        observations = {
+            phase: correlation in output for phase, correlation in correlations.items()
+        }
+        if not all(observations.values()):
+            missing = [
+                phase for phase, observed in observations.items() if not observed
+            ]
+            raise RuntimeError(
+                f"{service} logs lack E2E correlation evidence for {', '.join(missing)}."
+            )
+        proof[service] = observations
+    (ARTIFACT_DIRECTORY / "e2e-correlation-proof.json").write_text(
+        json.dumps(proof, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print("E2E correlations crossed api-outbox, ml-worker, and api-events.")
+
+
+def run_runtime_checks(
+    *, groups: frozenset[str], pnpm: str, uv: str, docker: str
+) -> None:
+    full_e2e = RUNTIME_GROUPS <= groups
+    if full_e2e:
+        run(
+            "Build every source-owned Compose image with fresh bases",
+            compose_command(docker, "build", "--pull"),
+        )
     run(
         "Build and start isolated PostgreSQL, MinIO, and RabbitMQ",
         compose_command(
@@ -768,6 +928,23 @@ def run_runtime_checks(*, groups: frozenset[str], uv: str, docker: str) -> None:
                 "scripts/verify_ml_runtime.py",
             ],
         )
+    if full_e2e:
+        run(
+            "Start the complete eight-service Compose environment",
+            compose_command(
+                docker,
+                "up",
+                "--detach",
+                "--wait",
+                *sorted(EXPECTED_COMPOSE_SERVICES),
+            ),
+        )
+        prove_complete_compose_readiness(docker)
+        run(
+            "Prove browser-to-ML-to-browser completed and failed workflows",
+            [pnpm, "e2e:test"],
+        )
+        prove_e2e_correlation(docker)
 
 
 def capture_runtime_diagnostic(
@@ -908,6 +1085,13 @@ def parse_args() -> argparse.Namespace:
         help="Mark unselected groups as carried from a successful baseline.",
     )
     parser.add_argument(
+        "--baseline-skipped-groups",
+        help=(
+            "Comma-separated groups skipped without evidence by the proven baseline; "
+            "they remain skipped unless selected by the current delta."
+        ),
+    )
+    parser.add_argument(
         "--carried-groups",
         help="Comma-separated unaffected groups carried into explicit-run evidence.",
     )
@@ -943,6 +1127,12 @@ def parse_group_selection(
 
 
 def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
+    if args.baseline_skipped_groups and (
+        args.groups or args.static_only or args.carry_all
+    ):
+        raise RuntimeError(
+            "--baseline-skipped-groups is only valid with --base or --staged."
+        )
     if args.groups:
         if args.skipped_groups:
             raise RuntimeError("--skipped-groups is only valid while planning.")
@@ -984,11 +1174,23 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
             changed_files=(),
             reason="Identical tree is covered by a successful exact-head baseline.",
         )
+    baseline_skipped = (
+        parse_group_selection(args.baseline_skipped_groups, expand_dependencies=False)
+        if args.baseline_skipped_groups
+        else frozenset()
+    )
+    if baseline_skipped and not args.baseline_proven:
+        raise RuntimeError("--baseline-skipped-groups requires --baseline-proven.")
+    if baseline_skipped and not (args.base or args.staged):
+        raise RuntimeError(
+            "--baseline-skipped-groups is only valid with --base or --staged."
+        )
     if args.base or args.staged:
         plan = plan_from_git(
             base=args.base,
             staged=args.staged,
             baseline_proven=args.baseline_proven,
+            baseline_skipped_groups=baseline_skipped,
         )
     else:
         plan = VerificationPlan(
@@ -1070,7 +1272,7 @@ def main() -> int:
 
         if plan.groups & RUNTIME_GROUPS:
             runtime_started = True
-            run_runtime_checks(groups=plan.groups, uv=uv, docker=docker)
+            run_runtime_checks(groups=plan.groups, pnpm=pnpm, uv=uv, docker=docker)
     except (RuntimeError, subprocess.CalledProcessError) as error:
         print(f"\nVerification failed: {error}", file=sys.stderr)
         verification_error = error

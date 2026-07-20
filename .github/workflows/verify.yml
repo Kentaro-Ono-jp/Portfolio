@@ -79,6 +79,7 @@ jobs:
           plan_arguments=(--plan)
           base_reason=""
           skip_request=""
+          baseline_skip_request=""
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             if [[ "$EVENT_ACTION" == "synchronize" && -n "$BEFORE_SHA" ]]; then
@@ -96,6 +97,8 @@ jobs:
             plan_arguments+=(--base "$base" --baseline-proven)
 
             if [[ "$PR_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
+              baseline_skip_request="$(trailer_value \
+                "$base" "Verification-Skip")"
               skip_request="$(trailer_value "$PR_HEAD_SHA" "Verification-Skip")"
             fi
           elif [[ "$EVENT_NAME" == "push" ]]; then
@@ -131,6 +134,8 @@ jobs:
               plan_arguments+=(--base "$BEFORE_SHA" --baseline-proven)
               base_reason="successful main baseline $BEFORE_SHA"
               if [[ "$ACTOR" == "$REPOSITORY_OWNER" ]]; then
+                baseline_skip_request="$(trailer_value \
+                  "$BEFORE_SHA" "Verification-Skip")"
                 skip_request="$(trailer_value \
                   "$CURRENT_SHA" "Verification-Skip")"
               fi
@@ -144,6 +149,9 @@ jobs:
 
           if [[ -n "$skip_request" ]]; then
             plan_arguments+=(--skipped-groups "$skip_request")
+          fi
+          if [[ -n "$baseline_skip_request" ]]; then
+            plan_arguments+=(--baseline-skipped-groups "$baseline_skip_request")
           fi
           python3 scripts/verify.py "${plan_arguments[@]}" \
             --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
@@ -188,6 +196,10 @@ jobs:
       - name: Install pinned ML dependencies
         if: steps.plan.outputs.needs_ml == 'true'
         run: uv sync --project apps/ml --frozen
+
+      - name: Install pinned Playwright browser
+        if: steps.plan.outputs.needs_e2e == 'true'
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run canonical verification
         if: steps.plan.outputs.has_execution == 'true'

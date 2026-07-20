@@ -123,10 +123,10 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 - Record an intentionally omitted affected group as skipped without evidence,
   with focused-Issue rationale and an exact-head `Verification-Skip` trailer;
   never relabel affected evidence as carried.
-- Docker-backed groups follow the same smallest-sufficient rule as other groups
-  and require no separate owner approval to execute.
-- Use static local verification unless local runtime work is explicitly
-  authorized. GitHub Actions supplies authoritative runtime proof.
+- Docker-backed groups follow the same smallest-sufficient selection rule as
+  other groups, but AI agents execute them in GitHub Actions. Local verification
+  is static-only unless the owner explicitly authorizes local Docker for the
+  exact task. GitHub Actions supplies authoritative runtime proof.
 - Inspect the complete intended diff before staging exact files.
 - After implementation and test intent are complete, stage the candidate
   without committing and apply the
@@ -164,9 +164,12 @@ the PR description is reconciled:
 4. Record current-head local proof and the exact-head workflow state and link as
    pending, successful, failed, or intentionally absent. Relabel older runs as
    preceding or superseded; never present them as current-head proof.
-5. State whether scope, non-targets, failure model, or acceptance criteria
+5. Restate the complete current skipped-group set in the exact-head
+   `Verification-Skip` trailer. Preserve inherited baseline skips until a later
+   selected execution supplies evidence for those groups.
+6. State whether scope, non-targets, failure model, or acceptance criteria
    changed. Include every docs-only skip field when that exception applies.
-6. Read the live description back and require its declared head to match the
+7. Read the live description back and require its declared head to match the
    live PR head before reporting a checkpoint or requesting review.
 
 After that readback, provide a newly populated prompt for every pushed head:
