@@ -116,6 +116,24 @@ def move_groups_to_skipped(
     )
 
 
+def apply_skip_lineage(
+    plan: VerificationPlan,
+    *,
+    baseline_skipped_groups: frozenset[str],
+    current_skipped_groups: frozenset[str],
+) -> VerificationPlan:
+    inherited = baseline_skipped_groups - plan.groups
+    missing = inherited - current_skipped_groups
+    if missing:
+        raise RuntimeError(
+            "Current Verification-Skip omits inherited skipped groups that are "
+            f"not selected for execution: {', '.join(ordered_groups(missing))}"
+        )
+    if not current_skipped_groups:
+        return plan
+    return move_groups_to_skipped(plan, current_skipped_groups)
+
+
 def expand_group_dependencies(groups: set[str] | frozenset[str]) -> frozenset[str]:
     expanded = set(groups)
     for group in tuple(expanded):
@@ -295,7 +313,16 @@ def paths_from_name_status(output: bytes) -> list[str]:
 def changed_files_from_git(
     *, base: str | None = None, staged: bool = False
 ) -> list[str]:
-    command = ["git", "diff", "--name-status", "--diff-filter=ACDMRTUXB", "-z"]
+    command = [
+        "git",
+        "diff",
+        "--name-status",
+        "--find-renames",
+        "--find-copies",
+        "--find-copies-harder",
+        "--diff-filter=ACDMRTUXB",
+        "-z",
+    ]
     if staged:
         command.append("--cached")
     elif base is not None:
@@ -1202,12 +1229,16 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
         raise RuntimeError(
             "--carried-groups is only valid with --groups for explicit-run evidence."
         )
-    if args.skipped_groups:
-        plan = move_groups_to_skipped(
-            plan,
-            parse_group_selection(args.skipped_groups, expand_dependencies=False),
-        )
-    return plan
+    current_skipped = (
+        parse_group_selection(args.skipped_groups, expand_dependencies=False)
+        if args.skipped_groups
+        else frozenset()
+    )
+    return apply_skip_lineage(
+        plan,
+        baseline_skipped_groups=baseline_skipped,
+        current_skipped_groups=current_skipped,
+    )
 
 
 def main() -> int:

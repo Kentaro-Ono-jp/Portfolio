@@ -233,9 +233,10 @@ def test_docs_follow_up_preserves_groups_skipped_by_successful_baseline(
         baseline_proven=True,
         baseline_skipped_groups=initial.skipped_groups,
     )
-    follow_up = verifier.move_groups_to_skipped(
+    follow_up = verifier.apply_skip_lineage(
         follow_up,
-        initial.skipped_groups,
+        baseline_skipped_groups=initial.skipped_groups,
+        current_skipped_groups=initial.skipped_groups,
     )
 
     assert follow_up.groups == {"docs"}
@@ -246,6 +247,34 @@ def test_docs_follow_up_preserves_groups_skipped_by_successful_baseline(
         "ml-static",
     }
     assert follow_up.skipped_groups == verifier.DOCKER_GROUPS
+
+
+def test_second_docs_follow_up_rejects_missing_inherited_skip_trailer(
+    verifier: ModuleType,
+) -> None:
+    inherited_skips = verifier.DOCKER_GROUPS
+    first_follow_up = verifier.plan_for_paths(
+        ["docs/ai/README.md"],
+        baseline_proven=True,
+        baseline_skipped_groups=inherited_skips,
+    )
+    first_follow_up = verifier.apply_skip_lineage(
+        first_follow_up,
+        baseline_skipped_groups=inherited_skips,
+        current_skipped_groups=inherited_skips,
+    )
+    second_follow_up = verifier.plan_for_paths(
+        ["docs/ai/PR_REVIEW.md"],
+        baseline_proven=True,
+        baseline_skipped_groups=first_follow_up.skipped_groups,
+    )
+
+    with pytest.raises(RuntimeError, match="Current Verification-Skip omits"):
+        verifier.apply_skip_lineage(
+            second_follow_up,
+            baseline_skipped_groups=first_follow_up.skipped_groups,
+            current_skipped_groups=frozenset(),
+        )
 
 
 def test_current_skip_cannot_replace_carried_baseline_evidence(
@@ -266,6 +295,9 @@ def test_cross_boundary_rename_selects_old_and_new_path_groups(
 ) -> None:
     def completed(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
         assert "--name-status" in command
+        assert "--find-renames" in command
+        assert "--find-copies" in command
+        assert "--find-copies-harder" in command
         return subprocess.CompletedProcess(
             args=command,
             returncode=0,
@@ -279,6 +311,50 @@ def test_cross_boundary_rename_selects_old_and_new_path_groups(
     assert plan.changed_files == (
         "apps/api/src/reactorfront_api/legacy.py",
         "docs/legacy.md",
+    )
+    assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
+
+
+def test_real_git_cross_boundary_copy_selects_source_and_destination_groups(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "copy-repository"
+    repository.mkdir()
+
+    def git(*arguments: str) -> str:
+        result = subprocess.run(
+            ["git", *arguments],
+            cwd=repository,
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    git("init")
+    git("config", "user.name", "Verification Test")
+    git("config", "user.email", "verification@example.invalid")
+    source = repository / "apps/api/src/reactorfront_api/copied.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("COPY_BOUNDARY = 'api-to-docs'\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-m", "Add API source")
+    base = git("rev-parse", "HEAD")
+
+    destination = repository / "docs/copied.md"
+    destination.parent.mkdir(parents=True)
+    destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    git("add", ".")
+    git("commit", "-m", "Copy API source into docs")
+
+    monkeypatch.setattr(verifier, "REPOSITORY_ROOT", repository)
+    plan = verifier.plan_from_git(base=base)
+
+    assert plan.changed_files == (
+        "apps/api/src/reactorfront_api/copied.py",
+        "docs/copied.md",
     )
     assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
 

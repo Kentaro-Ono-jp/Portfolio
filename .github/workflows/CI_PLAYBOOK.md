@@ -43,9 +43,12 @@ affected group as `Verification-Skip: <groups>` in the exact candidate's commit
 trailers and disclose it as skipped without evidence; never relabel it as
 carried. Every follow-up head must restate its complete current skipped-group
 set in that trailer so a later head and a tree-identical merge preserve the
-evidence gap. Docker-backed groups follow the same selection rule, run in
-GitHub Actions, and require explicit exact-task owner direction before any
-local Docker Desktop use.
+evidence gap. The planner must reject a head whose trailer omits an inherited
+skip that the current delta does not select for execution. Rename and copy
+selection must explicitly enable Git detection for both operations, including
+unmodified copy sources, and must select both paths. Docker-backed groups
+follow the same selection rule, run in GitHub Actions, and require explicit
+exact-task owner direction before any local Docker Desktop use.
 
 ### Local rehearsal boundaries
 
