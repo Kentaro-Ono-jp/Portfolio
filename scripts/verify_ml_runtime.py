@@ -113,6 +113,12 @@ def prepare_queues(settings: Settings, *, purge_requested: bool = True) -> None:
         connection.close()
 
 
+def isolate_ml_result_queue(settings: Settings) -> None:
+    compose("stop", "ml-worker", "api-outbox", "api-events")
+    prepare_queues(settings)
+    compose("up", "--detach", "--wait", "api-outbox")
+
+
 def submit_document(*, base_url: str, content: bytes, correlation_id: UUID) -> UUID:
     boundary = "reactorfront-portfolio-boundary"
     body = (
@@ -544,9 +550,7 @@ def main() -> int:
     base_url = os.environ.get("PORTFOLIO_API_BASE_URL", "http://127.0.0.1:58000")
     invoice_pdf = build_fixture(INVOICE_TEXT)
 
-    compose("stop", "ml-worker", "api-outbox")
-    prepare_queues(settings)
-    compose("up", "--detach", "--wait", "api-outbox")
+    isolate_ml_result_queue(settings)
 
     success_document = submit_document(
         base_url=base_url,

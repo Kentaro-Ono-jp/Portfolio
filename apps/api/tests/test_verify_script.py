@@ -308,10 +308,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 35
+    assert len(inventory) == 36
     assert len(verifier.selected_test_files(plan.groups)) == 9
     assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 9/35 selected" in verifier.plan_lines(plan)
+    assert "Test files: 9/36 selected" in verifier.plan_lines(plan)
 
 
 def test_plan_output_drives_conditional_dependency_setup(
