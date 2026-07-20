@@ -35,6 +35,10 @@ function sourcePdfInput(page: Page) {
   return page.getByLabel("Source PDF", { exact: true });
 }
 
+function workflowAlert(page: Page, expectedText: string) {
+  return page.getByRole("alert").filter({ hasText: expectedText });
+}
+
 function documentResponse(
   response: Response,
   status: string,
@@ -191,7 +195,7 @@ test("proves completed, failed, correlation, and invalid-file browser paths", as
     failureCode: "INVALID_PDF",
   });
   await expect(page.getByText("Failed", { exact: true })).toBeVisible();
-  await expect(page.getByRole("alert")).toContainText("INVALID_PDF");
+  await expect(workflowAlert(page, "INVALID_PDF")).toBeVisible();
   await page.screenshot({
     path: path.join(ARTIFACT_ROOT, "e2e-failed-terminal.png"),
     fullPage: true,
@@ -205,7 +209,7 @@ test("proves completed, failed, correlation, and invalid-file browser paths", as
     buffer: Buffer.from("not a pdf", "utf8"),
   });
   await page.getByRole("button", { name: "Start classification" }).click();
-  await expect(page.getByRole("alert")).toContainText("application/pdf");
+  await expect(workflowAlert(page, "application/pdf")).toBeVisible();
   expect(uploadRequests).toBe(requestsBeforeInvalidFile);
 
   writeFileSync(
