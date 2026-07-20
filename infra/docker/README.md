@@ -2,8 +2,8 @@
 
 The root `compose.yaml` is the canonical integration definition. It currently
 contains PostgreSQL, an S3-compatible MinIO server, RabbitMQ, the API image
-running HTTP, outbox-dispatch, and result-consumer process roles, and an
-independent ML worker image.
+running HTTP, outbox-dispatch, and result-consumer process roles, an
+independent ML worker image, and the Web image.
 
 - Keep one Dockerfile near each deployable area's source unless a documented
   build constraint requires another layout.
@@ -28,6 +28,9 @@ Global Docker cleanup commands are never part of this project's workflow.
   lock, generates and checksum-verifies the deterministic CPU PyTorch model in
   the build, and runs as numeric non-root user `10002` without a host port or
   PostgreSQL configuration.
+- The Web uses the official Node.js `24.18.0-bookworm-slim` image pinned by
+  manifest digest, installs the exact pnpm lock, builds the Next.js standalone
+  output, and runs as numeric non-root user `10003`.
 - MinIO is compiled from
   [official source commit](https://github.com/minio/minio/tree/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a)
   `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`, corresponding to the
@@ -56,4 +59,9 @@ The `api-events` role uses the API image without a host port. Its health check
 proves PostgreSQL and RabbitMQ result-topology reachability. It manually
 acknowledges only after an atomic receipt/state commit or a verified logical
 duplicate; valid ordering races are requeued with a bounded delay and poison
-events are rejected without an unbounded loop. The Web service remains absent.
+events are rejected without an unbounded loop.
+
+The `web` role exposes only its loopback-bound HTTP port. Its server-side proxy
+uses the internal `api:8000` boundary and has no PostgreSQL, RabbitMQ, object
+storage, or ML settings. The health check exercises the Web-owned `/health`
+route from inside the container.

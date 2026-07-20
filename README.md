@@ -97,8 +97,9 @@ environment. Local Docker Desktop is a development convenience only.
 
 The root [`compose.yaml`](compose.yaml) owns the isolated Compose project
 `reactorfront-portfolio`. The canonical verifier checks contracts, generated
-types, linting, formatting, static types, migrations, unit tests, and a real
-HTTP/PostgreSQL/S3-compatible/RabbitMQ integration path in GitHub Actions.
+types, Web linting, formatting, static types, coverage, production dependency
+advisories, migrations, unit tests, and a real
+Web/HTTP/PostgreSQL/S3-compatible/RabbitMQ integration path in GitHub Actions.
 
 Install the pinned dependencies and run the same verification from the
 repository root:
@@ -117,7 +118,7 @@ stops it afterward. To run all checks without starting containers:
 python scripts/verify.py --static-only
 ```
 
-### Run the current API, outbox, result-consumer, and ML worker boundary
+### Run the current Web, API, outbox, result-consumer, and ML worker boundary
 
 Start the three dependencies, create the deterministic development bucket,
 then start the migrated API, its outbox dispatcher, result consumer, and the ML
@@ -130,10 +131,12 @@ docker compose -p reactorfront-portfolio up --detach --build --wait api
 docker compose -p reactorfront-portfolio up --detach --build --wait api-outbox
 docker compose -p reactorfront-portfolio up --detach --build --wait api-events
 docker compose -p reactorfront-portfolio up --detach --build --wait ml-worker
+docker compose -p reactorfront-portfolio up --detach --build --wait web
 ```
 
-The API is available at `http://127.0.0.1:58000`. Required development ports
-bind only to loopback and can be changed with the safe examples in
+The Web application is available at `http://127.0.0.1:53000` and the API at
+`http://127.0.0.1:58000`. Required development ports bind only to loopback and
+can be changed with the safe examples in
 [`.env.example`](.env.example). The MinIO console is intentionally not
 published to the host.
 
@@ -153,7 +156,8 @@ vertical slice is tracked in
 through focused, reviewable pull requests.
 
 The contract, API-owned document submission, transactional outbox, independent
-ML worker, and API-owned result persistence boundaries are implemented. The
+ML worker, API-owned result persistence, and Web upload/progress/result
+boundaries are implemented. The
 worker proves canonical Celery task consumption, source-integrity checks,
 single-page PDF extraction, reproducible CPU PyTorch classification, and
 confirmed at-least-once started/completed/failed result publication. The
@@ -161,10 +165,12 @@ confirmed at-least-once started/completed/failed result publication. The
 transitions atomically, deduplicates logical redelivery, and exposes processing,
 completed, or failed state through the existing API.
 
-Repository-owned AI collaboration is defined by
-[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`. The Web
-upload, progress, and terminal-result workflow is the next product boundary;
-browser E2E and the complete eight-service proof remain later focused work.
+The Web uses generated OpenAPI types plus runtime Zod validation, keeps the API
+base URL server-only behind same-origin route handlers, and presents accessible
+queued, processing, completed, failed, retry, and reset states. Repository-owned
+AI collaboration is defined by
+[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`. Browser E2E
+and the complete eight-service proof remain later focused work.
 
 ## License
 

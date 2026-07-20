@@ -27,6 +27,12 @@ boundaries:
 - The web application consumes generated TypeScript types or a generated client.
 - Contract and event names are explicitly versioned.
 
+The Web imports the generated `paths` and `components` types through the
+private workspace package. Because generated declarations disappear at
+runtime, Web-owned Zod schemas independently validate accepted, queued,
+processing, completed, failed, and canonical problem responses at every HTTP
+boundary.
+
 ## Requested-event RabbitMQ transport
 
 The API-owned outbox dispatcher publishes requested work through this durable

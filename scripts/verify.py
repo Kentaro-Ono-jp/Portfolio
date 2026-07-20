@@ -40,6 +40,36 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
             compose_command(docker, "config", "--quiet"),
         ),
         (
+            "Lint Web source and tests",
+            [pnpm, "--filter", "@reactorfront/web", "lint"],
+        ),
+        (
+            "Check Web formatting",
+            [pnpm, "--filter", "@reactorfront/web", "format:check"],
+        ),
+        (
+            "Type-check Web source",
+            [pnpm, "--filter", "@reactorfront/web", "typecheck"],
+        ),
+        (
+            "Run Web branch-aware tests",
+            [pnpm, "--filter", "@reactorfront/web", "test:coverage"],
+        ),
+        (
+            "Build the production Web application",
+            [pnpm, "--filter", "@reactorfront/web", "build"],
+        ),
+        (
+            "Audit the pinned Web production dependency set",
+            [
+                pnpm,
+                "audit",
+                "--prod",
+                "--audit-level",
+                "moderate",
+            ],
+        ),
+        (
             "Lint API source and tests",
             [
                 uv,
@@ -191,7 +221,7 @@ def static_checks(*, pnpm: str, uv: str, docker: str) -> list[tuple[str, list[st
             ],
         ),
         (
-            "Validate the ML Compose boundary",
+            "Validate deployable Compose boundaries",
             [sys.executable, "scripts/check_ml_compose_boundary.py"],
         ),
     ]
@@ -294,6 +324,25 @@ def run_runtime_checks(*, uv: str, docker: str) -> None:
     run(
         "Build and start the migrated API container",
         compose_command(docker, "up", "--detach", "--build", "--wait", "api"),
+    )
+    run(
+        "Build and start the source-owned Web container",
+        compose_command(docker, "up", "--detach", "--build", "--wait", "web"),
+    )
+    run(
+        "Prove the Web container is healthy and non-root",
+        compose_command(
+            docker,
+            "exec",
+            "-T",
+            "web",
+            "node",
+            "-e",
+            "if (process.getuid?.() === 0) process.exit(1); "
+            "fetch('http://127.0.0.1:3000/health')"
+            ".then((response) => { if (!response.ok) process.exit(1); })"
+            ".catch(() => process.exit(1));",
+        ),
     )
     run(
         "Run API unit and real-service integration tests",
@@ -400,6 +449,22 @@ def show_runtime_diagnostics(docker: str) -> None:
             "--check",
         ),
         filename="api-events-readiness.txt",
+    )
+    capture_runtime_diagnostic(
+        label="Show Web process health",
+        command=compose_command(
+            docker,
+            "exec",
+            "-T",
+            "web",
+            "node",
+            "-e",
+            "fetch('http://127.0.0.1:3000/health')"
+            ".then(async (response) => { console.log(await response.text()); "
+            "if (!response.ok) process.exit(1); })"
+            ".catch(() => process.exit(1));",
+        ),
+        filename="web-health.txt",
     )
 
 

@@ -28,6 +28,14 @@ The review agent must:
   verify the temporary path no longer exists, and report the result in the
   review task's final response
 
+During every review cycle, the reviewer may use the owner's
+[standing local development tool authorization](README.md#standing-local-development-tool-authorization).
+On an owner-managed persistent workstation, an ordinary missing review tool or
+runtime may be installed persistently in the user scope outside the isolated
+clone. The cleanup requirement applies to the clone and generated review data,
+not to an intentional persistent tool installation. This permission does not
+relax the canonical-workspace, GitHub-write, Docker, or other boundaries below.
+
 The only permitted GitHub write is that verdict comment. Do not push, create
 or delete branches, edit or close an Issue or PR, resolve threads, change Draft
 or Ready state, merge, rerun or cancel workflows, change settings, or perform

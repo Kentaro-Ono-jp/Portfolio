@@ -34,6 +34,11 @@ condition, not as a product or Actions failure.
 - Resolve `pnpm`, `uv`, and `docker` before starting the canonical verifier.
   Compare the available Node and Python versions with `.node-version` and
   `.python-version`, and use the `uv` version pinned by the workflow.
+- On an owner-managed persistent workstation, use the owner's
+  [standing authorization](../../docs/ai/README.md#standing-local-development-tool-authorization)
+  to install an ordinary missing development tool or runtime persistently in
+  the user scope. Prefer the repository-pinned version and confirm the installed
+  version before continuing.
 - When the host must remain unchanged, install a missing exact-version tool in
   a unique, verified system temporary directory. Remove only that directory
   after verification and confirm that it no longer exists.
