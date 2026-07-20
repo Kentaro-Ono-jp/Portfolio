@@ -102,7 +102,8 @@ advisories, migrations, unit tests, and a real
 Web/HTTP/PostgreSQL/S3-compatible/RabbitMQ integration path in GitHub Actions.
 
 Install the pinned dependencies and run local static verification from the
-repository root. AI-agent work does not start or mutate local Docker Desktop:
+repository root. The static-only path neither resolves nor invokes the Docker
+CLI. AI-agent work does not start or mutate local Docker Desktop:
 
 ```console
 pnpm install --frozen-lockfile

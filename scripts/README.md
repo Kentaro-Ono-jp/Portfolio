@@ -23,6 +23,10 @@ uv sync --project apps/ml --frozen
 python scripts/verify.py --static-only
 ```
 
+This static-only path selects the five non-Docker groups and does not resolve
+or invoke the Docker CLI. Compose configuration and all runtime groups remain
+GitHub Actions work unless the owner authorizes local Docker for the exact task.
+
 GitHub Actions runs the default path without `--static-only`. It validates
 repository structure and then starts only the
 `reactorfront-portfolio` Compose project for migration, API and ML images,
@@ -50,6 +54,10 @@ python scripts/verify.py --static-only
 
 Supporting scripts are implementation details of that entrypoint:
 
+- `plan_ci.py` converts trusted GitHub event state into the canonical selective
+  plan. It keeps baseline and current-head trust separate, closes inherited
+  evidence gaps for external PRs, and routes tree-identical merges through the
+  same skip-lineage rules as changed trees.
 - `check_docs.py` rejects broken local Markdown links and drift in the required
   repository-owned AI governance topology, critical review boundaries, agent
   entrypoint references, and public-safe path rules.

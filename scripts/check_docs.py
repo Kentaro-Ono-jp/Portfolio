@@ -65,6 +65,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Do not enumerate every branch",
         "Explicit owner direction is required",
         "No per-failure owner confirmation is required",
+        "does not resolve or invoke the Docker CLI",
         "recoverable task checkpoint",
         ".github/workflows/CI_PLAYBOOK.md",
         "Completion evidence",
@@ -96,6 +97,7 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path(".github/workflows/CI_PLAYBOOK.md"): (
         "Staged pre-commit hardening",
         "Local rehearsal boundaries",
+        "keeps baseline and current-head trust separate",
         "External timeout termination is not verification evidence",
         "Post-merge knowledge reconciliation",
         "After every feature PR merge",

@@ -138,9 +138,10 @@ Do not infer current PR, Issue, check, or merge state from local memory.
   never relabel affected evidence as carried.
 - Docker-backed groups follow the same smallest-sufficient selection rule as
   other groups, but AI agents execute them in GitHub Actions. Local verification
-  is static-only unless the owner explicitly authorizes local Docker for the
-  exact task. GitHub Actions supplies authoritative runtime proof and does not
-  require separate confirmation before each execution.
+  is static-only and does not resolve or invoke the Docker CLI unless the owner
+  explicitly authorizes local Docker for the exact task. GitHub Actions supplies
+  authoritative runtime proof and does not require separate confirmation before
+  each execution.
 - Inspect the complete intended diff before staging exact files.
 - After implementation and test intent are complete, stage the candidate
   without committing and apply the

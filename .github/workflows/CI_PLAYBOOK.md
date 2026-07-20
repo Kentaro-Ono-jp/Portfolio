@@ -50,14 +50,26 @@ unmodified copy sources, and must select both paths. Docker-backed groups
 follow the same selection rule, run in GitHub Actions, and require explicit
 exact-task owner direction before any local Docker Desktop use.
 
+The event planner keeps baseline and current-head trust separate. A successful
+PR base or main baseline is trusted regardless of the current PR author. An
+owner PR may use its previous successful head incrementally and may declare the
+current skip trailer; an external PR always replans from its trusted PR base,
+ignores external head trailers, and promotes inherited evidence gaps plus their
+dependent groups to execution. A tree-identical owner merge may carry exact-head
+evidence only after reading both the owner PR-head and current merge-commit
+trailers and applying the same lineage check as a changed tree. Other merges
+replan from the successful main baseline.
+
 ### Local rehearsal boundaries
 
 Treat a missing command or host-tool version mismatch as a local preflight
 condition, not as a product or Actions failure.
 
-- Resolve `pnpm`, `uv`, and `docker` before starting the canonical verifier.
-  Compare the available Node and Python versions with `.node-version` and
-  `.python-version`, and use the `uv` version pinned by the workflow.
+- Resolve only the tools required by the selected plan before starting the
+  canonical verifier. The static-only path resolves `pnpm` and `uv` but does
+  not resolve or invoke the Docker CLI. Compare the available Node and Python
+  versions with `.node-version` and `.python-version`, and use the `uv` version
+  pinned by the workflow.
 - On an owner-managed persistent workstation, use the owner's
   [standing authorization](../../docs/ai/README.md#standing-local-development-tool-authorization)
   to install an ordinary missing development tool or runtime persistently in

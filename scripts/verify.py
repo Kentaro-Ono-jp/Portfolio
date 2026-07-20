@@ -30,6 +30,7 @@ ALL_GROUPS = frozenset(VERIFICATION_GROUPS)
 STATIC_GROUPS = frozenset(VERIFICATION_GROUPS[:6])
 RUNTIME_GROUPS = frozenset(VERIFICATION_GROUPS[6:])
 DOCKER_GROUPS = frozenset({"compose"}) | RUNTIME_GROUPS
+LOCAL_STATIC_GROUPS = STATIC_GROUPS - DOCKER_GROUPS
 EXPECTED_COMPOSE_SERVICES = frozenset(
     {
         "postgres",
@@ -63,6 +64,23 @@ class VerificationPlan:
             raise ValueError("Verification plan contains an unknown group.")
         if groups & carried_groups:
             raise ValueError("Executed and carried groups must be disjoint.")
+        for group in groups:
+            missing_dependencies = GROUP_DEPENDENCIES.get(group, frozenset()) - groups
+            if missing_dependencies:
+                raise ValueError(
+                    f"Selected group {group} lacks required dependencies: "
+                    f"{', '.join(sorted(missing_dependencies))}"
+                )
+        covered_groups = groups | carried_groups
+        for group in carried_groups:
+            missing_dependencies = (
+                GROUP_DEPENDENCIES.get(group, frozenset()) - covered_groups
+            )
+            if missing_dependencies:
+                raise ValueError(
+                    f"Carried group {group} lacks covered dependencies: "
+                    f"{', '.join(sorted(missing_dependencies))}"
+                )
         self.groups = groups
         self.carried_groups = carried_groups
         self.changed_files = changed_files
@@ -101,17 +119,57 @@ def plan_with_baseline_evidence(
 def move_groups_to_skipped(
     plan: VerificationPlan, groups: frozenset[str]
 ) -> VerificationPlan:
+    if not groups <= ALL_GROUPS:
+        raise ValueError("Skipped selection contains an unknown group.")
     carried = groups & plan.carried_groups
     if carried:
         raise RuntimeError(
             "Cannot relabel carried baseline evidence as skipped: "
             f"{', '.join(ordered_groups(carried))}"
         )
+    remaining = plan.groups - groups
+    broken_dependencies = {
+        group: GROUP_DEPENDENCIES[group] - remaining
+        for group in remaining
+        if GROUP_DEPENDENCIES.get(group, frozenset()) - remaining
+    }
+    if broken_dependencies:
+        details = "; ".join(
+            f"{group} requires {','.join(sorted(missing))}"
+            for group, missing in sorted(broken_dependencies.items())
+        )
+        raise RuntimeError(f"Skipped groups break selected dependencies: {details}")
     return VerificationPlan(
         groups=plan.groups - groups,
         carried_groups=plan.carried_groups,
         changed_files=plan.changed_files,
         reason=plan.reason,
+        base=plan.base,
+    )
+
+
+def promote_groups_to_execution(
+    plan: VerificationPlan, groups: frozenset[str]
+) -> VerificationPlan:
+    if not groups <= ALL_GROUPS:
+        raise ValueError("Required execution selection contains an unknown group.")
+    promoted = set(groups)
+    while True:
+        previous = promoted.copy()
+        promoted.update(
+            group
+            for group, dependencies in GROUP_DEPENDENCIES.items()
+            if dependencies & promoted
+        )
+        promoted.update(expand_group_dependencies(promoted))
+        if promoted == previous:
+            break
+    promoted_groups = frozenset(promoted)
+    return VerificationPlan(
+        groups=plan.groups | promoted_groups,
+        carried_groups=plan.carried_groups - promoted_groups,
+        changed_files=plan.changed_files,
+        reason=f"{plan.reason} Baseline evidence gaps were promoted to execution.",
         base=plan.base,
     )
 
@@ -155,7 +213,10 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
     if path.suffix.lower() == ".md":
         return frozenset({"docs"})
 
-    if normalized == "scripts/verify.py" or normalized.startswith(".github/workflows/"):
+    if normalized in {
+        "scripts/verify.py",
+        "scripts/plan_ci.py",
+    } or normalized.startswith(".github/workflows/"):
         return ALL_GROUPS
 
     if normalized.startswith("packages/contracts/"):
@@ -379,7 +440,7 @@ def test_file_inventory() -> tuple[tuple[str, str], ...]:
         for path in (REPOSITORY_ROOT / "apps" / service / "tests").glob("test_*.py"):
             inventory.append((group, path.relative_to(REPOSITORY_ROOT).as_posix()))
     for path in (REPOSITORY_ROOT / "tests" / "e2e").glob("*.spec.ts"):
-        inventory.append(("web-runtime", path.relative_to(REPOSITORY_ROOT).as_posix()))
+        inventory.append(("e2e", path.relative_to(REPOSITORY_ROOT).as_posix()))
     return tuple(sorted(inventory))
 
 
@@ -391,7 +452,9 @@ def selected_test_files(groups: frozenset[str]) -> tuple[str, ...]:
         "web-runtime",
     }
     return tuple(
-        path for owner, path in test_file_inventory() if owner in selected_owners
+        path
+        for owner, path in test_file_inventory()
+        if owner in selected_owners or (owner == "e2e" and RUNTIME_GROUPS <= groups)
     )
 
 
@@ -531,6 +594,7 @@ def static_checks(
                 "apps/api/alembic",
                 "apps/api/tests",
                 "scripts/verify.py",
+                "scripts/plan_ci.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
@@ -551,6 +615,7 @@ def static_checks(
                 "apps/api/alembic",
                 "apps/api/tests",
                 "scripts/verify.py",
+                "scripts/plan_ci.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
@@ -1078,7 +1143,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--static-only",
         action="store_true",
-        help="Skip container startup and real-service integration tests.",
+        help="Run the five non-Docker groups without resolving the Docker CLI.",
     )
     parser.add_argument(
         "--groups",
@@ -1119,6 +1184,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--close-baseline-gaps",
+        action="store_true",
+        help=(
+            "Execute inherited baseline-skipped groups instead of requiring their "
+            "current-head restatement."
+        ),
+    )
+    parser.add_argument(
         "--carried-groups",
         help="Comma-separated unaffected groups carried into explicit-run evidence.",
     )
@@ -1154,15 +1227,31 @@ def parse_group_selection(
 
 
 def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
-    if args.baseline_skipped_groups and (
-        args.groups or args.static_only or args.carry_all
-    ):
+    if args.carried_groups and not args.groups:
         raise RuntimeError(
-            "--baseline-skipped-groups is only valid with --base or --staged."
+            "--carried-groups is only valid with --groups for explicit-run evidence."
+        )
+    if args.carried_groups and not args.baseline_proven:
+        raise RuntimeError("--carried-groups requires --baseline-proven.")
+    if args.skipped_groups and (args.groups or args.static_only):
+        raise RuntimeError(
+            "--skipped-groups is only valid with --base, --staged, --full, "
+            "or --carry-all."
+        )
+    if args.baseline_skipped_groups and (args.groups or args.static_only):
+        raise RuntimeError(
+            "--baseline-skipped-groups is only valid with --base, --staged, "
+            "or --carry-all."
+        )
+    if args.close_baseline_gaps and not (args.base or args.staged):
+        raise RuntimeError("--close-baseline-gaps requires --base or --staged.")
+    if args.close_baseline_gaps and not args.baseline_proven:
+        raise RuntimeError("--close-baseline-gaps requires --baseline-proven.")
+    if args.close_baseline_gaps and args.skipped_groups:
+        raise RuntimeError(
+            "--close-baseline-gaps cannot be combined with --skipped-groups."
         )
     if args.groups:
-        if args.skipped_groups:
-            raise RuntimeError("--skipped-groups is only valid while planning.")
         carried = (
             parse_group_selection(args.carried_groups, expand_dependencies=False)
             if args.carried_groups
@@ -1183,31 +1272,39 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
         )
     if args.static_only:
         return VerificationPlan(
-            groups=STATIC_GROUPS,
+            groups=LOCAL_STATIC_GROUPS,
             changed_files=(),
-            reason="Static-only verification requested.",
-        )
-    if args.carry_all:
-        if not args.baseline_proven:
-            raise RuntimeError("--carry-all requires --baseline-proven.")
-        skipped = (
-            parse_group_selection(args.skipped_groups, expand_dependencies=False)
-            if args.skipped_groups
-            else frozenset()
-        )
-        return VerificationPlan(
-            groups=frozenset(),
-            carried_groups=ALL_GROUPS - skipped,
-            changed_files=(),
-            reason="Identical tree is covered by a successful exact-head baseline.",
+            reason="Non-Docker static-only verification requested.",
         )
     baseline_skipped = (
         parse_group_selection(args.baseline_skipped_groups, expand_dependencies=False)
         if args.baseline_skipped_groups
         else frozenset()
     )
+    current_skipped = (
+        parse_group_selection(args.skipped_groups, expand_dependencies=False)
+        if args.skipped_groups
+        else frozenset()
+    )
     if baseline_skipped and not args.baseline_proven:
         raise RuntimeError("--baseline-skipped-groups requires --baseline-proven.")
+    if args.carry_all:
+        if not args.baseline_proven:
+            raise RuntimeError("--carry-all requires --baseline-proven.")
+        plan = plan_with_baseline_evidence(
+            VerificationPlan(
+                groups=frozenset(),
+                changed_files=(),
+                reason="Identical tree is covered by a successful exact-head baseline.",
+            ),
+            baseline_proven=True,
+            baseline_skipped_groups=baseline_skipped,
+        )
+        return apply_skip_lineage(
+            plan,
+            baseline_skipped_groups=baseline_skipped,
+            current_skipped_groups=current_skipped,
+        )
     if baseline_skipped and not (args.base or args.staged):
         raise RuntimeError(
             "--baseline-skipped-groups is only valid with --base or --staged."
@@ -1217,23 +1314,18 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
             base=args.base,
             staged=args.staged,
             baseline_proven=args.baseline_proven,
-            baseline_skipped_groups=baseline_skipped,
+            baseline_skipped_groups=(
+                frozenset() if args.close_baseline_gaps else baseline_skipped
+            ),
         )
+        if args.close_baseline_gaps and baseline_skipped:
+            plan = promote_groups_to_execution(plan, baseline_skipped)
     else:
         plan = VerificationPlan(
             groups=ALL_GROUPS,
             changed_files=(),
             reason="Full canonical verification requested.",
         )
-    if args.carried_groups:
-        raise RuntimeError(
-            "--carried-groups is only valid with --groups for explicit-run evidence."
-        )
-    current_skipped = (
-        parse_group_selection(args.skipped_groups, expand_dependencies=False)
-        if args.skipped_groups
-        else frozenset()
-    )
     return apply_skip_lineage(
         plan,
         baseline_skipped_groups=baseline_skipped,
@@ -1256,33 +1348,46 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    if args.plan and not (args.base or args.staged or args.full or args.carry_all):
+    if args.plan and not (
+        args.groups
+        or args.static_only
+        or args.base
+        or args.staged
+        or args.full
+        or args.carry_all
+    ):
         print(
-            "\nVerification failed: --plan requires --base, --staged, or --full.",
+            "\nVerification failed: --plan requires --base, --staged, --full, "
+            "or --carry-all.",
             file=sys.stderr,
         )
         return 1
 
     try:
         plan = resolve_selection(args)
-    except RuntimeError as error:
+        for line in plan_lines(plan):
+            print(line)
+        if args.github_output is not None:
+            write_plan_outputs(plan, args.github_output)
+        if args.summary is not None:
+            write_plan_summary(plan, args.summary)
+    except (RuntimeError, ValueError, OSError) as error:
         print(f"\nVerification failed: {error}", file=sys.stderr)
         return 1
-    for line in plan_lines(plan):
-        print(line)
-    if args.github_output is not None:
-        write_plan_outputs(plan, args.github_output)
-    if args.summary is not None:
-        write_plan_summary(plan, args.summary)
     if args.plan:
         return 0
 
-    ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     runtime_started = False
-    verification_error: RuntimeError | subprocess.CalledProcessError | None = None
-    cleanup_error: subprocess.CalledProcessError | None = None
+    verification_error: (
+        RuntimeError | subprocess.CalledProcessError | OSError | None
+    ) = None
+    diagnostics_error: RuntimeError | subprocess.CalledProcessError | OSError | None = (
+        None
+    )
+    cleanup_error: subprocess.CalledProcessError | OSError | None = None
     docker = ""
     try:
+        ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
         pnpm = (
             require_command("pnpm") if plan.groups & {"contracts", "web-static"} else ""
         )
@@ -1304,20 +1409,35 @@ def main() -> int:
         if plan.groups & RUNTIME_GROUPS:
             runtime_started = True
             run_runtime_checks(groups=plan.groups, pnpm=pnpm, uv=uv, docker=docker)
-    except (RuntimeError, subprocess.CalledProcessError) as error:
+    except (RuntimeError, subprocess.CalledProcessError, OSError) as error:
         print(f"\nVerification failed: {error}", file=sys.stderr)
         verification_error = error
         if runtime_started:
-            show_runtime_diagnostics(docker)
+            try:
+                show_runtime_diagnostics(docker)
+            except (
+                RuntimeError,
+                subprocess.CalledProcessError,
+                OSError,
+            ) as diagnostic_failure:
+                diagnostics_error = diagnostic_failure
+                print(
+                    f"\nRuntime diagnostics failed: {diagnostic_failure}",
+                    file=sys.stderr,
+                )
     finally:
         if runtime_started:
             try:
                 cleanup_runtime(docker)
-            except subprocess.CalledProcessError as error:
+            except (subprocess.CalledProcessError, OSError) as error:
                 cleanup_error = error
                 print(f"\nRuntime cleanup failed: {error}", file=sys.stderr)
 
-    if verification_error is not None or cleanup_error is not None:
+    if (
+        verification_error is not None
+        or diagnostics_error is not None
+        or cleanup_error is not None
+    ):
         return 1
 
     print("\nVerification passed.")
