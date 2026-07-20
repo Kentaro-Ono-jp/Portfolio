@@ -19,6 +19,7 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0003: Adopt the initial technology stack](0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](0004-api-state-ownership-and-transactional-outbox.md)
 - [ADR-0006: Consolidate repository-owned AI guidance](0006-consolidate-ai-guidance.md)
+- [ADR-0007: Define the authentication, session, and API authorization boundary](0007-authentication-session-and-api-authorization.md)
 
 ## Superseded records
 
