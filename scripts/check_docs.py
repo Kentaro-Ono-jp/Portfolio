@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from urllib.parse import unquote
@@ -20,6 +21,20 @@ EXPECTED_AI_GUIDANCE_FILES = frozenset(
     {
         Path("README.md"),
         Path("PR_REVIEW.md"),
+    }
+)
+EXCLUDED_DIRECTORY_NAMES = frozenset(
+    {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "build",
+        "coverage",
+        "dist",
+        "htmlcov",
+        "node_modules",
     }
 )
 REQUIRED_GOVERNANCE_TEXT = {
@@ -66,6 +81,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Do not push",
         "complete pull request diff",
         "Do not modify implementation",
+        "short, uniquely named direct child",
+        "extended-length path handling",
         "temporary path no longer exists",
         "cleanup scheduled immediately after this comment",
     ),
@@ -128,23 +145,18 @@ FORBIDDEN_GOVERNANCE_PATTERNS = {
 
 
 def iter_markdown_files() -> list[Path]:
-    excluded = {
-        ".git",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".venv",
-        "build",
-        "coverage",
-        "dist",
-        "htmlcov",
-        "node_modules",
-    }
-    return sorted(
-        path
-        for path in REPOSITORY_ROOT.rglob("*.md")
-        if not excluded.intersection(path.relative_to(REPOSITORY_ROOT).parts)
-    )
+    markdown_files: list[Path] = []
+    for directory, directory_names, file_names in os.walk(
+        REPOSITORY_ROOT, topdown=True
+    ):
+        directory_names[:] = [
+            name for name in directory_names if name not in EXCLUDED_DIRECTORY_NAMES
+        ]
+        directory_path = Path(directory)
+        markdown_files.extend(
+            directory_path / name for name in file_names if name.endswith(".md")
+        )
+    return sorted(markdown_files)
 
 
 def local_target(raw_target: str) -> str | None:

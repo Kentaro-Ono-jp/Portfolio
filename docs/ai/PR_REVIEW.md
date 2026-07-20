@@ -48,7 +48,8 @@ Do not modify implementation to fix a finding.
    its workflow evidence to distinguish exact-head, preceding, superseded, and
    intentionally absent results accurately.
 4. Create the isolated shallow clone. Require `git rev-parse HEAD` to equal the
-   expected SHA.
+   expected SHA. On Windows, use a short, uniquely named direct child of the
+   platform temporary root for the clone and all generated review data.
 5. Inspect the complete pull request diff against its stated base. Judge
    behavior against scope, non-targets, failure model, acceptance criteria,
    accepted design, tests, and public safety.
@@ -78,6 +79,8 @@ Do not modify implementation to fix a finding.
      that every residual entry remains under the same target, do not traverse
      reparse-point targets, clear only the `ReadOnly` attribute with the same
      process's standard library, and retry deletion of the same fixed root
+   - if deletion of that validated root fails solely because of Windows path
+     length, retry with the standard library's extended-length path handling
    - do not change access-control lists, take ownership, terminate processes,
      or expand the deletion target to force cleanup
    - verify the temporary path no longer exists
