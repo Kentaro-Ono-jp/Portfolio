@@ -31,6 +31,10 @@ interface FailedPayload {
   failureCode: string;
 }
 
+function sourcePdfInput(page: Page) {
+  return page.getByLabel("Source PDF", { exact: true });
+}
+
 function documentResponse(
   response: Response,
   status: string,
@@ -74,7 +78,7 @@ async function upload(
   file: { name: string; mimeType: string; buffer: Buffer },
   terminalStatus: "completed" | "failed",
 ): Promise<{ upload: Response; terminal: Response }> {
-  await page.getByLabel("Source PDF").setInputFiles(file);
+  await sourcePdfInput(page).setInputFiles(file);
   const uploadResponse = page.waitForResponse((response) => {
     return (
       response.request().method() === "POST" &&
@@ -195,7 +199,7 @@ test("proves completed, failed, correlation, and invalid-file browser paths", as
 
   await page.getByRole("button", { name: "Classify another PDF" }).click();
   const requestsBeforeInvalidFile = uploadRequests;
-  await page.getByLabel("Source PDF").setInputFiles({
+  await sourcePdfInput(page).setInputFiles({
     name: "not-a-pdf.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("not a pdf", "utf8"),
