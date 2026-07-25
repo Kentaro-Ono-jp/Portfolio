@@ -8,3 +8,4 @@ allowBuilds:
 
 overrides:
   "next>postcss": 8.5.19
+  "next>sharp": 0.35.0
