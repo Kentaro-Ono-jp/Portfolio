@@ -46,6 +46,90 @@ def test_governance_guards_governing_delivery_specification_routing(
     )
 
 
+def test_governance_rejects_old_issue_one_routing_alongside_current_guidance(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("GIT_AGENTS.md")
+    current_guidance = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    stale_directive = "Read Issue #1 and only the focused Issue."
+    (tmp_path / relative_path).write_text(
+        f"{current_guidance}\n{stale_directive}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert (
+        f"{relative_path.as_posix()}: contains stale routing "
+        f"'Read Issue #1 and only the focused Issue'"
+    ) in failures
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "stale_directive"),
+    [
+        (
+            Path("CONTRIBUTING.md"),
+            "[delivery specification](docs/delivery/0001-first-vertical-slice.md)",
+        ),
+        (
+            Path("GIT_AGENTS.md"),
+            "Read [Delivery Specification 0001](docs/delivery/0001-first-vertical-slice.md).",
+        ),
+        (
+            Path("GIT_AGENTS.md"),
+            "Read Issue #1 and only the focused Issue",
+        ),
+        (
+            Path("docs/ai/README.md"),
+            "Issue #1, the focused Issue and PR",
+        ),
+        (
+            Path("docs/ai/README.md"),
+            "Issue #1 is the live portfolio ledger",
+        ),
+        (
+            Path("docs/ai/README.md"),
+            "Read Issue #1 and only the focused Issue",
+        ),
+        (
+            Path("docs/ai/README.md"),
+            "focused Issue and Issue #1",
+        ),
+        (
+            Path("docs/ai/README.md"),
+            "evidence rules below to the focused Issue and Issue #1",
+        ),
+        (
+            Path("docs/ai/README.md"),
+            "add its accumulated proof to Issue #1",
+        ),
+        (
+            Path("docs/ai/PR_REVIEW.md"),
+            "Delivery Specification 0001, the focused Issue",
+        ),
+    ],
+)
+def test_governance_rejects_former_active_routing_forms(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    stale_directive: str,
+) -> None:
+    path = tmp_path / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(stale_directive, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert (f"{relative_path.as_posix()}: contains stale routing {stale_directive!r}") in failures
+
+
 def test_markdown_scan_prunes_excluded_directories_before_descending(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
