@@ -42,7 +42,9 @@ REQUIRED_GOVERNANCE_TEXT = {
         "explicit, tracked entrypoint",
         "docs/ai/README.md",
         "docs/ai/PR_REVIEW.md",
-        "Issue #1 and only the focused Issue",
+        "accepted delivery specifications under",
+        "governing the current task",
+        "Read only the focused Issue",
         "Local memory and earlier conversations are orientation only",
         "python scripts/verify.py",
         ".github/workflows/CI_PLAYBOOK.md",
@@ -58,9 +60,11 @@ REQUIRED_GOVERNANCE_TEXT = {
         "GIT_AGENTS.md",
         "docs/ai/PR_REVIEW.md",
         "comment-only GitHub write authority",
+        "governing delivery specification's tracking Issue",
     ),
     Path("docs/ai/README.md"): (
         "Authority order",
+        "governing delivery specification's tracking Issue",
         "Does not independently mutate",
         "Do not enumerate every branch",
         "Explicit owner direction is required",
@@ -75,6 +79,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Unsolicited public input",
     ),
     Path("docs/ai/PR_REVIEW.md"): (
+        "Governing tracking Issue URL",
+        "accepted delivery specifications in numeric order",
         "Review cycle",
         "Previous verdict",
         "--depth 1",
@@ -107,6 +113,25 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Historical evidence ledger",
         "total 11",
     ),
+}
+FORBIDDEN_STALE_ROUTING_TEXT = {
+    Path("CONTRIBUTING.md"): (
+        "[delivery specification](docs/delivery/0001-first-vertical-slice.md)",
+    ),
+    Path("GIT_AGENTS.md"): (
+        "Read [Delivery Specification 0001]"
+        "(docs/delivery/0001-first-vertical-slice.md).",
+        "Read Issue #1 and only the focused Issue",
+    ),
+    Path("docs/ai/README.md"): (
+        "Issue #1, the focused Issue and PR",
+        "Issue #1 is the live portfolio ledger",
+        "Read Issue #1 and only the focused Issue",
+        "focused Issue and Issue #1",
+        "evidence rules below to the focused Issue and Issue #1",
+        "add its accumulated proof to Issue #1",
+    ),
+    Path("docs/ai/PR_REVIEW.md"): ("Delivery Specification 0001, the focused Issue",),
 }
 GOVERNANCE_ROOT_FILES = (
     Path("GIT_AGENTS.md"),
@@ -189,6 +214,17 @@ def governance_failures() -> list[str]:
             if fragment not in normalized_content:
                 failures.append(
                     f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"
+                )
+
+    for relative_path, forbidden_fragments in FORBIDDEN_STALE_ROUTING_TEXT.items():
+        path = REPOSITORY_ROOT / relative_path
+        if not path.is_file():
+            continue
+        normalized_content = " ".join(path.read_text(encoding="utf-8").split())
+        for fragment in forbidden_fragments:
+            if fragment in normalized_content:
+                failures.append(
+                    f"{relative_path.as_posix()}: contains stale routing {fragment!r}"
                 )
 
     governance_paths = [

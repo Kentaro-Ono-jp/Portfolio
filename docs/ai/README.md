@@ -11,8 +11,9 @@ Use the first applicable source:
 1. Accepted ADRs and delivery specifications: product and structural design.
 2. [GIT_AGENTS.md](../../GIT_AGENTS.md), this contract, and
    [PR_REVIEW.md](PR_REVIEW.md): durable collaboration rules.
-3. Issue #1, the focused Issue and PR, commits, verdicts, and Actions runs:
-   live state and delivery evidence.
+3. The governing delivery specification's tracking Issue, the focused Issue
+   and PR, commits, verdicts, and Actions runs: live state and delivery
+   evidence.
 4. Local memory, earlier conversations, summaries, and handoffs: orientation
    only.
 
@@ -20,8 +21,10 @@ When sources conflict, stop the pending mutation, inspect the smallest
 affected live boundary, and report the discrepancy. Never merge conflicting
 instructions silently.
 
-Issue #1 is the live portfolio ledger. Do not add a tracked current-status or
-handoff document.
+The tracking Issue linked from the governing accepted delivery specification
+is the live ledger for that delivery slice. A completed slice's tracking Issue
+remains durable evidence; it is not the live ledger for a later slice. Do not
+add a tracked current-status or handoff document.
 
 ## Actors and authority
 
@@ -81,8 +84,8 @@ At cold start:
 
 1. Read [GIT_AGENTS.md](../../GIT_AGENTS.md) and its required design sources.
 2. Run `git status --short --branch` in the canonical workspace.
-3. Read Issue #1 and only the focused Issue, PR, verdict, and workflow evidence
-   needed for the request.
+3. Read the governing delivery specification's tracking Issue and only the
+   focused Issue, PR, verdict, and workflow evidence needed for the request.
 4. Compare relevant local and remote heads before branching, pushing, merging,
    reconciling evidence, or deleting durable data.
 5. Broaden the audit only when state is dirty, stale, missing, contradictory,
@@ -151,7 +154,7 @@ Do not infer current PR, Issue, check, or merge state from local memory.
 ### 3. Publish a recoverable checkpoint
 
 - Commit tersely, push the focused branch, and open a Draft PR linked to the
-  focused Issue and Issue #1.
+  focused Issue and the governing delivery specification's tracking Issue.
 - Treat the pushed commit and Draft PR as the recoverable task checkpoint.
   Uncommitted or unpushed workspace changes are not durable handoff state.
 - Require the workflow result to target the exact pushed head.
@@ -164,9 +167,9 @@ Do not infer current PR, Issue, check, or merge state from local memory.
   the Markdown-only merge commit; its absent run is also not passing evidence.
 - After the initial PR description and exact-head workflow or approved absent
   state are reconciled, provide a copyable initial-review prompt populated with
-  the repository, PR, focused Issue, expected full head SHA, review cycle,
-  previous verdict, and exact workflow evidence or limitation required by
-  [PR_REVIEW.md](PR_REVIEW.md).
+  the repository, PR, governing tracking Issue, focused Issue, expected full
+  head SHA, review cycle, previous verdict, and exact workflow evidence or
+  limitation required by [PR_REVIEW.md](PR_REVIEW.md).
 
 After every follow-up push to an existing PR, the push is not complete until
 the PR description is reconciled:
@@ -232,8 +235,9 @@ A follow-up checkpoint is not complete without the applicable prompt.
    an approved Markdown-only merge.
 4. Before the next feature increment, reconcile the merged PR's reusable CI
    knowledge under the [CI playbook](../../.github/workflows/CI_PLAYBOOK.md).
-5. Apply the evidence rules below to the focused Issue and Issue #1, including
-   the CI-knowledge outcome.
+5. Apply the evidence rules below to the focused Issue and the governing
+   delivery specification's tracking Issue, including the CI-knowledge
+   outcome.
 6. Remove only authorized temporary data and the fully merged local branch.
 7. Keep remote-branch deletion explicit.
 8. Update this contract only if the process itself changed.
@@ -252,10 +256,11 @@ Markdown-only exception.
   failure model, non-targets, and definition of done, and add `Completion
   evidence` with stable links and exact SHAs.
 
-After every relevant merge, add its accumulated proof to Issue #1. Check an
-umbrella gate only when evidence proves every acceptance criterion for the
-complete Delivery Specification step or an approved exception. Partial proof
-stays attached while the gate remains unchecked.
+After every relevant merge, add its accumulated proof to the governing
+delivery specification's tracking Issue. Check an umbrella gate only when
+evidence proves every acceptance criterion for the complete Delivery
+Specification step or an approved exception. Partial proof stays attached
+while the gate remains unchecked.
 
 Check the final delivery-record item only after the delivery specification
 records its completion date, implementation PRs, final workflow, known

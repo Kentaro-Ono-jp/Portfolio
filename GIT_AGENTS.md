@@ -8,10 +8,13 @@ repository.
 1. Read [README.md](README.md).
 2. Read [the AI collaboration contract](docs/ai/README.md).
 3. Read accepted ADRs under [docs/adr](docs/adr/README.md), in numeric order.
-4. Read [Delivery Specification 0001](docs/delivery/0001-first-vertical-slice.md).
-5. Read the nearest area-specific README for the files in scope.
-6. Read Issue #1 and only the focused Issue, PR, verdict, and Actions evidence
-   needed for the current task.
+4. Read accepted delivery specifications under
+   [docs/delivery](docs/delivery), in numeric order.
+5. Identify the accepted delivery specification governing the current task and
+   read its linked tracking Issue.
+6. Read the nearest area-specific README for the files in scope.
+7. Read only the focused Issue, PR, verdict, and Actions evidence needed for
+   the current task.
 
 Accepted ADRs and delivery specifications govern product and structural
 design. Repository guidance governs durable collaboration. GitHub Issues,
