@@ -7,6 +7,7 @@ earlier chat and implementation-agent memory are not inputs.
 
 - Repository URL
 - Pull request URL
+- Governing tracking Issue URL
 - Focused Issue URL
 - Expected full head SHA
 - Review cycle: `initial` or `re-review`
@@ -46,8 +47,9 @@ Do not modify implementation to fix a finding.
 ## Procedure
 
 1. Read [GIT_AGENTS.md](../../GIT_AGENTS.md),
-   [the AI contract](README.md), accepted ADRs in numeric order, Delivery
-   Specification 0001, the focused Issue, and the complete PR description.
+   [the AI contract](README.md), accepted ADRs and accepted delivery
+   specifications in numeric order, the governing tracking Issue, the focused
+   Issue, and the complete PR description.
 2. For re-review, read the previous verdict and the implementation response.
    Verify each prior finding against the new code; do not limit review to those
    findings.

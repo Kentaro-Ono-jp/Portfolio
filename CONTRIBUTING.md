@@ -6,8 +6,9 @@ preserve its role as a focused, reproducible public engineering record.
 ## Before proposing a change
 
 1. Read [`README.md`](README.md), the accepted
-   [ADRs](docs/adr/README.md), and the relevant
-   [delivery specification](docs/delivery/0001-first-vertical-slice.md).
+   [ADRs](docs/adr/README.md), and accepted
+   [delivery specifications](docs/delivery/) in numeric order. Identify the
+   specification governing the change and read its linked tracking Issue.
 2. Search existing Issues and open or select one focused Issue that states the
    outcome, scope, non-targets, failure model, and acceptance criteria.
 3. Do not submit client, employer, personal, licensed-without-permission, or

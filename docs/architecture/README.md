@@ -29,7 +29,9 @@ Accepted decisions:
 - [ADR-0002: Target an AI-enabled document intelligence platform](../adr/0002-target-document-intelligence-platform.md)
 - [ADR-0003: Adopt the initial technology stack](../adr/0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](../adr/0004-api-state-ownership-and-transactional-outbox.md)
+- [ADR-0007: Define the authentication, session, and API authorization boundary](../adr/0007-authentication-session-and-api-authorization.md)
 
 Accepted delivery specifications:
 
 - [Delivery Specification 0001: First end-to-end vertical slice](../delivery/0001-first-vertical-slice.md)
+- [Delivery Specification 0002: Authenticated classification review and immutable audit trail](../delivery/0002-second-vertical-slice.md)

@@ -1,6 +1,8 @@
 # ReactorFront Portfolio
 
-> Status: first vertical slice completed — 2026-07-20
+> Status: first vertical slice completed; second vertical slice accepted and
+> tracked in [Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27)
+> — 2026-07-20
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml)
 
@@ -67,13 +69,15 @@ Portfolio/
 - [ADR-0003: Adopt the initial technology stack](docs/adr/0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](docs/adr/0004-api-state-ownership-and-transactional-outbox.md)
 - [ADR-0006: Consolidate repository-owned AI guidance](docs/adr/0006-consolidate-ai-guidance.md)
+- [ADR-0007: Define the authentication, session, and API authorization boundary](docs/adr/0007-authentication-session-and-api-authorization.md)
 
 Superseded decisions remain under [`docs/adr/`](docs/adr/README.md) as design
 history.
 
 ## Delivery specifications
 
-- [Delivery Specification 0001: First end-to-end vertical slice](docs/delivery/0001-first-vertical-slice.md)
+- Completed: [Delivery Specification 0001: First end-to-end vertical slice](docs/delivery/0001-first-vertical-slice.md)
+- Accepted: [Delivery Specification 0002: Authenticated classification review and immutable audit trail](docs/delivery/0002-second-vertical-slice.md), tracked in [Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27)
 
 ## Contributing and security
 
@@ -93,9 +97,10 @@ to [`docs/ai/PR_REVIEW.md`](docs/ai/PR_REVIEW.md).
 
 The independent reviewer uses an isolated temporary shallow clone, runs
 non-Docker static verification, and has comment-only GitHub write authority.
-Fast-changing status remains in Issue #1, focused Issues, PRs, commits, and
-Actions runs instead of being duplicated across local handoffs. Raw chats,
-hidden reasoning, personal data, and private context are not published.
+Fast-changing status remains in the governing delivery specification's
+tracking Issue, focused Issues, PRs, commits, and Actions runs instead of being
+duplicated across local handoffs. Raw chats, hidden reasoning, personal data,
+and private context are not published.
 
 ## Verification model
 

@@ -27,6 +27,25 @@ def test_repository_owned_governance_invariants_pass(
     assert documentation_checker.governance_failures() == []
 
 
+def test_governance_guards_governing_delivery_specification_routing(
+    documentation_checker: ModuleType,
+) -> None:
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+
+    assert "accepted delivery specifications under" in required_text[Path("GIT_AGENTS.md")]
+    assert "governing the current task" in required_text[Path("GIT_AGENTS.md")]
+    assert (
+        "governing delivery specification's tracking Issue"
+        in required_text[Path("docs/ai/README.md")]
+    )
+    assert "Governing tracking Issue URL" in required_text[Path("docs/ai/PR_REVIEW.md")]
+    assert all(
+        "Issue #1" not in fragment
+        for required_fragments in required_text.values()
+        for fragment in required_fragments
+    )
+
+
 def test_markdown_scan_prunes_excluded_directories_before_descending(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
