@@ -301,6 +301,7 @@ def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
         "An owner-approved Markdown-only PR may skip Actions.",
         "The owner authorizes local Docker for the exact task.",
         "The owner explicitly authorizes local Docker for the exact task.",
+        "The owner explicitly\nauthorizes local Docker for the exact task.",
     ],
 )
 def test_owner_confirmation_validation_rejects_legacy_navigation_gates(
@@ -448,6 +449,7 @@ def test_governance_public_safety_patterns_reject_sensitive_content(
         "[AI guidance](docs/ai/README.md)",
         "[ADR index](../adr/README.md)",
         "Compare Issue/PR/Actions evidence",
+        "Protect `/api/v1/documents` and expose `/health`.",
         "Use API_KEY=<redacted> and Authorization: Bearer <token>",
         "TOKEN=${TOKEN} and client context: [redacted]",
         "Exclude credentials, private company context, and client context.",
@@ -514,6 +516,47 @@ def test_governance_scanner_covers_routed_indexes_outside_ai_docs(
     documentation_checker._validate_public_governance_surface(failures, [routed_index])
 
     assert ("docs/delivery/README.md: contains forbidden Windows absolute path") in failures
+
+
+def test_design_selection_surface_includes_index_targets(
+    documentation_checker: ModuleType,
+) -> None:
+    relative_paths = {
+        path.relative_to(REPOSITORY_ROOT)
+        for path in documentation_checker.design_governance_paths()
+    }
+
+    assert Path("docs/adr/0005-repository-owned-ai-collaboration.md") in relative_paths
+    assert Path("docs/adr/0006-consolidate-ai-guidance.md") in relative_paths
+    assert Path("docs/delivery/0002-second-vertical-slice.md") in relative_paths
+
+
+def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
+    delivery = tmp_path / "docs" / "delivery" / "0002-selected.md"
+    focus.parent.mkdir(parents=True)
+    delivery.parent.mkdir(parents=True)
+    focus.write_text(
+        f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
+        encoding="utf-8",
+    )
+    delivery.write_text(
+        "The owner explicitly\nauthorizes local Docker for this task.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert (
+        "docs/delivery/0002-selected.md: contains forbidden owner "
+        "authorization gate; owner confirmation is reserved for "
+        "focused-slice selection"
+    ) in failures
 
 
 def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(

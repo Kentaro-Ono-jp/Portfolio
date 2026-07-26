@@ -403,9 +403,16 @@ PUBLIC_GOVERNANCE_SCAN_FILES = ROUTED_PUBLIC_SURFACE | {
     Path("scripts/README.md"),
     Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
 }
+DESIGN_SELECTION_DIRECTORIES = (
+    Path("docs/adr"),
+    Path("docs/delivery"),
+)
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
-    "POSIX absolute path": re.compile(r"(?<![\w/:<.~])/(?!/)[^\s`'\"><\])}]+"),
+    "POSIX absolute path": re.compile(
+        r"(?i)(?<![\w/:<.~])/(?:etc|home|mnt|opt|private|root|run|srv|tmp|"
+        r"usr|var|volumes|workspace)(?:/|\\b)[^\s`'\"><\])}]*"
+    ),
     "UNC absolute path": re.compile(
         r"(?<![\\\w])\\\\[^\\/\s`'\"><]+[\\/][^\\/\s`'\"><]+"
     ),
@@ -450,6 +457,15 @@ def iter_markdown_files() -> list[Path]:
             directory_path / name for name in file_names if name.endswith(".md")
         )
     return sorted(markdown_files)
+
+
+def design_governance_paths() -> list[Path]:
+    return sorted(
+        path
+        for relative_directory in DESIGN_SELECTION_DIRECTORIES
+        for path in (REPOSITORY_ROOT / relative_directory).glob("*.md")
+        if path.is_file()
+    )
 
 
 def local_target(raw_target: str) -> str | None:
@@ -618,13 +634,14 @@ def _validate_owner_confirmation_boundary(
     for path in governance_paths:
         relative_path = path.relative_to(REPOSITORY_ROOT)
         content = path.read_text(encoding="utf-8")
+        normalized_content = " ".join(content.split())
         heading_occurrences.extend(
             (relative_path, heading) for heading in STOP_HEADING.findall(content)
         )
         if relative_path == OWNER_CONFIRMATION_OWNER:
             continue
         for label, pattern in FORBIDDEN_OWNER_CONFIRMATION_PATTERNS.items():
-            if pattern.search(content):
+            if pattern.search(normalized_content):
                 failures.append(
                     f"{relative_path.as_posix()}: contains forbidden {label}; "
                     "owner confirmation is reserved for focused-slice selection"
@@ -699,6 +716,7 @@ def governance_failures() -> list[str]:
             if (REPOSITORY_ROOT / path).is_file()
         }
         | set(ai_paths)
+        | set(design_governance_paths())
     )
 
     _validate_rule_ownership(failures, governance_paths)

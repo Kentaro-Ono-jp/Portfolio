@@ -395,9 +395,8 @@ Application coding starts only after these repository gates pass:
 - update the verifier's service inventory, change-to-group mapping, evidence,
   and teardown ownership for the identity dependency
 
-This design does not authorize local Docker Desktop. GitHub Actions remains the
-canonical identity and browser runtime proof unless the owner explicitly
-authorizes local Docker for a later exact task.
+This design does not authorize local Docker Desktop. AI agents always use
+GitHub Actions as the canonical identity and browser runtime proof.
 
 ## Step 1: Implement the smallest authenticated human-review product flow
 
