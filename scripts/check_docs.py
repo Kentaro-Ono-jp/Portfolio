@@ -345,11 +345,12 @@ STOP_HEADING = re.compile(r"(?im)^## [^\r\n]*\bstop\b[^\r\n]*$")
 FORBIDDEN_OWNER_CONFIRMATION_PATTERNS = {
     "owner approval gate": re.compile(
         r"(?i)\b(?:explicit owner approval|owner(?:'s)? explicit approval|"
-        r"obtain owner approval|owner approval may|owner approved)\b"
+        r"obtain owner approval|owner approval may|owner[- ]approved)\b"
     ),
     "owner authorization gate": re.compile(
         r"(?i)\b(?:explicit owner authorization|owner(?:'s)? exact "
-        r"authorization|owner has authorized|only with owner authorization)\b"
+        r"authorization|owner has authorized|only with owner authorization|"
+        r"owner (?:explicitly )?authorizes)\b"
     ),
     "owner direction gate": re.compile(
         r"(?i)\b(?:explicit owner direction|owner direction|await owner "
@@ -390,12 +391,18 @@ EXCLUDED_DIRECTORY_NAMES = frozenset(
         "node_modules",
     }
 )
-GOVERNANCE_ROOT_FILES = (
-    Path("GIT_AGENTS.md"),
-    Path("AI_GUIDANCE.md"),
-    Path(".github/workflows/CI_PLAYBOOK.md"),
-    Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
+ROUTED_PUBLIC_SURFACE = frozenset(
+    path
+    for source, targets in REQUIRED_ROUTE_LINKS.items()
+    for path in (source, *targets)
 )
+PUBLIC_GOVERNANCE_SCAN_FILES = ROUTED_PUBLIC_SURFACE | {
+    Path("README.md"),
+    Path("CONTRIBUTING.md"),
+    Path(".github/workflows/README.md"),
+    Path("scripts/README.md"),
+    Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
+}
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
     "POSIX absolute path": re.compile(r"(?<![\w/:<.~])/(?!/)[^\s`'\"><\])}]+"),
@@ -535,14 +542,6 @@ def _validate_rule_ownership(failures: list[str], governance_paths: list[Path]) 
 
 
 def _validate_routes(failures: list[str]) -> None:
-    routed_surface = {
-        Path("GIT_AGENTS.md"),
-        Path("AI_GUIDANCE.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/delivery/README.md"),
-        Path("docs/adr/README.md"),
-        *DOCFORAI_FILE_ROLES,
-    }
     for source, required_targets in REQUIRED_ROUTE_LINKS.items():
         links = resolved_local_links(source)
         for target in required_targets:
@@ -551,7 +550,7 @@ def _validate_routes(failures: list[str]) -> None:
                     f"{source.as_posix()}: missing required route link "
                     f"{target.as_posix()}"
                 )
-        for target in sorted((links & routed_surface) - set(required_targets)):
+        for target in sorted((links & ROUTED_PUBLIC_SURFACE) - set(required_targets)):
             failures.append(
                 f"{source.as_posix()}: contains undeclared route link "
                 f"{target.as_posix()}"
@@ -646,6 +645,19 @@ def _validate_owner_confirmation_boundary(
         )
 
 
+def _validate_public_governance_surface(
+    failures: list[str], governance_paths: list[Path]
+) -> None:
+    for path in governance_paths:
+        content = path.read_text(encoding="utf-8")
+        for label, pattern in FORBIDDEN_GOVERNANCE_PATTERNS.items():
+            if pattern.search(content):
+                relative_path = path.relative_to(REPOSITORY_ROOT)
+                failures.append(
+                    f"{relative_path.as_posix()}: contains forbidden {label}"
+                )
+
+
 def governance_failures() -> list[str]:
     failures: list[str] = []
 
@@ -680,27 +692,21 @@ def governance_failures() -> list[str]:
                 )
 
     ai_paths = _validate_inventory_and_roles(failures)
-    governance_paths = [
-        REPOSITORY_ROOT / path
-        for path in GOVERNANCE_ROOT_FILES
-        if (REPOSITORY_ROOT / path).is_file()
-    ]
-    governance_paths.extend(ai_paths)
+    governance_paths = sorted(
+        {
+            REPOSITORY_ROOT / path
+            for path in PUBLIC_GOVERNANCE_SCAN_FILES
+            if (REPOSITORY_ROOT / path).is_file()
+        }
+        | set(ai_paths)
+    )
 
     _validate_rule_ownership(failures, governance_paths)
     _validate_routes(failures)
     _validate_router_budgets(failures)
     _validate_ci_failure_knowledge(failures)
     _validate_owner_confirmation_boundary(failures, governance_paths)
-
-    for path in governance_paths:
-        content = path.read_text(encoding="utf-8")
-        for label, pattern in FORBIDDEN_GOVERNANCE_PATTERNS.items():
-            if pattern.search(content):
-                relative_path = path.relative_to(REPOSITORY_ROOT)
-                failures.append(
-                    f"{relative_path.as_posix()}: contains forbidden {label}"
-                )
+    _validate_public_governance_surface(failures, governance_paths)
 
     return failures
 

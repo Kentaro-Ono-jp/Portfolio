@@ -8,10 +8,10 @@ its tests have been staged without a commit. It selects staged preflight,
 local rehearsal, an explicit exception, failed-run triage, post-merge
 reconciliation, or one relevant knowledge leaf without loading them together.
 
-An owner-approved Markdown-only PR may skip Actions only through the router's
-separate exception. At merge, its explicit squash-message boundary makes the
-Markdown-only `main` commit skip Actions too. Neither absent run is passing
-evidence.
+A machine-qualified Markdown-only PR may skip Actions only through the
+router's separate exception. At merge, its explicit squash-message boundary
+makes the Markdown-only `main` commit skip Actions too. Neither absent run is
+passing evidence.
 
 `verify.yml` runs the repository-owned `scripts/verify.py` entrypoint on pull
 requests, `main`, and manual dispatch. It proves the canonical contracts,

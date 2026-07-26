@@ -258,9 +258,9 @@ def test_owner_confirmation_stop_exists_only_in_focus(
     documentation_checker: ModuleType,
 ) -> None:
     governance_paths = [
-        REPOSITORY_ROOT / path for path in documentation_checker.GOVERNANCE_ROOT_FILES
+        REPOSITORY_ROOT / path
+        for path in sorted(documentation_checker.PUBLIC_GOVERNANCE_SCAN_FILES)
     ]
-    governance_paths.extend(sorted((REPOSITORY_ROOT / "docs" / "ai").rglob("*.md")))
     failures: list[str] = []
 
     documentation_checker._validate_owner_confirmation_boundary(failures, governance_paths)
@@ -293,6 +293,39 @@ def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
         "docs/ai/workflows/publish.md: contains forbidden owner direction gate; "
         "owner confirmation is reserved for focused-slice selection"
     ) in failures
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "An owner-approved Markdown-only PR may skip Actions.",
+        "The owner authorizes local Docker for the exact task.",
+        "The owner explicitly authorizes local Docker for the exact task.",
+    ],
+)
+def test_owner_confirmation_validation_rejects_legacy_navigation_gates(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    content: str,
+) -> None:
+    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
+    navigation = tmp_path / "scripts" / "README.md"
+    focus.parent.mkdir(parents=True)
+    navigation.parent.mkdir(parents=True)
+    focus.write_text(
+        f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
+        encoding="utf-8",
+    )
+    navigation.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_owner_confirmation_boundary(failures, [focus, navigation])
+
+    assert any(
+        failure.startswith("scripts/README.md: contains forbidden owner ") for failure in failures
+    )
 
 
 def test_owner_confirmation_validation_rejects_a_second_stop_heading(
@@ -462,6 +495,25 @@ def test_governance_scanner_rejects_nonportable_paths_in_nested_ai_docs(
     failures = documentation_checker.governance_failures()
 
     assert f"docs/ai/ci/knowledge/leak.md: contains forbidden {expected_label}" in failures
+
+
+def test_governance_scanner_covers_routed_indexes_outside_ai_docs(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    routed_index = tmp_path / "docs" / "delivery" / "README.md"
+    routed_index.parent.mkdir(parents=True)
+    routed_index.write_text("Read X:/private/workspace", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    assert Path("docs/delivery/README.md") in (documentation_checker.ROUTED_PUBLIC_SURFACE)
+    assert Path("docs/adr/README.md") in documentation_checker.ROUTED_PUBLIC_SURFACE
+
+    documentation_checker._validate_public_governance_surface(failures, [routed_index])
+
+    assert ("docs/delivery/README.md: contains forbidden Windows absolute path") in failures
 
 
 def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(

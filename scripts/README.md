@@ -26,7 +26,7 @@ python scripts/verify.py --static-only
 
 This static-only path selects the five non-Docker groups and does not resolve
 or invoke the Docker CLI. Compose configuration and all runtime groups remain
-GitHub Actions work unless the owner authorizes local Docker for the exact task.
+GitHub Actions work for AI agents.
 
 GitHub Actions runs the default path without `--static-only`. It validates
 repository structure and then starts only the
@@ -34,8 +34,8 @@ repository structure and then starts only the
 PostgreSQL, S3-compatible storage, RabbitMQ, publisher-confirm, model, Web,
 result-event persistence, duplicate-delivery, restart-recovery, exact
 eight-service readiness, and Playwright browser checks. It stops that project
-afterward. AI agents do not start or mutate local Docker Desktop unless the
-owner explicitly authorizes local Docker for the exact task.
+afterward. AI agents never start or mutate local Docker Desktop; Docker-backed
+proof runs in GitHub Actions.
 GitHub Actions also removes
 the three project-scoped test volumes; local execution preserves them. A failed
 teardown makes verification fail, and the workflow has an unconditional
