@@ -39,8 +39,11 @@ def test_progressive_routing_covers_the_complete_guidance_surface(
         Path(".github/workflows/CI_PLAYBOOK.md"),
     )
     assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/README.md")]
+    assert Path("docs/ai/workflows/governance-reconcile.md") in routes[Path("docs/ai/README.md")]
     assert Path("docs/ai/ci/markdown-only.md") not in routes[Path("docs/ai/ci/preflight.md")]
     assert Path("docs/ai/ci/knowledge/README.md") in routes[Path("docs/ai/ci/preflight.md")]
+    assert Path("docs/ai/knowledge/README.md") not in routes[Path("docs/ai/workflows/implement.md")]
+    assert Path("docs/ai/knowledge/README.md") not in routes[Path("docs/ai/review/inspect.md")]
     assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/workflows/correct.md")]
     assert Path("docs/ai/workflows/merge.md") in routes[Path("docs/ai/workflows/correct.md")]
     assert set(roles.values()) == {"router", "procedure", "reference", "knowledge"}
@@ -55,6 +58,86 @@ def test_every_canonical_rule_has_one_declared_owner(
     assert len(owners.values()) == len(set(owners.values()))
     assert owners["actor-authority"] == Path("docs/ai/reference/authority.md")
     assert owners["ci-markdown-only-exception"] == Path("docs/ai/ci/markdown-only.md")
+    assert owners["governance-knowledge-selection"] == Path("docs/ai/knowledge/README.md")
+    assert owners["governance-knowledge-reconciliation"] == Path(
+        "docs/ai/workflows/governance-reconcile.md"
+    )
+
+
+def test_governance_knowledge_write_route_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    routes = documentation_checker.REQUIRED_ROUTE_LINKS
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    reconciliation = Path("docs/ai/workflows/governance-reconcile.md")
+    selector = Path("docs/ai/knowledge/README.md")
+
+    assert reconciliation in routes[Path("docs/ai/README.md")]
+    assert reconciliation in routes[Path("docs/ai/workflows/reconcile.md")]
+    assert selector in routes[reconciliation]
+    assert set(routes[selector]) == {
+        Path("docs/ai/reference/authority.md"),
+        Path("docs/ai/reference/live-state.md"),
+        Path("docs/ai/reference/local-tools.md"),
+        Path("docs/ai/reference/public-safety.md"),
+        Path("docs/ai/reference/evidence.md"),
+        Path("docs/ai/workflows/focus.md"),
+        Path("docs/ai/workflows/implement.md"),
+        Path("docs/ai/workflows/publish.md"),
+        Path("docs/ai/workflows/correct.md"),
+        Path("docs/ai/workflows/merge.md"),
+        Path("docs/ai/workflows/reconcile.md"),
+        Path("docs/ai/review/setup.md"),
+        Path("docs/ai/review/inspect.md"),
+        Path("docs/ai/review/verdict.md"),
+        Path("docs/ai/review/cleanup.md"),
+        Path(".github/workflows/CI_PLAYBOOK.md"),
+        Path("docs/adr/README.md"),
+        Path("docs/delivery/README.md"),
+    }
+
+    expected_write_guards = {
+        reconciliation: (
+            "Governance knowledge reconciliation: no new reusable finding",
+            "accepted focused governance Issue",
+            "independently reviewed update",
+            "do not create a recursive empty Issue",
+        ),
+        selector: (
+            "not an append-only incident ledger",
+            "Select one canonical target",
+            "accepted focused governance Issue",
+            "independently reviewed PR",
+        ),
+        Path("docs/ai/review/verdict.md"): (
+            "Reusable governance candidate",
+            "not permission for the reviewer",
+        ),
+        Path("docs/ai/ci/failure-triage.md"): (
+            "Promote only a new reusable decision rule",
+            "Update one canonical knowledge leaf or add one routed leaf",
+        ),
+        Path("docs/ai/ci/post-merge.md"): (
+            "Revise or add one knowledge leaf",
+            "focused playbook-update Issue",
+            "Publish a knowledge change only through its focused Issue",
+        ),
+    }
+    for path, fragments in expected_write_guards.items():
+        assert all(fragment in required_text[path] for fragment in fragments)
+
+
+def test_review_verdict_has_one_governance_candidate_field() -> None:
+    verdict = (REPOSITORY_ROOT / "docs" / "ai" / "review" / "verdict.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert verdict.count("### Reusable governance candidate") == 1
+    assert (
+        verdict.index("### Findings or approval basis")
+        < verdict.index("### Reusable governance candidate")
+        < verdict.index("### Verification")
+    )
 
 
 @pytest.mark.parametrize(

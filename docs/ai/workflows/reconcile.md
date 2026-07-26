@@ -18,15 +18,16 @@ evidence reconciliation, or scoped cleanup remains.
    exists. Do not dispatch, rerun, or create a trigger commit.
 4. Enter the [CI router](../../../.github/workflows/CI_PLAYBOOK.md), select
    post-merge knowledge reconciliation, and return here with its outcome.
-5. Read the [Issue evidence reference](../reference/evidence.md), reconcile
+5. Open [governance knowledge reconciliation](governance-reconcile.md), record
+   its exact outcome in the focused Issue, and return here.
+6. Read the [Issue evidence reference](../reference/evidence.md), reconcile
    only fully proved focused and governing tracking-Issue criteria, then return
    here.
-6. Remove verified task-owned temporary data and a local branch only after its
+7. Remove verified task-owned temporary data and a local branch only after its
    exact tip is proved fully merged.
-7. Delete the remote branch only when the PR is merged, its remote tip equals
+8. Delete the remote branch only when the PR is merged, its remote tip equals
    the reviewed merged head, and no open PR references it. Otherwise retain it,
    record why, and continue reconciliation.
-8. Update repository-owned guidance only when the process itself changed.
 
 ## Recovery
 
@@ -35,6 +36,8 @@ evidence reconciliation, or scoped cleanup remains.
   [CI router](../../../.github/workflows/CI_PLAYBOOK.md); do not mark affected
   evidence complete.
 - Unresolved reusable CI knowledge remains an explicit reconciliation outcome.
+- Unresolved reusable governance knowledge remains linked or unclassified; it
+  is never copied into a nearby canonical rule.
 - Contradictory or incomplete evidence leaves affected criteria unchecked and
   records the exact gap.
 - Cleanup whose ownership or exact target cannot be proved is retained and

@@ -33,22 +33,25 @@ routes until the selected route returns here with changed state.
    rehearsal is blocked, a Markdown-only exception is requested, or CI
    knowledge must be reconciled:** use the
    [CI router](../../.github/workflows/CI_PLAYBOOK.md).
-3. **State is dirty, stale, contradictory, unavailable, or outside the actor
+3. **An exact feature merge is proved and reusable non-CI process or review
+   knowledge must be reconciled:** use
+   [governance knowledge reconciliation](workflows/governance-reconcile.md).
+4. **State is dirty, stale, contradictory, unavailable, or outside the actor
    model:** use [live-state and discrepancy handling](reference/live-state.md).
-4. **A development tool or runtime is missing or mismatched:** use
+5. **A development tool or runtime is missing or mismatched:** use
    [local tool authorization](reference/local-tools.md).
-5. **No accepted focused scope or exact branch exists, or material scope has
+6. **No accepted focused scope or exact branch exists, or material scope has
    changed:** use [focus](workflows/focus.md).
-6. **An accepted focused Issue and exact branch exist, but implementation is
+7. **An accepted focused Issue and exact branch exist, but implementation is
    not a complete staged candidate:** use
    [implement and verify](workflows/implement.md).
-7. **The verified candidate is ready to commit, push, or publish as a Draft
+8. **The verified candidate is ready to commit, push, or publish as a Draft
    PR, including a follow-up push:** use [publish](workflows/publish.md).
-8. **An independent verdict contains actionable findings:** use
+9. **An independent verdict contains actionable findings:** use
    [correct](workflows/correct.md).
-9. **An independently approved exact head has its required proof:** use
+10. **An independently approved exact head has its required proof:** use
    [merge](workflows/merge.md).
-10. **The PR is merged and evidence or cleanup remains:** use
+11. **The PR is merged and evidence or cleanup remains:** use
     [reconcile](workflows/reconcile.md).
 
 If no condition matches, refresh bounded live state once and repeat the ordered

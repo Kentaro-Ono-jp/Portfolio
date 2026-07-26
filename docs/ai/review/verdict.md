@@ -22,6 +22,10 @@ Previous verdict: `<URL | none>`
 
 <severity, exact evidence, and impact; include prior-finding status for re-review>
 
+### Reusable governance candidate
+
+<exact reusable process or review signal and evidence | none>
+
 ### Verification
 
 - shallow-clone static checks: `<result>`
@@ -35,10 +39,15 @@ Previous verdict: `<URL | none>`
 Do not claim cleanup is complete before the comment. Cleanup occurs after the
 only permitted GitHub write.
 
+The reusable-governance candidate is evidence for the implementation
+lifecycle's post-merge classification. It is not permission for the reviewer
+to edit guidance, implementation, an Issue, or the PR.
+
 ## Publication guard
 
 If the comment cannot accurately state the reviewed SHA, evidence,
-limitations, and scheduled cleanup, do not publish a partial verdict.
+reusable-governance candidate, limitations, and scheduled cleanup, do not
+publish a partial verdict.
 
 ## Next
 
