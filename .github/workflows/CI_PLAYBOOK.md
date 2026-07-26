@@ -1,227 +1,32 @@
-# GitHub Actions CI playbook
+# GitHub Actions CI router
 
-This guide turns verified runner failures into reusable preflight checks. It
-hardens how an accepted test runs; it never decides what the test must prove.
-The canonical entrypoint remains [`scripts/verify.py`](../../scripts/verify.py),
-and GitHub Actions remains the authoritative runtime environment.
+<!-- docforai-role: router -->
+<!-- docforai-rule: ci-routing -->
 
-## When to use it
+This thin router selects one CI procedure. It hardens how an accepted test
+runs; it never decides what the test must prove. The canonical entrypoint
+remains [`scripts/verify.py`](../../scripts/verify.py), and GitHub Actions
+remains authoritative for runtime proof.
 
-### Staged pre-commit hardening
+Do not preload every procedure, exception, or historical failure record.
 
-Do not use this guide to design the feature or its tests. First derive test
-intent from accepted design and the focused Issue, then finish the
-implementation and verification scripts.
+## Select the first matching state
 
-1. Inspect the complete intended diff and stage the exact candidate without
-   committing.
-2. Run `python scripts/verify.py --plan --staged`, record both N/NN counts and
-   the selected, executed, carried, and skipped groups, then inspect only the
-   applicable change-driven boundaries below. Missing baseline evidence
-   forbids carried results: an owner-authored PR runs a cold full selection,
-   while an external PR stops before dependency setup.
-3. Correct portability, dependency, real-service, recovery, evidence, or
-   teardown risks without weakening the intended proof.
-4. Rerun the required verification after any correction.
-5. Inspect and stage the corrected candidate again. Commit only that verified
-   staged state.
+1. **A complete implementation and its tests are staged without a commit:**
+   open [staged pre-commit hardening](../../docs/ai/ci/preflight.md).
+2. **A required local command is missing, mismatched, or taking longer than an
+   arbitrary wrapper timeout:** open
+   [local rehearsal](../../docs/ai/ci/local-rehearsal.md).
+3. **The complete candidate qualifies for a Markdown-only Actions skip:** open
+   the
+   [Markdown-only exception](../../docs/ai/ci/markdown-only.md).
+4. **An exact-head Actions run failed:** open
+   [failed-run triage](../../docs/ai/ci/failure-triage.md).
+5. **A feature PR merged and its exact merge workflow completed:** open
+   [post-merge knowledge reconciliation](../../docs/ai/ci/post-merge.md).
+6. **A known signal or changed boundary needs reusable runner knowledge:** open
+   the [CI knowledge index](../../docs/ai/ci/knowledge/README.md).
 
-The first staging is a review snapshot, not permission to commit stale index
-content after later edits.
-
-Within an accepted focused Issue, steps 3 through 5, the resulting commit and
-push, and execution or monitoring of the canonical GitHub Actions workflow are
-covered by standing owner authorization. No per-failure owner confirmation is
-required while the correction preserves the accepted scope and design. Stop
-for owner direction only when the correction would materially change scope or
-accepted design, use local Docker Desktop, change Ready or merge state,
-reconcile Issue checklists, perform destructive cleanup, or delete a remote
-branch.
-
-Carry only successful unaffected evidence. Record an intentionally omitted
-affected group as `Verification-Skip: <groups>` in the exact candidate's commit
-trailers and disclose it as skipped without evidence; never relabel it as
-carried. Every follow-up head must restate its complete current skipped-group
-set in that trailer so a later head and a tree-identical merge preserve the
-evidence gap. The planner must reject a head whose trailer omits an inherited
-skip that the current delta does not select for execution. Rename and copy
-selection must explicitly enable Git detection for both operations, including
-unmodified copy sources, and must select both paths. Docker-backed groups
-follow the same selection rule, run in GitHub Actions, and require explicit
-exact-task owner direction before any local Docker Desktop use.
-
-The event planner keeps baseline and current-head trust separate. A successful
-PR base or main baseline is trusted regardless of the current PR author. An
-owner PR may use its previous successful head incrementally and may declare the
-current skip trailer; an external PR always replans from its trusted PR base,
-ignores external head trailers, and promotes inherited evidence gaps plus their
-dependent groups to execution. A tree-identical owner merge may carry exact-head
-evidence only after reading both the owner PR-head and current merge-commit
-trailers and applying the same lineage check as a changed tree. Other merges
-replan from the successful main baseline.
-
-### Local rehearsal boundaries
-
-Treat a missing command or host-tool version mismatch as a local preflight
-condition, not as a product or Actions failure.
-
-- Resolve only the tools required by the selected plan before starting the
-  canonical verifier. The static-only path resolves `pnpm` and `uv` but does
-  not resolve or invoke the Docker CLI. Compare the available Node and Python
-  versions with `.node-version` and `.python-version`, and use the `uv` version
-  pinned by the workflow.
-- On an owner-managed persistent workstation, use the owner's
-  [standing authorization](../../docs/ai/README.md#standing-local-development-tool-authorization)
-  to install an ordinary missing development tool or runtime persistently in
-  the user scope. Prefer the repository-pinned version and confirm the installed
-  version before continuing.
-- When the host must remain unchanged, install a missing exact-version tool in
-  a unique, verified system temporary directory. Remove only that directory
-  after verification and confirm that it no longer exists.
-- Do not impose an arbitrary 60-second process timeout on
-  `scripts/verify.py --static-only`. Give the verifier enough lifetime for
-  dependency audits, model proof, and both test suites; yield or poll output
-  without terminating the subprocess. External timeout termination is not
-  verification evidence.
-- Disclose a local runtime mismatch instead of hiding it. GitHub Actions on the
-  repository-pinned versions remains the authoritative proof.
-
-These are local orchestration rules, not additional failed Actions runs in the
-historical ledger.
-
-### Owner-approved Markdown-only CI skip
-
-Any GitHub-supported skip instruction may appear in an initial PR head or a
-later head only when every condition below holds. Every supported form is
-prohibited outside this exception.
-
-1. The owner explicitly approves the skip for that PR head and its merge.
-2. The exact PR base commit is the then-current `main` baseline. Record the
-   baseline SHA and the latest applicable successful runtime proof; intervening
-   owner-approved Markdown-only merges do not require new runtime proof.
-3. Every path in the complete base-to-head PR diff ends in `.md`. The changes
-   are limited to non-executable wording, evidence, links, or review cleanup
-   guidance; no workflow file, script, test, configuration, dependency, or
-   application behavior changes.
-4. `python scripts/check_docs.py` and `git diff --check` pass on the review head.
-5. The review-head commit carries a supported skip instruction and receives an
-   independent exact-head review.
-
-Update the PR description before initial review or re-review with:
-
-- the current review head
-- the owner's Markdown-only skip approval
-- the exact base `main` SHA, workflow event, and successful run link
-- the exact Markdown file count and path list in the complete PR diff
-- the review-head local documentation results
-- an explicit statement that no exact-head Actions run exists or is claimed
-
-The reviewer independently verifies the base, full file boundary, local proof,
-and absent run. It reports the missing exact-head run as an approved limitation,
-not as passing evidence. Any failed condition restores the normal exact-head
-Actions requirement. The same approved exception skips the default-branch
-workflow for the Markdown-only merge commit.
-
-#### Squash merge message boundary
-
-[GitHub skip instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs)
-suppress both `pull_request` and `push` workflows when the triggering commit
-message contains `[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`,
-`[actions skip]`, or a `skip-checks` trailer. A generated default squash body
-may copy the final correction's subject and carry that instruction into the
-new `main` commit.
-
-When an approved Markdown-only PR used a skip instruction and the established
-merge method is squash:
-
-1. Pin the merge to the independently reviewed PR head.
-2. Supply an explicit squash subject and body that summarize the reviewed PR
-   without copying component commit subjects. Put one supported skip
-   instruction in the explicit squash message so the Markdown-only `main`
-   commit also skips Actions.
-3. Do not accept the hosting service's generated default squash body.
-4. After merge, read the exact merge commit message and require the intended
-   skip instruction. Confirm that no workflow run was created for that merge
-   SHA; do not dispatch or create a trigger commit.
-
-The PR-head and default-branch skips are one owner-approved Markdown-only
-exception. Neither absent run is runtime passing evidence.
-
-### Post-merge knowledge reconciliation
-
-After every feature PR merge, and before the next feature increment:
-
-1. Require the exact merge commit's automatic `push` workflow to complete.
-2. Audit that PR's failed runs and the corrective commits that followed them.
-3. Separate reusable runner knowledge from product defects and review-only
-   corrections.
-4. Prefer an executable regression guard in code, tests, image builds, or the
-   canonical verifier. Add or revise this guide only when the reusable decision
-   rule is new.
-5. Record the outcome in the merged feature's focused Issue. If new knowledge
-   exists, link its focused playbook-update Issue and publish that reviewed
-   update before the next feature increment. If none exists, add `CI knowledge
-   reconciliation: no new reusable finding` to completion evidence; do not
-   create an empty documentation change.
-
-## Change-driven first-push checks
-
-| Changed boundary | Inspect after staging | Durable protection |
-|---|---|---|
-| Python imports or dependency groups | A runtime module must not import a dev- or type-only package. | Isolate type imports with `TYPE_CHECKING`; smoke-import the installed application inside its production image. |
-| Pinned JavaScript framework dependencies | A previously clean lockfile can become vulnerable when a new advisory is published. Re-run the production audit, update the affected exact pin and aligned framework tooling to the first patched release, constrain only an affected transitive edge when its upstream range still resolves vulnerably, regenerate the lockfile, and search the repository for stale copies of the old version. | Keep `pnpm audit --prod --audit-level moderate` in the canonical verifier and require the frozen lockfile install in Actions. |
-| Directly executed Python scripts | Resolve imports using the exact documented command and working directory, without an unrecorded `PYTHONPATH`. | Exercise the same script path through the canonical verifier; lint every verification helper. |
-| Persistence and migrations | Check real PostgreSQL constraints, transaction order, commit/rollback boundaries, and server-specific types. | Flush dependency rows explicitly where ordering is contractual; prove the order and the real database path. |
-| Runtime fixtures and fault data | A check must select records it created, not whichever global row happens to match. A queue-depth proof must not race an unrelated consumer left running by an earlier verifier. | Use deterministic identifiers, quiesce competing consumers before purging or asserting queue ownership, and clean owned data both before the check and in `finally`. |
-| RabbitMQ or Celery topology | Check the pinned broker's queue durability, exclusivity, auto-delete behavior, and removed/deprecated features. | Keep business queues durable; make transient control/event queues exclusive; disable cluster topology the worker does not use. |
-| Browser E2E locators | Accessible-name substring matching can resolve both a landmark and a control whose names share the same words. Framework-owned live regions can also share the intended ARIA role. | Prefer exact accessible-name matching for reviewed labels and filter role locators by the expected user-visible message; keep strict locator mode as the uniqueness guard. |
-| Health and readiness | The health timeout must exceed the legitimate worst-case probe duration. Recovery may precede Docker's aggregate health update. | Budget the full probe; after fault injection poll the affected dependency's direct liveness signal. |
-| Retry and recovery proof | Broad faults plus automatic requeue can create connection churn and obscure the one transition under test. | Capture the exact semantic event, quiesce the actor, restore the dependency, then restart only the target service when possible. |
-| Diagnostics, artifacts, and teardown | The first causal failure must survive even when diagnostics or cleanup also fail. | Sanitize and upload evidence; keep teardown unconditional and scoped only to `reactorfront-portfolio`. |
-
-Do not add compatibility flags merely to make a pinned service accept obsolete
-behavior. Remove unused topology or correct the application contract instead.
-Do not replace bounded readiness polling with an unexplained fixed sleep.
-
-## Failed-run triage and promotion
-
-1. Pin the exact PR head and failed run. Read the failing step, retained
-   artifacts, and the first causal service error before reacting to teardown
-   noise.
-2. Classify the failure as product semantics, dependency/image parity,
-   invocation portability, real-service behavior, timing, state isolation,
-   recovery orchestration, or evidence/cleanup.
-3. Reproduce only through safe, authorized checks. Local Docker is optional and
-   must not be started merely because Actions failed.
-4. Fix the root cause and add the smallest executable regression protection.
-5. Run the allowed canonical verification, push the corrected head, and require
-   its exact workflow result.
-6. Promote only a new reusable decision rule to this guide. Link stable GitHub
-   evidence; do not copy raw logs or preserve a one-off workaround.
-
-## Historical evidence ledger
-
-This ledger accounts for every failed PR run through PR #12 and the reusable
-dependency-advisory failure recorded for PR #31. PRs
-[#2](https://github.com/Kentaro-Ono-jp/Portfolio/pull/2),
-[#10](https://github.com/Kentaro-Ono-jp/Portfolio/pull/10), and
-[#12](https://github.com/Kentaro-Ono-jp/Portfolio/pull/12) had no failed PR run.
-
-| Failure class and signal | Root cause and durable rule | Current executable guard | Evidence |
-|---|---|---|---|
-| Production import failed with `ModuleNotFoundError: mypy_boto3_s3`. | A type-only dependency leaked into runtime. Separate type imports and smoke-import the production install. | [`storage.py`](../../apps/api/src/reactorfront_api/storage.py) and the [API Dockerfile](../../infra/docker/api/Dockerfile) | PR #4 [failed run 29639639004](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29639639004), [fix `df47d81`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/df47d81f2f932132801285c2bab3dce9315fffb0), chain closed by [run 29639908626](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29639908626). |
-| Real submission returned 503 with a PostgreSQL `ForeignKeyViolation`; a later review correction reproduced it. | ORM insertion order was not the FK contract. Explicitly flush document, job, then outbox rows and lock that sequence with a regression test. | [`persistence.py`](../../apps/api/src/reactorfront_api/persistence.py) and [`test_persistence.py`](../../apps/api/tests/test_persistence.py) | PR #4 [failed runs 29639776329](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29639776329) and [29641893290](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29641893290); fixes [`2cecec2`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/2cecec26e82e3034ffbae3f73f6f4db29bfc2425) and [`05b3532`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/05b35322f2bf07a4757eaf0791e5a9c0e5d6ab7a); successful runs [29639908626](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29639908626) and [29642127264](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29642127264). |
-| The outbox verifier could not create its simulated crashed-dispatcher lease. | Runtime proof shared stale database state. Own deterministic records and clean before and in `finally`. | [`test_integration.py`](../../apps/api/tests/test_integration.py) and [`verify_outbox_runtime.py`](../../scripts/verify_outbox_runtime.py) | PR #6 [failed run 29666718552](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29666718552), [fix `58be144`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/58be144ae074da5616f6907c563a2007793aaba6), [successful run 29666913637](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29666913637). |
-| Direct ML verifier execution could not import `scripts.pdf_fixture`. | Direct script execution placed `scripts/`, not the repository root package assumption, on the import path. Use imports valid for the exact invocation. | [`verify_ml_runtime.py`](../../scripts/verify_ml_runtime.py) is linted and executed by [`verify.py`](../../scripts/verify.py). | PR #8 [failed run 29672537036](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29672537036), [fix `549d088`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/549d0889f03f3d7a471c31263fd5cb60656299f0); the next run advanced to RabbitMQ startup and the chain closed at [29674130187](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29674130187). |
-| RabbitMQ 4.3 rejected transient non-exclusive Celery control and event queues. | Deprecated topology survived in two observed layers. Make transient control/event queues exclusive rather than weakening broker policy. | [`celery_app.py`](../../apps/ml/src/reactorfront_ml/celery_app.py) and [`test_celery_app.py`](../../apps/ml/tests/test_celery_app.py) | PR #8 [failed runs 29672715519](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29672715519) and [29673187660](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29673187660); fixes [`640ddbd`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/640ddbd9fc9dadc864cbc9d72c85ed8ff16135ab) and [`674fd1b`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/674fd1b5e96e0e700b2e06b284395671cecf28aa). The next run advanced past the recorded queue rejection before failing worker readiness. |
-| Compose timed out waiting for the ML worker and reported it unhealthy; the log did not contain a RabbitMQ queue rejection. | The corrective commit removed unused gossip/mingle bootsteps and the next run passed. Treat that causal link as bounded historical inference, while retaining the independently justified rule that a single-purpose worker must not enable unused cluster topology. | The [ML Dockerfile](../../infra/docker/ml/Dockerfile) and [`check_ml_compose_boundary.py`](../../scripts/check_ml_compose_boundary.py) | PR #8 [failed run 29673641464](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29673641464), [correction `1826afd`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/1826afd4cea1ac3eda2595e0db983f49cc9a37a4), [successful run 29674130187](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29674130187). |
-| Compose marked the ML worker unhealthy although the full readiness command could complete. | The timeout did not cover model, object-storage, and broker probes on the runner. Budget the complete legitimate probe. | ML healthcheck in [`compose.yaml`](../../compose.yaml) and readiness behavior in [`health.py`](../../apps/ml/src/reactorfront_ml/health.py) | PR #8 [failed run 29675397127](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29675397127), [fix `1f5c4b7`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/1f5c4b7db49dd3c4ed0e4f50bee60650cec4faea); the next run passed readiness, and the chain closed at [29676610655](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29676610655). |
-| After pause/unpause fault injection, Compose still observed MinIO as unhealthy. | Dependency liveness recovered before aggregate Docker health converged. Poll the affected service directly before dependent restart. | `wait_for_minio_liveness` in [`verify_ml_runtime.py`](../../scripts/verify_ml_runtime.py) | PR #8 [failed run 29675923281](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29675923281), [fix `d7e59e1`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/d7e59e115a361558198cf41bd624e3e50cf7c130); the next run reached retry recovery, and the chain closed at [29676610655](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29676610655). |
-| Broker/result fault caused repeated `reject requeue=True` churn during recovery. | The verifier left the actor retrying while a broad fault was restored. Capture one semantic requeue, stop the worker, restore liveness, then restart only that worker with no dependency restart. | Fault and restart orchestration in [`verify_ml_runtime.py`](../../scripts/verify_ml_runtime.py) | PR #8 [failed run 29676215101](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29676215101), [fix `3276457`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/3276457a7429bd885c626a6d41b2ac03a9a25a3c), [successful run 29676610655](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29676610655). |
-| The production JavaScript audit rejected an unchanged Next.js pin after new advisories were published. | A successful earlier audit does not permanently validate a frozen dependency graph. Re-run the audit for every exact candidate; when it fails, update the affected exact pin and aligned framework tooling to the first patched release, constrain only an affected transitive edge when its upstream range still resolves vulnerably, regenerate the lockfile, and remove stale repository references. | The production dependency audit in [`verify.py`](../../scripts/verify.py), the exact pins in [`package.json`](../../apps/web/package.json), the narrow resolution in [`pnpm-workspace.yaml`](../../pnpm-workspace.yaml), and the frozen [`pnpm-lock.yaml`](../../pnpm-lock.yaml) | PR #31 [failed run 30155542598](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30155542598), dependency correction [`bd87ca6`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/bd87ca6f3a0032fdd287c309d6baa55f20b6f5d2), and [successful exact-head run 30155965735](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30155965735). |
-
-The 3 PR #4 failures, 1 PR #6 failure, and 7 PR #8 failures total 11. A
-successful later run proves the whole chain, while the linked corrective commit
-and disappearance of the earlier signal identify the individual fix. PR #31's
-dependency-advisory failure is counted separately and closed at the linked
-exact-head run.
+The order above is precedence. Open one route only. Return here after the
+selected procedure changes state; if no condition matches, return to the
+[AI work router](../../docs/ai/README.md).

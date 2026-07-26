@@ -1,30 +1,24 @@
 # Repository guidance for AI agents
 
-This is the explicit, tracked entrypoint for AI-assisted work in this
-repository.
+<!-- docforai-role: router -->
 
-## Start here
+This is the thin, tracked entrypoint for AI-assisted work in this repository.
+It selects guidance; it is not the complete operating manual.
 
-1. Read [README.md](README.md).
-2. Read [the AI collaboration contract](docs/ai/README.md).
-3. Read accepted ADRs under [docs/adr](docs/adr/README.md), in numeric order.
-4. Read accepted delivery specifications under
-   [docs/delivery](docs/delivery), in numeric order.
-5. Identify the accepted delivery specification governing the current task and
-   read its linked tracking Issue.
-6. Read the nearest area-specific README for the files in scope.
-7. Read only the focused Issue, PR, verdict, and Actions evidence needed for
-   the current task.
+## Start
 
-Accepted ADRs and delivery specifications govern product and structural
-design. Repository guidance governs durable collaboration. GitHub Issues,
-PRs, commits, verdicts, and Actions runs govern live state. Local memory and
-earlier conversations are orientation only.
+1. Read the [AI work router](docs/ai/README.md).
+2. Select the first matching state there and open only that route.
+3. Follow one explicit next or return transition at a time. Do not preload
+   sibling workflows, reference files, accepted design records, or CI history.
 
-## Non-negotiable boundaries
+Use the [tool-neutral pointer](AI_GUIDANCE.md) only to reach this file. It is
+not another source of rules.
 
-- Implement only accepted design. A material structural change requires an ADR
-  or specification change in the same PR.
+## Non-negotiable product boundaries
+
+- Implement only accepted design. A material product or structural change
+  requires an ADR or delivery-specification change in the same reviewed work.
 - Keep `apps/web`, `apps/api`, and `apps/ml` independently deployable.
 - Do not import another deployable area's private implementation.
 - Keep cross-language contracts, not shared business logic, in
@@ -33,47 +27,31 @@ earlier conversations are orientation only.
 - Keep cross-service integration and end-to-end tests outside service
   internals.
 
-## Work modes
-
-- Implementation, publication, merge, evidence, and cleanup follow
-  [docs/ai/README.md](docs/ai/README.md).
-- Initial PR review and re-review follow
-  [docs/ai/PR_REVIEW.md](docs/ai/PR_REVIEW.md).
-- Fast-changing status stays in the live GitHub ledger; do not create a tracked
-  handoff or current-status duplicate.
-
 ## Verification and Docker
 
 - Use `python scripts/verify.py` as the only root verification entrypoint.
-- For feature work, apply the
-  [CI playbook](.github/workflows/CI_PLAYBOOK.md) only to the complete staged
-  pre-commit candidate, then reconcile reusable CI knowledge after merge.
-- Install pinned JavaScript dependencies with
-  `pnpm install --frozen-lockfile` before canonical verification.
-- AI-agent local verification uses `python scripts/verify.py --static-only`.
-  Docker-backed groups run in GitHub Actions. Do not start or mutate local
-  Docker Desktop unless the owner explicitly authorizes local Docker for the
-  exact task.
-- GitHub Actions is the authoritative runtime proof.
-- The Compose project name is `reactorfront-portfolio`.
-- Never use global Docker cleanup or prune commands. Scope operations and
-  cleanup to this project.
-- Do not add `container_name` or declare external networks or volumes without a
-  documented requirement.
+- GitHub Actions is authoritative for Docker-backed runtime proof.
+- AI-agent local verification is static-only. Route every Docker-backed group
+  to GitHub Actions instead of requesting local Docker access.
+- The Compose project is `reactorfront-portfolio`. Never use global Docker
+  cleanup or prune commands.
+- A complete staged candidate enters the thin
+  [CI router](.github/workflows/CI_PLAYBOOK.md); it does not load every CI
+  procedure or historical failure record.
 
-## Public repository safety
+## Public boundary
 
-Commit only portable, project-relevant material. Never commit credentials,
-tokens, private source or company context, personal facts, machine-specific
-paths, raw chats, hidden reasoning, or local-memory exports. Use safe examples
-and deterministic, redistributable data. Preserve the standard MIT License and
-record third-party licensing when assets, data, models, or dependencies are
-introduced.
+Commit only portable, project-relevant material. Exclude credentials, private
+source or company context, personal facts, machine-specific paths, raw chats,
+hidden reasoning, and unfiltered local-memory exports. Use repository-owned
+synthetic fixtures and preserve applicable licensing.
 
-## Stop conditions
+## Discrepancy recovery
 
-Stop the pending mutation and report the smallest relevant discrepancy when
-the workspace is unexpectedly dirty, a required head moved, live evidence
-contradicts the focused scope, an unknown actor changed durable state, or
-automation gained unrecorded authority. Never reset or discard unrelated work
-to make the discrepancy disappear.
+When the workspace is unexpectedly dirty, a required head moved, live evidence
+contradicts the focused scope, an unknown actor changed durable state,
+automation gained unrecorded authority, or routing has no single matching
+state, preserve the smallest relevant discrepancy and use the routed
+live-state recovery. Never reset or discard unrelated work. Request a decision
+only when recovery requires selecting or materially redefining the focused
+slice.

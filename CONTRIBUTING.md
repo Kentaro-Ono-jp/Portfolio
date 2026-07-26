@@ -5,10 +5,10 @@ preserve its role as a focused, reproducible public engineering record.
 
 ## Before proposing a change
 
-1. Read [`README.md`](README.md), the accepted
-   [ADRs](docs/adr/README.md), and accepted
-   [delivery specifications](docs/delivery/) in numeric order. Identify the
-   specification governing the change and read its linked tracking Issue.
+1. Use the [delivery index](docs/delivery/README.md) to identify one governing
+   specification and tracking Issue. Use the [ADR index](docs/adr/README.md) to
+   select only decisions implicated by the proposed boundary. Read broader
+   design history only when a concrete dependency or conflict requires it.
 2. Search existing Issues and open or select one focused Issue that states the
    outcome, scope, non-targets, failure model, and acceptance criteria.
 3. Do not submit client, employer, personal, licensed-without-permission, or

@@ -1,6 +1,6 @@
 # ADR-0006: Consolidate repository-owned AI guidance
 
-- Status: Accepted
+- Status: Superseded by [ADR-0008](0008-progressive-disclosure-ai-guidance.md)
 - Date: 2026-07-19
 - Supersedes: [ADR-0005](0005-repository-owned-ai-collaboration.md)
 - Tracking issue: [#11](https://github.com/Kentaro-Ono-jp/Portfolio/issues/11)

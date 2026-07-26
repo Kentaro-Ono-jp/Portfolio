@@ -1,7 +1,7 @@
 # Tool-neutral AI entrypoint
 
-All AI-assisted work in this repository starts with
-[GIT_AGENTS.md](GIT_AGENTS.md). Follow its links for implementation or
-independent review.
+<!-- docforai-role: pointer -->
 
-This file is a compatibility pointer, not a second source of rules.
+Start at [GIT_AGENTS.md](GIT_AGENTS.md), then follow exactly one route selected
+by its AI work router. This compatibility pointer is not a second source of
+rules.
