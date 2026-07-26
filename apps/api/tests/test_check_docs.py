@@ -102,6 +102,10 @@ def test_governance_knowledge_write_route_is_complete(
             "accepted focused governance Issue",
             "independently reviewed update",
             "do not create a recursive empty Issue",
+            "ordered candidate queue",
+            "For each queued candidate",
+            "return to step 4 for the next queued candidate",
+            "Only after the queue is exhausted",
         ),
         selector: (
             "not an append-only incident ledger",
@@ -125,6 +129,72 @@ def test_governance_knowledge_write_route_is_complete(
     }
     for path, fragments in expected_write_guards.items():
         assert all(fragment in required_text[path] for fragment in fragments)
+
+
+def test_governance_selector_rejects_duplicate_signal_keys(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = (REPOSITORY_ROOT / "docs" / "ai" / "knowledge" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    duplicate = source.replace(
+        "| `reconciliation` |",
+        "| `issue-evidence` |",
+        1,
+    )
+    selector = tmp_path / "docs" / "ai" / "knowledge" / "README.md"
+    selector.parent.mkdir(parents=True)
+    selector.write_text(duplicate, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_governance_knowledge_selector(failures)
+
+    assert any("signal keys must be unique" in failure for failure in failures)
+    assert any("signal 'issue-evidence' must map exactly once" in failure for failure in failures)
+    assert any("signal 'reconciliation' must map exactly once" in failure for failure in failures)
+
+
+def test_governance_selector_rejects_ambiguous_evidence_wording(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = (REPOSITORY_ROOT / "docs" / "ai" / "knowledge" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    ambiguous = source.replace(
+        "Post-merge sequencing, main fast-forward, branch deletion, or task-owned cleanup",
+        "Issue evidence and completion proof",
+        1,
+    )
+    selector = tmp_path / "docs" / "ai" / "knowledge" / "README.md"
+    selector.parent.mkdir(parents=True)
+    selector.write_text(ambiguous, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_governance_knowledge_selector(failures)
+
+    assert any(
+        "signal 'reconciliation' is missing disambiguating text 'Post-merge sequencing'" in failure
+        for failure in failures
+    )
+
+
+def test_governance_reconciliation_keeps_processing_multiple_candidates() -> None:
+    procedure = (
+        REPOSITORY_ROOT / "docs" / "ai" / "workflows" / "governance-reconcile.md"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        procedure.index("ordered candidate queue")
+        < procedure.index("For each queued candidate")
+        < procedure.index("return to step 4 for the next queued candidate")
+        < procedure.index("Only after the queue is exhausted")
+    )
 
 
 def test_review_verdict_has_one_governance_candidate_field() -> None:

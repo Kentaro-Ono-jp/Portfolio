@@ -12,26 +12,30 @@ the other targets.
 
 ## Select one target
 
-| Signal | Canonical target |
-|---|---|
-| Actor, permission, confirmation, or mutation boundary | [Authority reference](../reference/authority.md) |
-| Dirty, stale, moved, contradictory, or unknown-writer recovery | [Live-state reference](../reference/live-state.md) |
-| Local command, installation, privilege, or environment fallback | [Local-tools reference](../reference/local-tools.md) |
-| Secret, private context, machine path, fixture, or public content | [Public-safety reference](../reference/public-safety.md) |
-| Focused or umbrella Issue evidence and completion proof | [Evidence reference](../reference/evidence.md) |
-| Focused-slice selection or material redefinition | [Focus workflow](../workflows/focus.md) |
-| Implementation, verification, or staged-candidate preparation | [Implementation workflow](../workflows/implement.md) |
-| Commit, push, Draft PR, or exact-head evidence | [Publication workflow](../workflows/publish.md) |
-| Actionable-review correction and re-review loop | [Correction workflow](../workflows/correct.md) |
-| Ready or exact-head merge guard | [Merge workflow](../workflows/merge.md) |
-| Main proof, Issue evidence, branch, or task-owned cleanup | [Reconciliation workflow](../workflows/reconcile.md) |
-| Independent clone and exact-head setup | [Review setup](../review/setup.md) |
-| Independent full-diff and proof inspection | [Review inspection](../review/inspect.md) |
-| One-comment verdict content or publication | [Review verdict](../review/verdict.md) |
-| Independent temporary-data cleanup | [Review cleanup](../review/cleanup.md) |
-| CI runner, verification, or Actions failure | [CI router](../../../.github/workflows/CI_PLAYBOOK.md) |
-| Product or structural decision | [ADR index](../../adr/README.md) through the focus workflow |
-| Delivery contract, acceptance, or completion evidence | [Delivery index](../../delivery/README.md) through the focus workflow |
+Rows are ordered precedence. Classify one atomic root-cause signal with the
+first matching key. If one observation spans several keys, split it into
+atomic candidates before selection; never assign one candidate to two targets.
+
+| Signal key | Signal | Canonical target |
+|---|---|---|
+| `actor-authority` | Actor, permission, confirmation, or mutation boundary | [Authority reference](../reference/authority.md) |
+| `live-state` | Dirty, stale, moved, contradictory, or unknown-writer recovery | [Live-state reference](../reference/live-state.md) |
+| `local-tools` | Local command, installation, privilege, or environment fallback | [Local-tools reference](../reference/local-tools.md) |
+| `public-safety` | Secret, private context, machine path, fixture, or public content | [Public-safety reference](../reference/public-safety.md) |
+| `issue-evidence` | Checklist criterion mapping, completion-evidence content, or umbrella-gate proof | [Evidence reference](../reference/evidence.md) |
+| `focus` | Focused-slice selection or material redefinition | [Focus workflow](../workflows/focus.md) |
+| `implementation` | Implementation, verification, or staged-candidate preparation | [Implementation workflow](../workflows/implement.md) |
+| `publication` | Commit, push, Draft PR, or exact-head evidence publication | [Publication workflow](../workflows/publish.md) |
+| `correction` | Actionable-review correction and re-review loop | [Correction workflow](../workflows/correct.md) |
+| `merge` | Ready or exact-head merge guard | [Merge workflow](../workflows/merge.md) |
+| `reconciliation` | Post-merge sequencing, main fast-forward, branch deletion, or task-owned cleanup | [Reconciliation workflow](../workflows/reconcile.md) |
+| `review-setup` | Independent clone and exact-head setup | [Review setup](../review/setup.md) |
+| `review-inspection` | Independent full-diff and proof inspection | [Review inspection](../review/inspect.md) |
+| `review-verdict` | One-comment verdict content or publication | [Review verdict](../review/verdict.md) |
+| `review-cleanup` | Independent temporary-data cleanup | [Review cleanup](../review/cleanup.md) |
+| `ci` | CI runner, verification, or Actions failure | [CI router](../../../.github/workflows/CI_PLAYBOOK.md) |
+| `architecture` | Product or structural decision | [ADR index](../../adr/README.md) |
+| `delivery` | Delivery contract, acceptance, or completion evidence | [Delivery index](../../delivery/README.md) |
 
 If no row owns the signal, return it as an unclassified candidate. Do not force
 it into a nearby target or add a duplicate general ledger.

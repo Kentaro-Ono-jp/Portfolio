@@ -55,12 +55,18 @@ Issue.
 
 ### Select one canonical destination
 
-The governance selector is a thin router, not an append-only ledger. It maps
-one concrete signal at a time to an existing canonical reference, lifecycle
-procedure, review procedure, CI route, ADR index, or delivery index.
+The governance selector is a thin router, not an append-only ledger. It assigns
+one atomic root-cause signal key at a time, using ordered precedence, to an
+existing canonical reference, lifecycle procedure, review procedure, CI route,
+ADR index, or delivery index. A compound observation is split before
+selection, so one candidate never receives two canonical targets.
 
 The caller compares the candidate with the selected rule and executable guards.
 It does not copy the same rule into a second destination.
+
+Reconciliation processes an ordered candidate queue. Each candidate receives
+and records one outcome before the workflow returns for the next candidate;
+the aggregate no-finding outcome is decided only after queue exhaustion.
 
 ### Promote through focused review
 
@@ -79,7 +85,9 @@ the merged feature before the next feature increment.
 Documentation verification owns the exact selector and procedure inventory,
 route reachability, canonical markers, thin-router budget, reviewer candidate
 field, no-finding outcome, focused-Issue and reviewed-PR promotion policy, and
-CI/design rerouting text.
+CI/design rerouting text. It also verifies the complete ordered signal-key to
+target mapping and rejects duplicate keys, wrong targets, and removal of the
+multi-candidate loop.
 
 ## Consequences
 
@@ -99,6 +107,8 @@ CI/design rerouting text.
   next feature increment.
 - Candidate classification still requires judgment; exact evidence and
   independent review bound that judgment.
+- Taxonomy changes require representative ambiguity and multiple-candidate
+  negative regressions, not destination-inventory assertions alone.
 
 ## Rejected alternatives
 

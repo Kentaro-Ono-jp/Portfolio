@@ -15,22 +15,25 @@ recorded reusable process or review candidate.
    proof or qualified exception, focused Issue, PR, and all verdict URLs.
 2. Audit only this slice's review candidates, actionable findings, correction
    chain, bounded recovery, evidence reconciliation, and cleanup outcomes.
-3. Separate product defects and one-off observations from reusable process
-   rules. A reviewer candidate is evidence to classify, not authority to
-   mutate guidance.
-4. Return CI runner or Actions signals to the
+   Normalize them into an ordered candidate queue, split compound observations
+   into atomic root-cause signals, and deduplicate only identical stable
+   evidence.
+3. When the queue is empty, skip to step 9.
+4. For each queued candidate, separate product defects and one-off observations
+   from reusable process rules. A reviewer candidate is evidence to classify,
+   not authority to mutate guidance.
+5. Return CI runner or Actions signals to the
    [CI router](../../../.github/workflows/CI_PLAYBOOK.md). Return material
    product or structural signals to [focus](focus.md) and ADR or delivery
    change control.
-5. For one reusable collaboration signal, use the
+6. For one reusable collaboration signal, use the
    [governance knowledge selector](../knowledge/README.md), read the selected
    canonical target, then return here.
-6. Compare the candidate with the existing rule and executable guards. Do not
+7. Compare the candidate with the existing rule and executable guards. Do not
    create a second canonical home or preserve raw review transcripts.
-7. Choose exactly one outcome:
+8. Record exactly one outcome for this candidate:
    - **none:** record
-     `Governance knowledge reconciliation: no new reusable finding` in the
-     focused Issue
+     it as product-specific, one-off, or already represented
    - **already satisfied:** link the current accepted focused governance PR
      and its proof; do not create a recursive empty Issue
    - **new reusable rule:** return to focus for owner selection, create or link
@@ -38,7 +41,13 @@ recorded reusable process or review candidate.
      reviewed update before the next feature increment
    - **unclassified:** record the exact candidate and gap without mutating a
      nearby rule
-8. Return the outcome and stable evidence to post-merge reconciliation.
+   After recording the outcome, return to step 4 for the next queued candidate.
+9. Only after the queue is exhausted, write one aggregate outcome in the
+   focused Issue. When no candidate produced an already-satisfied, new, or
+   unclassified reusable rule, record
+   `Governance knowledge reconciliation: no new reusable finding`.
+10. Return every per-candidate outcome and its stable evidence to post-merge
+    reconciliation.
 
 ## Recovery
 
