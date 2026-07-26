@@ -5,8 +5,8 @@ preserve its role as a focused, reproducible public engineering record.
 
 ## Before proposing a change
 
-1. Use the [delivery index](docs/delivery/README.md) to identify one governing
-   specification and tracking Issue. Use the [ADR index](docs/adr/README.md) to
+1. Use the [delivery index](aios/delivery/index.md) to identify one governing
+   specification and tracking Issue. Use the [ADR index](aios/adr/index.md) to
    select only decisions implicated by the proposed boundary. Read broader
    design history only when a concrete dependency or conflict requires it.
 2. Search existing Issues and open or select one focused Issue that states the

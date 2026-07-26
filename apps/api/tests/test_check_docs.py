@@ -31,22 +31,37 @@ def test_progressive_routing_covers_the_complete_guidance_surface(
     documentation_checker: ModuleType,
 ) -> None:
     routes = documentation_checker.REQUIRED_ROUTE_LINKS
-    roles = documentation_checker.DOCFORAI_FILE_ROLES
+    roles = documentation_checker.AIOS_FILE_ROLES
 
     assert routes[Path("GIT_AGENTS.md")] == (
         Path("AI_GUIDANCE.md"),
-        Path("docs/ai/README.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
+        Path("aios/work-router.md"),
+        Path("aios/ci/router.md"),
     )
-    assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/README.md")]
-    assert Path("docs/ai/workflows/governance-reconcile.md") in routes[Path("docs/ai/README.md")]
-    assert Path("docs/ai/ci/markdown-only.md") not in routes[Path("docs/ai/ci/preflight.md")]
-    assert Path("docs/ai/ci/knowledge/README.md") in routes[Path("docs/ai/ci/preflight.md")]
-    assert Path("docs/ai/knowledge/README.md") not in routes[Path("docs/ai/workflows/implement.md")]
-    assert Path("docs/ai/knowledge/README.md") not in routes[Path("docs/ai/review/inspect.md")]
-    assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/workflows/correct.md")]
-    assert Path("docs/ai/workflows/merge.md") in routes[Path("docs/ai/workflows/correct.md")]
-    assert set(roles.values()) == {"router", "procedure", "reference", "knowledge"}
+    assert Path("aios/procedures/focus.md") in routes[Path("aios/work-router.md")]
+    assert Path("aios/procedures/governance-reconcile.md") in routes[Path("aios/work-router.md")]
+    assert (
+        Path("aios/ci/exceptions/markdown-only.md")
+        not in routes[Path("aios/ci/procedures/preflight.md")]
+    )
+    assert Path("aios/ci/knowledge/selector.md") in routes[Path("aios/ci/procedures/preflight.md")]
+    assert (
+        Path("aios/selectors/governance-knowledge.md")
+        not in routes[Path("aios/procedures/implement.md")]
+    )
+    assert (
+        Path("aios/selectors/governance-knowledge.md") not in routes[Path("aios/review/inspect.md")]
+    )
+    assert Path("aios/procedures/focus.md") in routes[Path("aios/procedures/correct.md")]
+    assert Path("aios/procedures/merge.md") in routes[Path("aios/procedures/correct.md")]
+    assert set(roles.values()) == {
+        "router",
+        "selector",
+        "procedure",
+        "reference",
+        "knowledge",
+        "exception",
+    }
 
 
 def test_every_canonical_rule_has_one_declared_owner(
@@ -56,11 +71,13 @@ def test_every_canonical_rule_has_one_declared_owner(
 
     assert len(owners) == len(set(owners))
     assert len(owners.values()) == len(set(owners.values()))
-    assert owners["actor-authority"] == Path("docs/ai/reference/authority.md")
-    assert owners["ci-markdown-only-exception"] == Path("docs/ai/ci/markdown-only.md")
-    assert owners["governance-knowledge-selection"] == Path("docs/ai/knowledge/README.md")
+    assert owners["actor-authority"] == Path("aios/references/authority.md")
+    assert owners["ci-markdown-only-exception"] == Path("aios/ci/exceptions/markdown-only.md")
+    assert owners["governance-knowledge-selection"] == Path(
+        "aios/selectors/governance-knowledge.md"
+    )
     assert owners["governance-knowledge-reconciliation"] == Path(
-        "docs/ai/workflows/governance-reconcile.md"
+        "aios/procedures/governance-reconcile.md"
     )
 
 
@@ -69,31 +86,31 @@ def test_governance_knowledge_write_route_is_complete(
 ) -> None:
     routes = documentation_checker.REQUIRED_ROUTE_LINKS
     required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
-    reconciliation = Path("docs/ai/workflows/governance-reconcile.md")
-    selector = Path("docs/ai/knowledge/README.md")
+    reconciliation = Path("aios/procedures/governance-reconcile.md")
+    selector = Path("aios/selectors/governance-knowledge.md")
 
-    assert reconciliation in routes[Path("docs/ai/README.md")]
-    assert reconciliation in routes[Path("docs/ai/workflows/reconcile.md")]
+    assert reconciliation in routes[Path("aios/work-router.md")]
+    assert reconciliation in routes[Path("aios/procedures/reconcile.md")]
     assert selector in routes[reconciliation]
     assert set(routes[selector]) == {
-        Path("docs/ai/reference/authority.md"),
-        Path("docs/ai/reference/live-state.md"),
-        Path("docs/ai/reference/local-tools.md"),
-        Path("docs/ai/reference/public-safety.md"),
-        Path("docs/ai/reference/evidence.md"),
-        Path("docs/ai/workflows/focus.md"),
-        Path("docs/ai/workflows/implement.md"),
-        Path("docs/ai/workflows/publish.md"),
-        Path("docs/ai/workflows/correct.md"),
-        Path("docs/ai/workflows/merge.md"),
-        Path("docs/ai/workflows/reconcile.md"),
-        Path("docs/ai/review/setup.md"),
-        Path("docs/ai/review/inspect.md"),
-        Path("docs/ai/review/verdict.md"),
-        Path("docs/ai/review/cleanup.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/adr/README.md"),
-        Path("docs/delivery/README.md"),
+        Path("aios/references/authority.md"),
+        Path("aios/references/live-state.md"),
+        Path("aios/references/local-tools.md"),
+        Path("aios/references/public-safety.md"),
+        Path("aios/references/evidence.md"),
+        Path("aios/procedures/focus.md"),
+        Path("aios/procedures/implement.md"),
+        Path("aios/procedures/publish.md"),
+        Path("aios/procedures/correct.md"),
+        Path("aios/procedures/merge.md"),
+        Path("aios/procedures/reconcile.md"),
+        Path("aios/review/setup.md"),
+        Path("aios/review/inspect.md"),
+        Path("aios/review/verdict.md"),
+        Path("aios/review/cleanup.md"),
+        Path("aios/ci/router.md"),
+        Path("aios/adr/index.md"),
+        Path("aios/delivery/index.md"),
     }
 
     expected_write_guards = {
@@ -113,15 +130,15 @@ def test_governance_knowledge_write_route_is_complete(
             "accepted focused governance Issue",
             "independently reviewed PR",
         ),
-        Path("docs/ai/review/verdict.md"): (
+        Path("aios/review/verdict.md"): (
             "Reusable governance candidate",
             "not permission for the reviewer",
         ),
-        Path("docs/ai/ci/failure-triage.md"): (
+        Path("aios/ci/procedures/failure-triage.md"): (
             "Promote only a new reusable decision rule",
             "Update one canonical knowledge leaf or add one routed leaf",
         ),
-        Path("docs/ai/ci/post-merge.md"): (
+        Path("aios/ci/procedures/post-merge-reconcile.md"): (
             "Revise or add one knowledge leaf",
             "focused playbook-update Issue",
             "Publish a knowledge change only through its focused Issue",
@@ -136,7 +153,7 @@ def test_governance_selector_rejects_duplicate_signal_keys(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    source = (REPOSITORY_ROOT / "docs" / "ai" / "knowledge" / "README.md").read_text(
+    source = (REPOSITORY_ROOT / "aios" / "selectors" / "governance-knowledge.md").read_text(
         encoding="utf-8"
     )
     duplicate = source.replace(
@@ -144,7 +161,7 @@ def test_governance_selector_rejects_duplicate_signal_keys(
         "| `issue-evidence` |",
         1,
     )
-    selector = tmp_path / "docs" / "ai" / "knowledge" / "README.md"
+    selector = tmp_path / "aios" / "selectors" / "governance-knowledge.md"
     selector.parent.mkdir(parents=True)
     selector.write_text(duplicate, encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -162,7 +179,7 @@ def test_governance_selector_rejects_ambiguous_evidence_wording(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    source = (REPOSITORY_ROOT / "docs" / "ai" / "knowledge" / "README.md").read_text(
+    source = (REPOSITORY_ROOT / "aios" / "selectors" / "governance-knowledge.md").read_text(
         encoding="utf-8"
     )
     ambiguous = source.replace(
@@ -170,7 +187,7 @@ def test_governance_selector_rejects_ambiguous_evidence_wording(
         "Issue evidence and completion proof",
         1,
     )
-    selector = tmp_path / "docs" / "ai" / "knowledge" / "README.md"
+    selector = tmp_path / "aios" / "selectors" / "governance-knowledge.md"
     selector.parent.mkdir(parents=True)
     selector.write_text(ambiguous, encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -185,9 +202,9 @@ def test_governance_selector_rejects_ambiguous_evidence_wording(
 
 
 def test_governance_reconciliation_keeps_processing_multiple_candidates() -> None:
-    procedure = (
-        REPOSITORY_ROOT / "docs" / "ai" / "workflows" / "governance-reconcile.md"
-    ).read_text(encoding="utf-8")
+    procedure = (REPOSITORY_ROOT / "aios" / "procedures" / "governance-reconcile.md").read_text(
+        encoding="utf-8"
+    )
 
     assert (
         procedure.index("ordered candidate queue")
@@ -198,9 +215,7 @@ def test_governance_reconciliation_keeps_processing_multiple_candidates() -> Non
 
 
 def test_review_verdict_has_one_governance_candidate_field() -> None:
-    verdict = (REPOSITORY_ROOT / "docs" / "ai" / "review" / "verdict.md").read_text(
-        encoding="utf-8"
-    )
+    verdict = (REPOSITORY_ROOT / "aios" / "review" / "verdict.md").read_text(encoding="utf-8")
 
     assert verdict.count("### Reusable governance candidate") == 1
     assert (
@@ -215,9 +230,9 @@ def _write_review_candidate_capture_fixture(
     overrides: dict[Path, tuple[str, str]],
 ) -> None:
     relative_paths = (
-        Path("docs/ai/review/inspect.md"),
-        Path("docs/ai/review/verdict.md"),
-        Path("docs/ai/workflows/governance-reconcile.md"),
+        Path("aios/review/inspect.md"),
+        Path("aios/review/verdict.md"),
+        Path("aios/procedures/governance-reconcile.md"),
     )
     for relative_path in relative_paths:
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
@@ -234,31 +249,31 @@ def _write_review_candidate_capture_fixture(
     ("relative_path", "old", "new", "expected_fragment"),
     [
         (
-            Path("docs/ai/review/inspect.md"),
+            Path("aios/review/inspect.md"),
             "classify every evidenced reusable process or review candidate",
             "classify one reusable process or review candidate",
             "classify every evidenced reusable process or review candidate",
         ),
         (
-            Path("docs/ai/review/verdict.md"),
+            Path("aios/review/verdict.md"),
             "one numbered item for every atomic reusable candidate",
             "one numbered item for one reusable candidate",
             "one numbered item for every atomic reusable candidate",
         ),
         (
-            Path("docs/ai/review/verdict.md"),
+            Path("aios/review/verdict.md"),
             "`none` is permitted only when no reusable candidate was discovered",
             "`none` is always permitted",
             "`none` is permitted only when no reusable candidate was discovered",
         ),
         (
-            Path("docs/ai/workflows/governance-reconcile.md"),
+            Path("aios/procedures/governance-reconcile.md"),
             "Expand every numbered candidate item from every verdict",
             "Expand the first candidate item from every verdict",
             "Expand every numbered candidate item from every verdict",
         ),
         (
-            Path("docs/ai/workflows/governance-reconcile.md"),
+            Path("aios/procedures/governance-reconcile.md"),
             "Never stop ingestion after the first verdict item",
             "Stop ingestion after the first verdict item",
             "Never stop ingestion after the first verdict item",
@@ -301,9 +316,9 @@ def _write_shallow_review_diff_fixture(
     overrides: dict[Path, tuple[str, str]],
 ) -> None:
     relative_paths = (
-        Path("docs/ai/PR_REVIEW.md"),
-        Path("docs/ai/review/setup.md"),
-        Path("docs/ai/review/inspect.md"),
+        Path("aios/review/router.md"),
+        Path("aios/review/setup.md"),
+        Path("aios/review/inspect.md"),
     )
     for relative_path in relative_paths:
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
@@ -320,37 +335,37 @@ def _write_shallow_review_diff_fixture(
     ("relative_path", "old", "new", "expected_fragment"),
     [
         (
-            Path("docs/ai/PR_REVIEW.md"),
+            Path("aios/review/router.md"),
             "Expected full base SHA",
             "Base branch name",
             "Expected full base SHA",
         ),
         (
-            Path("docs/ai/review/setup.md"),
+            Path("aios/review/setup.md"),
             "git fetch --no-tags --depth 1 origin <expected-base-sha>",
             "git fetch --unshallow origin",
             "git fetch --no-tags --depth 1 origin <expected-base-sha>",
         ),
         (
-            Path("docs/ai/review/setup.md"),
+            Path("aios/review/setup.md"),
             "git cat-file -e <expected-base-sha>^{commit}",
             "git log --all",
             "git cat-file -e <expected-base-sha>^{commit}",
         ),
         (
-            Path("docs/ai/review/inspect.md"),
+            Path("aios/review/inspect.md"),
             "git diff --name-status <expected-base-sha> <expected-head-sha>",
             "git diff --name-status <expected-base-sha>...<expected-head-sha>",
             "git diff --name-status <expected-base-sha> <expected-head-sha>",
         ),
         (
-            Path("docs/ai/review/inspect.md"),
+            Path("aios/review/inspect.md"),
             "canonical GitHub PR patch and complete paginated file inventory",
             "pull request file count",
             "canonical GitHub PR patch and complete paginated file inventory",
         ),
         (
-            Path("docs/ai/review/inspect.md"),
+            Path("aios/review/inspect.md"),
             "Require the GitHub and exact endpoint inventories to agree",
             "inspect the GitHub and endpoint inventories separately",
             "Require the GitHub and exact endpoint inventories to agree",
@@ -393,23 +408,23 @@ def test_shallow_review_diff_contract_is_complete(
     [
         (
             Path("CONTRIBUTING.md"),
-            "[delivery specifications](docs/delivery/) in numeric order",
+            "[delivery specifications](aios/delivery/) in numeric order",
         ),
         (
             Path("GIT_AGENTS.md"),
-            "Read [the AI collaboration contract](docs/ai/README.md)",
+            "Read [the AI collaboration contract](aios/work-router.md)",
         ),
         (Path("GIT_AGENTS.md"), "accepted ADRs under"),
         (
-            Path("docs/ai/README.md"),
+            Path("aios/work-router.md"),
             "Read [GIT_AGENTS.md] and its required design sources",
         ),
         (
-            Path("docs/ai/PR_REVIEW.md"),
+            Path("aios/review/router.md"),
             "accepted ADRs and accepted delivery specifications in numeric order",
         ),
         (
-            Path(".github/workflows/CI_PLAYBOOK.md"),
+            Path("aios/ci/router.md"),
             "Historical evidence ledger",
         ),
     ],
@@ -439,8 +454,8 @@ def test_route_validation_rejects_a_missing_required_link(
 
     def without_focus(source: Path) -> set[Path]:
         links = original(source)
-        if source == Path("docs/ai/README.md"):
-            links.discard(Path("docs/ai/workflows/focus.md"))
+        if source == Path("aios/work-router.md"):
+            links.discard(Path("aios/procedures/focus.md"))
         return links
 
     monkeypatch.setattr(documentation_checker, "resolved_local_links", without_focus)
@@ -448,7 +463,7 @@ def test_route_validation_rejects_a_missing_required_link(
 
     documentation_checker._validate_routes(failures)
 
-    assert ("docs/ai/README.md: missing required route link docs/ai/workflows/focus.md") in failures
+    assert ("aios/work-router.md: missing required route link aios/procedures/focus.md") in failures
 
 
 def test_route_validation_rejects_an_unreachable_guidance_file(
@@ -461,8 +476,8 @@ def test_route_validation_rejects_an_unreachable_guidance_file(
         {
             Path("GIT_AGENTS.md"): (
                 Path("AI_GUIDANCE.md"),
-                Path("docs/ai/README.md"),
-                Path(".github/workflows/CI_PLAYBOOK.md"),
+                Path("aios/work-router.md"),
+                Path("aios/ci/router.md"),
             )
         },
     )
@@ -470,7 +485,7 @@ def test_route_validation_rejects_an_unreachable_guidance_file(
 
     documentation_checker._validate_routes(failures)
 
-    assert "routed governance file is unreachable: docs/ai/workflows/focus.md" in failures
+    assert "routed governance file is unreachable: aios/procedures/focus.md" in failures
 
 
 def test_route_validation_rejects_an_undeclared_eager_link(
@@ -481,8 +496,8 @@ def test_route_validation_rejects_an_undeclared_eager_link(
 
     def with_exception_preloaded(source: Path) -> set[Path]:
         links = original(source)
-        if source == Path("docs/ai/ci/preflight.md"):
-            links.add(Path("docs/ai/ci/markdown-only.md"))
+        if source == Path("aios/ci/procedures/preflight.md"):
+            links.add(Path("aios/ci/exceptions/markdown-only.md"))
         return links
 
     monkeypatch.setattr(
@@ -495,11 +510,12 @@ def test_route_validation_rejects_an_undeclared_eager_link(
     documentation_checker._validate_routes(failures)
 
     assert (
-        "docs/ai/ci/preflight.md: contains undeclared route link docs/ai/ci/markdown-only.md"
+        "aios/ci/procedures/preflight.md: contains undeclared route link "
+        "aios/ci/exceptions/markdown-only.md"
     ) in failures
 
 
-def test_router_budget_rejects_entrypoint_growth(
+def test_routing_node_budget_rejects_entrypoint_growth(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -508,14 +524,14 @@ def test_router_budget_rejects_entrypoint_growth(
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     monkeypatch.setattr(
         documentation_checker,
-        "ROUTER_LINE_BUDGETS",
+        "ROUTING_NODE_LINE_BUDGETS",
         {Path("GIT_AGENTS.md"): 2},
     )
     failures: list[str] = []
 
-    documentation_checker._validate_router_budgets(failures)
+    documentation_checker._validate_routing_node_budgets(failures)
 
-    assert "GIT_AGENTS.md: router has 3 lines, budget is 2" in failures
+    assert "GIT_AGENTS.md: routing node has 3 lines, budget is 2" in failures
 
 
 def test_role_validation_rejects_a_missing_marker(
@@ -523,9 +539,9 @@ def test_role_validation_rejects_a_missing_marker(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    guidance = tmp_path / "docs" / "ai"
+    guidance = tmp_path / "aios"
     guidance.mkdir(parents=True)
-    (guidance / "README.md").write_text("# Router\n", encoding="utf-8")
+    (guidance / "work-router.md").write_text("# Router\n", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     failures: list[str] = []
 
@@ -533,10 +549,96 @@ def test_role_validation_rejects_a_missing_marker(
 
     assert any(
         failure.startswith(
-            "docs/ai/README.md: expected one role marker '<!-- docforai-role: router -->'"
+            "aios/work-router.md: expected one role marker '<!-- aios-role: router -->'"
         )
         for failure in failures
     )
+
+
+def test_role_validation_rejects_a_marker_that_disagrees_with_its_path(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    reference = tmp_path / "aios" / "references" / "authority.md"
+    reference.parent.mkdir(parents=True)
+    reference.write_text(
+        "<!-- aios-role: procedure -->\n## Read when\n## Return\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_inventory_and_roles(failures)
+
+    assert (
+        "aios/references/authority.md: declared role 'procedure' "
+        "disagrees with path role 'reference'"
+    ) in failures
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "tracked_child"),
+    [
+        (Path("docs"), None),
+        (Path(".github/workflows/CI_PLAYBOOK.md"), None),
+        (Path("aios/ai"), Path("legacy.md")),
+    ],
+)
+def test_legacy_layout_validation_rejects_a_restored_live_path(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    tracked_child: Path | None,
+) -> None:
+    legacy = tmp_path / relative_path
+    if tracked_child is None and relative_path.suffix:
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("legacy\n", encoding="utf-8")
+    else:
+        legacy.mkdir(parents=True)
+        if tracked_child is not None:
+            (legacy / tracked_child).write_text("legacy\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_legacy_aios_layout(failures)
+
+    assert f"legacy AIOS path must not exist: {relative_path.as_posix()}" in failures
+
+
+def test_legacy_layout_validation_rejects_a_docforai_marker(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    entrypoint = tmp_path / "GIT_AGENTS.md"
+    entrypoint.write_text("<!-- docforai-role: router -->\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_legacy_aios_layout(failures)
+
+    assert "GIT_AGENTS.md: contains a legacy DocForAI marker" in failures
+
+
+def test_legacy_layout_validation_rejects_a_runtime_readme(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    readme = tmp_path / "aios" / "selectors" / "README.md"
+    readme.parent.mkdir(parents=True)
+    readme.write_text("# Hidden selector\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_legacy_aios_layout(failures)
+
+    assert (
+        "aios/selectors/README.md: runtime README.md must use a role-expressive filename"
+    ) in failures
 
 
 def test_canonical_rule_validation_rejects_duplicate_ownership(
@@ -544,9 +646,9 @@ def test_canonical_rule_validation_rejects_duplicate_ownership(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    marker = "<!-- docforai-rule: test-rule -->"
-    first = tmp_path / "docs" / "ai" / "first.md"
-    second = tmp_path / "docs" / "ai" / "second.md"
+    marker = "<!-- aios-rule: test-rule -->"
+    first = tmp_path / "aios" / "first.md"
+    second = tmp_path / "aios" / "second.md"
     first.parent.mkdir(parents=True)
     first.write_text(marker, encoding="utf-8")
     second.write_text(marker, encoding="utf-8")
@@ -554,7 +656,7 @@ def test_canonical_rule_validation_rejects_duplicate_ownership(
     monkeypatch.setattr(
         documentation_checker,
         "CANONICAL_RULE_OWNERS",
-        {"test-rule": Path("docs/ai/first.md")},
+        {"test-rule": Path("aios/first.md")},
     )
     failures: list[str] = []
 
@@ -568,7 +670,7 @@ def test_ci_failure_knowledge_requires_one_canonical_leaf(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    knowledge = tmp_path / "docs" / "ai" / "ci" / "knowledge"
+    knowledge = tmp_path / "aios" / "ci" / "knowledge"
     knowledge.mkdir(parents=True)
     (knowledge / "first.md").write_text("run 123", encoding="utf-8")
     (knowledge / "second.md").write_text("run 123", encoding="utf-8")
@@ -604,8 +706,8 @@ def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
-    publish = tmp_path / "docs" / "ai" / "workflows" / "publish.md"
+    focus = tmp_path / "aios" / "procedures" / "focus.md"
+    publish = tmp_path / "aios" / "procedures" / "publish.md"
     focus.parent.mkdir(parents=True)
     focus.write_text(
         f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
@@ -621,7 +723,7 @@ def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
     documentation_checker._validate_owner_confirmation_boundary(failures, [focus, publish])
 
     assert (
-        "docs/ai/workflows/publish.md: contains forbidden owner direction gate; "
+        "aios/procedures/publish.md: contains forbidden owner direction gate; "
         "owner confirmation is reserved for focused-slice selection"
     ) in failures
 
@@ -641,7 +743,7 @@ def test_owner_confirmation_validation_rejects_legacy_navigation_gates(
     tmp_path: Path,
     content: str,
 ) -> None:
-    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
+    focus = tmp_path / "aios" / "procedures" / "focus.md"
     navigation = tmp_path / "scripts" / "README.md"
     focus.parent.mkdir(parents=True)
     navigation.parent.mkdir(parents=True)
@@ -665,8 +767,8 @@ def test_owner_confirmation_validation_rejects_a_second_stop_heading(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
-    merge = tmp_path / "docs" / "ai" / "workflows" / "merge.md"
+    focus = tmp_path / "aios" / "procedures" / "focus.md"
+    merge = tmp_path / "aios" / "procedures" / "merge.md"
     focus.parent.mkdir(parents=True)
     focus.write_text(
         f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
@@ -680,7 +782,7 @@ def test_owner_confirmation_validation_rejects_a_second_stop_heading(
 
     assert any(
         "owner-confirmation STOP must exist exactly once" in failure
-        and "docs/ai/workflows/merge.md (## Stop)" in failure
+        and "aios/procedures/merge.md (## Stop)" in failure
         for failure in failures
     )
 
@@ -693,15 +795,15 @@ def test_markdown_scan_prunes_excluded_directories_before_descending(
     def fake_walk(root: Path, *, topdown: bool) -> Iterator[tuple[str, list[str], list[str]]]:
         assert root == tmp_path
         assert topdown is True
-        directory_names = [".venv", "docs"]
+        directory_names = [".venv", "aios"]
         yield str(root), directory_names, []
-        assert directory_names == ["docs"]
-        yield str(root / "docs"), [], ["guide.md"]
+        assert directory_names == ["aios"]
+        yield str(root / "aios"), [], ["guide.md"]
 
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     monkeypatch.setattr(documentation_checker.os, "walk", fake_walk)
 
-    assert documentation_checker.iter_markdown_files() == [tmp_path / "docs" / "guide.md"]
+    assert documentation_checker.iter_markdown_files() == [tmp_path / "aios" / "guide.md"]
 
 
 def test_governance_rejects_a_missing_ci_router(
@@ -713,7 +815,7 @@ def test_governance_rejects_a_missing_ci_router(
 
     failures = documentation_checker.governance_failures()
 
-    assert "missing required governance file .github/workflows/CI_PLAYBOOK.md" in failures
+    assert "missing required governance file aios/ci/router.md" in failures
 
 
 @pytest.mark.parametrize(
@@ -781,10 +883,10 @@ def test_governance_public_safety_patterns_reject_sensitive_content(
 @pytest.mark.parametrize(
     "content",
     [
-        "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/docs/ai/README.md",
+        "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/aios/work-router.md",
         "[Repository guidance](GIT_AGENTS.md)",
-        "[AI guidance](docs/ai/README.md)",
-        "[ADR index](../adr/README.md)",
+        "[AI guidance](aios/work-router.md)",
+        "[ADR index](../adr/index.md)",
         "Compare Issue/PR/Actions evidence",
         "Protect `/api/v1/documents` and expose `/health`.",
         "Use API_KEY=<redacted> and Authorization: Bearer <token>",
@@ -818,14 +920,14 @@ def test_governance_public_safety_patterns_allow_portable_references(
         ("Read ~/private", "user-home shorthand path"),
     ],
 )
-def test_governance_scanner_rejects_nonportable_paths_in_nested_ai_docs(
+def test_governance_scanner_rejects_nonportable_paths_in_nested_aios(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     content: str,
     expected_label: str,
 ) -> None:
-    governance_root = tmp_path / "docs" / "ai"
+    governance_root = tmp_path / "aios"
     nested = governance_root / "ci" / "knowledge"
     nested.mkdir(parents=True)
     leak = nested / "leak.md"
@@ -834,26 +936,26 @@ def test_governance_scanner_rejects_nonportable_paths_in_nested_ai_docs(
 
     failures = documentation_checker.governance_failures()
 
-    assert f"docs/ai/ci/knowledge/leak.md: contains forbidden {expected_label}" in failures
+    assert f"aios/ci/knowledge/leak.md: contains forbidden {expected_label}" in failures
 
 
-def test_governance_scanner_covers_routed_indexes_outside_ai_docs(
+def test_governance_scanner_covers_routed_indexes_outside_runtime_routes(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    routed_index = tmp_path / "docs" / "delivery" / "README.md"
+    routed_index = tmp_path / "aios" / "delivery" / "index.md"
     routed_index.parent.mkdir(parents=True)
     routed_index.write_text("Read X:/private/workspace", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     failures: list[str] = []
 
-    assert Path("docs/delivery/README.md") in (documentation_checker.ROUTED_PUBLIC_SURFACE)
-    assert Path("docs/adr/README.md") in documentation_checker.ROUTED_PUBLIC_SURFACE
+    assert Path("aios/delivery/index.md") in (documentation_checker.ROUTED_PUBLIC_SURFACE)
+    assert Path("aios/adr/index.md") in documentation_checker.ROUTED_PUBLIC_SURFACE
 
     documentation_checker._validate_public_governance_surface(failures, [routed_index])
 
-    assert ("docs/delivery/README.md: contains forbidden Windows absolute path") in failures
+    assert ("aios/delivery/index.md: contains forbidden Windows absolute path") in failures
 
 
 def test_design_selection_surface_includes_index_targets(
@@ -864,9 +966,9 @@ def test_design_selection_surface_includes_index_targets(
         for path in documentation_checker.design_governance_paths()
     }
 
-    assert Path("docs/adr/0005-repository-owned-ai-collaboration.md") in relative_paths
-    assert Path("docs/adr/0006-consolidate-ai-guidance.md") in relative_paths
-    assert Path("docs/delivery/0002-second-vertical-slice.md") in relative_paths
+    assert Path("aios/adr/0005-repository-owned-ai-collaboration.md") in relative_paths
+    assert Path("aios/adr/0006-consolidate-ai-guidance.md") in relative_paths
+    assert Path("aios/delivery/0002-second-vertical-slice.md") in relative_paths
 
 
 def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
@@ -874,8 +976,8 @@ def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
-    delivery = tmp_path / "docs" / "delivery" / "0002-selected.md"
+    focus = tmp_path / "aios" / "procedures" / "focus.md"
+    delivery = tmp_path / "aios" / "delivery" / "0002-selected.md"
     focus.parent.mkdir(parents=True)
     delivery.parent.mkdir(parents=True)
     focus.write_text(
@@ -891,7 +993,7 @@ def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
     failures = documentation_checker.governance_failures()
 
     assert (
-        "docs/delivery/0002-selected.md: contains forbidden owner "
+        "aios/delivery/0002-selected.md: contains forbidden owner "
         "authorization gate; owner confirmation is reserved for "
         "focused-slice selection"
     ) in failures
@@ -902,14 +1004,14 @@ def test_governance_failures_rejects_a_macos_path_in_selected_design(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    delivery = tmp_path / "docs" / "delivery" / "0002-selected.md"
+    delivery = tmp_path / "aios" / "delivery" / "0002-selected.md"
     delivery.parent.mkdir(parents=True)
     delivery.write_text("Read /Users/alice/private", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert "docs/delivery/0002-selected.md: contains forbidden POSIX absolute path" in failures
+    assert "aios/delivery/0002-selected.md: contains forbidden POSIX absolute path" in failures
 
 
 def test_governance_failures_allows_an_api_route_in_selected_design(
@@ -917,7 +1019,7 @@ def test_governance_failures_allows_an_api_route_in_selected_design(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    delivery = tmp_path / "docs" / "delivery" / "0002-selected.md"
+    delivery = tmp_path / "aios" / "delivery" / "0002-selected.md"
     delivery.parent.mkdir(parents=True)
     delivery.write_text("Call GET /api/v1/documents/{documentId}", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -925,7 +1027,7 @@ def test_governance_failures_allows_an_api_route_in_selected_design(
     failures = documentation_checker.governance_failures()
 
     assert not any(
-        failure.startswith("docs/delivery/0002-selected.md: contains forbidden POSIX absolute path")
+        failure.startswith("aios/delivery/0002-selected.md: contains forbidden POSIX absolute path")
         for failure in failures
     )
 
@@ -953,33 +1055,33 @@ def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(
         ),
     ],
 )
-def test_governance_scanner_rejects_sensitive_content_in_ai_docs(
+def test_governance_scanner_rejects_sensitive_content_in_aios(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     content: str,
     expected_label: str,
 ) -> None:
-    governance_root = tmp_path / "docs" / "ai"
+    governance_root = tmp_path / "aios"
     governance_root.mkdir(parents=True)
-    (governance_root / "README.md").write_text(content, encoding="utf-8")
+    (governance_root / "work-router.md").write_text(content, encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert f"docs/ai/README.md: contains forbidden {expected_label}" in failures
+    assert f"aios/work-router.md: contains forbidden {expected_label}" in failures
 
 
-def test_governance_scanner_rejects_an_extra_ai_guidance_file(
+def test_governance_scanner_rejects_an_extra_aios_runtime_file(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    governance_root = tmp_path / "docs" / "ai"
+    governance_root = tmp_path / "aios"
     governance_root.mkdir(parents=True)
     (governance_root / "EXTRA.md").write_text("safe", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert "docs/ai contains unexpected file EXTRA.md" in failures
+    assert "AIOS runtime contains unexpected file EXTRA.md" in failures
