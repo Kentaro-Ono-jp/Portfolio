@@ -899,15 +899,33 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
         )
 
     role_paths = {**ENTRYPOINT_FILE_ROLES, **AIOS_FILE_ROLES}
+    declared_roles_by_path: dict[Path, list[str]] = {}
+    for markdown_path in iter_markdown_files():
+        declared_roles = AIOS_ROLE_MARKER.findall(
+            markdown_path.read_text(encoding="utf-8")
+        )
+        if declared_roles:
+            declared_roles_by_path[markdown_path.relative_to(REPOSITORY_ROOT)] = (
+                declared_roles
+            )
+    for unexpected_path in sorted(declared_roles_by_path.keys() - role_paths.keys()):
+        failures.append(
+            f"{unexpected_path.as_posix()}: AIOS role markers are forbidden "
+            "outside declared role-bearing paths; found "
+            f"{declared_roles_by_path[unexpected_path]!r}"
+        )
+
     for relative_path, expected_role in role_paths.items():
         path = REPOSITORY_ROOT / relative_path
         if not path.is_file():
             continue
         marker = f"<!-- aios-role: {expected_role} -->"
         content = path.read_text(encoding="utf-8")
-        if content.count(marker) != 1:
+        declared_roles = declared_roles_by_path.get(relative_path, [])
+        if declared_roles != [expected_role]:
             failures.append(
-                f"{relative_path.as_posix()}: expected one role marker {marker!r}"
+                f"{relative_path.as_posix()}: expected exactly one role marker "
+                f"{marker!r}, found {declared_roles!r}"
             )
         if relative_path in AIOS_FILE_ROLES:
             runtime_path = relative_path.relative_to(AIOS_ROOT)
@@ -921,7 +939,6 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
                     f"{relative_path.as_posix()}: path implies role {inferred_role!r}, "
                     f"inventory declares {expected_role!r}"
                 )
-            declared_roles = AIOS_ROLE_MARKER.findall(content)
             if len(declared_roles) == 1 and declared_roles[0] != inferred_role:
                 failures.append(
                     f"{relative_path.as_posix()}: declared role "

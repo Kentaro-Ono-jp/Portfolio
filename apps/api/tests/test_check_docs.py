@@ -549,7 +549,8 @@ def test_role_validation_rejects_a_missing_marker(
 
     assert any(
         failure.startswith(
-            "aios/work-router.md: expected one role marker '<!-- aios-role: router -->'"
+            "aios/work-router.md: expected exactly one role marker "
+            "'<!-- aios-role: router -->', found []"
         )
         for failure in failures
     )
@@ -574,6 +575,47 @@ def test_role_validation_rejects_a_marker_that_disagrees_with_its_path(
     assert (
         "aios/references/authority.md: declared role 'procedure' "
         "disagrees with path role 'reference'"
+    ) in failures
+
+
+def test_role_validation_rejects_correct_and_conflicting_markers(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    reference = tmp_path / "aios" / "references" / "authority.md"
+    reference.parent.mkdir(parents=True)
+    reference.write_text(
+        "<!-- aios-role: reference -->\n<!-- aios-role: procedure -->\n## Read when\n## Return\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_inventory_and_roles(failures)
+
+    assert (
+        "aios/references/authority.md: expected exactly one role marker "
+        "'<!-- aios-role: reference -->', found ['reference', 'procedure']"
+    ) in failures
+
+
+def test_role_validation_rejects_a_marker_on_a_design_index(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    index = tmp_path / "aios" / "adr" / "index.md"
+    index.parent.mkdir(parents=True)
+    index.write_text("<!-- aios-role: router -->\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_inventory_and_roles(failures)
+
+    assert (
+        "aios/adr/index.md: AIOS role markers are forbidden outside declared "
+        "role-bearing paths; found ['router']"
     ) in failures
 
 
