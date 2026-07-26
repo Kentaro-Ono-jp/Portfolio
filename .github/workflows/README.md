@@ -3,10 +3,11 @@
 GitHub Actions will be the authoritative build and runtime verification
 environment for this portfolio.
 
-Use the thin [CI router](CI_PLAYBOOK.md) after a complete implementation and
-its tests have been staged without a commit. It selects staged preflight,
-local rehearsal, an explicit exception, failed-run triage, post-merge
-reconciliation, or one relevant knowledge leaf without loading them together.
+Use the thin [CI router](../../aios/ci/router.md) after a complete
+implementation and its tests have been staged without a commit. It selects
+staged preflight, local rehearsal, an explicit exception, failed-run triage,
+post-merge reconciliation, or one relevant knowledge leaf without loading them
+together.
 
 A machine-qualified Markdown-only PR may skip Actions only through the
 router's separate exception. At merge, its explicit squash-message boundary

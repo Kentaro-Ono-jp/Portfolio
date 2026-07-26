@@ -11,258 +11,285 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 
-DOCFORAI_FILE_ROLES = {
-    Path("docs/ai/README.md"): "router",
-    Path("docs/ai/PR_REVIEW.md"): "router",
-    Path("docs/ai/knowledge/README.md"): "router",
-    Path("docs/ai/reference/authority.md"): "reference",
-    Path("docs/ai/reference/live-state.md"): "reference",
-    Path("docs/ai/reference/public-safety.md"): "reference",
-    Path("docs/ai/reference/evidence.md"): "reference",
-    Path("docs/ai/reference/local-tools.md"): "reference",
-    Path("docs/ai/workflows/focus.md"): "procedure",
-    Path("docs/ai/workflows/implement.md"): "procedure",
-    Path("docs/ai/workflows/publish.md"): "procedure",
-    Path("docs/ai/workflows/correct.md"): "procedure",
-    Path("docs/ai/workflows/merge.md"): "procedure",
-    Path("docs/ai/workflows/reconcile.md"): "procedure",
-    Path("docs/ai/workflows/governance-reconcile.md"): "procedure",
-    Path("docs/ai/review/setup.md"): "procedure",
-    Path("docs/ai/review/inspect.md"): "procedure",
-    Path("docs/ai/review/verdict.md"): "procedure",
-    Path("docs/ai/review/cleanup.md"): "procedure",
-    Path("docs/ai/ci/preflight.md"): "procedure",
-    Path("docs/ai/ci/local-rehearsal.md"): "procedure",
-    Path("docs/ai/ci/markdown-only.md"): "procedure",
-    Path("docs/ai/ci/failure-triage.md"): "procedure",
-    Path("docs/ai/ci/post-merge.md"): "procedure",
-    Path("docs/ai/ci/knowledge/README.md"): "router",
-    Path("docs/ai/ci/knowledge/dependencies.md"): "knowledge",
-    Path("docs/ai/ci/knowledge/invocation.md"): "knowledge",
-    Path("docs/ai/ci/knowledge/persistence.md"): "knowledge",
-    Path("docs/ai/ci/knowledge/isolation.md"): "knowledge",
-    Path("docs/ai/ci/knowledge/messaging.md"): "knowledge",
-    Path("docs/ai/ci/knowledge/browser.md"): "knowledge",
-    Path("docs/ai/ci/knowledge/recovery.md"): "knowledge",
-    Path("docs/ai/ci/knowledge/evidence.md"): "knowledge",
+AIOS_ROOT = Path("aios")
+AIOS_RUNTIME_DIRECTORIES = (
+    Path("selectors"),
+    Path("references"),
+    Path("procedures"),
+    Path("review"),
+    Path("ci"),
+)
+EXPECTED_AIOS_TOP_LEVEL_ENTRIES = frozenset(
+    {
+        "adr",
+        "architecture",
+        "delivery",
+        *(path.as_posix() for path in AIOS_RUNTIME_DIRECTORIES),
+        "work-router.md",
+    }
+)
+AIOS_ROLE_MARKER = re.compile(r"<!--\s*aios-role:\s*([a-z-]+)\s*-->")
+LEGACY_ROLE_OR_RULE_MARKER = re.compile(r"<!--\s*docforai-(?:role|rule):")
+
+AIOS_FILE_ROLES = {
+    Path("aios/work-router.md"): "router",
+    Path("aios/review/router.md"): "router",
+    Path("aios/selectors/governance-knowledge.md"): "selector",
+    Path("aios/references/authority.md"): "reference",
+    Path("aios/references/live-state.md"): "reference",
+    Path("aios/references/public-safety.md"): "reference",
+    Path("aios/references/evidence.md"): "reference",
+    Path("aios/references/local-tools.md"): "reference",
+    Path("aios/procedures/focus.md"): "procedure",
+    Path("aios/procedures/implement.md"): "procedure",
+    Path("aios/procedures/publish.md"): "procedure",
+    Path("aios/procedures/correct.md"): "procedure",
+    Path("aios/procedures/merge.md"): "procedure",
+    Path("aios/procedures/reconcile.md"): "procedure",
+    Path("aios/procedures/governance-reconcile.md"): "procedure",
+    Path("aios/review/setup.md"): "procedure",
+    Path("aios/review/inspect.md"): "procedure",
+    Path("aios/review/verdict.md"): "procedure",
+    Path("aios/review/cleanup.md"): "procedure",
+    Path("aios/ci/router.md"): "router",
+    Path("aios/ci/procedures/preflight.md"): "procedure",
+    Path("aios/ci/procedures/local-rehearsal.md"): "procedure",
+    Path("aios/ci/exceptions/markdown-only.md"): "exception",
+    Path("aios/ci/procedures/failure-triage.md"): "procedure",
+    Path("aios/ci/procedures/post-merge-reconcile.md"): "procedure",
+    Path("aios/ci/knowledge/selector.md"): "selector",
+    Path("aios/ci/knowledge/dependencies.md"): "knowledge",
+    Path("aios/ci/knowledge/invocation.md"): "knowledge",
+    Path("aios/ci/knowledge/persistence.md"): "knowledge",
+    Path("aios/ci/knowledge/isolation.md"): "knowledge",
+    Path("aios/ci/knowledge/messaging.md"): "knowledge",
+    Path("aios/ci/knowledge/browser.md"): "knowledge",
+    Path("aios/ci/knowledge/recovery.md"): "knowledge",
+    Path("aios/ci/knowledge/evidence.md"): "knowledge",
 }
 ENTRYPOINT_FILE_ROLES = {
     Path("GIT_AGENTS.md"): "router",
     Path("AI_GUIDANCE.md"): "pointer",
-    Path(".github/workflows/CI_PLAYBOOK.md"): "router",
 }
-EXPECTED_AI_GUIDANCE_FILES = frozenset(
-    path.relative_to("docs/ai") for path in DOCFORAI_FILE_ROLES
+EXPECTED_AIOS_RUNTIME_FILES = frozenset(
+    path.relative_to(AIOS_ROOT) for path in AIOS_FILE_ROLES
 )
 REQUIRED_GOVERNANCE_FILES = (
-    Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
-    Path("docs/adr/0009-reviewed-governance-knowledge-reconciliation.md"),
-    Path("docs/adr/0010-lossless-review-candidate-capture.md"),
-    Path("docs/adr/0011-deterministic-shallow-review-diff.md"),
-    Path("docs/delivery/README.md"),
+    Path("aios/adr/0008-progressive-disclosure-ai-guidance.md"),
+    Path("aios/adr/0009-reviewed-governance-knowledge-reconciliation.md"),
+    Path("aios/adr/0010-lossless-review-candidate-capture.md"),
+    Path("aios/adr/0011-deterministic-shallow-review-diff.md"),
+    Path("aios/adr/0012-name-aios-nodes-by-runtime-role.md"),
+    Path("aios/adr/index.md"),
+    Path("aios/architecture/index.md"),
+    Path("aios/delivery/index.md"),
     *ENTRYPOINT_FILE_ROLES,
-    *DOCFORAI_FILE_ROLES,
+    *AIOS_FILE_ROLES,
 )
 
-ROUTER_LINE_BUDGETS = {
+ROUTING_NODE_LINE_BUDGETS = {
     Path("GIT_AGENTS.md"): 70,
     Path("AI_GUIDANCE.md"): 10,
-    Path("docs/ai/README.md"): 100,
-    Path("docs/ai/PR_REVIEW.md"): 65,
-    Path("docs/ai/knowledge/README.md"): 75,
-    Path(".github/workflows/CI_PLAYBOOK.md"): 45,
-    Path("docs/ai/ci/knowledge/README.md"): 55,
+    Path("aios/work-router.md"): 100,
+    Path("aios/review/router.md"): 65,
+    Path("aios/selectors/governance-knowledge.md"): 75,
+    Path("aios/ci/router.md"): 45,
+    Path("aios/ci/knowledge/selector.md"): 55,
 }
 
 CANONICAL_RULE_OWNERS = {
-    "progressive-disclosure": Path("docs/ai/README.md"),
-    "review-permission-boundary": Path("docs/ai/PR_REVIEW.md"),
-    "governance-knowledge-selection": Path("docs/ai/knowledge/README.md"),
-    "actor-authority": Path("docs/ai/reference/authority.md"),
-    "bounded-live-state": Path("docs/ai/reference/live-state.md"),
-    "public-safety": Path("docs/ai/reference/public-safety.md"),
-    "issue-evidence": Path("docs/ai/reference/evidence.md"),
-    "local-tool-authorization": Path("docs/ai/reference/local-tools.md"),
-    "focus-workflow": Path("docs/ai/workflows/focus.md"),
-    "implementation-workflow": Path("docs/ai/workflows/implement.md"),
-    "publication-workflow": Path("docs/ai/workflows/publish.md"),
-    "correction-workflow": Path("docs/ai/workflows/correct.md"),
-    "merge-workflow": Path("docs/ai/workflows/merge.md"),
-    "reconciliation-workflow": Path("docs/ai/workflows/reconcile.md"),
+    "progressive-disclosure": Path("aios/work-router.md"),
+    "review-permission-boundary": Path("aios/review/router.md"),
+    "governance-knowledge-selection": Path("aios/selectors/governance-knowledge.md"),
+    "actor-authority": Path("aios/references/authority.md"),
+    "bounded-live-state": Path("aios/references/live-state.md"),
+    "public-safety": Path("aios/references/public-safety.md"),
+    "issue-evidence": Path("aios/references/evidence.md"),
+    "local-tool-authorization": Path("aios/references/local-tools.md"),
+    "focus-workflow": Path("aios/procedures/focus.md"),
+    "implementation-workflow": Path("aios/procedures/implement.md"),
+    "publication-workflow": Path("aios/procedures/publish.md"),
+    "correction-workflow": Path("aios/procedures/correct.md"),
+    "merge-workflow": Path("aios/procedures/merge.md"),
+    "reconciliation-workflow": Path("aios/procedures/reconcile.md"),
     "governance-knowledge-reconciliation": Path(
-        "docs/ai/workflows/governance-reconcile.md"
+        "aios/procedures/governance-reconcile.md"
     ),
-    "review-setup": Path("docs/ai/review/setup.md"),
-    "review-inspection": Path("docs/ai/review/inspect.md"),
-    "review-verdict": Path("docs/ai/review/verdict.md"),
-    "review-cleanup": Path("docs/ai/review/cleanup.md"),
-    "ci-routing": Path(".github/workflows/CI_PLAYBOOK.md"),
-    "ci-preflight": Path("docs/ai/ci/preflight.md"),
-    "ci-local-rehearsal": Path("docs/ai/ci/local-rehearsal.md"),
-    "ci-markdown-only-exception": Path("docs/ai/ci/markdown-only.md"),
-    "ci-failure-triage": Path("docs/ai/ci/failure-triage.md"),
-    "ci-post-merge": Path("docs/ai/ci/post-merge.md"),
-    "ci-knowledge-selection": Path("docs/ai/ci/knowledge/README.md"),
-    "ci-knowledge-dependencies": Path("docs/ai/ci/knowledge/dependencies.md"),
-    "ci-knowledge-invocation": Path("docs/ai/ci/knowledge/invocation.md"),
-    "ci-knowledge-persistence": Path("docs/ai/ci/knowledge/persistence.md"),
-    "ci-knowledge-isolation": Path("docs/ai/ci/knowledge/isolation.md"),
-    "ci-knowledge-messaging": Path("docs/ai/ci/knowledge/messaging.md"),
-    "ci-knowledge-browser": Path("docs/ai/ci/knowledge/browser.md"),
-    "ci-knowledge-recovery": Path("docs/ai/ci/knowledge/recovery.md"),
-    "ci-knowledge-evidence": Path("docs/ai/ci/knowledge/evidence.md"),
+    "review-setup": Path("aios/review/setup.md"),
+    "review-inspection": Path("aios/review/inspect.md"),
+    "review-verdict": Path("aios/review/verdict.md"),
+    "review-cleanup": Path("aios/review/cleanup.md"),
+    "ci-routing": Path("aios/ci/router.md"),
+    "ci-preflight": Path("aios/ci/procedures/preflight.md"),
+    "ci-local-rehearsal": Path("aios/ci/procedures/local-rehearsal.md"),
+    "ci-markdown-only-exception": Path("aios/ci/exceptions/markdown-only.md"),
+    "ci-failure-triage": Path("aios/ci/procedures/failure-triage.md"),
+    "ci-post-merge": Path("aios/ci/procedures/post-merge-reconcile.md"),
+    "ci-knowledge-selection": Path("aios/ci/knowledge/selector.md"),
+    "ci-knowledge-dependencies": Path("aios/ci/knowledge/dependencies.md"),
+    "ci-knowledge-invocation": Path("aios/ci/knowledge/invocation.md"),
+    "ci-knowledge-persistence": Path("aios/ci/knowledge/persistence.md"),
+    "ci-knowledge-isolation": Path("aios/ci/knowledge/isolation.md"),
+    "ci-knowledge-messaging": Path("aios/ci/knowledge/messaging.md"),
+    "ci-knowledge-browser": Path("aios/ci/knowledge/browser.md"),
+    "ci-knowledge-recovery": Path("aios/ci/knowledge/recovery.md"),
+    "ci-knowledge-evidence": Path("aios/ci/knowledge/evidence.md"),
 }
 
 REQUIRED_ROUTE_LINKS = {
     Path("GIT_AGENTS.md"): (
         Path("AI_GUIDANCE.md"),
-        Path("docs/ai/README.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
+        Path("aios/work-router.md"),
+        Path("aios/ci/router.md"),
     ),
     Path("AI_GUIDANCE.md"): (Path("GIT_AGENTS.md"),),
-    Path("docs/ai/README.md"): (
-        Path("docs/ai/PR_REVIEW.md"),
-        Path("docs/ai/reference/authority.md"),
-        Path("docs/ai/reference/live-state.md"),
-        Path("docs/ai/reference/local-tools.md"),
-        Path("docs/ai/workflows/focus.md"),
-        Path("docs/ai/workflows/implement.md"),
-        Path("docs/ai/workflows/publish.md"),
-        Path("docs/ai/workflows/correct.md"),
-        Path("docs/ai/workflows/merge.md"),
-        Path("docs/ai/workflows/reconcile.md"),
-        Path("docs/ai/workflows/governance-reconcile.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/delivery/README.md"),
-        Path("docs/adr/README.md"),
+    Path("aios/work-router.md"): (
+        Path("aios/review/router.md"),
+        Path("aios/references/authority.md"),
+        Path("aios/references/live-state.md"),
+        Path("aios/references/local-tools.md"),
+        Path("aios/procedures/focus.md"),
+        Path("aios/procedures/implement.md"),
+        Path("aios/procedures/publish.md"),
+        Path("aios/procedures/correct.md"),
+        Path("aios/procedures/merge.md"),
+        Path("aios/procedures/reconcile.md"),
+        Path("aios/procedures/governance-reconcile.md"),
+        Path("aios/ci/router.md"),
+        Path("aios/delivery/index.md"),
+        Path("aios/adr/index.md"),
     ),
-    Path("docs/ai/PR_REVIEW.md"): (Path("docs/ai/review/setup.md"),),
-    Path("docs/ai/workflows/focus.md"): (
-        Path("docs/delivery/README.md"),
-        Path("docs/adr/README.md"),
-        Path("docs/ai/reference/live-state.md"),
-        Path("docs/ai/reference/public-safety.md"),
-        Path("docs/ai/workflows/implement.md"),
+    Path("aios/review/router.md"): (Path("aios/review/setup.md"),),
+    Path("aios/procedures/focus.md"): (
+        Path("aios/delivery/index.md"),
+        Path("aios/adr/index.md"),
+        Path("aios/references/live-state.md"),
+        Path("aios/references/public-safety.md"),
+        Path("aios/procedures/implement.md"),
     ),
-    Path("docs/ai/workflows/implement.md"): (
-        Path("docs/ai/workflows/focus.md"),
-        Path("docs/ai/reference/local-tools.md"),
-        Path("docs/ai/reference/public-safety.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/ai/workflows/publish.md"),
+    Path("aios/procedures/implement.md"): (
+        Path("aios/procedures/focus.md"),
+        Path("aios/references/local-tools.md"),
+        Path("aios/references/public-safety.md"),
+        Path("aios/ci/router.md"),
+        Path("aios/procedures/publish.md"),
     ),
-    Path("docs/ai/workflows/publish.md"): (
-        Path("docs/ai/reference/live-state.md"),
-        Path("docs/ai/ci/markdown-only.md"),
-        Path("docs/ai/PR_REVIEW.md"),
-        Path("docs/ai/workflows/focus.md"),
-        Path("docs/ai/workflows/correct.md"),
-        Path("docs/ai/workflows/merge.md"),
+    Path("aios/procedures/publish.md"): (
+        Path("aios/references/live-state.md"),
+        Path("aios/ci/exceptions/markdown-only.md"),
+        Path("aios/review/router.md"),
+        Path("aios/procedures/focus.md"),
+        Path("aios/procedures/correct.md"),
+        Path("aios/procedures/merge.md"),
     ),
-    Path("docs/ai/workflows/correct.md"): (
-        Path("docs/ai/workflows/focus.md"),
-        Path("docs/ai/workflows/implement.md"),
-        Path("docs/ai/workflows/publish.md"),
-        Path("docs/ai/workflows/merge.md"),
+    Path("aios/procedures/correct.md"): (
+        Path("aios/procedures/focus.md"),
+        Path("aios/procedures/implement.md"),
+        Path("aios/procedures/publish.md"),
+        Path("aios/procedures/merge.md"),
     ),
-    Path("docs/ai/workflows/merge.md"): (
-        Path("docs/ai/reference/live-state.md"),
-        Path("docs/ai/ci/markdown-only.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/ai/workflows/reconcile.md"),
+    Path("aios/procedures/merge.md"): (
+        Path("aios/references/live-state.md"),
+        Path("aios/ci/exceptions/markdown-only.md"),
+        Path("aios/ci/router.md"),
+        Path("aios/procedures/reconcile.md"),
     ),
-    Path("docs/ai/workflows/reconcile.md"): (
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/ai/workflows/governance-reconcile.md"),
-        Path("docs/ai/reference/evidence.md"),
-        Path("docs/ai/README.md"),
+    Path("aios/procedures/reconcile.md"): (
+        Path("aios/ci/router.md"),
+        Path("aios/procedures/governance-reconcile.md"),
+        Path("aios/references/evidence.md"),
+        Path("aios/work-router.md"),
     ),
-    Path("docs/ai/workflows/governance-reconcile.md"): (
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/ai/workflows/focus.md"),
-        Path("docs/ai/knowledge/README.md"),
+    Path("aios/procedures/governance-reconcile.md"): (
+        Path("aios/ci/router.md"),
+        Path("aios/procedures/focus.md"),
+        Path("aios/selectors/governance-knowledge.md"),
     ),
-    Path("docs/ai/knowledge/README.md"): (
-        Path("docs/ai/reference/authority.md"),
-        Path("docs/ai/reference/live-state.md"),
-        Path("docs/ai/reference/local-tools.md"),
-        Path("docs/ai/reference/public-safety.md"),
-        Path("docs/ai/reference/evidence.md"),
-        Path("docs/ai/workflows/focus.md"),
-        Path("docs/ai/workflows/implement.md"),
-        Path("docs/ai/workflows/publish.md"),
-        Path("docs/ai/workflows/correct.md"),
-        Path("docs/ai/workflows/merge.md"),
-        Path("docs/ai/workflows/reconcile.md"),
-        Path("docs/ai/review/setup.md"),
-        Path("docs/ai/review/inspect.md"),
-        Path("docs/ai/review/verdict.md"),
-        Path("docs/ai/review/cleanup.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        Path("docs/adr/README.md"),
-        Path("docs/delivery/README.md"),
+    Path("aios/selectors/governance-knowledge.md"): (
+        Path("aios/references/authority.md"),
+        Path("aios/references/live-state.md"),
+        Path("aios/references/local-tools.md"),
+        Path("aios/references/public-safety.md"),
+        Path("aios/references/evidence.md"),
+        Path("aios/procedures/focus.md"),
+        Path("aios/procedures/implement.md"),
+        Path("aios/procedures/publish.md"),
+        Path("aios/procedures/correct.md"),
+        Path("aios/procedures/merge.md"),
+        Path("aios/procedures/reconcile.md"),
+        Path("aios/review/setup.md"),
+        Path("aios/review/inspect.md"),
+        Path("aios/review/verdict.md"),
+        Path("aios/review/cleanup.md"),
+        Path("aios/ci/router.md"),
+        Path("aios/adr/index.md"),
+        Path("aios/delivery/index.md"),
     ),
-    Path("docs/ai/review/setup.md"): (
-        Path("docs/ai/reference/local-tools.md"),
-        Path("docs/ai/review/inspect.md"),
+    Path("aios/review/setup.md"): (
+        Path("aios/references/local-tools.md"),
+        Path("aios/review/inspect.md"),
     ),
-    Path("docs/ai/review/inspect.md"): (
-        Path("docs/ai/reference/public-safety.md"),
-        Path("docs/ai/ci/markdown-only.md"),
-        Path("docs/ai/review/verdict.md"),
+    Path("aios/review/inspect.md"): (
+        Path("aios/references/public-safety.md"),
+        Path("aios/ci/exceptions/markdown-only.md"),
+        Path("aios/review/verdict.md"),
     ),
-    Path("docs/ai/review/verdict.md"): (Path("docs/ai/review/cleanup.md"),),
-    Path(".github/workflows/CI_PLAYBOOK.md"): (
-        Path("docs/ai/ci/preflight.md"),
-        Path("docs/ai/ci/local-rehearsal.md"),
-        Path("docs/ai/ci/markdown-only.md"),
-        Path("docs/ai/ci/failure-triage.md"),
-        Path("docs/ai/ci/post-merge.md"),
-        Path("docs/ai/ci/knowledge/README.md"),
-        Path("docs/ai/README.md"),
+    Path("aios/review/verdict.md"): (Path("aios/review/cleanup.md"),),
+    Path("aios/ci/router.md"): (
+        Path("aios/ci/procedures/preflight.md"),
+        Path("aios/ci/procedures/local-rehearsal.md"),
+        Path("aios/ci/exceptions/markdown-only.md"),
+        Path("aios/ci/procedures/failure-triage.md"),
+        Path("aios/ci/procedures/post-merge-reconcile.md"),
+        Path("aios/ci/knowledge/selector.md"),
+        Path("aios/work-router.md"),
     ),
-    Path("docs/ai/ci/preflight.md"): (
-        Path("docs/ai/ci/knowledge/README.md"),
-        Path("docs/ai/ci/local-rehearsal.md"),
-        Path("docs/ai/ci/failure-triage.md"),
+    Path("aios/ci/procedures/preflight.md"): (
+        Path("aios/ci/knowledge/selector.md"),
+        Path("aios/ci/procedures/local-rehearsal.md"),
+        Path("aios/ci/procedures/failure-triage.md"),
     ),
-    Path("docs/ai/ci/local-rehearsal.md"): (Path("docs/ai/reference/local-tools.md"),),
-    Path("docs/ai/ci/failure-triage.md"): (
-        Path("docs/ai/ci/knowledge/README.md"),
-        Path("docs/ai/workflows/focus.md"),
+    Path("aios/ci/procedures/local-rehearsal.md"): (
+        Path("aios/references/local-tools.md"),
     ),
-    Path("docs/ai/ci/post-merge.md"): (Path("docs/ai/ci/knowledge/README.md"),),
-    Path("docs/ai/ci/knowledge/README.md"): (
-        Path("docs/ai/ci/knowledge/dependencies.md"),
-        Path("docs/ai/ci/knowledge/invocation.md"),
-        Path("docs/ai/ci/knowledge/persistence.md"),
-        Path("docs/ai/ci/knowledge/isolation.md"),
-        Path("docs/ai/ci/knowledge/messaging.md"),
-        Path("docs/ai/ci/knowledge/browser.md"),
-        Path("docs/ai/ci/knowledge/recovery.md"),
-        Path("docs/ai/ci/knowledge/evidence.md"),
+    Path("aios/ci/procedures/failure-triage.md"): (
+        Path("aios/ci/knowledge/selector.md"),
+        Path("aios/procedures/focus.md"),
+    ),
+    Path("aios/ci/procedures/post-merge-reconcile.md"): (
+        Path("aios/ci/knowledge/selector.md"),
+    ),
+    Path("aios/ci/knowledge/selector.md"): (
+        Path("aios/ci/knowledge/dependencies.md"),
+        Path("aios/ci/knowledge/invocation.md"),
+        Path("aios/ci/knowledge/persistence.md"),
+        Path("aios/ci/knowledge/isolation.md"),
+        Path("aios/ci/knowledge/messaging.md"),
+        Path("aios/ci/knowledge/browser.md"),
+        Path("aios/ci/knowledge/recovery.md"),
+        Path("aios/ci/knowledge/evidence.md"),
     ),
 }
 
 GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
-    "actor-authority": Path("docs/ai/reference/authority.md"),
-    "live-state": Path("docs/ai/reference/live-state.md"),
-    "local-tools": Path("docs/ai/reference/local-tools.md"),
-    "public-safety": Path("docs/ai/reference/public-safety.md"),
-    "issue-evidence": Path("docs/ai/reference/evidence.md"),
-    "focus": Path("docs/ai/workflows/focus.md"),
-    "implementation": Path("docs/ai/workflows/implement.md"),
-    "publication": Path("docs/ai/workflows/publish.md"),
-    "correction": Path("docs/ai/workflows/correct.md"),
-    "merge": Path("docs/ai/workflows/merge.md"),
-    "reconciliation": Path("docs/ai/workflows/reconcile.md"),
-    "review-setup": Path("docs/ai/review/setup.md"),
-    "review-inspection": Path("docs/ai/review/inspect.md"),
-    "review-verdict": Path("docs/ai/review/verdict.md"),
-    "review-cleanup": Path("docs/ai/review/cleanup.md"),
-    "ci": Path(".github/workflows/CI_PLAYBOOK.md"),
-    "architecture": Path("docs/adr/README.md"),
-    "delivery": Path("docs/delivery/README.md"),
+    "actor-authority": Path("aios/references/authority.md"),
+    "live-state": Path("aios/references/live-state.md"),
+    "local-tools": Path("aios/references/local-tools.md"),
+    "public-safety": Path("aios/references/public-safety.md"),
+    "issue-evidence": Path("aios/references/evidence.md"),
+    "focus": Path("aios/procedures/focus.md"),
+    "implementation": Path("aios/procedures/implement.md"),
+    "publication": Path("aios/procedures/publish.md"),
+    "correction": Path("aios/procedures/correct.md"),
+    "merge": Path("aios/procedures/merge.md"),
+    "reconciliation": Path("aios/procedures/reconcile.md"),
+    "review-setup": Path("aios/review/setup.md"),
+    "review-inspection": Path("aios/review/inspect.md"),
+    "review-verdict": Path("aios/review/verdict.md"),
+    "review-cleanup": Path("aios/review/cleanup.md"),
+    "ci": Path("aios/ci/router.md"),
+    "architecture": Path("aios/adr/index.md"),
+    "delivery": Path("aios/delivery/index.md"),
 }
 GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
     "issue-evidence": (
@@ -279,19 +306,19 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
 }
 
 REVIEW_CANDIDATE_CAPTURE_FRAGMENTS = {
-    Path("docs/ai/review/inspect.md"): (
+    Path("aios/review/inspect.md"): (
         "classify every evidenced reusable process or review candidate",
         "Split compound observations into atomic root-cause candidates",
         "retain every candidate for the verdict",
         "Use `none` only when no reusable candidate was discovered",
     ),
-    Path("docs/ai/review/verdict.md"): (
+    Path("aios/review/verdict.md"): (
         "one numbered item for every atomic reusable candidate",
         "`none` is permitted only when no reusable candidate was discovered",
         "never use it as a substitute for a second or later item",
         "every reusable-governance candidate or valid `none`",
     ),
-    Path("docs/ai/workflows/governance-reconcile.md"): (
+    Path("aios/procedures/governance-reconcile.md"): (
         "Expand every numbered candidate item from every verdict",
         "preserve stable source order",
         "Never stop ingestion after the first verdict item",
@@ -299,11 +326,11 @@ REVIEW_CANDIDATE_CAPTURE_FRAGMENTS = {
 }
 
 SHALLOW_REVIEW_DIFF_FRAGMENTS = {
-    Path("docs/ai/PR_REVIEW.md"): (
+    Path("aios/review/router.md"): (
         "Expected full base SHA",
         "Expected full head SHA",
     ),
-    Path("docs/ai/review/setup.md"): (
+    Path("aios/review/setup.md"): (
         "Resolve the live PR base and head",
         "expected full base and head SHAs",
         "Never infer a missing base",
@@ -311,7 +338,7 @@ SHALLOW_REVIEW_DIFF_FRAGMENTS = {
         "git cat-file -e <expected-base-sha>^{commit}",
         "Do not deepen, unshallow, or search history for a merge base",
     ),
-    Path("docs/ai/review/inspect.md"): (
+    Path("aios/review/inspect.md"): (
         "canonical GitHub PR patch and complete paginated file inventory",
         "git diff --name-status <expected-base-sha> <expected-head-sha>",
         "git diff --binary <expected-base-sha> <expected-head-sha> --",
@@ -334,7 +361,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "GIT_AGENTS.md",
         "not a second source of rules",
     ),
-    Path("docs/ai/README.md"): (
+    Path("aios/work-router.md"): (
         "progressive disclosure",
         "Select the first matching state",
         "Do not read all ADRs or delivery specifications",
@@ -342,15 +369,15 @@ REQUIRED_GOVERNANCE_TEXT = {
         "The only owner-confirmation STOP",
         "reusable non-CI process or review knowledge",
     ),
-    Path("docs/ai/PR_REVIEW.md"): (
+    Path("aios/review/router.md"): (
         "Governing tracking Issue URL",
         "Expected full head SHA",
         "The only permitted GitHub write",
         "Do not push",
         "open only the named next state",
-        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("docs/ai/PR_REVIEW.md")],
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("aios/review/router.md")],
     ),
-    Path("docs/ai/reference/authority.md"): (
+    Path("aios/references/authority.md"): (
         "The only owner-confirmation boundary",
         "standing policy",
         "Docker-backed proof runs in GitHub Actions",
@@ -359,36 +386,36 @@ REQUIRED_GOVERNANCE_TEXT = {
         "A remote branch is deleted only after",
         "Public participant",
     ),
-    Path("docs/ai/reference/live-state.md"): (
+    Path("aios/references/live-state.md"): (
         "Do not enumerate every branch",
         "Do not infer current PR, Issue, check, or merge state",
         "Deterministic recovery",
     ),
-    Path("docs/ai/reference/evidence.md"): (
+    Path("aios/references/evidence.md"): (
         "Completion evidence",
         "umbrella gate",
         "Check only fully proved criteria",
         "independent reviewer never edits Issue checklists",
     ),
-    Path("docs/ai/reference/local-tools.md"): (
+    Path("aios/references/local-tools.md"): (
         "Do not request elevated privileges",
         "route Docker-backed or environment-dependent proof to GitHub Actions",
     ),
-    Path("docs/ai/workflows/publish.md"): (
+    Path("aios/procedures/publish.md"): (
         "machine-qualified Markdown-only CI exception",
         "Approved exact head with required proof",
     ),
-    Path("docs/ai/workflows/merge.md"): (
+    Path("aios/procedures/merge.md"): (
         "without a separate confirmation pause",
         "defer the merge mutation",
     ),
-    Path("docs/ai/workflows/reconcile.md"): (
+    Path("aios/procedures/reconcile.md"): (
         "Delete the remote branch only when",
         "Otherwise retain it",
         "leaves affected criteria unchecked",
         "governance knowledge reconciliation",
     ),
-    Path("docs/ai/workflows/governance-reconcile.md"): (
+    Path("aios/procedures/governance-reconcile.md"): (
         "after every focused PR merge",
         "Governance knowledge reconciliation: no new reusable finding",
         "accepted focused governance Issue",
@@ -400,10 +427,10 @@ REQUIRED_GOVERNANCE_TEXT = {
         "return to step 4 for the next queued candidate",
         "Only after the queue is exhausted",
         *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[
-            Path("docs/ai/workflows/governance-reconcile.md")
+            Path("aios/procedures/governance-reconcile.md")
         ],
     ),
-    Path("docs/ai/knowledge/README.md"): (
+    Path("aios/selectors/governance-knowledge.md"): (
         "not an append-only incident ledger",
         "Select one canonical target",
         "accepted focused governance Issue",
@@ -413,66 +440,66 @@ REQUIRED_GOVERNANCE_TEXT = {
         "split it into atomic candidates",
         "never assign one candidate to two targets",
     ),
-    Path("docs/ai/review/inspect.md"): (
-        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("docs/ai/review/inspect.md")],
-        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("docs/ai/review/inspect.md")],
+    Path("aios/review/inspect.md"): (
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("aios/review/inspect.md")],
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("aios/review/inspect.md")],
         "candidate becomes an actionable finding only when",
     ),
-    Path("docs/ai/review/verdict.md"): (
+    Path("aios/review/verdict.md"): (
         "Reusable governance candidate",
         "not permission for the reviewer",
-        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("docs/ai/review/verdict.md")],
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("aios/review/verdict.md")],
     ),
-    Path("docs/ai/review/setup.md"): (
+    Path("aios/review/setup.md"): (
         "--depth 1",
         "--no-tags",
         "canonical workspace",
-        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("docs/ai/review/setup.md")],
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("aios/review/setup.md")],
     ),
-    Path("docs/ai/review/cleanup.md"): (
+    Path("aios/review/cleanup.md"): (
         "extended-length path handling",
         "temporary path no longer exists",
         "Do not make a second GitHub write",
     ),
-    Path(".github/workflows/CI_PLAYBOOK.md"): (
+    Path("aios/ci/router.md"): (
         "thin router",
         "Do not preload every procedure",
         "Select the first matching state",
     ),
-    Path("docs/ai/ci/preflight.md"): (
+    Path("aios/ci/procedures/preflight.md"): (
         "keeps baseline and current-head trust separate",
         "Verification-Skip",
         "cold full selection",
         "Local Docker always falls back to Actions",
     ),
-    Path("docs/ai/ci/local-rehearsal.md"): (
+    Path("aios/ci/procedures/local-rehearsal.md"): (
         "External timeout termination is not verification evidence",
         "does not resolve or invoke the Docker CLI",
     ),
-    Path("docs/ai/ci/markdown-only.md"): (
+    Path("aios/ci/exceptions/markdown-only.md"): (
         "machine-qualified exception",
         "absent run is never passing evidence",
         "use normal exact-head Actions proof",
         "Squash merge boundary",
     ),
-    Path("docs/ai/ci/post-merge.md"): (
+    Path("aios/ci/procedures/post-merge-reconcile.md"): (
         "after every feature PR merge",
         "no new reusable finding",
         "Revise or add one knowledge leaf",
         "focused playbook-update Issue",
         "Publish a knowledge change only through its focused Issue",
     ),
-    Path("docs/ai/ci/failure-triage.md"): (
+    Path("aios/ci/procedures/failure-triage.md"): (
         "Promote only a new reusable decision rule",
         "Update one canonical knowledge leaf or add one routed leaf",
     ),
-    Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"): (
+    Path("aios/adr/0008-progressive-disclosure-ai-guidance.md"): (
         "Supersedes",
         "ordered first-match selection",
         "exact routed file inventory",
         "ADR-0006 remains historical evidence",
     ),
-    Path("docs/adr/0009-reviewed-governance-knowledge-reconciliation.md"): (
+    Path("aios/adr/0009-reviewed-governance-knowledge-reconciliation.md"): (
         "ADR-0008 introduced progressive-disclosure routing",
         "Reusable governance candidate",
         "one canonical destination",
@@ -481,7 +508,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "ordered candidate queue",
         "representative ambiguity",
     ),
-    Path("docs/adr/0010-lossless-review-candidate-capture.md"): (
+    Path("aios/adr/0010-lossless-review-candidate-capture.md"): (
         "ADR-0009 established a reviewed write path",
         "exactly one `Reusable governance candidate` section",
         "one item for every atomic candidate",
@@ -489,7 +516,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "singular-only review capture",
         "first-item-only regression",
     ),
-    Path("docs/adr/0011-deterministic-shallow-review-diff.md"): (
+    Path("aios/adr/0011-deterministic-shallow-review-diff.md"): (
         "ADR-0010",
         "expected full base SHA",
         "exact base commit object",
@@ -498,35 +525,47 @@ REQUIRED_GOVERNANCE_TEXT = {
         "does not require a merge base",
         "Require inventory agreement",
     ),
+    Path("aios/adr/0012-name-aios-nodes-by-runtime-role.md"): (
+        "The complete top-level `docs/` tree moves to `aios/`",
+        "Every AIOS runtime node declares exactly one machine-readable role",
+        "`router`",
+        "`selector`",
+        "`procedure`",
+        "`reference`",
+        "`knowledge`",
+        "`exception`",
+        "Runtime filenames and directories encode their role",
+        "Accepted ADR prose remains immutable evidence",
+    ),
 }
 
 FORBIDDEN_STALE_ROUTING_TEXT = {
     Path("CONTRIBUTING.md"): (
-        "[delivery specifications](docs/delivery/) in numeric order",
+        "[delivery specifications](aios/delivery/) in numeric order",
     ),
     Path("GIT_AGENTS.md"): (
-        "Read [the AI collaboration contract](docs/ai/README.md)",
+        "Read [the AI collaboration contract](aios/work-router.md)",
         "accepted ADRs under",
         "accepted delivery specifications under",
         "Read Issue #1 and only the focused Issue",
     ),
-    Path("docs/ai/README.md"): (
+    Path("aios/work-router.md"): (
         "This is the single operating contract",
         "Read [GIT_AGENTS.md] and its required design sources",
         "Issue #1 is the live portfolio ledger",
         "Implementation lifecycle",
     ),
-    Path("docs/ai/PR_REVIEW.md"): (
+    Path("aios/review/router.md"): (
         "accepted ADRs and accepted delivery specifications in numeric order",
         "Delivery Specification 0001, the focused Issue",
     ),
-    Path(".github/workflows/CI_PLAYBOOK.md"): (
+    Path("aios/ci/router.md"): (
         "Change-driven first-push checks",
         "Historical evidence ledger",
     ),
 }
 
-OWNER_CONFIRMATION_OWNER = Path("docs/ai/workflows/focus.md")
+OWNER_CONFIRMATION_OWNER = Path("aios/procedures/focus.md")
 OWNER_CONFIRMATION_HEADING = "## Owner-confirmation STOP"
 STOP_HEADING = re.compile(r"(?im)^## [^\r\n]*\bstop\b[^\r\n]*$")
 FORBIDDEN_OWNER_CONFIRMATION_PATTERNS = {
@@ -588,11 +627,11 @@ PUBLIC_GOVERNANCE_SCAN_FILES = ROUTED_PUBLIC_SURFACE | {
     Path("CONTRIBUTING.md"),
     Path(".github/workflows/README.md"),
     Path("scripts/README.md"),
-    Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
+    Path("aios/adr/0008-progressive-disclosure-ai-guidance.md"),
 }
 DESIGN_SELECTION_DIRECTORIES = (
-    Path("docs/adr"),
-    Path("docs/delivery"),
+    Path("aios/adr"),
+    Path("aios/delivery"),
 )
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
@@ -690,7 +729,7 @@ def resolved_local_links(relative_source: Path) -> set[Path]:
 
 
 def _validate_governance_knowledge_selector(failures: list[str]) -> None:
-    relative_path = Path("docs/ai/knowledge/README.md")
+    relative_path = Path("aios/selectors/governance-knowledge.md")
     path = REPOSITORY_ROOT / relative_path
     if not path.is_file():
         return
@@ -777,7 +816,7 @@ def _validate_review_candidate_capture(failures: list[str]) -> None:
                     f"capture invariant {fragment!r}"
                 )
 
-    verdict_path = REPOSITORY_ROOT / "docs/ai/review/verdict.md"
+    verdict_path = REPOSITORY_ROOT / "aios/review/verdict.md"
     if not verdict_path.is_file():
         return
     verdict = verdict_path.read_text(encoding="utf-8")
@@ -785,14 +824,14 @@ def _validate_review_candidate_capture(failures: list[str]) -> None:
     verification_heading = "### Verification"
     if verdict.count(candidate_heading) != 1:
         failures.append(
-            "docs/ai/review/verdict.md: must contain exactly one reusable "
+            "aios/review/verdict.md: must contain exactly one reusable "
             "governance candidate section"
         )
         return
     candidate_section = verdict.split(candidate_heading, maxsplit=1)[1]
     if verification_heading not in candidate_section:
         failures.append(
-            "docs/ai/review/verdict.md: candidate section must precede verification"
+            "aios/review/verdict.md: candidate section must precede verification"
         )
         return
     candidate_section = candidate_section.split(verification_heading, maxsplit=1)[0]
@@ -802,7 +841,7 @@ def _validate_review_candidate_capture(failures: list[str]) -> None:
         )
         if not item.search(candidate_section):
             failures.append(
-                "docs/ai/review/verdict.md: candidate template must demonstrate "
+                "aios/review/verdict.md: candidate template must demonstrate "
                 f"ordered atomic item {item_number} with signal and evidence"
             )
 
@@ -822,35 +861,91 @@ def _validate_shallow_review_diff_contract(failures: list[str]) -> None:
 
 
 def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
-    governance_root = REPOSITORY_ROOT / "docs" / "ai"
-    if not governance_root.is_dir():
-        failures.append("missing governance directory docs/ai")
+    aios_root = REPOSITORY_ROOT / AIOS_ROOT
+    if not aios_root.is_dir():
+        failures.append("missing AIOS directory aios")
         return []
 
-    actual_files = frozenset(
-        path.relative_to(governance_root)
-        for path in governance_root.rglob("*")
+    actual_top_level_entries = frozenset(
+        path.name
+        for path in aios_root.iterdir()
         if path.is_file()
+        or (path.is_dir() and any(child.is_file() for child in path.rglob("*")))
     )
-    for unexpected_path in sorted(actual_files - EXPECTED_AI_GUIDANCE_FILES):
-        failures.append(
-            f"docs/ai contains unexpected file {unexpected_path.as_posix()}"
-        )
-    for missing_path in sorted(EXPECTED_AI_GUIDANCE_FILES - actual_files):
-        failures.append(f"docs/ai is missing required file {missing_path.as_posix()}")
+    for unexpected_name in sorted(
+        actual_top_level_entries - EXPECTED_AIOS_TOP_LEVEL_ENTRIES
+    ):
+        failures.append(f"AIOS contains unexpected top-level entry {unexpected_name}")
+    for missing_name in sorted(
+        EXPECTED_AIOS_TOP_LEVEL_ENTRIES - actual_top_level_entries
+    ):
+        failures.append(f"AIOS is missing required top-level entry {missing_name}")
 
-    role_paths = {**ENTRYPOINT_FILE_ROLES, **DOCFORAI_FILE_ROLES}
+    runtime_paths = list(aios_root.glob("*.md"))
+    for relative_directory in AIOS_RUNTIME_DIRECTORIES:
+        runtime_directory = aios_root / relative_directory
+        if runtime_directory.is_dir():
+            runtime_paths.extend(
+                path for path in runtime_directory.rglob("*") if path.is_file()
+            )
+    actual_files = frozenset(path.relative_to(aios_root) for path in runtime_paths)
+    for unexpected_path in sorted(actual_files - EXPECTED_AIOS_RUNTIME_FILES):
+        failures.append(
+            f"AIOS runtime contains unexpected file {unexpected_path.as_posix()}"
+        )
+    for missing_path in sorted(EXPECTED_AIOS_RUNTIME_FILES - actual_files):
+        failures.append(
+            f"AIOS runtime is missing required file {missing_path.as_posix()}"
+        )
+
+    role_paths = {**ENTRYPOINT_FILE_ROLES, **AIOS_FILE_ROLES}
+    declared_roles_by_path: dict[Path, list[str]] = {}
+    for markdown_path in iter_markdown_files():
+        declared_roles = AIOS_ROLE_MARKER.findall(
+            markdown_path.read_text(encoding="utf-8")
+        )
+        if declared_roles:
+            declared_roles_by_path[markdown_path.relative_to(REPOSITORY_ROOT)] = (
+                declared_roles
+            )
+    for unexpected_path in sorted(declared_roles_by_path.keys() - role_paths.keys()):
+        failures.append(
+            f"{unexpected_path.as_posix()}: AIOS role markers are forbidden "
+            "outside declared role-bearing paths; found "
+            f"{declared_roles_by_path[unexpected_path]!r}"
+        )
+
     for relative_path, expected_role in role_paths.items():
         path = REPOSITORY_ROOT / relative_path
         if not path.is_file():
             continue
-        marker = f"<!-- docforai-role: {expected_role} -->"
+        marker = f"<!-- aios-role: {expected_role} -->"
         content = path.read_text(encoding="utf-8")
-        if content.count(marker) != 1:
+        declared_roles = declared_roles_by_path.get(relative_path, [])
+        if declared_roles != [expected_role]:
             failures.append(
-                f"{relative_path.as_posix()}: expected one role marker {marker!r}"
+                f"{relative_path.as_posix()}: expected exactly one role marker "
+                f"{marker!r}, found {declared_roles!r}"
             )
-        if expected_role in {"procedure", "reference", "knowledge"}:
+        if relative_path in AIOS_FILE_ROLES:
+            runtime_path = relative_path.relative_to(AIOS_ROOT)
+            inferred_role = _role_for_aios_runtime_path(runtime_path)
+            if inferred_role is None:
+                failures.append(
+                    f"{relative_path.as_posix()}: path has no valid AIOS runtime role"
+                )
+            elif inferred_role != expected_role:
+                failures.append(
+                    f"{relative_path.as_posix()}: path implies role {inferred_role!r}, "
+                    f"inventory declares {expected_role!r}"
+                )
+            if len(declared_roles) == 1 and declared_roles[0] != inferred_role:
+                failures.append(
+                    f"{relative_path.as_posix()}: declared role "
+                    f"{declared_roles[0]!r} disagrees with path role "
+                    f"{inferred_role!r}"
+                )
+        if expected_role in {"procedure", "reference", "knowledge", "exception"}:
             if "## Read when" not in content:
                 failures.append(f"{relative_path.as_posix()}: missing '## Read when'")
             if "## Next" not in content and "## Return" not in content:
@@ -858,7 +953,67 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
                     f"{relative_path.as_posix()}: missing next or return transition"
                 )
 
-    return sorted(governance_root.rglob("*.md"))
+    return sorted(path for path in runtime_paths if path.suffix == ".md")
+
+
+def _role_for_aios_runtime_path(relative_path: Path) -> str | None:
+    parts = relative_path.parts
+    if relative_path == Path("work-router.md") or relative_path.name == "router.md":
+        return "router"
+    if parts[0] == "selectors" or relative_path.name == "selector.md":
+        return "selector"
+    if parts[0] == "references":
+        return "reference"
+    if "exceptions" in parts:
+        return "exception"
+    if "knowledge" in parts:
+        return "knowledge"
+    if "procedures" in parts or (
+        parts[0] == "review" and relative_path.name != "router.md"
+    ):
+        return "procedure"
+    return None
+
+
+def _validate_legacy_aios_layout(failures: list[str]) -> None:
+    for relative_path in (
+        Path("docs"),
+        Path(".github/workflows/CI_PLAYBOOK.md"),
+    ):
+        if (REPOSITORY_ROOT / relative_path).exists():
+            failures.append(
+                f"legacy AIOS path must not exist: {relative_path.as_posix()}"
+            )
+
+    legacy_runtime_root = REPOSITORY_ROOT / "aios" / "ai"
+    if legacy_runtime_root.is_dir() and any(
+        path.is_file() for path in legacy_runtime_root.rglob("*")
+    ):
+        failures.append("legacy AIOS path must not exist: aios/ai")
+
+    marker_paths = {
+        *ENTRYPOINT_FILE_ROLES,
+        *AIOS_FILE_ROLES,
+    }
+    for relative_path in sorted(marker_paths):
+        path = REPOSITORY_ROOT / relative_path
+        if not path.is_file():
+            continue
+        if LEGACY_ROLE_OR_RULE_MARKER.search(path.read_text(encoding="utf-8")):
+            failures.append(
+                f"{relative_path.as_posix()}: contains a legacy DocForAI marker"
+            )
+
+    aios_root = REPOSITORY_ROOT / AIOS_ROOT
+    for relative_directory in AIOS_RUNTIME_DIRECTORIES:
+        runtime_directory = aios_root / relative_directory
+        if not runtime_directory.is_dir():
+            continue
+        for readme in runtime_directory.rglob("README.md"):
+            failures.append(
+                f"{readme.relative_to(REPOSITORY_ROOT).as_posix()}: "
+                "runtime README.md must use a role-expressive filename"
+            )
 
 
 def _validate_rule_ownership(failures: list[str], governance_paths: list[Path]) -> None:
@@ -867,7 +1022,7 @@ def _validate_rule_ownership(failures: list[str], governance_paths: list[Path]) 
         for path in governance_paths
     }
     for marker_name, owner in CANONICAL_RULE_OWNERS.items():
-        marker = f"<!-- docforai-rule: {marker_name} -->"
+        marker = f"<!-- aios-rule: {marker_name} -->"
         occurrences = [
             (path, content.count(marker))
             for path, content in contents.items()
@@ -911,8 +1066,7 @@ def _validate_routes(failures: list[str]) -> None:
     required_reachable_surface = {
         Path("GIT_AGENTS.md"),
         Path("AI_GUIDANCE.md"),
-        Path(".github/workflows/CI_PLAYBOOK.md"),
-        *DOCFORAI_FILE_ROLES,
+        *AIOS_FILE_ROLES,
     }
     for unreachable in sorted(required_reachable_surface - reachable):
         failures.append(
@@ -920,25 +1074,25 @@ def _validate_routes(failures: list[str]) -> None:
         )
 
 
-def _validate_router_budgets(failures: list[str]) -> None:
-    for relative_path, maximum_lines in ROUTER_LINE_BUDGETS.items():
+def _validate_routing_node_budgets(failures: list[str]) -> None:
+    for relative_path, maximum_lines in ROUTING_NODE_LINE_BUDGETS.items():
         path = REPOSITORY_ROOT / relative_path
         if not path.is_file():
             continue
         line_count = len(path.read_text(encoding="utf-8").splitlines())
         if line_count > maximum_lines:
             failures.append(
-                f"{relative_path.as_posix()}: router has {line_count} lines, "
+                f"{relative_path.as_posix()}: routing node has {line_count} lines, "
                 f"budget is {maximum_lines}"
             )
 
 
 def _validate_ci_failure_knowledge(failures: list[str]) -> None:
-    knowledge_root = REPOSITORY_ROOT / "docs" / "ai" / "ci" / "knowledge"
+    knowledge_root = REPOSITORY_ROOT / "aios" / "ci" / "knowledge"
     knowledge_leaves = [
         path.read_text(encoding="utf-8")
         for path in sorted(knowledge_root.glob("*.md"))
-        if path.name != "README.md"
+        if path.name != "selector.md"
     ]
     counts = Counter(
         run_id
@@ -1005,6 +1159,8 @@ def _validate_public_governance_surface(
 def governance_failures() -> list[str]:
     failures: list[str] = []
 
+    _validate_legacy_aios_layout(failures)
+
     for relative_path in REQUIRED_GOVERNANCE_FILES:
         if not (REPOSITORY_ROOT / relative_path).is_file():
             failures.append(
@@ -1035,14 +1191,14 @@ def governance_failures() -> list[str]:
                     f"{relative_path.as_posix()}: contains stale routing {fragment!r}"
                 )
 
-    ai_paths = _validate_inventory_and_roles(failures)
+    aios_paths = _validate_inventory_and_roles(failures)
     governance_paths = sorted(
         {
             REPOSITORY_ROOT / path
             for path in PUBLIC_GOVERNANCE_SCAN_FILES
             if (REPOSITORY_ROOT / path).is_file()
         }
-        | set(ai_paths)
+        | set(aios_paths)
         | set(design_governance_paths())
     )
 
@@ -1051,7 +1207,7 @@ def governance_failures() -> list[str]:
     _validate_governance_knowledge_selector(failures)
     _validate_review_candidate_capture(failures)
     _validate_shallow_review_diff_contract(failures)
-    _validate_router_budgets(failures)
+    _validate_routing_node_budgets(failures)
     _validate_ci_failure_knowledge(failures)
     _validate_owner_confirmation_boundary(failures, governance_paths)
     _validate_public_governance_surface(failures, governance_paths)
@@ -1084,7 +1240,7 @@ def main() -> int:
 
     print(
         f"Validated {checked_links} local links across {len(markdown_files)} "
-        "Markdown files and the routed repository-owned AI governance graph."
+        "Markdown files and the routed AIOS governance graph."
     )
     return 0
 

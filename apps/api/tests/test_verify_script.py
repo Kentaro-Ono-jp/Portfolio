@@ -183,7 +183,7 @@ def test_cross_cutting_or_unknown_change_fails_closed_to_every_group(
 
 
 def test_documentation_change_selects_only_documentation(verifier: ModuleType) -> None:
-    plan = verifier.plan_for_paths(["docs/ai/README.md"])
+    plan = verifier.plan_for_paths(["aios/work-router.md"])
 
     assert plan.groups == {"docs"}
     assert plan.carried_groups == set()
@@ -194,7 +194,7 @@ def test_successful_baseline_marks_unaffected_groups_as_carried(
     verifier: ModuleType,
 ) -> None:
     plan = verifier.plan_for_paths(
-        ["docs/ai/README.md"],
+        ["aios/work-router.md"],
         base="successful-head",
         baseline_proven=True,
     )
@@ -286,7 +286,7 @@ def test_docs_follow_up_preserves_groups_skipped_by_successful_baseline(
     initial = verifier.move_groups_to_skipped(initial, verifier.DOCKER_GROUPS)
 
     follow_up = verifier.plan_for_paths(
-        ["docs/ai/README.md"],
+        ["aios/work-router.md"],
         baseline_proven=True,
         baseline_skipped_groups=initial.skipped_groups,
     )
@@ -311,7 +311,7 @@ def test_second_docs_follow_up_rejects_missing_inherited_skip_trailer(
 ) -> None:
     inherited_skips = verifier.DOCKER_GROUPS
     first_follow_up = verifier.plan_for_paths(
-        ["docs/ai/README.md"],
+        ["aios/work-router.md"],
         baseline_proven=True,
         baseline_skipped_groups=inherited_skips,
     )
@@ -321,7 +321,7 @@ def test_second_docs_follow_up_rejects_missing_inherited_skip_trailer(
         current_skipped_groups=inherited_skips,
     )
     second_follow_up = verifier.plan_for_paths(
-        ["docs/ai/PR_REVIEW.md"],
+        ["aios/review/router.md"],
         baseline_proven=True,
         baseline_skipped_groups=first_follow_up.skipped_groups,
     )
@@ -338,7 +338,7 @@ def test_current_skip_cannot_replace_carried_baseline_evidence(
     verifier: ModuleType,
 ) -> None:
     plan = verifier.plan_for_paths(
-        ["docs/ai/README.md"],
+        ["aios/work-router.md"],
         baseline_proven=True,
     )
 
@@ -367,7 +367,7 @@ def test_cross_boundary_rename_selects_old_and_new_path_groups(
         return subprocess.CompletedProcess(
             args=command,
             returncode=0,
-            stdout=(b"R100\0apps/api/src/reactorfront_api/legacy.py\0docs/legacy.md\0"),
+            stdout=(b"R100\0apps/api/src/reactorfront_api/legacy.py\0aios/legacy.md\0"),
         )
 
     monkeypatch.setattr(verifier.subprocess, "run", completed)
@@ -376,7 +376,7 @@ def test_cross_boundary_rename_selects_old_and_new_path_groups(
 
     assert plan.changed_files == (
         "apps/api/src/reactorfront_api/legacy.py",
-        "docs/legacy.md",
+        "aios/legacy.md",
     )
     assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
 
@@ -409,7 +409,7 @@ def test_real_git_cross_boundary_copy_selects_source_and_destination_groups(
     git("commit", "-m", "Add API source")
     base = git("rev-parse", "HEAD")
 
-    destination = repository / "docs/copied.md"
+    destination = repository / "aios/copied.md"
     destination.parent.mkdir(parents=True)
     destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     git("add", ".")
@@ -420,7 +420,7 @@ def test_real_git_cross_boundary_copy_selects_source_and_destination_groups(
 
     assert plan.changed_files == (
         "apps/api/src/reactorfront_api/copied.py",
-        "docs/copied.md",
+        "aios/copied.md",
     )
     assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
 
@@ -610,7 +610,7 @@ def test_closing_partial_baseline_gap_reruns_dependent_evidence(
         verifier,
         "plan_from_git",
         lambda **kwargs: verifier.plan_for_paths(
-            ["docs/ai/README.md"],
+            ["aios/work-router.md"],
             base=kwargs["base"],
             baseline_proven=kwargs["baseline_proven"],
             baseline_skipped_groups=kwargs["baseline_skipped_groups"],
@@ -1054,7 +1054,7 @@ def test_external_pr_executes_trusted_base_gaps_and_ignores_current_skip(
         ci_planner.verify,
         "plan_from_git",
         lambda **kwargs: ci_planner.verify.plan_for_paths(
-            ["docs/ai/README.md"],
+            ["aios/work-router.md"],
             base=kwargs["base"],
             baseline_proven=kwargs["baseline_proven"],
             baseline_skipped_groups=kwargs["baseline_skipped_groups"],
@@ -1269,7 +1269,7 @@ def test_normal_main_push_preserves_baseline_skip_lineage(
         ci_planner.verify,
         "plan_from_git",
         lambda **kwargs: ci_planner.verify.plan_for_paths(
-            ["docs/ai/README.md"],
+            ["aios/work-router.md"],
             base=kwargs["base"],
             baseline_proven=kwargs["baseline_proven"],
             baseline_skipped_groups=kwargs["baseline_skipped_groups"],
