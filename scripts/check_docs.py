@@ -14,6 +14,7 @@ IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 DOCFORAI_FILE_ROLES = {
     Path("docs/ai/README.md"): "router",
     Path("docs/ai/PR_REVIEW.md"): "router",
+    Path("docs/ai/knowledge/README.md"): "router",
     Path("docs/ai/reference/authority.md"): "reference",
     Path("docs/ai/reference/live-state.md"): "reference",
     Path("docs/ai/reference/public-safety.md"): "reference",
@@ -25,6 +26,7 @@ DOCFORAI_FILE_ROLES = {
     Path("docs/ai/workflows/correct.md"): "procedure",
     Path("docs/ai/workflows/merge.md"): "procedure",
     Path("docs/ai/workflows/reconcile.md"): "procedure",
+    Path("docs/ai/workflows/governance-reconcile.md"): "procedure",
     Path("docs/ai/review/setup.md"): "procedure",
     Path("docs/ai/review/inspect.md"): "procedure",
     Path("docs/ai/review/verdict.md"): "procedure",
@@ -54,6 +56,7 @@ EXPECTED_AI_GUIDANCE_FILES = frozenset(
 )
 REQUIRED_GOVERNANCE_FILES = (
     Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
+    Path("docs/adr/0009-reviewed-governance-knowledge-reconciliation.md"),
     Path("docs/delivery/README.md"),
     *ENTRYPOINT_FILE_ROLES,
     *DOCFORAI_FILE_ROLES,
@@ -64,6 +67,7 @@ ROUTER_LINE_BUDGETS = {
     Path("AI_GUIDANCE.md"): 10,
     Path("docs/ai/README.md"): 100,
     Path("docs/ai/PR_REVIEW.md"): 65,
+    Path("docs/ai/knowledge/README.md"): 75,
     Path(".github/workflows/CI_PLAYBOOK.md"): 45,
     Path("docs/ai/ci/knowledge/README.md"): 55,
 }
@@ -71,6 +75,7 @@ ROUTER_LINE_BUDGETS = {
 CANONICAL_RULE_OWNERS = {
     "progressive-disclosure": Path("docs/ai/README.md"),
     "review-permission-boundary": Path("docs/ai/PR_REVIEW.md"),
+    "governance-knowledge-selection": Path("docs/ai/knowledge/README.md"),
     "actor-authority": Path("docs/ai/reference/authority.md"),
     "bounded-live-state": Path("docs/ai/reference/live-state.md"),
     "public-safety": Path("docs/ai/reference/public-safety.md"),
@@ -82,6 +87,9 @@ CANONICAL_RULE_OWNERS = {
     "correction-workflow": Path("docs/ai/workflows/correct.md"),
     "merge-workflow": Path("docs/ai/workflows/merge.md"),
     "reconciliation-workflow": Path("docs/ai/workflows/reconcile.md"),
+    "governance-knowledge-reconciliation": Path(
+        "docs/ai/workflows/governance-reconcile.md"
+    ),
     "review-setup": Path("docs/ai/review/setup.md"),
     "review-inspection": Path("docs/ai/review/inspect.md"),
     "review-verdict": Path("docs/ai/review/verdict.md"),
@@ -121,6 +129,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("docs/ai/workflows/correct.md"),
         Path("docs/ai/workflows/merge.md"),
         Path("docs/ai/workflows/reconcile.md"),
+        Path("docs/ai/workflows/governance-reconcile.md"),
         Path(".github/workflows/CI_PLAYBOOK.md"),
         Path("docs/delivery/README.md"),
         Path("docs/adr/README.md"),
@@ -162,8 +171,34 @@ REQUIRED_ROUTE_LINKS = {
     ),
     Path("docs/ai/workflows/reconcile.md"): (
         Path(".github/workflows/CI_PLAYBOOK.md"),
+        Path("docs/ai/workflows/governance-reconcile.md"),
         Path("docs/ai/reference/evidence.md"),
         Path("docs/ai/README.md"),
+    ),
+    Path("docs/ai/workflows/governance-reconcile.md"): (
+        Path(".github/workflows/CI_PLAYBOOK.md"),
+        Path("docs/ai/workflows/focus.md"),
+        Path("docs/ai/knowledge/README.md"),
+    ),
+    Path("docs/ai/knowledge/README.md"): (
+        Path("docs/ai/reference/authority.md"),
+        Path("docs/ai/reference/live-state.md"),
+        Path("docs/ai/reference/local-tools.md"),
+        Path("docs/ai/reference/public-safety.md"),
+        Path("docs/ai/reference/evidence.md"),
+        Path("docs/ai/workflows/focus.md"),
+        Path("docs/ai/workflows/implement.md"),
+        Path("docs/ai/workflows/publish.md"),
+        Path("docs/ai/workflows/correct.md"),
+        Path("docs/ai/workflows/merge.md"),
+        Path("docs/ai/workflows/reconcile.md"),
+        Path("docs/ai/review/setup.md"),
+        Path("docs/ai/review/inspect.md"),
+        Path("docs/ai/review/verdict.md"),
+        Path("docs/ai/review/cleanup.md"),
+        Path(".github/workflows/CI_PLAYBOOK.md"),
+        Path("docs/adr/README.md"),
+        Path("docs/delivery/README.md"),
     ),
     Path("docs/ai/review/setup.md"): (
         Path("docs/ai/reference/local-tools.md"),
@@ -207,6 +242,40 @@ REQUIRED_ROUTE_LINKS = {
     ),
 }
 
+GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
+    "actor-authority": Path("docs/ai/reference/authority.md"),
+    "live-state": Path("docs/ai/reference/live-state.md"),
+    "local-tools": Path("docs/ai/reference/local-tools.md"),
+    "public-safety": Path("docs/ai/reference/public-safety.md"),
+    "issue-evidence": Path("docs/ai/reference/evidence.md"),
+    "focus": Path("docs/ai/workflows/focus.md"),
+    "implementation": Path("docs/ai/workflows/implement.md"),
+    "publication": Path("docs/ai/workflows/publish.md"),
+    "correction": Path("docs/ai/workflows/correct.md"),
+    "merge": Path("docs/ai/workflows/merge.md"),
+    "reconciliation": Path("docs/ai/workflows/reconcile.md"),
+    "review-setup": Path("docs/ai/review/setup.md"),
+    "review-inspection": Path("docs/ai/review/inspect.md"),
+    "review-verdict": Path("docs/ai/review/verdict.md"),
+    "review-cleanup": Path("docs/ai/review/cleanup.md"),
+    "ci": Path(".github/workflows/CI_PLAYBOOK.md"),
+    "architecture": Path("docs/adr/README.md"),
+    "delivery": Path("docs/delivery/README.md"),
+}
+GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
+    "issue-evidence": (
+        "Checklist criterion mapping",
+        "completion-evidence content",
+        "umbrella-gate proof",
+    ),
+    "reconciliation": (
+        "Post-merge sequencing",
+        "main fast-forward",
+        "branch deletion",
+        "task-owned cleanup",
+    ),
+}
+
 REQUIRED_GOVERNANCE_TEXT = {
     Path("GIT_AGENTS.md"): (
         "thin, tracked entrypoint",
@@ -225,6 +294,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Do not read all ADRs or delivery specifications",
         "A loop-back is valid only after state changed",
         "The only owner-confirmation STOP",
+        "reusable non-CI process or review knowledge",
     ),
     Path("docs/ai/PR_REVIEW.md"): (
         "Governing tracking Issue URL",
@@ -269,6 +339,37 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Delete the remote branch only when",
         "Otherwise retain it",
         "leaves affected criteria unchecked",
+        "governance knowledge reconciliation",
+    ),
+    Path("docs/ai/workflows/governance-reconcile.md"): (
+        "after every focused PR merge",
+        "Governance knowledge reconciliation: no new reusable finding",
+        "accepted focused governance Issue",
+        "independently reviewed update",
+        "do not create a recursive empty Issue",
+        "CI runner or Actions signals",
+        "ordered candidate queue",
+        "For each queued candidate",
+        "return to step 4 for the next queued candidate",
+        "Only after the queue is exhausted",
+    ),
+    Path("docs/ai/knowledge/README.md"): (
+        "not an append-only incident ledger",
+        "Select one canonical target",
+        "accepted focused governance Issue",
+        "independently reviewed PR",
+        "current focused governance PR",
+        "Rows are ordered precedence",
+        "split it into atomic candidates",
+        "never assign one candidate to two targets",
+    ),
+    Path("docs/ai/review/inspect.md"): (
+        "reusable process or review knowledge candidate",
+        "candidate becomes an actionable finding only when",
+    ),
+    Path("docs/ai/review/verdict.md"): (
+        "Reusable governance candidate",
+        "not permission for the reviewer",
     ),
     Path("docs/ai/review/setup.md"): (
         "--depth 1",
@@ -304,12 +405,28 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path("docs/ai/ci/post-merge.md"): (
         "after every feature PR merge",
         "no new reusable finding",
+        "Revise or add one knowledge leaf",
+        "focused playbook-update Issue",
+        "Publish a knowledge change only through its focused Issue",
+    ),
+    Path("docs/ai/ci/failure-triage.md"): (
+        "Promote only a new reusable decision rule",
+        "Update one canonical knowledge leaf or add one routed leaf",
     ),
     Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"): (
         "Supersedes",
         "ordered first-match selection",
         "exact routed file inventory",
         "ADR-0006 remains historical evidence",
+    ),
+    Path("docs/adr/0009-reviewed-governance-knowledge-reconciliation.md"): (
+        "ADR-0008 introduced progressive-disclosure routing",
+        "Reusable governance candidate",
+        "one canonical destination",
+        "focused governance Issue",
+        "independently reviewed PR",
+        "ordered candidate queue",
+        "representative ambiguity",
     ),
 }
 
@@ -500,6 +617,81 @@ def resolved_local_links(relative_source: Path) -> set[Path]:
         except ValueError:
             continue
     return links
+
+
+def _validate_governance_knowledge_selector(failures: list[str]) -> None:
+    relative_path = Path("docs/ai/knowledge/README.md")
+    path = REPOSITORY_ROOT / relative_path
+    if not path.is_file():
+        return
+
+    rows: list[tuple[str, str, Path]] = []
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        stripped = line.strip()
+        if not stripped.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) != 3:
+            failures.append(
+                f"{relative_path.as_posix()}:{line_number}: malformed signal row"
+            )
+            continue
+        key = cells[0].strip("`")
+        links = list(MARKDOWN_LINK.finditer(cells[2]))
+        if len(links) != 1:
+            failures.append(
+                f"{relative_path.as_posix()}:{line_number}: signal {key!r} "
+                "must have exactly one canonical target link"
+            )
+            continue
+        target = local_target(links[0].group(1))
+        if not target:
+            failures.append(
+                f"{relative_path.as_posix()}:{line_number}: signal {key!r} "
+                "must use one local canonical target"
+            )
+            continue
+        resolved = (path.parent / target).resolve()
+        try:
+            relative_target = resolved.relative_to(REPOSITORY_ROOT.resolve())
+        except ValueError:
+            failures.append(
+                f"{relative_path.as_posix()}:{line_number}: signal {key!r} "
+                "target escapes the repository"
+            )
+            continue
+        rows.append((key, cells[1], relative_target))
+
+    expected_keys = list(GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS)
+    actual_keys = [key for key, _signal, _target in rows]
+    if actual_keys != expected_keys:
+        failures.append(
+            f"{relative_path.as_posix()}: signal keys must be unique and in "
+            f"declared precedence order; expected {expected_keys}, found {actual_keys}"
+        )
+
+    for key, expected_target in GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS.items():
+        matches = [
+            (signal, target) for actual_key, signal, target in rows if actual_key == key
+        ]
+        if len(matches) != 1 or matches[0][1] != expected_target:
+            rendered = (
+                ", ".join(target.as_posix() for _signal, target in matches) or "none"
+            )
+            failures.append(
+                f"{relative_path.as_posix()}: signal {key!r} must map exactly "
+                f"once to {expected_target.as_posix()}, found {rendered}"
+            )
+            continue
+        signal = matches[0][0]
+        for fragment in GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS.get(key, ()):
+            if fragment not in signal:
+                failures.append(
+                    f"{relative_path.as_posix()}: signal {key!r} is missing "
+                    f"disambiguating text {fragment!r}"
+                )
 
 
 def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
@@ -729,6 +921,7 @@ def governance_failures() -> list[str]:
 
     _validate_rule_ownership(failures, governance_paths)
     _validate_routes(failures)
+    _validate_governance_knowledge_selector(failures)
     _validate_router_budgets(failures)
     _validate_ci_failure_knowledge(failures)
     _validate_owner_confirmation_boundary(failures, governance_paths)

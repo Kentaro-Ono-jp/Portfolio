@@ -39,8 +39,11 @@ def test_progressive_routing_covers_the_complete_guidance_surface(
         Path(".github/workflows/CI_PLAYBOOK.md"),
     )
     assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/README.md")]
+    assert Path("docs/ai/workflows/governance-reconcile.md") in routes[Path("docs/ai/README.md")]
     assert Path("docs/ai/ci/markdown-only.md") not in routes[Path("docs/ai/ci/preflight.md")]
     assert Path("docs/ai/ci/knowledge/README.md") in routes[Path("docs/ai/ci/preflight.md")]
+    assert Path("docs/ai/knowledge/README.md") not in routes[Path("docs/ai/workflows/implement.md")]
+    assert Path("docs/ai/knowledge/README.md") not in routes[Path("docs/ai/review/inspect.md")]
     assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/workflows/correct.md")]
     assert Path("docs/ai/workflows/merge.md") in routes[Path("docs/ai/workflows/correct.md")]
     assert set(roles.values()) == {"router", "procedure", "reference", "knowledge"}
@@ -55,6 +58,156 @@ def test_every_canonical_rule_has_one_declared_owner(
     assert len(owners.values()) == len(set(owners.values()))
     assert owners["actor-authority"] == Path("docs/ai/reference/authority.md")
     assert owners["ci-markdown-only-exception"] == Path("docs/ai/ci/markdown-only.md")
+    assert owners["governance-knowledge-selection"] == Path("docs/ai/knowledge/README.md")
+    assert owners["governance-knowledge-reconciliation"] == Path(
+        "docs/ai/workflows/governance-reconcile.md"
+    )
+
+
+def test_governance_knowledge_write_route_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    routes = documentation_checker.REQUIRED_ROUTE_LINKS
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    reconciliation = Path("docs/ai/workflows/governance-reconcile.md")
+    selector = Path("docs/ai/knowledge/README.md")
+
+    assert reconciliation in routes[Path("docs/ai/README.md")]
+    assert reconciliation in routes[Path("docs/ai/workflows/reconcile.md")]
+    assert selector in routes[reconciliation]
+    assert set(routes[selector]) == {
+        Path("docs/ai/reference/authority.md"),
+        Path("docs/ai/reference/live-state.md"),
+        Path("docs/ai/reference/local-tools.md"),
+        Path("docs/ai/reference/public-safety.md"),
+        Path("docs/ai/reference/evidence.md"),
+        Path("docs/ai/workflows/focus.md"),
+        Path("docs/ai/workflows/implement.md"),
+        Path("docs/ai/workflows/publish.md"),
+        Path("docs/ai/workflows/correct.md"),
+        Path("docs/ai/workflows/merge.md"),
+        Path("docs/ai/workflows/reconcile.md"),
+        Path("docs/ai/review/setup.md"),
+        Path("docs/ai/review/inspect.md"),
+        Path("docs/ai/review/verdict.md"),
+        Path("docs/ai/review/cleanup.md"),
+        Path(".github/workflows/CI_PLAYBOOK.md"),
+        Path("docs/adr/README.md"),
+        Path("docs/delivery/README.md"),
+    }
+
+    expected_write_guards = {
+        reconciliation: (
+            "Governance knowledge reconciliation: no new reusable finding",
+            "accepted focused governance Issue",
+            "independently reviewed update",
+            "do not create a recursive empty Issue",
+            "ordered candidate queue",
+            "For each queued candidate",
+            "return to step 4 for the next queued candidate",
+            "Only after the queue is exhausted",
+        ),
+        selector: (
+            "not an append-only incident ledger",
+            "Select one canonical target",
+            "accepted focused governance Issue",
+            "independently reviewed PR",
+        ),
+        Path("docs/ai/review/verdict.md"): (
+            "Reusable governance candidate",
+            "not permission for the reviewer",
+        ),
+        Path("docs/ai/ci/failure-triage.md"): (
+            "Promote only a new reusable decision rule",
+            "Update one canonical knowledge leaf or add one routed leaf",
+        ),
+        Path("docs/ai/ci/post-merge.md"): (
+            "Revise or add one knowledge leaf",
+            "focused playbook-update Issue",
+            "Publish a knowledge change only through its focused Issue",
+        ),
+    }
+    for path, fragments in expected_write_guards.items():
+        assert all(fragment in required_text[path] for fragment in fragments)
+
+
+def test_governance_selector_rejects_duplicate_signal_keys(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = (REPOSITORY_ROOT / "docs" / "ai" / "knowledge" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    duplicate = source.replace(
+        "| `reconciliation` |",
+        "| `issue-evidence` |",
+        1,
+    )
+    selector = tmp_path / "docs" / "ai" / "knowledge" / "README.md"
+    selector.parent.mkdir(parents=True)
+    selector.write_text(duplicate, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_governance_knowledge_selector(failures)
+
+    assert any("signal keys must be unique" in failure for failure in failures)
+    assert any("signal 'issue-evidence' must map exactly once" in failure for failure in failures)
+    assert any("signal 'reconciliation' must map exactly once" in failure for failure in failures)
+
+
+def test_governance_selector_rejects_ambiguous_evidence_wording(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = (REPOSITORY_ROOT / "docs" / "ai" / "knowledge" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    ambiguous = source.replace(
+        "Post-merge sequencing, main fast-forward, branch deletion, or task-owned cleanup",
+        "Issue evidence and completion proof",
+        1,
+    )
+    selector = tmp_path / "docs" / "ai" / "knowledge" / "README.md"
+    selector.parent.mkdir(parents=True)
+    selector.write_text(ambiguous, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_governance_knowledge_selector(failures)
+
+    assert any(
+        "signal 'reconciliation' is missing disambiguating text 'Post-merge sequencing'" in failure
+        for failure in failures
+    )
+
+
+def test_governance_reconciliation_keeps_processing_multiple_candidates() -> None:
+    procedure = (
+        REPOSITORY_ROOT / "docs" / "ai" / "workflows" / "governance-reconcile.md"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        procedure.index("ordered candidate queue")
+        < procedure.index("For each queued candidate")
+        < procedure.index("return to step 4 for the next queued candidate")
+        < procedure.index("Only after the queue is exhausted")
+    )
+
+
+def test_review_verdict_has_one_governance_candidate_field() -> None:
+    verdict = (REPOSITORY_ROOT / "docs" / "ai" / "review" / "verdict.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert verdict.count("### Reusable governance candidate") == 1
+    assert (
+        verdict.index("### Findings or approval basis")
+        < verdict.index("### Reusable governance candidate")
+        < verdict.index("### Verification")
+    )
 
 
 @pytest.mark.parametrize(
