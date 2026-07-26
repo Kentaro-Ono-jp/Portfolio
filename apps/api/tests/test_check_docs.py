@@ -296,6 +296,98 @@ def test_review_candidate_template_demonstrates_multiple_atomic_items(
     assert failures == []
 
 
+def _write_shallow_review_diff_fixture(
+    tmp_path: Path,
+    overrides: dict[Path, tuple[str, str]],
+) -> None:
+    relative_paths = (
+        Path("docs/ai/PR_REVIEW.md"),
+        Path("docs/ai/review/setup.md"),
+        Path("docs/ai/review/inspect.md"),
+    )
+    for relative_path in relative_paths:
+        source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+        if relative_path in overrides:
+            old, new = overrides[relative_path]
+            assert old in source
+            source = source.replace(old, new)
+        destination = tmp_path / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(source, encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "old", "new", "expected_fragment"),
+    [
+        (
+            Path("docs/ai/PR_REVIEW.md"),
+            "Expected full base SHA",
+            "Base branch name",
+            "Expected full base SHA",
+        ),
+        (
+            Path("docs/ai/review/setup.md"),
+            "git fetch --no-tags --depth 1 origin <expected-base-sha>",
+            "git fetch --unshallow origin",
+            "git fetch --no-tags --depth 1 origin <expected-base-sha>",
+        ),
+        (
+            Path("docs/ai/review/setup.md"),
+            "git cat-file -e <expected-base-sha>^{commit}",
+            "git log --all",
+            "git cat-file -e <expected-base-sha>^{commit}",
+        ),
+        (
+            Path("docs/ai/review/inspect.md"),
+            "git diff --name-status <expected-base-sha> <expected-head-sha>",
+            "git diff --name-status <expected-base-sha>...<expected-head-sha>",
+            "git diff --name-status <expected-base-sha> <expected-head-sha>",
+        ),
+        (
+            Path("docs/ai/review/inspect.md"),
+            "canonical GitHub PR patch and complete paginated file inventory",
+            "pull request file count",
+            "canonical GitHub PR patch and complete paginated file inventory",
+        ),
+        (
+            Path("docs/ai/review/inspect.md"),
+            "Require the GitHub and exact endpoint inventories to agree",
+            "inspect the GitHub and endpoint inventories separately",
+            "Require the GitHub and exact endpoint inventories to agree",
+        ),
+    ],
+)
+def test_shallow_review_diff_contract_rejects_incomplete_proof(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    old: str,
+    new: str,
+    expected_fragment: str,
+) -> None:
+    _write_shallow_review_diff_fixture(
+        tmp_path,
+        {relative_path: (old, new)},
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_shallow_review_diff_contract(failures)
+
+    assert any(expected_fragment in failure for failure in failures)
+
+
+def test_shallow_review_diff_contract_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    failures: list[str] = []
+
+    documentation_checker._validate_shallow_review_diff_contract(failures)
+
+    assert failures == []
+
+
 @pytest.mark.parametrize(
     ("relative_path", "stale_directive"),
     [

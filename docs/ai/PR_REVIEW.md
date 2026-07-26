@@ -13,6 +13,7 @@ states.
 - Pull request URL
 - Governing tracking Issue URL
 - Focused Issue URL
+- Expected full base SHA
 - Expected full head SHA
 - Review cycle: `initial` or `re-review`
 - Previous verdict URL for re-review, otherwise `none`

@@ -58,6 +58,7 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
     Path("docs/adr/0009-reviewed-governance-knowledge-reconciliation.md"),
     Path("docs/adr/0010-lossless-review-candidate-capture.md"),
+    Path("docs/adr/0011-deterministic-shallow-review-diff.md"),
     Path("docs/delivery/README.md"),
     *ENTRYPOINT_FILE_ROLES,
     *DOCFORAI_FILE_ROLES,
@@ -297,6 +298,30 @@ REVIEW_CANDIDATE_CAPTURE_FRAGMENTS = {
     ),
 }
 
+SHALLOW_REVIEW_DIFF_FRAGMENTS = {
+    Path("docs/ai/PR_REVIEW.md"): (
+        "Expected full base SHA",
+        "Expected full head SHA",
+    ),
+    Path("docs/ai/review/setup.md"): (
+        "Resolve the live PR base and head",
+        "expected full base and head SHAs",
+        "Never infer a missing base",
+        "git fetch --no-tags --depth 1 origin <expected-base-sha>",
+        "git cat-file -e <expected-base-sha>^{commit}",
+        "Do not deepen, unshallow, or search history for a merge base",
+    ),
+    Path("docs/ai/review/inspect.md"): (
+        "canonical GitHub PR patch and complete paginated file inventory",
+        "git diff --name-status <expected-base-sha> <expected-head-sha>",
+        "git diff --binary <expected-base-sha> <expected-head-sha> --",
+        "do not require a merge base",
+        "never rely on a three-dot comparison as the only complete-diff proof",
+        "Require the GitHub and exact endpoint inventories to agree",
+        "file or status mismatch is a blocking limitation",
+    ),
+}
+
 REQUIRED_GOVERNANCE_TEXT = {
     Path("GIT_AGENTS.md"): (
         "thin, tracked entrypoint",
@@ -323,6 +348,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "The only permitted GitHub write",
         "Do not push",
         "open only the named next state",
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("docs/ai/PR_REVIEW.md")],
     ),
     Path("docs/ai/reference/authority.md"): (
         "The only owner-confirmation boundary",
@@ -389,6 +415,7 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path("docs/ai/review/inspect.md"): (
         *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("docs/ai/review/inspect.md")],
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("docs/ai/review/inspect.md")],
         "candidate becomes an actionable finding only when",
     ),
     Path("docs/ai/review/verdict.md"): (
@@ -400,6 +427,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "--depth 1",
         "--no-tags",
         "canonical workspace",
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("docs/ai/review/setup.md")],
     ),
     Path("docs/ai/review/cleanup.md"): (
         "extended-length path handling",
@@ -460,6 +488,15 @@ REQUIRED_GOVERNANCE_TEXT = {
         "expands every numbered candidate item from every verdict",
         "singular-only review capture",
         "first-item-only regression",
+    ),
+    Path("docs/adr/0011-deterministic-shallow-review-diff.md"): (
+        "ADR-0010",
+        "expected full base SHA",
+        "exact base commit object",
+        "canonical GitHub PR patch",
+        "git diff <expected-base-sha> <expected-head-sha>",
+        "does not require a merge base",
+        "Require inventory agreement",
     ),
 }
 
@@ -770,6 +807,20 @@ def _validate_review_candidate_capture(failures: list[str]) -> None:
             )
 
 
+def _validate_shallow_review_diff_contract(failures: list[str]) -> None:
+    for relative_path, required_fragments in SHALLOW_REVIEW_DIFF_FRAGMENTS.items():
+        path = REPOSITORY_ROOT / relative_path
+        if not path.is_file():
+            continue
+        normalized_content = " ".join(path.read_text(encoding="utf-8").split())
+        for fragment in required_fragments:
+            if fragment not in normalized_content:
+                failures.append(
+                    f"{relative_path.as_posix()}: missing deterministic shallow-review "
+                    f"diff invariant {fragment!r}"
+                )
+
+
 def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
     governance_root = REPOSITORY_ROOT / "docs" / "ai"
     if not governance_root.is_dir():
@@ -999,6 +1050,7 @@ def governance_failures() -> list[str]:
     _validate_routes(failures)
     _validate_governance_knowledge_selector(failures)
     _validate_review_candidate_capture(failures)
+    _validate_shallow_review_diff_contract(failures)
     _validate_router_budgets(failures)
     _validate_ci_failure_knowledge(failures)
     _validate_owner_confirmation_boundary(failures, governance_paths)
