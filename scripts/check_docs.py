@@ -57,6 +57,7 @@ EXPECTED_AI_GUIDANCE_FILES = frozenset(
 REQUIRED_GOVERNANCE_FILES = (
     Path("docs/adr/0008-progressive-disclosure-ai-guidance.md"),
     Path("docs/adr/0009-reviewed-governance-knowledge-reconciliation.md"),
+    Path("docs/adr/0010-lossless-review-candidate-capture.md"),
     Path("docs/delivery/README.md"),
     *ENTRYPOINT_FILE_ROLES,
     *DOCFORAI_FILE_ROLES,
@@ -276,6 +277,26 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
     ),
 }
 
+REVIEW_CANDIDATE_CAPTURE_FRAGMENTS = {
+    Path("docs/ai/review/inspect.md"): (
+        "classify every evidenced reusable process or review candidate",
+        "Split compound observations into atomic root-cause candidates",
+        "retain every candidate for the verdict",
+        "Use `none` only when no reusable candidate was discovered",
+    ),
+    Path("docs/ai/review/verdict.md"): (
+        "one numbered item for every atomic reusable candidate",
+        "`none` is permitted only when no reusable candidate was discovered",
+        "never use it as a substitute for a second or later item",
+        "every reusable-governance candidate or valid `none`",
+    ),
+    Path("docs/ai/workflows/governance-reconcile.md"): (
+        "Expand every numbered candidate item from every verdict",
+        "preserve stable source order",
+        "Never stop ingestion after the first verdict item",
+    ),
+}
+
 REQUIRED_GOVERNANCE_TEXT = {
     Path("GIT_AGENTS.md"): (
         "thin, tracked entrypoint",
@@ -352,6 +373,9 @@ REQUIRED_GOVERNANCE_TEXT = {
         "For each queued candidate",
         "return to step 4 for the next queued candidate",
         "Only after the queue is exhausted",
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[
+            Path("docs/ai/workflows/governance-reconcile.md")
+        ],
     ),
     Path("docs/ai/knowledge/README.md"): (
         "not an append-only incident ledger",
@@ -364,12 +388,13 @@ REQUIRED_GOVERNANCE_TEXT = {
         "never assign one candidate to two targets",
     ),
     Path("docs/ai/review/inspect.md"): (
-        "reusable process or review knowledge candidate",
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("docs/ai/review/inspect.md")],
         "candidate becomes an actionable finding only when",
     ),
     Path("docs/ai/review/verdict.md"): (
         "Reusable governance candidate",
         "not permission for the reviewer",
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("docs/ai/review/verdict.md")],
     ),
     Path("docs/ai/review/setup.md"): (
         "--depth 1",
@@ -427,6 +452,14 @@ REQUIRED_GOVERNANCE_TEXT = {
         "independently reviewed PR",
         "ordered candidate queue",
         "representative ambiguity",
+    ),
+    Path("docs/adr/0010-lossless-review-candidate-capture.md"): (
+        "ADR-0009 established a reviewed write path",
+        "exactly one `Reusable governance candidate` section",
+        "one item for every atomic candidate",
+        "expands every numbered candidate item from every verdict",
+        "singular-only review capture",
+        "first-item-only regression",
     ),
 }
 
@@ -694,6 +727,49 @@ def _validate_governance_knowledge_selector(failures: list[str]) -> None:
                 )
 
 
+def _validate_review_candidate_capture(failures: list[str]) -> None:
+    for relative_path, required_fragments in REVIEW_CANDIDATE_CAPTURE_FRAGMENTS.items():
+        path = REPOSITORY_ROOT / relative_path
+        if not path.is_file():
+            continue
+        normalized_content = " ".join(path.read_text(encoding="utf-8").split())
+        for fragment in required_fragments:
+            if fragment not in normalized_content:
+                failures.append(
+                    f"{relative_path.as_posix()}: missing lossless review-candidate "
+                    f"capture invariant {fragment!r}"
+                )
+
+    verdict_path = REPOSITORY_ROOT / "docs/ai/review/verdict.md"
+    if not verdict_path.is_file():
+        return
+    verdict = verdict_path.read_text(encoding="utf-8")
+    candidate_heading = "### Reusable governance candidate"
+    verification_heading = "### Verification"
+    if verdict.count(candidate_heading) != 1:
+        failures.append(
+            "docs/ai/review/verdict.md: must contain exactly one reusable "
+            "governance candidate section"
+        )
+        return
+    candidate_section = verdict.split(candidate_heading, maxsplit=1)[1]
+    if verification_heading not in candidate_section:
+        failures.append(
+            "docs/ai/review/verdict.md: candidate section must precede verification"
+        )
+        return
+    candidate_section = candidate_section.split(verification_heading, maxsplit=1)[0]
+    for item_number in (1, 2):
+        item = re.compile(
+            rf"(?m)^{item_number}\. \*\*Signal:\*\* .+ \*\*Evidence:\*\* .+$"
+        )
+        if not item.search(candidate_section):
+            failures.append(
+                "docs/ai/review/verdict.md: candidate template must demonstrate "
+                f"ordered atomic item {item_number} with signal and evidence"
+            )
+
+
 def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
     governance_root = REPOSITORY_ROOT / "docs" / "ai"
     if not governance_root.is_dir():
@@ -922,6 +998,7 @@ def governance_failures() -> list[str]:
     _validate_rule_ownership(failures, governance_paths)
     _validate_routes(failures)
     _validate_governance_knowledge_selector(failures)
+    _validate_review_candidate_capture(failures)
     _validate_router_budgets(failures)
     _validate_ci_failure_knowledge(failures)
     _validate_owner_confirmation_boundary(failures, governance_paths)
