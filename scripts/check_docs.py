@@ -409,9 +409,17 @@ DESIGN_SELECTION_DIRECTORIES = (
 )
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
+    # Reject every multi-segment leading-slash path except the canonical public API
+    # route; retain explicit single-segment machine roots such as /etc and /tmp.
     "POSIX absolute path": re.compile(
-        r"(?i)(?<![\w/:<.~])/(?:etc|home|mnt|opt|private|root|run|srv|tmp|"
-        r"usr|var|volumes|workspace)(?:/|\\b)[^\s`'\"><\])}]*"
+        r"(?ix)(?<![\w/:<.~])/"
+        r"(?:"
+        r"(?:etc|home|mnt|opt|private|root|run|srv|tmp|usr|var|volumes|workspace)"
+        r"(?:/|\b)[^\s`'\"><\])}]*"
+        r"|"
+        r"(?!(?:api)(?:/|\b))"
+        r"[a-z0-9._~-]+/[^\s`'\"><\])}]+"
+        r")"
     ),
     "UNC absolute path": re.compile(
         r"(?<![\\\w])\\\\[^\\/\s`'\"><]+[\\/][^\\/\s`'\"><]+"

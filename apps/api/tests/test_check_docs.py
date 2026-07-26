@@ -393,6 +393,12 @@ def test_governance_rejects_a_missing_ci_router(
         ("Read /etc/passwd", "POSIX absolute path"),
         ("Read /tmp/private/workspace", "POSIX absolute path"),
         ("Read /workspace/private", "POSIX absolute path"),
+        ("Read /Users/alice/private", "POSIX absolute path"),
+        ("Read /Applications/Portfolio.app/Contents", "POSIX absolute path"),
+        ("Read /Library/Application Support/private", "POSIX absolute path"),
+        ("Read /System/Volumes/Data/private", "POSIX absolute path"),
+        ("Read /data/private", "POSIX absolute path"),
+        ("Read /app/private", "POSIX absolute path"),
         (r"Read \\server\share\private", "UNC absolute path"),
         ("Open file:///tmp/private", "local file URI"),
         ("Read ~/private", "user-home shorthand path"),
@@ -475,6 +481,7 @@ def test_governance_public_safety_patterns_allow_portable_references(
     [
         ("Read /tmp/private/workspace", "POSIX absolute path"),
         ("Read /workspace/private", "POSIX absolute path"),
+        ("Read /Users/alice/private", "POSIX absolute path"),
         (r"Read \\server\share\private", "UNC absolute path"),
         ("Open file:///tmp/private", "local file URI"),
         ("Read ~/private", "user-home shorthand path"),
@@ -557,6 +564,39 @@ def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
         "authorization gate; owner confirmation is reserved for "
         "focused-slice selection"
     ) in failures
+
+
+def test_governance_failures_rejects_a_macos_path_in_selected_design(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    delivery = tmp_path / "docs" / "delivery" / "0002-selected.md"
+    delivery.parent.mkdir(parents=True)
+    delivery.write_text("Read /Users/alice/private", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert "docs/delivery/0002-selected.md: contains forbidden POSIX absolute path" in failures
+
+
+def test_governance_failures_allows_an_api_route_in_selected_design(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    delivery = tmp_path / "docs" / "delivery" / "0002-selected.md"
+    delivery.parent.mkdir(parents=True)
+    delivery.write_text("Call GET /api/v1/documents/{documentId}", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    failures = documentation_checker.governance_failures()
+
+    assert not any(
+        failure.startswith("docs/delivery/0002-selected.md: contains forbidden POSIX absolute path")
+        for failure in failures
+    )
 
 
 def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(
