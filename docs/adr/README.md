@@ -21,6 +21,7 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0007: Define the authentication, session, and API authorization boundary](0007-authentication-session-and-api-authorization.md)
 - [ADR-0008: Route AI guidance through progressive disclosure](0008-progressive-disclosure-ai-guidance.md)
 - [ADR-0009: Reconcile reusable governance knowledge through reviewed updates](0009-reviewed-governance-knowledge-reconciliation.md)
+- [ADR-0010: Preserve every reusable review candidate in one verdict](0010-lossless-review-candidate-capture.md)
 
 ## Superseded records
 

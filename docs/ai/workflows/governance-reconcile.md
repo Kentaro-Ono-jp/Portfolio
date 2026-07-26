@@ -15,9 +15,11 @@ recorded reusable process or review candidate.
    proof or qualified exception, focused Issue, PR, and all verdict URLs.
 2. Audit only this slice's review candidates, actionable findings, correction
    chain, bounded recovery, evidence reconciliation, and cleanup outcomes.
-   Normalize them into an ordered candidate queue, split compound observations
-   into atomic root-cause signals, and deduplicate only identical stable
-   evidence.
+   Expand every numbered candidate item from every verdict into the
+   ordered candidate queue. Then add other proved signals, split compound
+   observations into atomic root-cause candidates, preserve stable source
+   order, and deduplicate only identical stable evidence.
+   Never stop ingestion after the first verdict item.
 3. When the queue is empty, skip to step 9.
 4. For each queued candidate, separate product defects and one-off observations
    from reusable process rules. A reviewer candidate is evidence to classify,

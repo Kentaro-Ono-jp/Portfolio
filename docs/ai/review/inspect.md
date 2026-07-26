@@ -30,9 +30,12 @@ Read this file only after review setup proves the exact isolated clone.
    behavioral evidence. Do not request speculative expansion.
 10. For re-review, verify every prior finding against the new code and still
     inspect the complete current PR.
-11. Separately classify one reusable process or review knowledge candidate
-    with exact evidence, or `none`. A candidate becomes an actionable finding
-    only when it also exposes a defect in the current accepted scope.
+11. Separately classify every evidenced reusable process or review candidate
+    discovered in this review cycle. Split compound observations into atomic
+    root-cause candidates, preserve their stable discovery order, and retain
+    every candidate for the verdict. Use `none` only when no reusable candidate
+    was discovered. A candidate becomes an actionable finding only when it
+    also exposes a defect in the current accepted scope.
 
 ## Verdict guard
 

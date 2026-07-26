@@ -210,6 +210,92 @@ def test_review_verdict_has_one_governance_candidate_field() -> None:
     )
 
 
+def _write_review_candidate_capture_fixture(
+    tmp_path: Path,
+    overrides: dict[Path, tuple[str, str]],
+) -> None:
+    relative_paths = (
+        Path("docs/ai/review/inspect.md"),
+        Path("docs/ai/review/verdict.md"),
+        Path("docs/ai/workflows/governance-reconcile.md"),
+    )
+    for relative_path in relative_paths:
+        source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+        if relative_path in overrides:
+            old, new = overrides[relative_path]
+            assert old in source
+            source = source.replace(old, new)
+        destination = tmp_path / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(source, encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "old", "new", "expected_fragment"),
+    [
+        (
+            Path("docs/ai/review/inspect.md"),
+            "classify every evidenced reusable process or review candidate",
+            "classify one reusable process or review candidate",
+            "classify every evidenced reusable process or review candidate",
+        ),
+        (
+            Path("docs/ai/review/verdict.md"),
+            "one numbered item for every atomic reusable candidate",
+            "one numbered item for one reusable candidate",
+            "one numbered item for every atomic reusable candidate",
+        ),
+        (
+            Path("docs/ai/review/verdict.md"),
+            "`none` is permitted only when no reusable candidate was discovered",
+            "`none` is always permitted",
+            "`none` is permitted only when no reusable candidate was discovered",
+        ),
+        (
+            Path("docs/ai/workflows/governance-reconcile.md"),
+            "Expand every numbered candidate item from every verdict",
+            "Expand the first candidate item from every verdict",
+            "Expand every numbered candidate item from every verdict",
+        ),
+        (
+            Path("docs/ai/workflows/governance-reconcile.md"),
+            "Never stop ingestion after the first verdict item",
+            "Stop ingestion after the first verdict item",
+            "Never stop ingestion after the first verdict item",
+        ),
+    ],
+)
+def test_review_candidate_capture_rejects_lossy_regressions(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    old: str,
+    new: str,
+    expected_fragment: str,
+) -> None:
+    _write_review_candidate_capture_fixture(
+        tmp_path,
+        {relative_path: (old, new)},
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_review_candidate_capture(failures)
+
+    assert any(expected_fragment in failure for failure in failures)
+
+
+def test_review_candidate_template_demonstrates_multiple_atomic_items(
+    documentation_checker: ModuleType,
+) -> None:
+    failures: list[str] = []
+
+    documentation_checker._validate_review_candidate_capture(failures)
+
+    assert failures == []
+
+
 @pytest.mark.parametrize(
     ("relative_path", "stale_directive"),
     [

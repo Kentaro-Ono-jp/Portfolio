@@ -24,7 +24,15 @@ Previous verdict: `<URL | none>`
 
 ### Reusable governance candidate
 
-<exact reusable process or review signal and evidence | none>
+<exactly one of:
+
+`none`
+
+or one numbered item for every atomic reusable candidate:
+
+1. **Signal:** `<one atomic reusable process or review signal>` — **Evidence:** `<exact evidence>`
+2. **Signal:** `<next atomic signal; repeat once per remaining candidate>` — **Evidence:** `<exact evidence>`
+>
 
 ### Verification
 
@@ -39,15 +47,20 @@ Previous verdict: `<URL | none>`
 Do not claim cleanup is complete before the comment. Cleanup occurs after the
 only permitted GitHub write.
 
-The reusable-governance candidate is evidence for the implementation
-lifecycle's post-merge classification. It is not permission for the reviewer
-to edit guidance, implementation, an Issue, or the PR.
+Keep exactly one candidate section. When candidates exist, use their stable
+discovery order and one numbered item for every atomic reusable candidate.
+`none` is permitted only when no reusable candidate was discovered; never use
+it as a substitute for a second or later item.
+
+The reusable-governance candidates are evidence for the implementation
+lifecycle's post-merge classification. They are not permission for the
+reviewer to edit guidance, implementation, an Issue, or the PR.
 
 ## Publication guard
 
-If the comment cannot accurately state the reviewed SHA, evidence,
-reusable-governance candidate, limitations, and scheduled cleanup, do not
-publish a partial verdict.
+If the comment cannot accurately state the reviewed SHA, evidence, every
+reusable-governance candidate or valid `none`, limitations, and scheduled
+cleanup, do not publish a partial verdict.
 
 ## Next
 
