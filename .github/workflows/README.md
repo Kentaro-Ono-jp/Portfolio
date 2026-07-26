@@ -3,14 +3,15 @@
 GitHub Actions will be the authoritative build and runtime verification
 environment for this portfolio.
 
-Use the [CI playbook](CI_PLAYBOOK.md) only after a complete implementation and
-its tests have been staged without a commit. It also governs the required
-post-merge CI-knowledge reconciliation for every feature PR.
+Use the thin [CI router](CI_PLAYBOOK.md) after a complete implementation and
+its tests have been staged without a commit. It selects staged preflight,
+local rehearsal, an explicit exception, failed-run triage, post-merge
+reconciliation, or one relevant knowledge leaf without loading them together.
 
-An owner-approved Markdown-only PR may skip Actions from its initial head under
-the playbook's evidence boundary. At merge, use its explicit squash-message
-boundary so the Markdown-only `main` commit also skips Actions. Neither the PR
-head nor merged-main run is required for this narrow exception.
+An owner-approved Markdown-only PR may skip Actions only through the router's
+separate exception. At merge, its explicit squash-message boundary makes the
+Markdown-only `main` commit skip Actions too. Neither absent run is passing
+evidence.
 
 `verify.yml` runs the repository-owned `scripts/verify.py` entrypoint on pull
 requests, `main`, and manual dispatch. It proves the canonical contracts,

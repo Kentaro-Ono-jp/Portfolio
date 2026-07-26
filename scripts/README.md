@@ -9,9 +9,10 @@ Actions.
 
 After a complete implementation and its verification changes are staged but
 not committed, use the
-[GitHub Actions CI playbook](../.github/workflows/CI_PLAYBOOK.md) to harden the
-candidate without changing what the accepted test must prove. Reverify and
-restage any correction before commit.
+[GitHub Actions CI router](../.github/workflows/CI_PLAYBOOK.md). Select only
+staged preflight and any conditionally matching knowledge leaf; do not load CI
+exceptions or historical failures by default. Reverify and restage every
+correction before commit.
 
 For AI-agent local work, run the static path from the repository root after
 installing the pinned dependency sets:
@@ -58,9 +59,10 @@ Supporting scripts are implementation details of that entrypoint:
   plan. It keeps baseline and current-head trust separate, closes inherited
   evidence gaps for external PRs, and routes tree-identical merges through the
   same skip-lineage rules as changed trees.
-- `check_docs.py` rejects broken local Markdown links and drift in the required
-  repository-owned AI governance topology, critical review boundaries, agent
-  entrypoint references, and public-safe path rules.
+- `check_docs.py` rejects broken local Markdown links and drift in the routed
+  AI-governance inventory, roles, canonical rule ownership, reachability,
+  thin-router budgets, review boundaries, CI failure evidence, and public-safe
+  path rules.
 - `check_ml_compose_boundary.py` proves the CPU-only lock, keeps the worker free
   of database settings and host ports, verifies that `api-events` remains a
   separate API-owned role, and constrains Web to the internal API boundary.

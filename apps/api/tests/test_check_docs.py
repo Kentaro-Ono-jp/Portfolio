@@ -27,45 +27,34 @@ def test_repository_owned_governance_invariants_pass(
     assert documentation_checker.governance_failures() == []
 
 
-def test_governance_guards_governing_delivery_specification_routing(
+def test_progressive_routing_covers_the_complete_guidance_surface(
     documentation_checker: ModuleType,
 ) -> None:
-    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    routes = documentation_checker.REQUIRED_ROUTE_LINKS
+    roles = documentation_checker.DOCFORAI_FILE_ROLES
 
-    assert "accepted delivery specifications under" in required_text[Path("GIT_AGENTS.md")]
-    assert "governing the current task" in required_text[Path("GIT_AGENTS.md")]
-    assert (
-        "governing delivery specification's tracking Issue"
-        in required_text[Path("docs/ai/README.md")]
+    assert routes[Path("GIT_AGENTS.md")] == (
+        Path("AI_GUIDANCE.md"),
+        Path("docs/ai/README.md"),
+        Path(".github/workflows/CI_PLAYBOOK.md"),
     )
-    assert "Governing tracking Issue URL" in required_text[Path("docs/ai/PR_REVIEW.md")]
-    assert all(
-        "Issue #1" not in fragment
-        for required_fragments in required_text.values()
-        for fragment in required_fragments
-    )
+    assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/README.md")]
+    assert Path("docs/ai/ci/markdown-only.md") not in routes[Path("docs/ai/ci/preflight.md")]
+    assert Path("docs/ai/ci/knowledge/README.md") in routes[Path("docs/ai/ci/preflight.md")]
+    assert Path("docs/ai/workflows/focus.md") in routes[Path("docs/ai/workflows/correct.md")]
+    assert Path("docs/ai/workflows/merge.md") in routes[Path("docs/ai/workflows/correct.md")]
+    assert set(roles.values()) == {"router", "procedure", "reference", "knowledge"}
 
 
-def test_governance_rejects_old_issue_one_routing_alongside_current_guidance(
+def test_every_canonical_rule_has_one_declared_owner(
     documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    relative_path = Path("GIT_AGENTS.md")
-    current_guidance = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
-    stale_directive = "Read Issue #1 and only the focused Issue."
-    (tmp_path / relative_path).write_text(
-        f"{current_guidance}\n{stale_directive}\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    owners = documentation_checker.CANONICAL_RULE_OWNERS
 
-    failures = documentation_checker.governance_failures()
-
-    assert (
-        f"{relative_path.as_posix()}: contains stale routing "
-        f"'Read Issue #1 and only the focused Issue'"
-    ) in failures
+    assert len(owners) == len(set(owners))
+    assert len(owners.values()) == len(set(owners.values()))
+    assert owners["actor-authority"] == Path("docs/ai/reference/authority.md")
+    assert owners["ci-markdown-only-exception"] == Path("docs/ai/ci/markdown-only.md")
 
 
 @pytest.mark.parametrize(
@@ -73,47 +62,28 @@ def test_governance_rejects_old_issue_one_routing_alongside_current_guidance(
     [
         (
             Path("CONTRIBUTING.md"),
-            "[delivery specification](docs/delivery/0001-first-vertical-slice.md)",
+            "[delivery specifications](docs/delivery/) in numeric order",
         ),
         (
             Path("GIT_AGENTS.md"),
-            "Read [Delivery Specification 0001](docs/delivery/0001-first-vertical-slice.md).",
+            "Read [the AI collaboration contract](docs/ai/README.md)",
         ),
-        (
-            Path("GIT_AGENTS.md"),
-            "Read Issue #1 and only the focused Issue",
-        ),
+        (Path("GIT_AGENTS.md"), "accepted ADRs under"),
         (
             Path("docs/ai/README.md"),
-            "Issue #1, the focused Issue and PR",
-        ),
-        (
-            Path("docs/ai/README.md"),
-            "Issue #1 is the live portfolio ledger",
-        ),
-        (
-            Path("docs/ai/README.md"),
-            "Read Issue #1 and only the focused Issue",
-        ),
-        (
-            Path("docs/ai/README.md"),
-            "focused Issue and Issue #1",
-        ),
-        (
-            Path("docs/ai/README.md"),
-            "evidence rules below to the focused Issue and Issue #1",
-        ),
-        (
-            Path("docs/ai/README.md"),
-            "add its accumulated proof to Issue #1",
+            "Read [GIT_AGENTS.md] and its required design sources",
         ),
         (
             Path("docs/ai/PR_REVIEW.md"),
-            "Delivery Specification 0001, the focused Issue",
+            "accepted ADRs and accepted delivery specifications in numeric order",
+        ),
+        (
+            Path(".github/workflows/CI_PLAYBOOK.md"),
+            "Historical evidence ledger",
         ),
     ],
 )
-def test_governance_rejects_former_active_routing_forms(
+def test_governance_rejects_retired_eager_or_monolithic_routes(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -127,7 +97,227 @@ def test_governance_rejects_former_active_routing_forms(
 
     failures = documentation_checker.governance_failures()
 
-    assert (f"{relative_path.as_posix()}: contains stale routing {stale_directive!r}") in failures
+    assert f"{relative_path.as_posix()}: contains stale routing {stale_directive!r}" in failures
+
+
+def test_route_validation_rejects_a_missing_required_link(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = documentation_checker.resolved_local_links
+
+    def without_focus(source: Path) -> set[Path]:
+        links = original(source)
+        if source == Path("docs/ai/README.md"):
+            links.discard(Path("docs/ai/workflows/focus.md"))
+        return links
+
+    monkeypatch.setattr(documentation_checker, "resolved_local_links", without_focus)
+    failures: list[str] = []
+
+    documentation_checker._validate_routes(failures)
+
+    assert ("docs/ai/README.md: missing required route link docs/ai/workflows/focus.md") in failures
+
+
+def test_route_validation_rejects_an_unreachable_guidance_file(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        documentation_checker,
+        "REQUIRED_ROUTE_LINKS",
+        {
+            Path("GIT_AGENTS.md"): (
+                Path("AI_GUIDANCE.md"),
+                Path("docs/ai/README.md"),
+                Path(".github/workflows/CI_PLAYBOOK.md"),
+            )
+        },
+    )
+    failures: list[str] = []
+
+    documentation_checker._validate_routes(failures)
+
+    assert "routed governance file is unreachable: docs/ai/workflows/focus.md" in failures
+
+
+def test_route_validation_rejects_an_undeclared_eager_link(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = documentation_checker.resolved_local_links
+
+    def with_exception_preloaded(source: Path) -> set[Path]:
+        links = original(source)
+        if source == Path("docs/ai/ci/preflight.md"):
+            links.add(Path("docs/ai/ci/markdown-only.md"))
+        return links
+
+    monkeypatch.setattr(
+        documentation_checker,
+        "resolved_local_links",
+        with_exception_preloaded,
+    )
+    failures: list[str] = []
+
+    documentation_checker._validate_routes(failures)
+
+    assert (
+        "docs/ai/ci/preflight.md: contains undeclared route link docs/ai/ci/markdown-only.md"
+    ) in failures
+
+
+def test_router_budget_rejects_entrypoint_growth(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "GIT_AGENTS.md").write_text("one\ntwo\nthree\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    monkeypatch.setattr(
+        documentation_checker,
+        "ROUTER_LINE_BUDGETS",
+        {Path("GIT_AGENTS.md"): 2},
+    )
+    failures: list[str] = []
+
+    documentation_checker._validate_router_budgets(failures)
+
+    assert "GIT_AGENTS.md: router has 3 lines, budget is 2" in failures
+
+
+def test_role_validation_rejects_a_missing_marker(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    guidance = tmp_path / "docs" / "ai"
+    guidance.mkdir(parents=True)
+    (guidance / "README.md").write_text("# Router\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_inventory_and_roles(failures)
+
+    assert any(
+        failure.startswith(
+            "docs/ai/README.md: expected one role marker '<!-- docforai-role: router -->'"
+        )
+        for failure in failures
+    )
+
+
+def test_canonical_rule_validation_rejects_duplicate_ownership(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    marker = "<!-- docforai-rule: test-rule -->"
+    first = tmp_path / "docs" / "ai" / "first.md"
+    second = tmp_path / "docs" / "ai" / "second.md"
+    first.parent.mkdir(parents=True)
+    first.write_text(marker, encoding="utf-8")
+    second.write_text(marker, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    monkeypatch.setattr(
+        documentation_checker,
+        "CANONICAL_RULE_OWNERS",
+        {"test-rule": Path("docs/ai/first.md")},
+    )
+    failures: list[str] = []
+
+    documentation_checker._validate_rule_ownership(failures, [first, second])
+
+    assert any("canonical rule 'test-rule' expected once" in item for item in failures)
+
+
+def test_ci_failure_knowledge_requires_one_canonical_leaf(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    knowledge = tmp_path / "docs" / "ai" / "ci" / "knowledge"
+    knowledge.mkdir(parents=True)
+    (knowledge / "first.md").write_text("run 123", encoding="utf-8")
+    (knowledge / "second.md").write_text("run 123", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    monkeypatch.setattr(
+        documentation_checker,
+        "REQUIRED_CI_FAILURE_RUN_IDS",
+        ("123",),
+    )
+    failures: list[str] = []
+
+    documentation_checker._validate_ci_failure_knowledge(failures)
+
+    assert "CI failed run 123 must appear in exactly one knowledge leaf, found 2" in failures
+
+
+def test_owner_confirmation_stop_exists_only_in_focus(
+    documentation_checker: ModuleType,
+) -> None:
+    governance_paths = [
+        REPOSITORY_ROOT / path for path in documentation_checker.GOVERNANCE_ROOT_FILES
+    ]
+    governance_paths.extend(sorted((REPOSITORY_ROOT / "docs" / "ai").rglob("*.md")))
+    failures: list[str] = []
+
+    documentation_checker._validate_owner_confirmation_boundary(failures, governance_paths)
+
+    assert failures == []
+
+
+def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
+    publish = tmp_path / "docs" / "ai" / "workflows" / "publish.md"
+    focus.parent.mkdir(parents=True)
+    focus.write_text(
+        f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
+        encoding="utf-8",
+    )
+    publish.write_text(
+        "Wait for explicit owner direction before merge.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_owner_confirmation_boundary(failures, [focus, publish])
+
+    assert (
+        "docs/ai/workflows/publish.md: contains forbidden owner direction gate; "
+        "owner confirmation is reserved for focused-slice selection"
+    ) in failures
+
+
+def test_owner_confirmation_validation_rejects_a_second_stop_heading(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    focus = tmp_path / "docs" / "ai" / "workflows" / "focus.md"
+    merge = tmp_path / "docs" / "ai" / "workflows" / "merge.md"
+    focus.parent.mkdir(parents=True)
+    focus.write_text(
+        f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
+        encoding="utf-8",
+    )
+    merge.write_text("## Stop\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_owner_confirmation_boundary(failures, [focus, merge])
+
+    assert any(
+        "owner-confirmation STOP must exist exactly once" in failure
+        and "docs/ai/workflows/merge.md (## Stop)" in failure
+        for failure in failures
+    )
 
 
 def test_markdown_scan_prunes_excluded_directories_before_descending(
@@ -149,7 +339,7 @@ def test_markdown_scan_prunes_excluded_directories_before_descending(
     assert documentation_checker.iter_markdown_files() == [tmp_path / "docs" / "guide.md"]
 
 
-def test_governance_rejects_a_missing_ci_playbook(
+def test_governance_rejects_a_missing_ci_router(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -255,7 +445,7 @@ def test_governance_public_safety_patterns_allow_portable_references(
         ("Read ~/private", "user-home shorthand path"),
     ],
 )
-def test_governance_scanner_rejects_nonportable_paths_in_ai_docs(
+def test_governance_scanner_rejects_nonportable_paths_in_nested_ai_docs(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -263,15 +453,15 @@ def test_governance_scanner_rejects_nonportable_paths_in_ai_docs(
     expected_label: str,
 ) -> None:
     governance_root = tmp_path / "docs" / "ai"
-    governance_root.mkdir(parents=True)
-    (governance_root / "leak.md").write_text(content, encoding="utf-8")
+    nested = governance_root / "ci" / "knowledge"
+    nested.mkdir(parents=True)
+    leak = nested / "leak.md"
+    leak.write_text(content, encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert any(
-        failure == f"docs/ai/leak.md: contains forbidden {expected_label}" for failure in failures
-    )
+    assert f"docs/ai/ci/knowledge/leak.md: contains forbidden {expected_label}" in failures
 
 
 def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(
@@ -284,9 +474,7 @@ def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(
 
     failures = documentation_checker.governance_failures()
 
-    assert any(
-        failure == "GIT_AGENTS.md: contains forbidden Windows absolute path" for failure in failures
-    )
+    assert "GIT_AGENTS.md: contains forbidden Windows absolute path" in failures
 
 
 @pytest.mark.parametrize(
@@ -309,14 +497,11 @@ def test_governance_scanner_rejects_sensitive_content_in_ai_docs(
     governance_root = tmp_path / "docs" / "ai"
     governance_root.mkdir(parents=True)
     (governance_root / "README.md").write_text(content, encoding="utf-8")
-    (governance_root / "PR_REVIEW.md").write_text("safe", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert any(
-        failure == f"docs/ai/README.md: contains forbidden {expected_label}" for failure in failures
-    )
+    assert f"docs/ai/README.md: contains forbidden {expected_label}" in failures
 
 
 def test_governance_scanner_rejects_an_extra_ai_guidance_file(
@@ -326,8 +511,6 @@ def test_governance_scanner_rejects_an_extra_ai_guidance_file(
 ) -> None:
     governance_root = tmp_path / "docs" / "ai"
     governance_root.mkdir(parents=True)
-    (governance_root / "README.md").write_text("safe", encoding="utf-8")
-    (governance_root / "PR_REVIEW.md").write_text("safe", encoding="utf-8")
     (governance_root / "EXTRA.md").write_text("safe", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 

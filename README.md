@@ -48,7 +48,7 @@ Portfolio/
 |-- packages/
 |   `-- contracts/           # Language-neutral cross-service contracts
 |-- docs/
-|   |-- ai/                  # AI collaboration contract and prompt evidence
+|   |-- ai/                  # Progressive AI workflow and knowledge routing
 |   |-- architecture/        # Architecture documentation
 |   |-- adr/                 # Architecture Decision Records
 |   `-- delivery/            # Accepted delivery specifications
@@ -68,16 +68,16 @@ Portfolio/
 - [ADR-0002: Target an AI-enabled document intelligence platform](docs/adr/0002-target-document-intelligence-platform.md)
 - [ADR-0003: Adopt the initial technology stack](docs/adr/0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](docs/adr/0004-api-state-ownership-and-transactional-outbox.md)
-- [ADR-0006: Consolidate repository-owned AI guidance](docs/adr/0006-consolidate-ai-guidance.md)
 - [ADR-0007: Define the authentication, session, and API authorization boundary](docs/adr/0007-authentication-session-and-api-authorization.md)
+- [ADR-0008: Route AI guidance through progressive disclosure](docs/adr/0008-progressive-disclosure-ai-guidance.md)
 
 Superseded decisions remain under [`docs/adr/`](docs/adr/README.md) as design
 history.
 
 ## Delivery specifications
 
-- Completed: [Delivery Specification 0001: First end-to-end vertical slice](docs/delivery/0001-first-vertical-slice.md)
-- Accepted: [Delivery Specification 0002: Authenticated classification review and immutable audit trail](docs/delivery/0002-second-vertical-slice.md), tracked in [Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27)
+Use the thin [delivery index](docs/delivery/README.md) to select the governing
+contract without loading completed and current specifications together.
 
 ## Contributing and security
 
@@ -89,11 +89,12 @@ history.
 
 ## AI-assisted engineering evidence
 
-The repository treats AI collaboration rules and reusable prompts as reviewed
-engineering artifacts rather than machine-local memory. The explicit
-[`GIT_AGENTS.md`](GIT_AGENTS.md) entrypoint routes implementation work to the
-consolidated [`docs/ai/README.md`](docs/ai/README.md) contract and review work
-to [`docs/ai/PR_REVIEW.md`](docs/ai/PR_REVIEW.md).
+The repository treats AI collaboration rules and reusable CI knowledge as
+reviewed engineering artifacts rather than machine-local memory. The explicit
+[`GIT_AGENTS.md`](GIT_AGENTS.md) entrypoint reaches a thin
+[`docs/ai/README.md`](docs/ai/README.md) state router. Implementation,
+independent review, CI exceptions, and failure knowledge are loaded one
+applicable route at a time instead of as one complete manual.
 
 The independent reviewer uses an isolated temporary shallow clone, runs
 non-Docker static verification, and has comment-only GitHub write authority.
@@ -199,7 +200,8 @@ re-proved the completed tree without maintainer-specific state. After the
 `main` Actions caches were removed, a second
 [cold-cache dispatch](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29735196072)
 re-proved the same exact tree. Repository-owned AI collaboration is defined by
-[ADR-0006](docs/adr/0006-consolidate-ai-guidance.md) and `docs/ai/`.
+[ADR-0008](docs/adr/0008-progressive-disclosure-ai-guidance.md) and
+`docs/ai/`.
 
 ## License
 
