@@ -3,293 +3,328 @@ from __future__ import annotations
 import os
 import re
 from collections import Counter, deque
+from html import unescape
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+MARKDOWN_HTML_ANCHOR = re.compile(
+    r"""(?is)<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))"""
+)
+MARKDOWN_BACKSLASH_ESCAPE = re.compile(
+    r"""\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])"""
+)
+MARKDOWN_REFERENCE_LABEL = r"(?:\\.|[^\]]){1,999}"
+MARKDOWN_OPTIONAL_REFERENCE_LABEL = r"(?:\\.|[^\]]){0,999}"
+MARKDOWN_REFERENCE_DEFINITION = re.compile(
+    rf"\[({MARKDOWN_REFERENCE_LABEL})\]:[ \t]*"
+    rf"(?:(?:\r\n|\r|\n)[ \t]*(?:>[ \t]*)*)?"
+    rf"(?:<([^>\r\n]+)>|([^\s]+))"
+)
+MARKDOWN_REFERENCE_LINK = re.compile(
+    rf"(?<!!)\[({MARKDOWN_REFERENCE_LABEL})\]"
+    rf"\[({MARKDOWN_OPTIONAL_REFERENCE_LABEL})\]"
+)
+MARKDOWN_SHORTCUT_REFERENCE_LINK = re.compile(
+    rf"(?<![!\]])\[({MARKDOWN_REFERENCE_LABEL})\](?![ \t]*(?:\(|\[|:))"
+)
 IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 
-AIOS_ROOT = Path("aios")
-AIOS_RUNTIME_DIRECTORIES = (
+IPS_ROOT = Path("ips-microkernel")
+IPS_HUMAN_README = IPS_ROOT / "README.md"
+IPS_HUMAN_CONTEXT_MARKER = "<!-- ips-context: human-only -->"
+IPS_RUNTIME_DIRECTORIES = (
     Path("selectors"),
     Path("references"),
     Path("procedures"),
     Path("review"),
     Path("ci"),
 )
-EXPECTED_AIOS_TOP_LEVEL_ENTRIES = frozenset(
+EXPECTED_IPS_TOP_LEVEL_ENTRIES = frozenset(
     {
         "adr",
         "architecture",
         "delivery",
-        *(path.as_posix() for path in AIOS_RUNTIME_DIRECTORIES),
+        *(path.as_posix() for path in IPS_RUNTIME_DIRECTORIES),
+        "README.md",
         "work-router.md",
     }
 )
-AIOS_ROLE_MARKER = re.compile(r"<!--\s*aios-role:\s*([a-z-]+)\s*-->")
-LEGACY_ROLE_OR_RULE_MARKER = re.compile(r"<!--\s*docforai-(?:role|rule):")
+IPS_ROLE_MARKER = re.compile(r"<!--\s*ips-role:\s*([a-z-]+)\s*-->")
+IPS_RUNTIME_MARKER = re.compile(r"<!--\s*ips-(?:role|rule):")
+LEGACY_ROLE_OR_RULE_MARKER = re.compile(r"<!--\s*(?:docforai|aios)-(?:role|rule):")
 
-AIOS_FILE_ROLES = {
-    Path("aios/work-router.md"): "router",
-    Path("aios/review/router.md"): "router",
-    Path("aios/selectors/governance-knowledge.md"): "selector",
-    Path("aios/references/authority.md"): "reference",
-    Path("aios/references/live-state.md"): "reference",
-    Path("aios/references/public-safety.md"): "reference",
-    Path("aios/references/evidence.md"): "reference",
-    Path("aios/references/local-tools.md"): "reference",
-    Path("aios/procedures/focus.md"): "procedure",
-    Path("aios/procedures/implement.md"): "procedure",
-    Path("aios/procedures/publish.md"): "procedure",
-    Path("aios/procedures/correct.md"): "procedure",
-    Path("aios/procedures/merge.md"): "procedure",
-    Path("aios/procedures/reconcile.md"): "procedure",
-    Path("aios/procedures/governance-reconcile.md"): "procedure",
-    Path("aios/review/setup.md"): "procedure",
-    Path("aios/review/inspect.md"): "procedure",
-    Path("aios/review/verdict.md"): "procedure",
-    Path("aios/review/cleanup.md"): "procedure",
-    Path("aios/ci/router.md"): "router",
-    Path("aios/ci/procedures/preflight.md"): "procedure",
-    Path("aios/ci/procedures/local-rehearsal.md"): "procedure",
-    Path("aios/ci/exceptions/markdown-only.md"): "exception",
-    Path("aios/ci/procedures/failure-triage.md"): "procedure",
-    Path("aios/ci/procedures/post-merge-reconcile.md"): "procedure",
-    Path("aios/ci/knowledge/selector.md"): "selector",
-    Path("aios/ci/knowledge/dependencies.md"): "knowledge",
-    Path("aios/ci/knowledge/invocation.md"): "knowledge",
-    Path("aios/ci/knowledge/persistence.md"): "knowledge",
-    Path("aios/ci/knowledge/isolation.md"): "knowledge",
-    Path("aios/ci/knowledge/messaging.md"): "knowledge",
-    Path("aios/ci/knowledge/browser.md"): "knowledge",
-    Path("aios/ci/knowledge/recovery.md"): "knowledge",
-    Path("aios/ci/knowledge/evidence.md"): "knowledge",
+IPS_FILE_ROLES = {
+    Path("ips-microkernel/work-router.md"): "router",
+    Path("ips-microkernel/review/router.md"): "router",
+    Path("ips-microkernel/selectors/governance-knowledge.md"): "selector",
+    Path("ips-microkernel/references/authority.md"): "reference",
+    Path("ips-microkernel/references/live-state.md"): "reference",
+    Path("ips-microkernel/references/public-safety.md"): "reference",
+    Path("ips-microkernel/references/evidence.md"): "reference",
+    Path("ips-microkernel/references/local-tools.md"): "reference",
+    Path("ips-microkernel/procedures/focus.md"): "procedure",
+    Path("ips-microkernel/procedures/implement.md"): "procedure",
+    Path("ips-microkernel/procedures/publish.md"): "procedure",
+    Path("ips-microkernel/procedures/correct.md"): "procedure",
+    Path("ips-microkernel/procedures/merge.md"): "procedure",
+    Path("ips-microkernel/procedures/reconcile.md"): "procedure",
+    Path("ips-microkernel/procedures/governance-reconcile.md"): "procedure",
+    Path("ips-microkernel/review/setup.md"): "procedure",
+    Path("ips-microkernel/review/inspect.md"): "procedure",
+    Path("ips-microkernel/review/verdict.md"): "procedure",
+    Path("ips-microkernel/review/cleanup.md"): "procedure",
+    Path("ips-microkernel/ci/router.md"): "router",
+    Path("ips-microkernel/ci/procedures/preflight.md"): "procedure",
+    Path("ips-microkernel/ci/procedures/local-rehearsal.md"): "procedure",
+    Path("ips-microkernel/ci/exceptions/markdown-only.md"): "exception",
+    Path("ips-microkernel/ci/procedures/failure-triage.md"): "procedure",
+    Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): "procedure",
+    Path("ips-microkernel/ci/knowledge/selector.md"): "selector",
+    Path("ips-microkernel/ci/knowledge/dependencies.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/invocation.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/persistence.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/isolation.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/messaging.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/browser.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/recovery.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/evidence.md"): "knowledge",
 }
 ENTRYPOINT_FILE_ROLES = {
     Path("GIT_AGENTS.md"): "router",
     Path("AI_GUIDANCE.md"): "pointer",
 }
-EXPECTED_AIOS_RUNTIME_FILES = frozenset(
-    path.relative_to(AIOS_ROOT) for path in AIOS_FILE_ROLES
+EXPECTED_IPS_RUNTIME_FILES = frozenset(
+    path.relative_to(IPS_ROOT) for path in IPS_FILE_ROLES
 )
 REQUIRED_GOVERNANCE_FILES = (
-    Path("aios/adr/0008-progressive-disclosure-ai-guidance.md"),
-    Path("aios/adr/0009-reviewed-governance-knowledge-reconciliation.md"),
-    Path("aios/adr/0010-lossless-review-candidate-capture.md"),
-    Path("aios/adr/0011-deterministic-shallow-review-diff.md"),
-    Path("aios/adr/0012-name-aios-nodes-by-runtime-role.md"),
-    Path("aios/adr/index.md"),
-    Path("aios/architecture/index.md"),
-    Path("aios/delivery/index.md"),
+    Path("ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md"),
+    Path("ips-microkernel/adr/0009-reviewed-governance-knowledge-reconciliation.md"),
+    Path("ips-microkernel/adr/0010-lossless-review-candidate-capture.md"),
+    Path("ips-microkernel/adr/0011-deterministic-shallow-review-diff.md"),
+    Path("ips-microkernel/adr/0012-name-aios-nodes-by-runtime-role.md"),
+    Path("ips-microkernel/adr/0013-name-ips-microkernel.md"),
+    Path("ips-microkernel/adr/index.md"),
+    Path("ips-microkernel/architecture/index.md"),
+    Path("ips-microkernel/delivery/index.md"),
+    IPS_HUMAN_README,
     *ENTRYPOINT_FILE_ROLES,
-    *AIOS_FILE_ROLES,
+    *IPS_FILE_ROLES,
 )
 
 ROUTING_NODE_LINE_BUDGETS = {
     Path("GIT_AGENTS.md"): 70,
     Path("AI_GUIDANCE.md"): 10,
-    Path("aios/work-router.md"): 100,
-    Path("aios/review/router.md"): 65,
-    Path("aios/selectors/governance-knowledge.md"): 75,
-    Path("aios/ci/router.md"): 45,
-    Path("aios/ci/knowledge/selector.md"): 55,
+    Path("ips-microkernel/work-router.md"): 100,
+    Path("ips-microkernel/review/router.md"): 65,
+    Path("ips-microkernel/selectors/governance-knowledge.md"): 75,
+    Path("ips-microkernel/ci/router.md"): 45,
+    Path("ips-microkernel/ci/knowledge/selector.md"): 55,
 }
 
 CANONICAL_RULE_OWNERS = {
-    "progressive-disclosure": Path("aios/work-router.md"),
-    "review-permission-boundary": Path("aios/review/router.md"),
-    "governance-knowledge-selection": Path("aios/selectors/governance-knowledge.md"),
-    "actor-authority": Path("aios/references/authority.md"),
-    "bounded-live-state": Path("aios/references/live-state.md"),
-    "public-safety": Path("aios/references/public-safety.md"),
-    "issue-evidence": Path("aios/references/evidence.md"),
-    "local-tool-authorization": Path("aios/references/local-tools.md"),
-    "focus-workflow": Path("aios/procedures/focus.md"),
-    "implementation-workflow": Path("aios/procedures/implement.md"),
-    "publication-workflow": Path("aios/procedures/publish.md"),
-    "correction-workflow": Path("aios/procedures/correct.md"),
-    "merge-workflow": Path("aios/procedures/merge.md"),
-    "reconciliation-workflow": Path("aios/procedures/reconcile.md"),
-    "governance-knowledge-reconciliation": Path(
-        "aios/procedures/governance-reconcile.md"
+    "progressive-disclosure": Path("ips-microkernel/work-router.md"),
+    "review-permission-boundary": Path("ips-microkernel/review/router.md"),
+    "governance-knowledge-selection": Path(
+        "ips-microkernel/selectors/governance-knowledge.md"
     ),
-    "review-setup": Path("aios/review/setup.md"),
-    "review-inspection": Path("aios/review/inspect.md"),
-    "review-verdict": Path("aios/review/verdict.md"),
-    "review-cleanup": Path("aios/review/cleanup.md"),
-    "ci-routing": Path("aios/ci/router.md"),
-    "ci-preflight": Path("aios/ci/procedures/preflight.md"),
-    "ci-local-rehearsal": Path("aios/ci/procedures/local-rehearsal.md"),
-    "ci-markdown-only-exception": Path("aios/ci/exceptions/markdown-only.md"),
-    "ci-failure-triage": Path("aios/ci/procedures/failure-triage.md"),
-    "ci-post-merge": Path("aios/ci/procedures/post-merge-reconcile.md"),
-    "ci-knowledge-selection": Path("aios/ci/knowledge/selector.md"),
-    "ci-knowledge-dependencies": Path("aios/ci/knowledge/dependencies.md"),
-    "ci-knowledge-invocation": Path("aios/ci/knowledge/invocation.md"),
-    "ci-knowledge-persistence": Path("aios/ci/knowledge/persistence.md"),
-    "ci-knowledge-isolation": Path("aios/ci/knowledge/isolation.md"),
-    "ci-knowledge-messaging": Path("aios/ci/knowledge/messaging.md"),
-    "ci-knowledge-browser": Path("aios/ci/knowledge/browser.md"),
-    "ci-knowledge-recovery": Path("aios/ci/knowledge/recovery.md"),
-    "ci-knowledge-evidence": Path("aios/ci/knowledge/evidence.md"),
+    "actor-authority": Path("ips-microkernel/references/authority.md"),
+    "bounded-live-state": Path("ips-microkernel/references/live-state.md"),
+    "public-safety": Path("ips-microkernel/references/public-safety.md"),
+    "issue-evidence": Path("ips-microkernel/references/evidence.md"),
+    "local-tool-authorization": Path("ips-microkernel/references/local-tools.md"),
+    "focus-workflow": Path("ips-microkernel/procedures/focus.md"),
+    "implementation-workflow": Path("ips-microkernel/procedures/implement.md"),
+    "publication-workflow": Path("ips-microkernel/procedures/publish.md"),
+    "correction-workflow": Path("ips-microkernel/procedures/correct.md"),
+    "merge-workflow": Path("ips-microkernel/procedures/merge.md"),
+    "reconciliation-workflow": Path("ips-microkernel/procedures/reconcile.md"),
+    "governance-knowledge-reconciliation": Path(
+        "ips-microkernel/procedures/governance-reconcile.md"
+    ),
+    "review-setup": Path("ips-microkernel/review/setup.md"),
+    "review-inspection": Path("ips-microkernel/review/inspect.md"),
+    "review-verdict": Path("ips-microkernel/review/verdict.md"),
+    "review-cleanup": Path("ips-microkernel/review/cleanup.md"),
+    "ci-routing": Path("ips-microkernel/ci/router.md"),
+    "ci-preflight": Path("ips-microkernel/ci/procedures/preflight.md"),
+    "ci-local-rehearsal": Path("ips-microkernel/ci/procedures/local-rehearsal.md"),
+    "ci-markdown-only-exception": Path(
+        "ips-microkernel/ci/exceptions/markdown-only.md"
+    ),
+    "ci-failure-triage": Path("ips-microkernel/ci/procedures/failure-triage.md"),
+    "ci-post-merge": Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"),
+    "ci-knowledge-selection": Path("ips-microkernel/ci/knowledge/selector.md"),
+    "ci-knowledge-dependencies": Path("ips-microkernel/ci/knowledge/dependencies.md"),
+    "ci-knowledge-invocation": Path("ips-microkernel/ci/knowledge/invocation.md"),
+    "ci-knowledge-persistence": Path("ips-microkernel/ci/knowledge/persistence.md"),
+    "ci-knowledge-isolation": Path("ips-microkernel/ci/knowledge/isolation.md"),
+    "ci-knowledge-messaging": Path("ips-microkernel/ci/knowledge/messaging.md"),
+    "ci-knowledge-browser": Path("ips-microkernel/ci/knowledge/browser.md"),
+    "ci-knowledge-recovery": Path("ips-microkernel/ci/knowledge/recovery.md"),
+    "ci-knowledge-evidence": Path("ips-microkernel/ci/knowledge/evidence.md"),
 }
 
 REQUIRED_ROUTE_LINKS = {
     Path("GIT_AGENTS.md"): (
         Path("AI_GUIDANCE.md"),
-        Path("aios/work-router.md"),
-        Path("aios/ci/router.md"),
+        Path("ips-microkernel/work-router.md"),
+        Path("ips-microkernel/ci/router.md"),
     ),
     Path("AI_GUIDANCE.md"): (Path("GIT_AGENTS.md"),),
-    Path("aios/work-router.md"): (
-        Path("aios/review/router.md"),
-        Path("aios/references/authority.md"),
-        Path("aios/references/live-state.md"),
-        Path("aios/references/local-tools.md"),
-        Path("aios/procedures/focus.md"),
-        Path("aios/procedures/implement.md"),
-        Path("aios/procedures/publish.md"),
-        Path("aios/procedures/correct.md"),
-        Path("aios/procedures/merge.md"),
-        Path("aios/procedures/reconcile.md"),
-        Path("aios/procedures/governance-reconcile.md"),
-        Path("aios/ci/router.md"),
-        Path("aios/delivery/index.md"),
-        Path("aios/adr/index.md"),
+    Path("ips-microkernel/work-router.md"): (
+        Path("ips-microkernel/review/router.md"),
+        Path("ips-microkernel/references/authority.md"),
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/references/local-tools.md"),
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/procedures/implement.md"),
+        Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/correct.md"),
+        Path("ips-microkernel/procedures/merge.md"),
+        Path("ips-microkernel/procedures/reconcile.md"),
+        Path("ips-microkernel/procedures/governance-reconcile.md"),
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/delivery/index.md"),
+        Path("ips-microkernel/adr/index.md"),
     ),
-    Path("aios/review/router.md"): (Path("aios/review/setup.md"),),
-    Path("aios/procedures/focus.md"): (
-        Path("aios/delivery/index.md"),
-        Path("aios/adr/index.md"),
-        Path("aios/references/live-state.md"),
-        Path("aios/references/public-safety.md"),
-        Path("aios/procedures/implement.md"),
+    Path("ips-microkernel/review/router.md"): (
+        Path("ips-microkernel/review/setup.md"),
     ),
-    Path("aios/procedures/implement.md"): (
-        Path("aios/procedures/focus.md"),
-        Path("aios/references/local-tools.md"),
-        Path("aios/references/public-safety.md"),
-        Path("aios/ci/router.md"),
-        Path("aios/procedures/publish.md"),
+    Path("ips-microkernel/procedures/focus.md"): (
+        Path("ips-microkernel/delivery/index.md"),
+        Path("ips-microkernel/adr/index.md"),
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/references/public-safety.md"),
+        Path("ips-microkernel/procedures/implement.md"),
     ),
-    Path("aios/procedures/publish.md"): (
-        Path("aios/references/live-state.md"),
-        Path("aios/ci/exceptions/markdown-only.md"),
-        Path("aios/review/router.md"),
-        Path("aios/procedures/focus.md"),
-        Path("aios/procedures/correct.md"),
-        Path("aios/procedures/merge.md"),
+    Path("ips-microkernel/procedures/implement.md"): (
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/references/local-tools.md"),
+        Path("ips-microkernel/references/public-safety.md"),
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/procedures/publish.md"),
     ),
-    Path("aios/procedures/correct.md"): (
-        Path("aios/procedures/focus.md"),
-        Path("aios/procedures/implement.md"),
-        Path("aios/procedures/publish.md"),
-        Path("aios/procedures/merge.md"),
+    Path("ips-microkernel/procedures/publish.md"): (
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/ci/exceptions/markdown-only.md"),
+        Path("ips-microkernel/review/router.md"),
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/procedures/correct.md"),
+        Path("ips-microkernel/procedures/merge.md"),
     ),
-    Path("aios/procedures/merge.md"): (
-        Path("aios/references/live-state.md"),
-        Path("aios/ci/exceptions/markdown-only.md"),
-        Path("aios/ci/router.md"),
-        Path("aios/procedures/reconcile.md"),
+    Path("ips-microkernel/procedures/correct.md"): (
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/procedures/implement.md"),
+        Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/merge.md"),
     ),
-    Path("aios/procedures/reconcile.md"): (
-        Path("aios/ci/router.md"),
-        Path("aios/procedures/governance-reconcile.md"),
-        Path("aios/references/evidence.md"),
-        Path("aios/work-router.md"),
+    Path("ips-microkernel/procedures/merge.md"): (
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/ci/exceptions/markdown-only.md"),
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/procedures/reconcile.md"),
     ),
-    Path("aios/procedures/governance-reconcile.md"): (
-        Path("aios/ci/router.md"),
-        Path("aios/procedures/focus.md"),
-        Path("aios/selectors/governance-knowledge.md"),
+    Path("ips-microkernel/procedures/reconcile.md"): (
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/procedures/governance-reconcile.md"),
+        Path("ips-microkernel/references/evidence.md"),
+        Path("ips-microkernel/work-router.md"),
     ),
-    Path("aios/selectors/governance-knowledge.md"): (
-        Path("aios/references/authority.md"),
-        Path("aios/references/live-state.md"),
-        Path("aios/references/local-tools.md"),
-        Path("aios/references/public-safety.md"),
-        Path("aios/references/evidence.md"),
-        Path("aios/procedures/focus.md"),
-        Path("aios/procedures/implement.md"),
-        Path("aios/procedures/publish.md"),
-        Path("aios/procedures/correct.md"),
-        Path("aios/procedures/merge.md"),
-        Path("aios/procedures/reconcile.md"),
-        Path("aios/review/setup.md"),
-        Path("aios/review/inspect.md"),
-        Path("aios/review/verdict.md"),
-        Path("aios/review/cleanup.md"),
-        Path("aios/ci/router.md"),
-        Path("aios/adr/index.md"),
-        Path("aios/delivery/index.md"),
+    Path("ips-microkernel/procedures/governance-reconcile.md"): (
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/selectors/governance-knowledge.md"),
     ),
-    Path("aios/review/setup.md"): (
-        Path("aios/references/local-tools.md"),
-        Path("aios/review/inspect.md"),
+    Path("ips-microkernel/selectors/governance-knowledge.md"): (
+        Path("ips-microkernel/references/authority.md"),
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/references/local-tools.md"),
+        Path("ips-microkernel/references/public-safety.md"),
+        Path("ips-microkernel/references/evidence.md"),
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/procedures/implement.md"),
+        Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/correct.md"),
+        Path("ips-microkernel/procedures/merge.md"),
+        Path("ips-microkernel/procedures/reconcile.md"),
+        Path("ips-microkernel/review/setup.md"),
+        Path("ips-microkernel/review/inspect.md"),
+        Path("ips-microkernel/review/verdict.md"),
+        Path("ips-microkernel/review/cleanup.md"),
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/adr/index.md"),
+        Path("ips-microkernel/delivery/index.md"),
     ),
-    Path("aios/review/inspect.md"): (
-        Path("aios/references/public-safety.md"),
-        Path("aios/ci/exceptions/markdown-only.md"),
-        Path("aios/review/verdict.md"),
+    Path("ips-microkernel/review/setup.md"): (
+        Path("ips-microkernel/references/local-tools.md"),
+        Path("ips-microkernel/review/inspect.md"),
     ),
-    Path("aios/review/verdict.md"): (Path("aios/review/cleanup.md"),),
-    Path("aios/ci/router.md"): (
-        Path("aios/ci/procedures/preflight.md"),
-        Path("aios/ci/procedures/local-rehearsal.md"),
-        Path("aios/ci/exceptions/markdown-only.md"),
-        Path("aios/ci/procedures/failure-triage.md"),
-        Path("aios/ci/procedures/post-merge-reconcile.md"),
-        Path("aios/ci/knowledge/selector.md"),
-        Path("aios/work-router.md"),
+    Path("ips-microkernel/review/inspect.md"): (
+        Path("ips-microkernel/references/public-safety.md"),
+        Path("ips-microkernel/ci/exceptions/markdown-only.md"),
+        Path("ips-microkernel/review/verdict.md"),
     ),
-    Path("aios/ci/procedures/preflight.md"): (
-        Path("aios/ci/knowledge/selector.md"),
-        Path("aios/ci/procedures/local-rehearsal.md"),
-        Path("aios/ci/procedures/failure-triage.md"),
+    Path("ips-microkernel/review/verdict.md"): (
+        Path("ips-microkernel/review/cleanup.md"),
     ),
-    Path("aios/ci/procedures/local-rehearsal.md"): (
-        Path("aios/references/local-tools.md"),
+    Path("ips-microkernel/ci/router.md"): (
+        Path("ips-microkernel/ci/procedures/preflight.md"),
+        Path("ips-microkernel/ci/procedures/local-rehearsal.md"),
+        Path("ips-microkernel/ci/exceptions/markdown-only.md"),
+        Path("ips-microkernel/ci/procedures/failure-triage.md"),
+        Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"),
+        Path("ips-microkernel/ci/knowledge/selector.md"),
+        Path("ips-microkernel/work-router.md"),
     ),
-    Path("aios/ci/procedures/failure-triage.md"): (
-        Path("aios/ci/knowledge/selector.md"),
-        Path("aios/procedures/focus.md"),
+    Path("ips-microkernel/ci/procedures/preflight.md"): (
+        Path("ips-microkernel/ci/knowledge/selector.md"),
+        Path("ips-microkernel/ci/procedures/local-rehearsal.md"),
+        Path("ips-microkernel/ci/procedures/failure-triage.md"),
     ),
-    Path("aios/ci/procedures/post-merge-reconcile.md"): (
-        Path("aios/ci/knowledge/selector.md"),
+    Path("ips-microkernel/ci/procedures/local-rehearsal.md"): (
+        Path("ips-microkernel/references/local-tools.md"),
     ),
-    Path("aios/ci/knowledge/selector.md"): (
-        Path("aios/ci/knowledge/dependencies.md"),
-        Path("aios/ci/knowledge/invocation.md"),
-        Path("aios/ci/knowledge/persistence.md"),
-        Path("aios/ci/knowledge/isolation.md"),
-        Path("aios/ci/knowledge/messaging.md"),
-        Path("aios/ci/knowledge/browser.md"),
-        Path("aios/ci/knowledge/recovery.md"),
-        Path("aios/ci/knowledge/evidence.md"),
+    Path("ips-microkernel/ci/procedures/failure-triage.md"): (
+        Path("ips-microkernel/ci/knowledge/selector.md"),
+        Path("ips-microkernel/procedures/focus.md"),
+    ),
+    Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (
+        Path("ips-microkernel/ci/knowledge/selector.md"),
+    ),
+    Path("ips-microkernel/ci/knowledge/selector.md"): (
+        Path("ips-microkernel/ci/knowledge/dependencies.md"),
+        Path("ips-microkernel/ci/knowledge/invocation.md"),
+        Path("ips-microkernel/ci/knowledge/persistence.md"),
+        Path("ips-microkernel/ci/knowledge/isolation.md"),
+        Path("ips-microkernel/ci/knowledge/messaging.md"),
+        Path("ips-microkernel/ci/knowledge/browser.md"),
+        Path("ips-microkernel/ci/knowledge/recovery.md"),
+        Path("ips-microkernel/ci/knowledge/evidence.md"),
     ),
 }
 
 GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
-    "actor-authority": Path("aios/references/authority.md"),
-    "live-state": Path("aios/references/live-state.md"),
-    "local-tools": Path("aios/references/local-tools.md"),
-    "public-safety": Path("aios/references/public-safety.md"),
-    "issue-evidence": Path("aios/references/evidence.md"),
-    "focus": Path("aios/procedures/focus.md"),
-    "implementation": Path("aios/procedures/implement.md"),
-    "publication": Path("aios/procedures/publish.md"),
-    "correction": Path("aios/procedures/correct.md"),
-    "merge": Path("aios/procedures/merge.md"),
-    "reconciliation": Path("aios/procedures/reconcile.md"),
-    "review-setup": Path("aios/review/setup.md"),
-    "review-inspection": Path("aios/review/inspect.md"),
-    "review-verdict": Path("aios/review/verdict.md"),
-    "review-cleanup": Path("aios/review/cleanup.md"),
-    "ci": Path("aios/ci/router.md"),
-    "architecture": Path("aios/adr/index.md"),
-    "delivery": Path("aios/delivery/index.md"),
+    "actor-authority": Path("ips-microkernel/references/authority.md"),
+    "live-state": Path("ips-microkernel/references/live-state.md"),
+    "local-tools": Path("ips-microkernel/references/local-tools.md"),
+    "public-safety": Path("ips-microkernel/references/public-safety.md"),
+    "issue-evidence": Path("ips-microkernel/references/evidence.md"),
+    "focus": Path("ips-microkernel/procedures/focus.md"),
+    "implementation": Path("ips-microkernel/procedures/implement.md"),
+    "publication": Path("ips-microkernel/procedures/publish.md"),
+    "correction": Path("ips-microkernel/procedures/correct.md"),
+    "merge": Path("ips-microkernel/procedures/merge.md"),
+    "reconciliation": Path("ips-microkernel/procedures/reconcile.md"),
+    "review-setup": Path("ips-microkernel/review/setup.md"),
+    "review-inspection": Path("ips-microkernel/review/inspect.md"),
+    "review-verdict": Path("ips-microkernel/review/verdict.md"),
+    "review-cleanup": Path("ips-microkernel/review/cleanup.md"),
+    "ci": Path("ips-microkernel/ci/router.md"),
+    "architecture": Path("ips-microkernel/adr/index.md"),
+    "delivery": Path("ips-microkernel/delivery/index.md"),
 }
 GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
     "issue-evidence": (
@@ -306,19 +341,19 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
 }
 
 REVIEW_CANDIDATE_CAPTURE_FRAGMENTS = {
-    Path("aios/review/inspect.md"): (
+    Path("ips-microkernel/review/inspect.md"): (
         "classify every evidenced reusable process or review candidate",
         "Split compound observations into atomic root-cause candidates",
         "retain every candidate for the verdict",
         "Use `none` only when no reusable candidate was discovered",
     ),
-    Path("aios/review/verdict.md"): (
+    Path("ips-microkernel/review/verdict.md"): (
         "one numbered item for every atomic reusable candidate",
         "`none` is permitted only when no reusable candidate was discovered",
         "never use it as a substitute for a second or later item",
         "every reusable-governance candidate or valid `none`",
     ),
-    Path("aios/procedures/governance-reconcile.md"): (
+    Path("ips-microkernel/procedures/governance-reconcile.md"): (
         "Expand every numbered candidate item from every verdict",
         "preserve stable source order",
         "Never stop ingestion after the first verdict item",
@@ -326,11 +361,11 @@ REVIEW_CANDIDATE_CAPTURE_FRAGMENTS = {
 }
 
 SHALLOW_REVIEW_DIFF_FRAGMENTS = {
-    Path("aios/review/router.md"): (
+    Path("ips-microkernel/review/router.md"): (
         "Expected full base SHA",
         "Expected full head SHA",
     ),
-    Path("aios/review/setup.md"): (
+    Path("ips-microkernel/review/setup.md"): (
         "Resolve the live PR base and head",
         "expected full base and head SHAs",
         "Never infer a missing base",
@@ -338,7 +373,7 @@ SHALLOW_REVIEW_DIFF_FRAGMENTS = {
         "git cat-file -e <expected-base-sha>^{commit}",
         "Do not deepen, unshallow, or search history for a merge base",
     ),
-    Path("aios/review/inspect.md"): (
+    Path("ips-microkernel/review/inspect.md"): (
         "canonical GitHub PR patch and complete paginated file inventory",
         "git diff --name-status <expected-base-sha> <expected-head-sha>",
         "git diff --binary <expected-base-sha> <expected-head-sha> --",
@@ -361,7 +396,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "GIT_AGENTS.md",
         "not a second source of rules",
     ),
-    Path("aios/work-router.md"): (
+    Path("ips-microkernel/work-router.md"): (
         "progressive disclosure",
         "Select the first matching state",
         "Do not read all ADRs or delivery specifications",
@@ -369,15 +404,15 @@ REQUIRED_GOVERNANCE_TEXT = {
         "The only owner-confirmation STOP",
         "reusable non-CI process or review knowledge",
     ),
-    Path("aios/review/router.md"): (
+    Path("ips-microkernel/review/router.md"): (
         "Governing tracking Issue URL",
         "Expected full head SHA",
         "The only permitted GitHub write",
         "Do not push",
         "open only the named next state",
-        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("aios/review/router.md")],
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("ips-microkernel/review/router.md")],
     ),
-    Path("aios/references/authority.md"): (
+    Path("ips-microkernel/references/authority.md"): (
         "The only owner-confirmation boundary",
         "standing policy",
         "Docker-backed proof runs in GitHub Actions",
@@ -386,36 +421,36 @@ REQUIRED_GOVERNANCE_TEXT = {
         "A remote branch is deleted only after",
         "Public participant",
     ),
-    Path("aios/references/live-state.md"): (
+    Path("ips-microkernel/references/live-state.md"): (
         "Do not enumerate every branch",
         "Do not infer current PR, Issue, check, or merge state",
         "Deterministic recovery",
     ),
-    Path("aios/references/evidence.md"): (
+    Path("ips-microkernel/references/evidence.md"): (
         "Completion evidence",
         "umbrella gate",
         "Check only fully proved criteria",
         "independent reviewer never edits Issue checklists",
     ),
-    Path("aios/references/local-tools.md"): (
+    Path("ips-microkernel/references/local-tools.md"): (
         "Do not request elevated privileges",
         "route Docker-backed or environment-dependent proof to GitHub Actions",
     ),
-    Path("aios/procedures/publish.md"): (
+    Path("ips-microkernel/procedures/publish.md"): (
         "machine-qualified Markdown-only CI exception",
         "Approved exact head with required proof",
     ),
-    Path("aios/procedures/merge.md"): (
+    Path("ips-microkernel/procedures/merge.md"): (
         "without a separate confirmation pause",
         "defer the merge mutation",
     ),
-    Path("aios/procedures/reconcile.md"): (
+    Path("ips-microkernel/procedures/reconcile.md"): (
         "Delete the remote branch only when",
         "Otherwise retain it",
         "leaves affected criteria unchecked",
         "governance knowledge reconciliation",
     ),
-    Path("aios/procedures/governance-reconcile.md"): (
+    Path("ips-microkernel/procedures/governance-reconcile.md"): (
         "after every focused PR merge",
         "Governance knowledge reconciliation: no new reusable finding",
         "accepted focused governance Issue",
@@ -427,10 +462,10 @@ REQUIRED_GOVERNANCE_TEXT = {
         "return to step 4 for the next queued candidate",
         "Only after the queue is exhausted",
         *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[
-            Path("aios/procedures/governance-reconcile.md")
+            Path("ips-microkernel/procedures/governance-reconcile.md")
         ],
     ),
-    Path("aios/selectors/governance-knowledge.md"): (
+    Path("ips-microkernel/selectors/governance-knowledge.md"): (
         "not an append-only incident ledger",
         "Select one canonical target",
         "accepted focused governance Issue",
@@ -440,66 +475,66 @@ REQUIRED_GOVERNANCE_TEXT = {
         "split it into atomic candidates",
         "never assign one candidate to two targets",
     ),
-    Path("aios/review/inspect.md"): (
-        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("aios/review/inspect.md")],
-        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("aios/review/inspect.md")],
+    Path("ips-microkernel/review/inspect.md"): (
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("ips-microkernel/review/inspect.md")],
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("ips-microkernel/review/inspect.md")],
         "candidate becomes an actionable finding only when",
     ),
-    Path("aios/review/verdict.md"): (
+    Path("ips-microkernel/review/verdict.md"): (
         "Reusable governance candidate",
         "not permission for the reviewer",
-        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("aios/review/verdict.md")],
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("ips-microkernel/review/verdict.md")],
     ),
-    Path("aios/review/setup.md"): (
+    Path("ips-microkernel/review/setup.md"): (
         "--depth 1",
         "--no-tags",
         "canonical workspace",
-        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("aios/review/setup.md")],
+        *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("ips-microkernel/review/setup.md")],
     ),
-    Path("aios/review/cleanup.md"): (
+    Path("ips-microkernel/review/cleanup.md"): (
         "extended-length path handling",
         "temporary path no longer exists",
         "Do not make a second GitHub write",
     ),
-    Path("aios/ci/router.md"): (
+    Path("ips-microkernel/ci/router.md"): (
         "thin router",
         "Do not preload every procedure",
         "Select the first matching state",
     ),
-    Path("aios/ci/procedures/preflight.md"): (
+    Path("ips-microkernel/ci/procedures/preflight.md"): (
         "keeps baseline and current-head trust separate",
         "Verification-Skip",
         "cold full selection",
         "Local Docker always falls back to Actions",
     ),
-    Path("aios/ci/procedures/local-rehearsal.md"): (
+    Path("ips-microkernel/ci/procedures/local-rehearsal.md"): (
         "External timeout termination is not verification evidence",
         "does not resolve or invoke the Docker CLI",
     ),
-    Path("aios/ci/exceptions/markdown-only.md"): (
+    Path("ips-microkernel/ci/exceptions/markdown-only.md"): (
         "machine-qualified exception",
         "absent run is never passing evidence",
         "use normal exact-head Actions proof",
         "Squash merge boundary",
     ),
-    Path("aios/ci/procedures/post-merge-reconcile.md"): (
+    Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (
         "after every feature PR merge",
         "no new reusable finding",
         "Revise or add one knowledge leaf",
         "focused playbook-update Issue",
         "Publish a knowledge change only through its focused Issue",
     ),
-    Path("aios/ci/procedures/failure-triage.md"): (
+    Path("ips-microkernel/ci/procedures/failure-triage.md"): (
         "Promote only a new reusable decision rule",
         "Update one canonical knowledge leaf or add one routed leaf",
     ),
-    Path("aios/adr/0008-progressive-disclosure-ai-guidance.md"): (
+    Path("ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md"): (
         "Supersedes",
         "ordered first-match selection",
         "exact routed file inventory",
         "ADR-0006 remains historical evidence",
     ),
-    Path("aios/adr/0009-reviewed-governance-knowledge-reconciliation.md"): (
+    Path("ips-microkernel/adr/0009-reviewed-governance-knowledge-reconciliation.md"): (
         "ADR-0008 introduced progressive-disclosure routing",
         "Reusable governance candidate",
         "one canonical destination",
@@ -508,7 +543,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "ordered candidate queue",
         "representative ambiguity",
     ),
-    Path("aios/adr/0010-lossless-review-candidate-capture.md"): (
+    Path("ips-microkernel/adr/0010-lossless-review-candidate-capture.md"): (
         "ADR-0009 established a reviewed write path",
         "exactly one `Reusable governance candidate` section",
         "one item for every atomic candidate",
@@ -516,7 +551,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "singular-only review capture",
         "first-item-only regression",
     ),
-    Path("aios/adr/0011-deterministic-shallow-review-diff.md"): (
+    Path("ips-microkernel/adr/0011-deterministic-shallow-review-diff.md"): (
         "ADR-0010",
         "expected full base SHA",
         "exact base commit object",
@@ -525,7 +560,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "does not require a merge base",
         "Require inventory agreement",
     ),
-    Path("aios/adr/0012-name-aios-nodes-by-runtime-role.md"): (
+    Path("ips-microkernel/adr/0012-name-aios-nodes-by-runtime-role.md"): (
         "The complete top-level `docs/` tree moves to `aios/`",
         "Every AIOS runtime node declares exactly one machine-readable role",
         "`router`",
@@ -537,35 +572,53 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Runtime filenames and directories encode their role",
         "Accepted ADR prose remains immutable evidence",
     ),
+    Path("ips-microkernel/adr/0013-name-ips-microkernel.md"): (
+        "intentional Progressive-disclosure System Microkernel",
+        "`ips-microkernel/README.md` is human-only",
+        "runtime governance graph",
+        "legacy `aios/` root",
+        "ADR-0012 remains immutable historical evidence",
+    ),
+    IPS_HUMAN_README: (
+        "This page explains the architecture; it does not participate in its runtime",
+        "intentional Progressive-disclosure System Microkernel",
+        "Not reading is a design decision",
+        "Reprogramming, differentiation, and expression",
+        "AIOS became the iPS Microkernel",
+        "## 日本語",
+        "読まないことは設計判断である",
+        "再プログラム、分化、発現",
+        "その結果、AIOSはiPS Microkernelとなった",
+    ),
 }
 
 FORBIDDEN_STALE_ROUTING_TEXT = {
     Path("CONTRIBUTING.md"): (
-        "[delivery specifications](aios/delivery/) in numeric order",
+        "[delivery specifications](ips-microkernel/delivery/) in numeric order",
     ),
     Path("GIT_AGENTS.md"): (
-        "Read [the AI collaboration contract](aios/work-router.md)",
+        "Read [the AI collaboration contract](ips-microkernel/work-router.md)",
         "accepted ADRs under",
         "accepted delivery specifications under",
         "Read Issue #1 and only the focused Issue",
     ),
-    Path("aios/work-router.md"): (
+    Path("ips-microkernel/work-router.md"): (
         "This is the single operating contract",
         "Read [GIT_AGENTS.md] and its required design sources",
         "Issue #1 is the live portfolio ledger",
         "Implementation lifecycle",
     ),
-    Path("aios/review/router.md"): (
+    Path("ips-microkernel/review/router.md"): (
         "accepted ADRs and accepted delivery specifications in numeric order",
         "Delivery Specification 0001, the focused Issue",
     ),
-    Path("aios/ci/router.md"): (
+    Path("ips-microkernel/ci/router.md"): (
         "Change-driven first-push checks",
         "Historical evidence ledger",
     ),
 }
 
-OWNER_CONFIRMATION_OWNER = Path("aios/procedures/focus.md")
+OWNER_CONFIRMATION_OWNER = Path("ips-microkernel/procedures/focus.md")
 OWNER_CONFIRMATION_HEADING = "## Owner-confirmation STOP"
 STOP_HEADING = re.compile(r"(?im)^## [^\r\n]*\bstop\b[^\r\n]*$")
 FORBIDDEN_OWNER_CONFIRMATION_PATTERNS = {
@@ -627,11 +680,12 @@ PUBLIC_GOVERNANCE_SCAN_FILES = ROUTED_PUBLIC_SURFACE | {
     Path("CONTRIBUTING.md"),
     Path(".github/workflows/README.md"),
     Path("scripts/README.md"),
-    Path("aios/adr/0008-progressive-disclosure-ai-guidance.md"),
+    IPS_HUMAN_README,
+    Path("ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md"),
 }
 DESIGN_SELECTION_DIRECTORIES = (
-    Path("aios/adr"),
-    Path("aios/delivery"),
+    Path("ips-microkernel/adr"),
+    Path("ips-microkernel/delivery"),
 )
 FORBIDDEN_GOVERNANCE_PATTERNS = {
     "Windows absolute path": re.compile(r"(?i)(?<![a-z0-9_])[a-z]:[\\/]"),
@@ -704,9 +758,40 @@ def design_governance_paths() -> list[Path]:
 
 def local_target(raw_target: str) -> str | None:
     target = raw_target.strip().strip("<>").split(maxsplit=1)[0]
-    if target.startswith(IGNORED_PREFIXES):
+    target = MARKDOWN_BACKSLASH_ESCAPE.sub(r"\1", unescape(target))
+    if target.casefold().startswith(IGNORED_PREFIXES):
         return None
-    return unquote(target.split("#", maxsplit=1)[0])
+    return unquote(urlsplit(target).path)
+
+
+def _normalize_reference_label(label: str) -> str:
+    label = re.sub(r"(?m)^[ \t]*(?:>[ \t]?)+", "", label)
+    return " ".join(label.split()).casefold()
+
+
+def markdown_link_targets(content: str) -> list[str]:
+    targets = [match.group(1) for match in MARKDOWN_LINK.finditer(content)]
+    targets.extend(
+        next(group for group in match.groups() if group is not None)
+        for match in MARKDOWN_HTML_ANCHOR.finditer(content)
+    )
+    definitions: dict[str, str] = {}
+    for match in MARKDOWN_REFERENCE_DEFINITION.finditer(content):
+        label = _normalize_reference_label(match.group(1))
+        definitions.setdefault(label, match.group(2) or match.group(3))
+
+    for match in MARKDOWN_REFERENCE_LINK.finditer(content):
+        label = match.group(2) or match.group(1)
+        target = definitions.get(_normalize_reference_label(label))
+        if target is not None:
+            targets.append(target)
+
+    for match in MARKDOWN_SHORTCUT_REFERENCE_LINK.finditer(content):
+        target = definitions.get(_normalize_reference_label(match.group(1)))
+        if target is not None:
+            targets.append(target)
+
+    return targets
 
 
 def resolved_local_links(relative_source: Path) -> set[Path]:
@@ -716,8 +801,8 @@ def resolved_local_links(relative_source: Path) -> set[Path]:
 
     links: set[Path] = set()
     content = path.read_text(encoding="utf-8")
-    for match in MARKDOWN_LINK.finditer(content):
-        target = local_target(match.group(1))
+    for raw_target in markdown_link_targets(content):
+        target = local_target(raw_target)
         if not target:
             continue
         resolved = (path.parent / target).resolve()
@@ -729,7 +814,7 @@ def resolved_local_links(relative_source: Path) -> set[Path]:
 
 
 def _validate_governance_knowledge_selector(failures: list[str]) -> None:
-    relative_path = Path("aios/selectors/governance-knowledge.md")
+    relative_path = Path("ips-microkernel/selectors/governance-knowledge.md")
     path = REPOSITORY_ROOT / relative_path
     if not path.is_file():
         return
@@ -816,7 +901,7 @@ def _validate_review_candidate_capture(failures: list[str]) -> None:
                     f"capture invariant {fragment!r}"
                 )
 
-    verdict_path = REPOSITORY_ROOT / "aios/review/verdict.md"
+    verdict_path = REPOSITORY_ROOT / "ips-microkernel/review/verdict.md"
     if not verdict_path.is_file():
         return
     verdict = verdict_path.read_text(encoding="utf-8")
@@ -824,14 +909,14 @@ def _validate_review_candidate_capture(failures: list[str]) -> None:
     verification_heading = "### Verification"
     if verdict.count(candidate_heading) != 1:
         failures.append(
-            "aios/review/verdict.md: must contain exactly one reusable "
+            "ips-microkernel/review/verdict.md: must contain exactly one reusable "
             "governance candidate section"
         )
         return
     candidate_section = verdict.split(candidate_heading, maxsplit=1)[1]
     if verification_heading not in candidate_section:
         failures.append(
-            "aios/review/verdict.md: candidate section must precede verification"
+            "ips-microkernel/review/verdict.md: candidate section must precede verification"
         )
         return
     candidate_section = candidate_section.split(verification_heading, maxsplit=1)[0]
@@ -841,7 +926,7 @@ def _validate_review_candidate_capture(failures: list[str]) -> None:
         )
         if not item.search(candidate_section):
             failures.append(
-                "aios/review/verdict.md: candidate template must demonstrate "
+                "ips-microkernel/review/verdict.md: candidate template must demonstrate "
                 f"ordered atomic item {item_number} with signal and evidence"
             )
 
@@ -861,47 +946,57 @@ def _validate_shallow_review_diff_contract(failures: list[str]) -> None:
 
 
 def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
-    aios_root = REPOSITORY_ROOT / AIOS_ROOT
-    if not aios_root.is_dir():
-        failures.append("missing AIOS directory aios")
+    ips_root = REPOSITORY_ROOT / IPS_ROOT
+    if not ips_root.is_dir():
+        failures.append("missing iPS Microkernel directory ips-microkernel")
         return []
 
     actual_top_level_entries = frozenset(
         path.name
-        for path in aios_root.iterdir()
+        for path in ips_root.iterdir()
         if path.is_file()
         or (path.is_dir() and any(child.is_file() for child in path.rglob("*")))
     )
     for unexpected_name in sorted(
-        actual_top_level_entries - EXPECTED_AIOS_TOP_LEVEL_ENTRIES
+        actual_top_level_entries - EXPECTED_IPS_TOP_LEVEL_ENTRIES
     ):
-        failures.append(f"AIOS contains unexpected top-level entry {unexpected_name}")
+        failures.append(
+            f"iPS Microkernel contains unexpected top-level entry {unexpected_name}"
+        )
     for missing_name in sorted(
-        EXPECTED_AIOS_TOP_LEVEL_ENTRIES - actual_top_level_entries
+        EXPECTED_IPS_TOP_LEVEL_ENTRIES - actual_top_level_entries
     ):
-        failures.append(f"AIOS is missing required top-level entry {missing_name}")
+        failures.append(
+            f"iPS Microkernel is missing required top-level entry {missing_name}"
+        )
 
-    runtime_paths = list(aios_root.glob("*.md"))
-    for relative_directory in AIOS_RUNTIME_DIRECTORIES:
-        runtime_directory = aios_root / relative_directory
+    runtime_paths = [
+        path
+        for path in ips_root.glob("*.md")
+        if path.relative_to(REPOSITORY_ROOT) != IPS_HUMAN_README
+    ]
+    for relative_directory in IPS_RUNTIME_DIRECTORIES:
+        runtime_directory = ips_root / relative_directory
         if runtime_directory.is_dir():
             runtime_paths.extend(
                 path for path in runtime_directory.rglob("*") if path.is_file()
             )
-    actual_files = frozenset(path.relative_to(aios_root) for path in runtime_paths)
-    for unexpected_path in sorted(actual_files - EXPECTED_AIOS_RUNTIME_FILES):
+    actual_files = frozenset(path.relative_to(ips_root) for path in runtime_paths)
+    for unexpected_path in sorted(actual_files - EXPECTED_IPS_RUNTIME_FILES):
         failures.append(
-            f"AIOS runtime contains unexpected file {unexpected_path.as_posix()}"
+            "iPS Microkernel runtime contains unexpected file "
+            f"{unexpected_path.as_posix()}"
         )
-    for missing_path in sorted(EXPECTED_AIOS_RUNTIME_FILES - actual_files):
+    for missing_path in sorted(EXPECTED_IPS_RUNTIME_FILES - actual_files):
         failures.append(
-            f"AIOS runtime is missing required file {missing_path.as_posix()}"
+            "iPS Microkernel runtime is missing required file "
+            f"{missing_path.as_posix()}"
         )
 
-    role_paths = {**ENTRYPOINT_FILE_ROLES, **AIOS_FILE_ROLES}
+    role_paths = {**ENTRYPOINT_FILE_ROLES, **IPS_FILE_ROLES}
     declared_roles_by_path: dict[Path, list[str]] = {}
     for markdown_path in iter_markdown_files():
-        declared_roles = AIOS_ROLE_MARKER.findall(
+        declared_roles = IPS_ROLE_MARKER.findall(
             markdown_path.read_text(encoding="utf-8")
         )
         if declared_roles:
@@ -910,7 +1005,7 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
             )
     for unexpected_path in sorted(declared_roles_by_path.keys() - role_paths.keys()):
         failures.append(
-            f"{unexpected_path.as_posix()}: AIOS role markers are forbidden "
+            f"{unexpected_path.as_posix()}: iPS role markers are forbidden "
             "outside declared role-bearing paths; found "
             f"{declared_roles_by_path[unexpected_path]!r}"
         )
@@ -919,7 +1014,7 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
         path = REPOSITORY_ROOT / relative_path
         if not path.is_file():
             continue
-        marker = f"<!-- aios-role: {expected_role} -->"
+        marker = f"<!-- ips-role: {expected_role} -->"
         content = path.read_text(encoding="utf-8")
         declared_roles = declared_roles_by_path.get(relative_path, [])
         if declared_roles != [expected_role]:
@@ -927,12 +1022,12 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
                 f"{relative_path.as_posix()}: expected exactly one role marker "
                 f"{marker!r}, found {declared_roles!r}"
             )
-        if relative_path in AIOS_FILE_ROLES:
-            runtime_path = relative_path.relative_to(AIOS_ROOT)
-            inferred_role = _role_for_aios_runtime_path(runtime_path)
+        if relative_path in IPS_FILE_ROLES:
+            runtime_path = relative_path.relative_to(IPS_ROOT)
+            inferred_role = _role_for_ips_runtime_path(runtime_path)
             if inferred_role is None:
                 failures.append(
-                    f"{relative_path.as_posix()}: path has no valid AIOS runtime role"
+                    f"{relative_path.as_posix()}: path has no valid iPS runtime role"
                 )
             elif inferred_role != expected_role:
                 failures.append(
@@ -956,7 +1051,7 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
     return sorted(path for path in runtime_paths if path.suffix == ".md")
 
 
-def _role_for_aios_runtime_path(relative_path: Path) -> str | None:
+def _role_for_ips_runtime_path(relative_path: Path) -> str | None:
     parts = relative_path.parts
     if relative_path == Path("work-router.md") or relative_path.name == "router.md":
         return "router"
@@ -975,38 +1070,33 @@ def _role_for_aios_runtime_path(relative_path: Path) -> str | None:
     return None
 
 
-def _validate_legacy_aios_layout(failures: list[str]) -> None:
+def _validate_legacy_governance_layout(failures: list[str]) -> None:
     for relative_path in (
+        Path("aios"),
         Path("docs"),
         Path(".github/workflows/CI_PLAYBOOK.md"),
     ):
         if (REPOSITORY_ROOT / relative_path).exists():
             failures.append(
-                f"legacy AIOS path must not exist: {relative_path.as_posix()}"
+                f"legacy governance path must not exist: {relative_path.as_posix()}"
             )
 
-    legacy_runtime_root = REPOSITORY_ROOT / "aios" / "ai"
+    legacy_runtime_root = REPOSITORY_ROOT / "ips-microkernel" / "ai"
     if legacy_runtime_root.is_dir() and any(
         path.is_file() for path in legacy_runtime_root.rglob("*")
     ):
-        failures.append("legacy AIOS path must not exist: aios/ai")
+        failures.append("legacy governance path must not exist: ips-microkernel/ai")
 
-    marker_paths = {
-        *ENTRYPOINT_FILE_ROLES,
-        *AIOS_FILE_ROLES,
-    }
-    for relative_path in sorted(marker_paths):
-        path = REPOSITORY_ROOT / relative_path
-        if not path.is_file():
-            continue
+    for path in iter_markdown_files():
         if LEGACY_ROLE_OR_RULE_MARKER.search(path.read_text(encoding="utf-8")):
+            relative_path = path.relative_to(REPOSITORY_ROOT)
             failures.append(
-                f"{relative_path.as_posix()}: contains a legacy DocForAI marker"
+                f"{relative_path.as_posix()}: contains a legacy DocForAI or AIOS marker"
             )
 
-    aios_root = REPOSITORY_ROOT / AIOS_ROOT
-    for relative_directory in AIOS_RUNTIME_DIRECTORIES:
-        runtime_directory = aios_root / relative_directory
+    ips_root = REPOSITORY_ROOT / IPS_ROOT
+    for relative_directory in IPS_RUNTIME_DIRECTORIES:
+        runtime_directory = ips_root / relative_directory
         if not runtime_directory.is_dir():
             continue
         for readme in runtime_directory.rglob("README.md"):
@@ -1016,13 +1106,60 @@ def _validate_legacy_aios_layout(failures: list[str]) -> None:
             )
 
 
+def _validate_human_only_readme(failures: list[str]) -> None:
+    readme = REPOSITORY_ROOT / IPS_HUMAN_README
+    if not readme.is_file():
+        return
+
+    content = readme.read_text(encoding="utf-8")
+    if content.count(IPS_HUMAN_CONTEXT_MARKER) != 1:
+        failures.append(
+            f"{IPS_HUMAN_README.as_posix()}: expected exactly one human-only "
+            f"context marker {IPS_HUMAN_CONTEXT_MARKER!r}"
+        )
+    if IPS_RUNTIME_MARKER.search(content):
+        failures.append(
+            f"{IPS_HUMAN_README.as_posix()}: human-only README must not declare "
+            "an iPS runtime role or rule"
+        )
+
+    runtime_surface = {
+        *ENTRYPOINT_FILE_ROLES,
+        *IPS_FILE_ROLES,
+        *ROUTED_PUBLIC_SURFACE,
+    }
+    if IPS_HUMAN_README in runtime_surface:
+        failures.append(
+            f"{IPS_HUMAN_README.as_posix()}: human-only README must not be part "
+            "of the runtime governance graph"
+        )
+
+    allowed_inbound_sources = {Path("README.md")}
+    for markdown_path in iter_markdown_files():
+        source = markdown_path.relative_to(REPOSITORY_ROOT)
+        if source == IPS_HUMAN_README:
+            continue
+        if IPS_HUMAN_README not in resolved_local_links(source):
+            continue
+        if source not in allowed_inbound_sources:
+            failures.append(
+                f"{source.as_posix()}: human-only README may be linked only by "
+                "the repository root README"
+            )
+
+    if IPS_HUMAN_README not in resolved_local_links(Path("README.md")):
+        failures.append(
+            f"README.md: missing human navigation link to {IPS_HUMAN_README.as_posix()}"
+        )
+
+
 def _validate_rule_ownership(failures: list[str], governance_paths: list[Path]) -> None:
     contents = {
         path.relative_to(REPOSITORY_ROOT): path.read_text(encoding="utf-8")
         for path in governance_paths
     }
     for marker_name, owner in CANONICAL_RULE_OWNERS.items():
-        marker = f"<!-- aios-rule: {marker_name} -->"
+        marker = f"<!-- ips-rule: {marker_name} -->"
         occurrences = [
             (path, content.count(marker))
             for path, content in contents.items()
@@ -1066,7 +1203,7 @@ def _validate_routes(failures: list[str]) -> None:
     required_reachable_surface = {
         Path("GIT_AGENTS.md"),
         Path("AI_GUIDANCE.md"),
-        *AIOS_FILE_ROLES,
+        *IPS_FILE_ROLES,
     }
     for unreachable in sorted(required_reachable_surface - reachable):
         failures.append(
@@ -1088,7 +1225,7 @@ def _validate_routing_node_budgets(failures: list[str]) -> None:
 
 
 def _validate_ci_failure_knowledge(failures: list[str]) -> None:
-    knowledge_root = REPOSITORY_ROOT / "aios" / "ci" / "knowledge"
+    knowledge_root = REPOSITORY_ROOT / "ips-microkernel" / "ci" / "knowledge"
     knowledge_leaves = [
         path.read_text(encoding="utf-8")
         for path in sorted(knowledge_root.glob("*.md"))
@@ -1159,7 +1296,8 @@ def _validate_public_governance_surface(
 def governance_failures() -> list[str]:
     failures: list[str] = []
 
-    _validate_legacy_aios_layout(failures)
+    _validate_legacy_governance_layout(failures)
+    _validate_human_only_readme(failures)
 
     for relative_path in REQUIRED_GOVERNANCE_FILES:
         if not (REPOSITORY_ROOT / relative_path).is_file():
@@ -1191,14 +1329,14 @@ def governance_failures() -> list[str]:
                     f"{relative_path.as_posix()}: contains stale routing {fragment!r}"
                 )
 
-    aios_paths = _validate_inventory_and_roles(failures)
+    ips_paths = _validate_inventory_and_roles(failures)
     governance_paths = sorted(
         {
             REPOSITORY_ROOT / path
             for path in PUBLIC_GOVERNANCE_SCAN_FILES
             if (REPOSITORY_ROOT / path).is_file()
         }
-        | set(aios_paths)
+        | set(ips_paths)
         | set(design_governance_paths())
     )
 
@@ -1222,8 +1360,8 @@ def main() -> int:
 
     for document in markdown_files:
         content = document.read_text(encoding="utf-8")
-        for match in MARKDOWN_LINK.finditer(content):
-            target = local_target(match.group(1))
+        for raw_target in markdown_link_targets(content):
+            target = local_target(raw_target)
             if not target:
                 continue
             checked_links += 1
@@ -1240,7 +1378,7 @@ def main() -> int:
 
     print(
         f"Validated {checked_links} local links across {len(markdown_files)} "
-        "Markdown files and the routed AIOS governance graph."
+        "Markdown files and the routed iPS Microkernel governance graph."
     )
     return 0
 

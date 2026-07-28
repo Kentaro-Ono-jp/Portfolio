@@ -1,16 +1,17 @@
 # Repository guidance for AI agents
 
-<!-- aios-role: router -->
+<!-- ips-role: router -->
 
 This is the thin, tracked entrypoint for AI-assisted work in this repository.
 It selects guidance; it is not the complete operating manual.
 
 ## Start
 
-1. Read the [AIOS work router](aios/work-router.md).
+1. Read the [iPS Microkernel work router](ips-microkernel/work-router.md).
 2. Select the first matching state there and open only that route.
 3. Follow one explicit next or return transition at a time. Do not preload
-   sibling workflows, reference files, accepted design records, or CI history.
+   sibling workflows, reference files, accepted design records, CI history, or
+   the human-only architecture README.
 
 Use the [tool-neutral pointer](AI_GUIDANCE.md) only to reach this file. It is
 not another source of rules.
@@ -36,7 +37,7 @@ not another source of rules.
 - The Compose project is `reactorfront-portfolio`. Never use global Docker
   cleanup or prune commands.
 - A complete staged candidate enters the thin
-  [CI router](aios/ci/router.md); it does not load every CI
+  [CI router](ips-microkernel/ci/router.md); it does not load every CI
   procedure or historical failure record.
 
 ## Public boundary

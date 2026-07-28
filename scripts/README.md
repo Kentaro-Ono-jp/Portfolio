@@ -9,7 +9,7 @@ Actions.
 
 After a complete implementation and its verification changes are staged but
 not committed, use the
-[GitHub Actions CI router](../aios/ci/router.md). Select only
+[GitHub Actions CI router](../ips-microkernel/ci/router.md). Select only
 staged preflight and any conditionally matching knowledge leaf; do not load CI
 exceptions or historical failures by default. Reverify and restage every
 correction before commit.

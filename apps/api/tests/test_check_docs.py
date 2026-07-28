@@ -27,33 +27,285 @@ def test_repository_owned_governance_invariants_pass(
     assert documentation_checker.governance_failures() == []
 
 
+def test_human_only_readme_is_outside_the_runtime_governance_graph(
+    documentation_checker: ModuleType,
+) -> None:
+    human_readme = documentation_checker.IPS_HUMAN_README
+
+    assert human_readme not in documentation_checker.IPS_FILE_ROLES
+    assert human_readme not in documentation_checker.ROUTED_PUBLIC_SURFACE
+    assert human_readme in documentation_checker.resolved_local_links(Path("README.md"))
+    assert all(
+        human_readme not in documentation_checker.resolved_local_links(source)
+        for source in {
+            *documentation_checker.ENTRYPOINT_FILE_ROLES,
+            *documentation_checker.IPS_FILE_ROLES,
+            *documentation_checker.ROUTED_PUBLIC_SURFACE,
+        }
+    )
+
+
+def test_human_only_readme_rejects_a_runtime_marker(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root_readme = tmp_path / "README.md"
+    root_readme.write_text(
+        "[iPS Microkernel](ips-microkernel/README.md)\n",
+        encoding="utf-8",
+    )
+    human_readme = tmp_path / "ips-microkernel" / "README.md"
+    human_readme.parent.mkdir(parents=True)
+    human_readme.write_text(
+        "<!-- ips-context: human-only -->\n<!-- ips-role: router -->\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_human_only_readme(failures)
+
+    assert (
+        "ips-microkernel/README.md: human-only README must not declare an iPS runtime role or rule"
+    ) in failures
+
+
+def test_human_only_readme_rejects_an_inbound_runtime_link(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root_readme = tmp_path / "README.md"
+    root_readme.write_text(
+        "[iPS Microkernel](ips-microkernel/README.md)\n",
+        encoding="utf-8",
+    )
+    human_readme = tmp_path / "ips-microkernel" / "README.md"
+    human_readme.parent.mkdir(parents=True)
+    human_readme.write_text(
+        "<!-- ips-context: human-only -->\n",
+        encoding="utf-8",
+    )
+    work_router = tmp_path / "ips-microkernel" / "work-router.md"
+    work_router.write_text("[origin](README.md)\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_human_only_readme(failures)
+
+    assert (
+        "ips-microkernel/work-router.md: human-only README may be linked only "
+        "by the repository root README"
+    ) in failures
+
+
+def test_human_only_readme_rejects_an_inbound_reference_style_runtime_link(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root_readme = tmp_path / "README.md"
+    root_readme.write_text(
+        "[iPS Microkernel](ips-microkernel/README.md)\n",
+        encoding="utf-8",
+    )
+    human_readme = tmp_path / "ips-microkernel" / "README.md"
+    human_readme.parent.mkdir(parents=True)
+    human_readme.write_text(
+        "<!-- ips-context: human-only -->\n",
+        encoding="utf-8",
+    )
+    work_router = tmp_path / "ips-microkernel" / "work-router.md"
+    work_router.write_text(
+        "[origin][human]\n\n[human]: README.md\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_human_only_readme(failures)
+
+    assert (
+        "ips-microkernel/work-router.md: human-only README may be linked only "
+        "by the repository root README"
+    ) in failures
+
+
+def test_human_only_readme_rejects_a_line_broken_reference_definition(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root_readme = tmp_path / "README.md"
+    root_readme.write_text(
+        "[iPS Microkernel](ips-microkernel/README.md)\n",
+        encoding="utf-8",
+    )
+    human_readme = tmp_path / "ips-microkernel" / "README.md"
+    human_readme.parent.mkdir(parents=True)
+    human_readme.write_text(
+        "<!-- ips-context: human-only -->\n",
+        encoding="utf-8",
+    )
+    work_router = tmp_path / "ips-microkernel" / "work-router.md"
+    work_router.write_text(
+        "[origin][human]\n\n[human]:\nREADME.md\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_human_only_readme(failures)
+
+    assert (
+        "ips-microkernel/work-router.md: human-only README may be linked only "
+        "by the repository root README"
+    ) in failures
+
+
+def test_human_only_readme_rejects_a_multiline_label_inside_a_block_quote(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root_readme = tmp_path / "README.md"
+    root_readme.write_text(
+        "[iPS Microkernel](ips-microkernel/README.md)\n",
+        encoding="utf-8",
+    )
+    human_readme = tmp_path / "ips-microkernel" / "README.md"
+    human_readme.parent.mkdir(parents=True)
+    human_readme.write_text(
+        "<!-- ips-context: human-only -->\n",
+        encoding="utf-8",
+    )
+    work_router = tmp_path / "ips-microkernel" / "work-router.md"
+    work_router.write_text(
+        "[Human Label]\n\n> [human\n> label]: README.md\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_human_only_readme(failures)
+
+    assert (
+        "ips-microkernel/work-router.md: human-only README may be linked only "
+        "by the repository root README"
+    ) in failures
+
+
+def test_human_only_readme_rejects_a_query_bearing_runtime_link(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root_readme = tmp_path / "README.md"
+    root_readme.write_text(
+        "[iPS Microkernel](ips-microkernel/README.md)\n",
+        encoding="utf-8",
+    )
+    human_readme = tmp_path / "ips-microkernel" / "README.md"
+    human_readme.parent.mkdir(parents=True)
+    human_readme.write_text(
+        "<!-- ips-context: human-only -->\n",
+        encoding="utf-8",
+    )
+    work_router = tmp_path / "ips-microkernel" / "work-router.md"
+    work_router.write_text(
+        "[origin](README.md?plain=1#architecture)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_human_only_readme(failures)
+
+    assert (
+        "ips-microkernel/work-router.md: human-only README may be linked only "
+        "by the repository root README"
+    ) in failures
+
+
+@pytest.mark.parametrize(
+    ("content", "target"),
+    (
+        ("[origin][human]\n\n[human]: README.md\n", "README.md"),
+        ("[origin][]\n\n[origin]:\n    <README.md>\n", "README.md"),
+        ("[Human Label]\n\n[human\n label]: README.md\n", "README.md"),
+        ("[human]\n\n> [human]:\n> README.md\n", "README.md"),
+        ("[Human Label]\n\n> [human\n> label]: README.md\n", "README.md"),
+        ('<a class="origin" href="README.md">origin</a>\n', "README.md"),
+    ),
+)
+def test_markdown_link_targets_supports_gfm_reference_forms_and_layouts(
+    documentation_checker: ModuleType,
+    content: str,
+    target: str,
+) -> None:
+    assert documentation_checker.markdown_link_targets(content) == [target]
+
+
+@pytest.mark.parametrize(
+    "target",
+    (
+        "README.md?plain=1",
+        "README.md#architecture",
+        "README&#46;md",
+        r"README\.md",
+    ),
+)
+def test_local_target_normalizes_rendered_url_aliases(
+    documentation_checker: ModuleType,
+    target: str,
+) -> None:
+    assert documentation_checker.local_target(target) == "README.md"
+
+
 def test_progressive_routing_covers_the_complete_guidance_surface(
     documentation_checker: ModuleType,
 ) -> None:
     routes = documentation_checker.REQUIRED_ROUTE_LINKS
-    roles = documentation_checker.AIOS_FILE_ROLES
+    roles = documentation_checker.IPS_FILE_ROLES
 
     assert routes[Path("GIT_AGENTS.md")] == (
         Path("AI_GUIDANCE.md"),
-        Path("aios/work-router.md"),
-        Path("aios/ci/router.md"),
-    )
-    assert Path("aios/procedures/focus.md") in routes[Path("aios/work-router.md")]
-    assert Path("aios/procedures/governance-reconcile.md") in routes[Path("aios/work-router.md")]
-    assert (
-        Path("aios/ci/exceptions/markdown-only.md")
-        not in routes[Path("aios/ci/procedures/preflight.md")]
-    )
-    assert Path("aios/ci/knowledge/selector.md") in routes[Path("aios/ci/procedures/preflight.md")]
-    assert (
-        Path("aios/selectors/governance-knowledge.md")
-        not in routes[Path("aios/procedures/implement.md")]
+        Path("ips-microkernel/work-router.md"),
+        Path("ips-microkernel/ci/router.md"),
     )
     assert (
-        Path("aios/selectors/governance-knowledge.md") not in routes[Path("aios/review/inspect.md")]
+        Path("ips-microkernel/procedures/focus.md")
+        in routes[Path("ips-microkernel/work-router.md")]
     )
-    assert Path("aios/procedures/focus.md") in routes[Path("aios/procedures/correct.md")]
-    assert Path("aios/procedures/merge.md") in routes[Path("aios/procedures/correct.md")]
+    assert (
+        Path("ips-microkernel/procedures/governance-reconcile.md")
+        in routes[Path("ips-microkernel/work-router.md")]
+    )
+    assert (
+        Path("ips-microkernel/ci/exceptions/markdown-only.md")
+        not in routes[Path("ips-microkernel/ci/procedures/preflight.md")]
+    )
+    assert (
+        Path("ips-microkernel/ci/knowledge/selector.md")
+        in routes[Path("ips-microkernel/ci/procedures/preflight.md")]
+    )
+    assert (
+        Path("ips-microkernel/selectors/governance-knowledge.md")
+        not in routes[Path("ips-microkernel/procedures/implement.md")]
+    )
+    assert (
+        Path("ips-microkernel/selectors/governance-knowledge.md")
+        not in routes[Path("ips-microkernel/review/inspect.md")]
+    )
+    assert (
+        Path("ips-microkernel/procedures/focus.md")
+        in routes[Path("ips-microkernel/procedures/correct.md")]
+    )
+    assert (
+        Path("ips-microkernel/procedures/merge.md")
+        in routes[Path("ips-microkernel/procedures/correct.md")]
+    )
     assert set(roles.values()) == {
         "router",
         "selector",
@@ -71,13 +323,15 @@ def test_every_canonical_rule_has_one_declared_owner(
 
     assert len(owners) == len(set(owners))
     assert len(owners.values()) == len(set(owners.values()))
-    assert owners["actor-authority"] == Path("aios/references/authority.md")
-    assert owners["ci-markdown-only-exception"] == Path("aios/ci/exceptions/markdown-only.md")
+    assert owners["actor-authority"] == Path("ips-microkernel/references/authority.md")
+    assert owners["ci-markdown-only-exception"] == Path(
+        "ips-microkernel/ci/exceptions/markdown-only.md"
+    )
     assert owners["governance-knowledge-selection"] == Path(
-        "aios/selectors/governance-knowledge.md"
+        "ips-microkernel/selectors/governance-knowledge.md"
     )
     assert owners["governance-knowledge-reconciliation"] == Path(
-        "aios/procedures/governance-reconcile.md"
+        "ips-microkernel/procedures/governance-reconcile.md"
     )
 
 
@@ -86,31 +340,31 @@ def test_governance_knowledge_write_route_is_complete(
 ) -> None:
     routes = documentation_checker.REQUIRED_ROUTE_LINKS
     required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
-    reconciliation = Path("aios/procedures/governance-reconcile.md")
-    selector = Path("aios/selectors/governance-knowledge.md")
+    reconciliation = Path("ips-microkernel/procedures/governance-reconcile.md")
+    selector = Path("ips-microkernel/selectors/governance-knowledge.md")
 
-    assert reconciliation in routes[Path("aios/work-router.md")]
-    assert reconciliation in routes[Path("aios/procedures/reconcile.md")]
+    assert reconciliation in routes[Path("ips-microkernel/work-router.md")]
+    assert reconciliation in routes[Path("ips-microkernel/procedures/reconcile.md")]
     assert selector in routes[reconciliation]
     assert set(routes[selector]) == {
-        Path("aios/references/authority.md"),
-        Path("aios/references/live-state.md"),
-        Path("aios/references/local-tools.md"),
-        Path("aios/references/public-safety.md"),
-        Path("aios/references/evidence.md"),
-        Path("aios/procedures/focus.md"),
-        Path("aios/procedures/implement.md"),
-        Path("aios/procedures/publish.md"),
-        Path("aios/procedures/correct.md"),
-        Path("aios/procedures/merge.md"),
-        Path("aios/procedures/reconcile.md"),
-        Path("aios/review/setup.md"),
-        Path("aios/review/inspect.md"),
-        Path("aios/review/verdict.md"),
-        Path("aios/review/cleanup.md"),
-        Path("aios/ci/router.md"),
-        Path("aios/adr/index.md"),
-        Path("aios/delivery/index.md"),
+        Path("ips-microkernel/references/authority.md"),
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/references/local-tools.md"),
+        Path("ips-microkernel/references/public-safety.md"),
+        Path("ips-microkernel/references/evidence.md"),
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/procedures/implement.md"),
+        Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/correct.md"),
+        Path("ips-microkernel/procedures/merge.md"),
+        Path("ips-microkernel/procedures/reconcile.md"),
+        Path("ips-microkernel/review/setup.md"),
+        Path("ips-microkernel/review/inspect.md"),
+        Path("ips-microkernel/review/verdict.md"),
+        Path("ips-microkernel/review/cleanup.md"),
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/adr/index.md"),
+        Path("ips-microkernel/delivery/index.md"),
     }
 
     expected_write_guards = {
@@ -130,15 +384,15 @@ def test_governance_knowledge_write_route_is_complete(
             "accepted focused governance Issue",
             "independently reviewed PR",
         ),
-        Path("aios/review/verdict.md"): (
+        Path("ips-microkernel/review/verdict.md"): (
             "Reusable governance candidate",
             "not permission for the reviewer",
         ),
-        Path("aios/ci/procedures/failure-triage.md"): (
+        Path("ips-microkernel/ci/procedures/failure-triage.md"): (
             "Promote only a new reusable decision rule",
             "Update one canonical knowledge leaf or add one routed leaf",
         ),
-        Path("aios/ci/procedures/post-merge-reconcile.md"): (
+        Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (
             "Revise or add one knowledge leaf",
             "focused playbook-update Issue",
             "Publish a knowledge change only through its focused Issue",
@@ -153,15 +407,15 @@ def test_governance_selector_rejects_duplicate_signal_keys(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    source = (REPOSITORY_ROOT / "aios" / "selectors" / "governance-knowledge.md").read_text(
-        encoding="utf-8"
-    )
+    source = (
+        REPOSITORY_ROOT / "ips-microkernel" / "selectors" / "governance-knowledge.md"
+    ).read_text(encoding="utf-8")
     duplicate = source.replace(
         "| `reconciliation` |",
         "| `issue-evidence` |",
         1,
     )
-    selector = tmp_path / "aios" / "selectors" / "governance-knowledge.md"
+    selector = tmp_path / "ips-microkernel" / "selectors" / "governance-knowledge.md"
     selector.parent.mkdir(parents=True)
     selector.write_text(duplicate, encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -179,15 +433,15 @@ def test_governance_selector_rejects_ambiguous_evidence_wording(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    source = (REPOSITORY_ROOT / "aios" / "selectors" / "governance-knowledge.md").read_text(
-        encoding="utf-8"
-    )
+    source = (
+        REPOSITORY_ROOT / "ips-microkernel" / "selectors" / "governance-knowledge.md"
+    ).read_text(encoding="utf-8")
     ambiguous = source.replace(
         "Post-merge sequencing, main fast-forward, branch deletion, or task-owned cleanup",
         "Issue evidence and completion proof",
         1,
     )
-    selector = tmp_path / "aios" / "selectors" / "governance-knowledge.md"
+    selector = tmp_path / "ips-microkernel" / "selectors" / "governance-knowledge.md"
     selector.parent.mkdir(parents=True)
     selector.write_text(ambiguous, encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -202,9 +456,9 @@ def test_governance_selector_rejects_ambiguous_evidence_wording(
 
 
 def test_governance_reconciliation_keeps_processing_multiple_candidates() -> None:
-    procedure = (REPOSITORY_ROOT / "aios" / "procedures" / "governance-reconcile.md").read_text(
-        encoding="utf-8"
-    )
+    procedure = (
+        REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "governance-reconcile.md"
+    ).read_text(encoding="utf-8")
 
     assert (
         procedure.index("ordered candidate queue")
@@ -215,7 +469,9 @@ def test_governance_reconciliation_keeps_processing_multiple_candidates() -> Non
 
 
 def test_review_verdict_has_one_governance_candidate_field() -> None:
-    verdict = (REPOSITORY_ROOT / "aios" / "review" / "verdict.md").read_text(encoding="utf-8")
+    verdict = (REPOSITORY_ROOT / "ips-microkernel" / "review" / "verdict.md").read_text(
+        encoding="utf-8"
+    )
 
     assert verdict.count("### Reusable governance candidate") == 1
     assert (
@@ -230,9 +486,9 @@ def _write_review_candidate_capture_fixture(
     overrides: dict[Path, tuple[str, str]],
 ) -> None:
     relative_paths = (
-        Path("aios/review/inspect.md"),
-        Path("aios/review/verdict.md"),
-        Path("aios/procedures/governance-reconcile.md"),
+        Path("ips-microkernel/review/inspect.md"),
+        Path("ips-microkernel/review/verdict.md"),
+        Path("ips-microkernel/procedures/governance-reconcile.md"),
     )
     for relative_path in relative_paths:
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
@@ -249,31 +505,31 @@ def _write_review_candidate_capture_fixture(
     ("relative_path", "old", "new", "expected_fragment"),
     [
         (
-            Path("aios/review/inspect.md"),
+            Path("ips-microkernel/review/inspect.md"),
             "classify every evidenced reusable process or review candidate",
             "classify one reusable process or review candidate",
             "classify every evidenced reusable process or review candidate",
         ),
         (
-            Path("aios/review/verdict.md"),
+            Path("ips-microkernel/review/verdict.md"),
             "one numbered item for every atomic reusable candidate",
             "one numbered item for one reusable candidate",
             "one numbered item for every atomic reusable candidate",
         ),
         (
-            Path("aios/review/verdict.md"),
+            Path("ips-microkernel/review/verdict.md"),
             "`none` is permitted only when no reusable candidate was discovered",
             "`none` is always permitted",
             "`none` is permitted only when no reusable candidate was discovered",
         ),
         (
-            Path("aios/procedures/governance-reconcile.md"),
+            Path("ips-microkernel/procedures/governance-reconcile.md"),
             "Expand every numbered candidate item from every verdict",
             "Expand the first candidate item from every verdict",
             "Expand every numbered candidate item from every verdict",
         ),
         (
-            Path("aios/procedures/governance-reconcile.md"),
+            Path("ips-microkernel/procedures/governance-reconcile.md"),
             "Never stop ingestion after the first verdict item",
             "Stop ingestion after the first verdict item",
             "Never stop ingestion after the first verdict item",
@@ -316,9 +572,9 @@ def _write_shallow_review_diff_fixture(
     overrides: dict[Path, tuple[str, str]],
 ) -> None:
     relative_paths = (
-        Path("aios/review/router.md"),
-        Path("aios/review/setup.md"),
-        Path("aios/review/inspect.md"),
+        Path("ips-microkernel/review/router.md"),
+        Path("ips-microkernel/review/setup.md"),
+        Path("ips-microkernel/review/inspect.md"),
     )
     for relative_path in relative_paths:
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
@@ -335,37 +591,37 @@ def _write_shallow_review_diff_fixture(
     ("relative_path", "old", "new", "expected_fragment"),
     [
         (
-            Path("aios/review/router.md"),
+            Path("ips-microkernel/review/router.md"),
             "Expected full base SHA",
             "Base branch name",
             "Expected full base SHA",
         ),
         (
-            Path("aios/review/setup.md"),
+            Path("ips-microkernel/review/setup.md"),
             "git fetch --no-tags --depth 1 origin <expected-base-sha>",
             "git fetch --unshallow origin",
             "git fetch --no-tags --depth 1 origin <expected-base-sha>",
         ),
         (
-            Path("aios/review/setup.md"),
+            Path("ips-microkernel/review/setup.md"),
             "git cat-file -e <expected-base-sha>^{commit}",
             "git log --all",
             "git cat-file -e <expected-base-sha>^{commit}",
         ),
         (
-            Path("aios/review/inspect.md"),
+            Path("ips-microkernel/review/inspect.md"),
             "git diff --name-status <expected-base-sha> <expected-head-sha>",
             "git diff --name-status <expected-base-sha>...<expected-head-sha>",
             "git diff --name-status <expected-base-sha> <expected-head-sha>",
         ),
         (
-            Path("aios/review/inspect.md"),
+            Path("ips-microkernel/review/inspect.md"),
             "canonical GitHub PR patch and complete paginated file inventory",
             "pull request file count",
             "canonical GitHub PR patch and complete paginated file inventory",
         ),
         (
-            Path("aios/review/inspect.md"),
+            Path("ips-microkernel/review/inspect.md"),
             "Require the GitHub and exact endpoint inventories to agree",
             "inspect the GitHub and endpoint inventories separately",
             "Require the GitHub and exact endpoint inventories to agree",
@@ -408,23 +664,23 @@ def test_shallow_review_diff_contract_is_complete(
     [
         (
             Path("CONTRIBUTING.md"),
-            "[delivery specifications](aios/delivery/) in numeric order",
+            "[delivery specifications](ips-microkernel/delivery/) in numeric order",
         ),
         (
             Path("GIT_AGENTS.md"),
-            "Read [the AI collaboration contract](aios/work-router.md)",
+            "Read [the AI collaboration contract](ips-microkernel/work-router.md)",
         ),
         (Path("GIT_AGENTS.md"), "accepted ADRs under"),
         (
-            Path("aios/work-router.md"),
+            Path("ips-microkernel/work-router.md"),
             "Read [GIT_AGENTS.md] and its required design sources",
         ),
         (
-            Path("aios/review/router.md"),
+            Path("ips-microkernel/review/router.md"),
             "accepted ADRs and accepted delivery specifications in numeric order",
         ),
         (
-            Path("aios/ci/router.md"),
+            Path("ips-microkernel/ci/router.md"),
             "Historical evidence ledger",
         ),
     ],
@@ -454,8 +710,8 @@ def test_route_validation_rejects_a_missing_required_link(
 
     def without_focus(source: Path) -> set[Path]:
         links = original(source)
-        if source == Path("aios/work-router.md"):
-            links.discard(Path("aios/procedures/focus.md"))
+        if source == Path("ips-microkernel/work-router.md"):
+            links.discard(Path("ips-microkernel/procedures/focus.md"))
         return links
 
     monkeypatch.setattr(documentation_checker, "resolved_local_links", without_focus)
@@ -463,7 +719,10 @@ def test_route_validation_rejects_a_missing_required_link(
 
     documentation_checker._validate_routes(failures)
 
-    assert ("aios/work-router.md: missing required route link aios/procedures/focus.md") in failures
+    assert (
+        "ips-microkernel/work-router.md: missing required route link "
+        "ips-microkernel/procedures/focus.md"
+    ) in failures
 
 
 def test_route_validation_rejects_an_unreachable_guidance_file(
@@ -476,8 +735,8 @@ def test_route_validation_rejects_an_unreachable_guidance_file(
         {
             Path("GIT_AGENTS.md"): (
                 Path("AI_GUIDANCE.md"),
-                Path("aios/work-router.md"),
-                Path("aios/ci/router.md"),
+                Path("ips-microkernel/work-router.md"),
+                Path("ips-microkernel/ci/router.md"),
             )
         },
     )
@@ -485,7 +744,7 @@ def test_route_validation_rejects_an_unreachable_guidance_file(
 
     documentation_checker._validate_routes(failures)
 
-    assert "routed governance file is unreachable: aios/procedures/focus.md" in failures
+    assert "routed governance file is unreachable: ips-microkernel/procedures/focus.md" in failures
 
 
 def test_route_validation_rejects_an_undeclared_eager_link(
@@ -496,8 +755,8 @@ def test_route_validation_rejects_an_undeclared_eager_link(
 
     def with_exception_preloaded(source: Path) -> set[Path]:
         links = original(source)
-        if source == Path("aios/ci/procedures/preflight.md"):
-            links.add(Path("aios/ci/exceptions/markdown-only.md"))
+        if source == Path("ips-microkernel/ci/procedures/preflight.md"):
+            links.add(Path("ips-microkernel/ci/exceptions/markdown-only.md"))
         return links
 
     monkeypatch.setattr(
@@ -510,8 +769,8 @@ def test_route_validation_rejects_an_undeclared_eager_link(
     documentation_checker._validate_routes(failures)
 
     assert (
-        "aios/ci/procedures/preflight.md: contains undeclared route link "
-        "aios/ci/exceptions/markdown-only.md"
+        "ips-microkernel/ci/procedures/preflight.md: contains undeclared route link "
+        "ips-microkernel/ci/exceptions/markdown-only.md"
     ) in failures
 
 
@@ -539,7 +798,7 @@ def test_role_validation_rejects_a_missing_marker(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    guidance = tmp_path / "aios"
+    guidance = tmp_path / "ips-microkernel"
     guidance.mkdir(parents=True)
     (guidance / "work-router.md").write_text("# Router\n", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -549,8 +808,8 @@ def test_role_validation_rejects_a_missing_marker(
 
     assert any(
         failure.startswith(
-            "aios/work-router.md: expected exactly one role marker "
-            "'<!-- aios-role: router -->', found []"
+            "ips-microkernel/work-router.md: expected exactly one role marker "
+            "'<!-- ips-role: router -->', found []"
         )
         for failure in failures
     )
@@ -561,10 +820,10 @@ def test_role_validation_rejects_a_marker_that_disagrees_with_its_path(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    reference = tmp_path / "aios" / "references" / "authority.md"
+    reference = tmp_path / "ips-microkernel" / "references" / "authority.md"
     reference.parent.mkdir(parents=True)
     reference.write_text(
-        "<!-- aios-role: procedure -->\n## Read when\n## Return\n",
+        "<!-- ips-role: procedure -->\n## Read when\n## Return\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -573,7 +832,7 @@ def test_role_validation_rejects_a_marker_that_disagrees_with_its_path(
     documentation_checker._validate_inventory_and_roles(failures)
 
     assert (
-        "aios/references/authority.md: declared role 'procedure' "
+        "ips-microkernel/references/authority.md: declared role 'procedure' "
         "disagrees with path role 'reference'"
     ) in failures
 
@@ -583,10 +842,10 @@ def test_role_validation_rejects_correct_and_conflicting_markers(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    reference = tmp_path / "aios" / "references" / "authority.md"
+    reference = tmp_path / "ips-microkernel" / "references" / "authority.md"
     reference.parent.mkdir(parents=True)
     reference.write_text(
-        "<!-- aios-role: reference -->\n<!-- aios-role: procedure -->\n## Read when\n## Return\n",
+        "<!-- ips-role: reference -->\n<!-- ips-role: procedure -->\n## Read when\n## Return\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -595,8 +854,8 @@ def test_role_validation_rejects_correct_and_conflicting_markers(
     documentation_checker._validate_inventory_and_roles(failures)
 
     assert (
-        "aios/references/authority.md: expected exactly one role marker "
-        "'<!-- aios-role: reference -->', found ['reference', 'procedure']"
+        "ips-microkernel/references/authority.md: expected exactly one role marker "
+        "'<!-- ips-role: reference -->', found ['reference', 'procedure']"
     ) in failures
 
 
@@ -605,26 +864,27 @@ def test_role_validation_rejects_a_marker_on_a_design_index(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    index = tmp_path / "aios" / "adr" / "index.md"
+    index = tmp_path / "ips-microkernel" / "adr" / "index.md"
     index.parent.mkdir(parents=True)
-    index.write_text("<!-- aios-role: router -->\n", encoding="utf-8")
+    index.write_text("<!-- ips-role: router -->\n", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     failures: list[str] = []
 
     documentation_checker._validate_inventory_and_roles(failures)
 
     assert (
-        "aios/adr/index.md: AIOS role markers are forbidden outside declared "
-        "role-bearing paths; found ['router']"
+        "ips-microkernel/adr/index.md: iPS role markers are forbidden outside "
+        "declared role-bearing paths; found ['router']"
     ) in failures
 
 
 @pytest.mark.parametrize(
     ("relative_path", "tracked_child"),
     [
+        (Path("aios"), None),
         (Path("docs"), None),
         (Path(".github/workflows/CI_PLAYBOOK.md"), None),
-        (Path("aios/ai"), Path("legacy.md")),
+        (Path("ips-microkernel/ai"), Path("legacy.md")),
     ],
 )
 def test_legacy_layout_validation_rejects_a_restored_live_path(
@@ -645,24 +905,49 @@ def test_legacy_layout_validation_rejects_a_restored_live_path(
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     failures: list[str] = []
 
-    documentation_checker._validate_legacy_aios_layout(failures)
+    documentation_checker._validate_legacy_governance_layout(failures)
 
-    assert f"legacy AIOS path must not exist: {relative_path.as_posix()}" in failures
+    assert f"legacy governance path must not exist: {relative_path.as_posix()}" in failures
 
 
-def test_legacy_layout_validation_rejects_a_docforai_marker(
+@pytest.mark.parametrize(
+    "marker",
+    (
+        "<!-- docforai-role: router -->",
+        "<!-- aios-role: router -->",
+        "<!-- aios-rule: progressive-disclosure -->",
+    ),
+)
+def test_legacy_layout_validation_rejects_a_retired_marker(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    marker: str,
+) -> None:
+    entrypoint = tmp_path / "GIT_AGENTS.md"
+    entrypoint.write_text(f"{marker}\n", encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_legacy_governance_layout(failures)
+
+    assert "GIT_AGENTS.md: contains a legacy DocForAI or AIOS marker" in failures
+
+
+def test_legacy_layout_validation_rejects_a_retired_marker_on_a_design_index(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    entrypoint = tmp_path / "GIT_AGENTS.md"
-    entrypoint.write_text("<!-- docforai-role: router -->\n", encoding="utf-8")
+    index = tmp_path / "ips-microkernel" / "adr" / "index.md"
+    index.parent.mkdir(parents=True)
+    index.write_text("<!-- aios-role: router -->\n", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     failures: list[str] = []
 
-    documentation_checker._validate_legacy_aios_layout(failures)
+    documentation_checker._validate_legacy_governance_layout(failures)
 
-    assert "GIT_AGENTS.md: contains a legacy DocForAI marker" in failures
+    assert "ips-microkernel/adr/index.md: contains a legacy DocForAI or AIOS marker" in failures
 
 
 def test_legacy_layout_validation_rejects_a_runtime_readme(
@@ -670,16 +955,16 @@ def test_legacy_layout_validation_rejects_a_runtime_readme(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    readme = tmp_path / "aios" / "selectors" / "README.md"
+    readme = tmp_path / "ips-microkernel" / "selectors" / "README.md"
     readme.parent.mkdir(parents=True)
     readme.write_text("# Hidden selector\n", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     failures: list[str] = []
 
-    documentation_checker._validate_legacy_aios_layout(failures)
+    documentation_checker._validate_legacy_governance_layout(failures)
 
     assert (
-        "aios/selectors/README.md: runtime README.md must use a role-expressive filename"
+        "ips-microkernel/selectors/README.md: runtime README.md must use a role-expressive filename"
     ) in failures
 
 
@@ -688,9 +973,9 @@ def test_canonical_rule_validation_rejects_duplicate_ownership(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    marker = "<!-- aios-rule: test-rule -->"
-    first = tmp_path / "aios" / "first.md"
-    second = tmp_path / "aios" / "second.md"
+    marker = "<!-- ips-rule: test-rule -->"
+    first = tmp_path / "ips-microkernel" / "first.md"
+    second = tmp_path / "ips-microkernel" / "second.md"
     first.parent.mkdir(parents=True)
     first.write_text(marker, encoding="utf-8")
     second.write_text(marker, encoding="utf-8")
@@ -698,7 +983,7 @@ def test_canonical_rule_validation_rejects_duplicate_ownership(
     monkeypatch.setattr(
         documentation_checker,
         "CANONICAL_RULE_OWNERS",
-        {"test-rule": Path("aios/first.md")},
+        {"test-rule": Path("ips-microkernel/first.md")},
     )
     failures: list[str] = []
 
@@ -712,7 +997,7 @@ def test_ci_failure_knowledge_requires_one_canonical_leaf(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    knowledge = tmp_path / "aios" / "ci" / "knowledge"
+    knowledge = tmp_path / "ips-microkernel" / "ci" / "knowledge"
     knowledge.mkdir(parents=True)
     (knowledge / "first.md").write_text("run 123", encoding="utf-8")
     (knowledge / "second.md").write_text("run 123", encoding="utf-8")
@@ -748,8 +1033,8 @@ def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    focus = tmp_path / "aios" / "procedures" / "focus.md"
-    publish = tmp_path / "aios" / "procedures" / "publish.md"
+    focus = tmp_path / "ips-microkernel" / "procedures" / "focus.md"
+    publish = tmp_path / "ips-microkernel" / "procedures" / "publish.md"
     focus.parent.mkdir(parents=True)
     focus.write_text(
         f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
@@ -765,7 +1050,7 @@ def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
     documentation_checker._validate_owner_confirmation_boundary(failures, [focus, publish])
 
     assert (
-        "aios/procedures/publish.md: contains forbidden owner direction gate; "
+        "ips-microkernel/procedures/publish.md: contains forbidden owner direction gate; "
         "owner confirmation is reserved for focused-slice selection"
     ) in failures
 
@@ -785,7 +1070,7 @@ def test_owner_confirmation_validation_rejects_legacy_navigation_gates(
     tmp_path: Path,
     content: str,
 ) -> None:
-    focus = tmp_path / "aios" / "procedures" / "focus.md"
+    focus = tmp_path / "ips-microkernel" / "procedures" / "focus.md"
     navigation = tmp_path / "scripts" / "README.md"
     focus.parent.mkdir(parents=True)
     navigation.parent.mkdir(parents=True)
@@ -809,8 +1094,8 @@ def test_owner_confirmation_validation_rejects_a_second_stop_heading(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    focus = tmp_path / "aios" / "procedures" / "focus.md"
-    merge = tmp_path / "aios" / "procedures" / "merge.md"
+    focus = tmp_path / "ips-microkernel" / "procedures" / "focus.md"
+    merge = tmp_path / "ips-microkernel" / "procedures" / "merge.md"
     focus.parent.mkdir(parents=True)
     focus.write_text(
         f"{documentation_checker.OWNER_CONFIRMATION_HEADING}\n",
@@ -824,7 +1109,7 @@ def test_owner_confirmation_validation_rejects_a_second_stop_heading(
 
     assert any(
         "owner-confirmation STOP must exist exactly once" in failure
-        and "aios/procedures/merge.md (## Stop)" in failure
+        and "ips-microkernel/procedures/merge.md (## Stop)" in failure
         for failure in failures
     )
 
@@ -837,15 +1122,17 @@ def test_markdown_scan_prunes_excluded_directories_before_descending(
     def fake_walk(root: Path, *, topdown: bool) -> Iterator[tuple[str, list[str], list[str]]]:
         assert root == tmp_path
         assert topdown is True
-        directory_names = [".venv", "aios"]
+        directory_names = [".venv", "ips-microkernel"]
         yield str(root), directory_names, []
-        assert directory_names == ["aios"]
-        yield str(root / "aios"), [], ["guide.md"]
+        assert directory_names == ["ips-microkernel"]
+        yield str(root / "ips-microkernel"), [], ["guide.md"]
 
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     monkeypatch.setattr(documentation_checker.os, "walk", fake_walk)
 
-    assert documentation_checker.iter_markdown_files() == [tmp_path / "aios" / "guide.md"]
+    assert documentation_checker.iter_markdown_files() == [
+        tmp_path / "ips-microkernel" / "guide.md"
+    ]
 
 
 def test_governance_rejects_a_missing_ci_router(
@@ -857,7 +1144,7 @@ def test_governance_rejects_a_missing_ci_router(
 
     failures = documentation_checker.governance_failures()
 
-    assert "missing required governance file aios/ci/router.md" in failures
+    assert "missing required governance file ips-microkernel/ci/router.md" in failures
 
 
 @pytest.mark.parametrize(
@@ -925,9 +1212,9 @@ def test_governance_public_safety_patterns_reject_sensitive_content(
 @pytest.mark.parametrize(
     "content",
     [
-        "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/aios/work-router.md",
+        "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/ips-microkernel/work-router.md",
         "[Repository guidance](GIT_AGENTS.md)",
-        "[AI guidance](aios/work-router.md)",
+        "[AI guidance](ips-microkernel/work-router.md)",
         "[ADR index](../adr/index.md)",
         "Compare Issue/PR/Actions evidence",
         "Protect `/api/v1/documents` and expose `/health`.",
@@ -962,14 +1249,14 @@ def test_governance_public_safety_patterns_allow_portable_references(
         ("Read ~/private", "user-home shorthand path"),
     ],
 )
-def test_governance_scanner_rejects_nonportable_paths_in_nested_aios(
+def test_governance_scanner_rejects_nonportable_paths_in_nested_ips_microkernel(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     content: str,
     expected_label: str,
 ) -> None:
-    governance_root = tmp_path / "aios"
+    governance_root = tmp_path / "ips-microkernel"
     nested = governance_root / "ci" / "knowledge"
     nested.mkdir(parents=True)
     leak = nested / "leak.md"
@@ -978,7 +1265,7 @@ def test_governance_scanner_rejects_nonportable_paths_in_nested_aios(
 
     failures = documentation_checker.governance_failures()
 
-    assert f"aios/ci/knowledge/leak.md: contains forbidden {expected_label}" in failures
+    assert f"ips-microkernel/ci/knowledge/leak.md: contains forbidden {expected_label}" in failures
 
 
 def test_governance_scanner_covers_routed_indexes_outside_runtime_routes(
@@ -986,18 +1273,22 @@ def test_governance_scanner_covers_routed_indexes_outside_runtime_routes(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    routed_index = tmp_path / "aios" / "delivery" / "index.md"
+    routed_index = tmp_path / "ips-microkernel" / "delivery" / "index.md"
     routed_index.parent.mkdir(parents=True)
     routed_index.write_text("Read X:/private/workspace", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
     failures: list[str] = []
 
-    assert Path("aios/delivery/index.md") in (documentation_checker.ROUTED_PUBLIC_SURFACE)
-    assert Path("aios/adr/index.md") in documentation_checker.ROUTED_PUBLIC_SURFACE
+    assert Path("ips-microkernel/delivery/index.md") in (
+        documentation_checker.ROUTED_PUBLIC_SURFACE
+    )
+    assert Path("ips-microkernel/adr/index.md") in documentation_checker.ROUTED_PUBLIC_SURFACE
 
     documentation_checker._validate_public_governance_surface(failures, [routed_index])
 
-    assert ("aios/delivery/index.md: contains forbidden Windows absolute path") in failures
+    assert (
+        "ips-microkernel/delivery/index.md: contains forbidden Windows absolute path"
+    ) in failures
 
 
 def test_design_selection_surface_includes_index_targets(
@@ -1008,9 +1299,9 @@ def test_design_selection_surface_includes_index_targets(
         for path in documentation_checker.design_governance_paths()
     }
 
-    assert Path("aios/adr/0005-repository-owned-ai-collaboration.md") in relative_paths
-    assert Path("aios/adr/0006-consolidate-ai-guidance.md") in relative_paths
-    assert Path("aios/delivery/0002-second-vertical-slice.md") in relative_paths
+    assert Path("ips-microkernel/adr/0005-repository-owned-ai-collaboration.md") in relative_paths
+    assert Path("ips-microkernel/adr/0006-consolidate-ai-guidance.md") in relative_paths
+    assert Path("ips-microkernel/delivery/0002-second-vertical-slice.md") in relative_paths
 
 
 def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
@@ -1018,8 +1309,8 @@ def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    focus = tmp_path / "aios" / "procedures" / "focus.md"
-    delivery = tmp_path / "aios" / "delivery" / "0002-selected.md"
+    focus = tmp_path / "ips-microkernel" / "procedures" / "focus.md"
+    delivery = tmp_path / "ips-microkernel" / "delivery" / "0002-selected.md"
     focus.parent.mkdir(parents=True)
     delivery.parent.mkdir(parents=True)
     focus.write_text(
@@ -1035,7 +1326,7 @@ def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
     failures = documentation_checker.governance_failures()
 
     assert (
-        "aios/delivery/0002-selected.md: contains forbidden owner "
+        "ips-microkernel/delivery/0002-selected.md: contains forbidden owner "
         "authorization gate; owner confirmation is reserved for "
         "focused-slice selection"
     ) in failures
@@ -1046,14 +1337,17 @@ def test_governance_failures_rejects_a_macos_path_in_selected_design(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    delivery = tmp_path / "aios" / "delivery" / "0002-selected.md"
+    delivery = tmp_path / "ips-microkernel" / "delivery" / "0002-selected.md"
     delivery.parent.mkdir(parents=True)
     delivery.write_text("Read /Users/alice/private", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert "aios/delivery/0002-selected.md: contains forbidden POSIX absolute path" in failures
+    assert (
+        "ips-microkernel/delivery/0002-selected.md: contains forbidden POSIX absolute path"
+        in failures
+    )
 
 
 def test_governance_failures_allows_an_api_route_in_selected_design(
@@ -1061,7 +1355,7 @@ def test_governance_failures_allows_an_api_route_in_selected_design(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    delivery = tmp_path / "aios" / "delivery" / "0002-selected.md"
+    delivery = tmp_path / "ips-microkernel" / "delivery" / "0002-selected.md"
     delivery.parent.mkdir(parents=True)
     delivery.write_text("Call GET /api/v1/documents/{documentId}", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -1069,7 +1363,9 @@ def test_governance_failures_allows_an_api_route_in_selected_design(
     failures = documentation_checker.governance_failures()
 
     assert not any(
-        failure.startswith("aios/delivery/0002-selected.md: contains forbidden POSIX absolute path")
+        failure.startswith(
+            "ips-microkernel/delivery/0002-selected.md: contains forbidden POSIX absolute path"
+        )
         for failure in failures
     )
 
@@ -1097,33 +1393,33 @@ def test_governance_scanner_rejects_nonportable_paths_in_root_guidance(
         ),
     ],
 )
-def test_governance_scanner_rejects_sensitive_content_in_aios(
+def test_governance_scanner_rejects_sensitive_content_in_ips_microkernel(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     content: str,
     expected_label: str,
 ) -> None:
-    governance_root = tmp_path / "aios"
+    governance_root = tmp_path / "ips-microkernel"
     governance_root.mkdir(parents=True)
     (governance_root / "work-router.md").write_text(content, encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert f"aios/work-router.md: contains forbidden {expected_label}" in failures
+    assert f"ips-microkernel/work-router.md: contains forbidden {expected_label}" in failures
 
 
-def test_governance_scanner_rejects_an_extra_aios_runtime_file(
+def test_governance_scanner_rejects_an_extra_ips_runtime_file(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    governance_root = tmp_path / "aios"
+    governance_root = tmp_path / "ips-microkernel"
     governance_root.mkdir(parents=True)
     (governance_root / "EXTRA.md").write_text("safe", encoding="utf-8")
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
 
     failures = documentation_checker.governance_failures()
 
-    assert "AIOS runtime contains unexpected file EXTRA.md" in failures
+    assert "iPS Microkernel runtime contains unexpected file EXTRA.md" in failures
