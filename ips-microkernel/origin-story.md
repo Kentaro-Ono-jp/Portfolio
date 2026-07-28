@@ -198,27 +198,28 @@ The metaphor communicates the design. The enforceable vocabulary remains
 precise: **route**, **select**, **load**, **activate**, **transition**,
 **return**, **prove**, and **validate**.
 
-## Two separate graphs
+## A separate human narrative and runtime graph
 
-The repository deliberately maintains two different navigation graphs.
+The repository deliberately keeps this human narrative separate from its
+runtime governance graph.
 
-The **human navigation graph** explains the portfolio and makes this page
-discoverable from the repository root README. A reader may explore the name,
-metaphor, history, and architecture at will.
+The narrative has no repository navigation entry. A person encounters it only
+by browsing the `ips-microkernel` directory or noticing the file directly, and
+may then explore the name, metaphor, history, and architecture at will.
 
 The **runtime governance graph** starts at `GIT_AGENTS.md` and reaches only
 role-bearing routers, selectors, procedures, references, knowledge modules,
-exceptions, and selected design indexes. This README has no runtime role or
-rule marker, is not a route target, and may not be linked from inside the iPS
-Microkernel tree.
+exceptions, and selected design indexes. This file has no runtime role or rule
+marker and is not a route target.
 
-`scripts/check_docs.py` enforces that separation. Verification fails if this
-page acquires a runtime marker, enters the routed surface, or gains an inbound
-link from anywhere other than the repository root README.
+No filename-specific navigation or inbound-link rule registers this narrative.
+Its human-only context marker keeps it outside the runtime inventory.
+Linklessness is the current topology, not a permanent recurrence-prevention
+guard.
 
 The result is intentional asymmetry:
 
-- humans can discover the explanation;
+- humans who encounter the file can read the explanation;
 - runtime agents do not pay its context cost.
 
 ## Origin
@@ -265,22 +266,11 @@ second live route.
 
 ## 日本語
 
-> 人間向けのアーキテクチャー解説。このファイルはruntime roleを持たず、
-> ルーティングされたガバナンスグラフから意図的に除外されている。
+> 人間向けのアーキテクチャー解説。このファイルはruntime roleを持たず、ルーティングされたガバナンスグラフから意図的に除外されている。
 
-このページはアーキテクチャーを説明するが、そのruntimeには参加しない。
-iPS Microkernelを通じて動作するAIエージェントは、`GIT_AGENTS.md`から開始し、
-薄いwork routerに従い、現在の状態に対して選択された経路だけをロードしなければ
-ならない。この誕生物語を事前にロードしてはならない。機械的な文書検査がこの
-ファイルを検査することはあるが、この物語がエージェントの作業コンテキストに
-入ることはない。
+このページはアーキテクチャーを説明するが、そのruntimeには参加しない。iPS Microkernelを通じて動作するAIエージェントは、`GIT_AGENTS.md`から開始し、薄いwork routerに従い、現在の状態に対して選択された経路だけをロードしなければならない。この誕生物語を事前にロードしてはならない。機械的な文書検査がこのファイルを検査することはあるが、この物語がエージェントの作業コンテキストに入ることはない。
 
-このリポジトリで公開する製品の主軸は、引き続き
-[Document Intelligence and Human Review Platform](../README.md)である。
-iPS Microkernelは、その製品を設計、実装、レビュー、検証し、進化させるための
-文書駆動ガバナンスアーキテクチャーである。両者のアイデンティティーを分ける
-ことで、ルートREADMEは製品を主役にしたまま、このページにはアーキテクチャーの
-思想と誕生の経緯を残すことができる。
+このリポジトリで公開する製品の主軸は、引き続き[Document Intelligence and Human Review Platform](../README.md)である。iPS Microkernelは、その製品を設計、実装、レビュー、検証し、進化させるための文書駆動ガバナンスアーキテクチャーである。両者のアイデンティティーを分けることで、ルートREADMEは製品を主役にしたまま、このページにはアーキテクチャーの思想と誕生の経緯を残すことができる。
 
 ### 名称
 
@@ -288,18 +278,13 @@ iPS Microkernelは、その製品を設計、実装、レビュー、検証し�
 
 > **intentional Progressive-disclosure System Microkernel**
 
-小文字の`i`、大文字の`P`と`S`は意図的な表記である。この名称は、iPS細胞で
-親しまれている表記と、その背景にある製品名を意識した命名の物語に着想を得て
-いる。同時に、各単語がアーキテクチャー上の制約を表す技術的な頭字語でもある。
+小文字の`i`、大文字の`P`と`S`は意図的な表記である。この名称は、iPS細胞で親しまれている表記と、その背景にある製品名を意識した命名の物語に着想を得ている。同時に、各単語がアーキテクチャー上の制約を表す技術的な頭字語でもある。
 
 #### intentional
 
 **読まないことは設計判断である。**
 
-無関係な文書をロードしないことは、コンテキストの欠落でも、不完全な初期化でも、
-エージェントの失敗でもない。現在の作業に必要のない情報を、意図的にロードしない
-のである。このシステムは、トークン、注意力、判断対象の広さを、有限のruntime
-resourceとして扱う。
+無関係な文書をロードしないことは、コンテキストの欠落でも、不完全な初期化でも、エージェントの失敗でもない。現在の作業に必要のない情報を、意図的にロードしないのである。このシステムは、トークン、注意力、判断対象の広さを、有限のruntime resourceとして扱う。
 
 これにより、統治上の問いは次のように変わる。
 
@@ -313,11 +298,9 @@ resourceとして扱う。
 
 #### Progressive-disclosure
 
-すべての運用知識を起動時に開示することはしない。現在の状態が選択したrouter、
-procedure、reference、knowledge、exceptionだけを段階的に開示する。
+すべての運用知識を起動時に開示することはしない。現在の状態が選択したrouter、procedure、reference、knowledge、exceptionだけを段階的に開示する。
 
-通常の作業は薄いrouterから始まる。具体的なsignalが発生すると、次に必要な
-機能を一つだけ開示する。
+通常の作業は薄いrouterから始まる。具体的なsignalが発生すると、次に必要な機能を一つだけ開示する。
 
 - 焦点が定まっていない変更は、focus procedureを開示する。
 - 受理済みIssueとbranchは、implementation procedureを開示する。
@@ -326,9 +309,7 @@ procedure、reference、knowledge、exceptionだけを段階的に開示する�
 - dependency failureは、dependency knowledgeを開示する。
 - 条件を満たしたMarkdown-only変更は、そのexceptionを開示する。
 
-選択されなかった兄弟要素は休眠したままである。開示は一度に一つの明示的な
-transitionだけを進み、選択された処理によって状態が変化した後、呼び出し元へ
-戻る。
+選択されなかった兄弟要素は休眠したままである。開示は一度に一つの明示的なtransitionだけを進み、選択された処理によって状態が変化した後、呼び出し元へ戻る。
 
 #### System
 
@@ -346,17 +327,13 @@ transitionだけを進み、選択された処理によって状態が変化し�
 - dependencyとreachabilityの制約
 - topology全体に対する実行可能な検査
 
-文章は契約を伝える。path、marker、link、inventory、testは、その契約の重要な
-部分を機械からも観測できる形にする。
+文章は契約を伝える。path、marker、link、inventory、testは、その契約の重要な部分を機械からも観測できる形にする。
 
 #### Microkernel
 
-起動時に保持するのは、最小のdispatch layerだけである。巨大な知識、特殊事例、
-詳細なprocedureはkernelの外側に置き、選択された時だけロードする。
+起動時に保持するのは、最小のdispatch layerだけである。巨大な知識、特殊事例、詳細なprocedureはkernelの外側に置き、選択された時だけロードする。
 
-このアーキテクチャーは、常時ロードされるモノリシックなpromptを、薄いrouting
-kernelと、状態によって起動するgovernance serviceへ置き換える。このため、
-文書駆動microkernelとして振る舞う。
+このアーキテクチャーは、常時ロードされるモノリシックなpromptを、薄いrouting kernelと、状態によって起動するgovernance serviceへ置き換える。このため、文書駆動microkernelとして振る舞う。
 
 | リポジトリ要素 | runtime上の責務 |
 |---|---|
@@ -369,17 +346,13 @@ kernelと、状態によって起動するgovernance serviceへ置き換える�
 | `exceptions/` | 限定条件下だけで有効になる特殊経路 |
 | `scripts/check_docs.py` | role、型、dependency、reachability、旧経路復活を検査する境界検査器 |
 
-*Microkernel*という語が表すのは、責務とロード方式のアーキテクチャーである。
-OSが持つ文字どおりのprocess isolation、memory protection、hardware privilege
-levelを備えていると主張するものではない。
+*Microkernel*という語が表すのは、責務とロード方式のアーキテクチャーである。OSが持つ文字どおりのprocess isolation、memory protection、hardware privilege levelを備えていると主張するものではない。
 
 ### 選択的CI：証拠のprogressive disclosure
 
 選択的CIは、同じアーキテクチャーを検証へ適用する。
 
-これは単に「テストを減らす」という意味ではない。plannerはexact candidateから
-始め、変更されたpathとdependencyをverification groupへ対応付け、影響を受ける
-境界に必要な証拠だけを開示する。
+これは単に「テストを減らす」という意味ではない。plannerはexact candidateから始め、変更されたpathとdependencyをverification groupへ対応付け、影響を受ける境界に必要な証拠だけを開示する。
 
 報告される状態には、それぞれ異なる意味がある。
 
@@ -390,52 +363,31 @@ levelを備えていると主張するものではない。
 | **carried** | 影響を受けないtrusted baselineの成功証拠を引き続き適用できる |
 | **skipped without evidence** | 実行せず、成功証拠も主張しない。gapを明示したままにする |
 
-したがって、`2/9 selected`という報告は、残りの7 groupを黙って無視したという
-意味ではない。現在の変更によって2 groupが発現し、それ以外のgroupについても、
-carried evidenceまたは明示的な未証明gapとして説明できなければならない。
+したがって、`2/9 selected`という報告は、残りの7 groupを黙って無視したという意味ではない。現在の変更によって2 groupが発現し、それ以外のgroupについても、carried evidenceまたは明示的な未証明gapとして説明できなければならない。
 
-renameやcopyは境界の両側を開示する。evidence lineageが欠けている場合は、根拠の
-ない確信を作らず、保守的な実行へ戻る。Docker-backed groupも同じ選択modelに
-従うが、authoritativeな実行場所はlocal DockerではなくGitHub Actionsである。
+renameやcopyは境界の両側を開示する。evidence lineageが欠けている場合は、根拠のない確信を作らず、保守的な実行へ戻る。Docker-backed groupも同じ選択modelに従うが、authoritativeな実行場所はlocal DockerではなくGitHub Actionsである。
 
-選択的CIは、実際に変化した状態に応じて検証時間を配分する。これは証拠の
-progressive disclosureである。
+選択的CIは、実際に変化した状態に応じて検証時間を配分する。これは証拠のprogressive disclosureである。
 
 ### 永久禁止ではなく、再訪可能な状態
 
-iPS Microkernelは、一度のincidentごとに永久禁止事項が増えていく単調な
-ratchetではない。
+iPS Microkernelは、一度のincidentごとに永久禁止事項が増えていく単調なratchetではない。
 
-既存のものを変更する自由には、修正、置換、revertだけでなく、以前に観測した
-状態へ意図的に戻ることも含まれる。過去のdefect、review finding、放棄した
-approachは次の判断に使うevidenceであり、その状態や技法を自動的に禁止する
-ものではない。
+既存のものを変更する自由には、修正、置換、revertだけでなく、以前に観測した状態へ意図的に戻ることも含まれる。過去のdefect、review finding、放棄したapproachは次の判断に使うevidenceであり、その状態や技法を自動的に禁止するものではない。
 
-再発防止は任意である。focused outcomeが明示的に選択した場合にだけ、現在の
-作業へ含める。correctionは現在の事例だけを直してもよく、repository ownerは
-残存findingを理解したうえで受容してもよい。
+再発防止は任意である。focused outcomeが明示的に選択した場合にだけ、現在の作業へ含める。correctionは現在の事例だけを直してもよく、repository ownerは残存findingを理解したうえで受容してもよい。
 
-破壊的またはbreakingな影響も、危険なcategoryに属するという理由だけでは
-禁止しない。ただし、個々のmutationには、accepted scope、exact target、
-actor authority、evidence、および明示されたrecoveryまたはlimitationが必要で
-ある。この方針が許可するのは意図的な変更であり、無関係または未特定の対象を
-破壊することではない。
+破壊的またはbreakingな影響も、危険なcategoryに属するという理由だけでは禁止しない。ただし、個々のmutationには、accepted scope、exact target、actor authority、evidence、および明示されたrecoveryまたはlimitationが必要である。この方針が許可するのは意図的な変更であり、無関係または未特定の対象を破壊することではない。
 
-ownerは、exact-head reviewの残存findingを受容し、そのheadのmergeを承認できる。
-記録には実際のverdictと受容した残件を残さなければならない。owner waiverは
-`Approved` verdictではない。
+ownerは、exact-head reviewの残存findingを受容し、そのheadのmergeを承認できる。記録には実際のverdictと受容した残件を残さなければならない。owner waiverは`Approved` verdictではない。
 
 ### 再プログラム、分化、発現
 
 iPSの比喩は、モノリシックな文書群をどのように変換するかを表している。
 
-iPS細胞が、分化済みの細胞を再プログラムして別の可能性を開くものなら、
-iPS Microkernelは、巨大で未分化な文書群・ファイル群を、明示的なruntime
-roleへ再プログラムする。そのroleは、現在の作業状態に応じたコンテキストへ
-分化する。
+iPS細胞が、分化済みの細胞を再プログラムして別の可能性を開くものなら、iPS Microkernelは、巨大で未分化な文書群・ファイル群を、明示的なruntime roleへ再プログラムする。そのroleは、現在の作業状態に応じたコンテキストへ分化する。
 
-すべての機能を常に活動させることはしない。signalを待ち、それに対応する
-moduleだけを発現させる。
+すべての機能を常に活動させることはしない。signalを待ち、それに対応するmoduleだけを発現させる。
 
 - dependency evidenceが必要とした時、dependency knowledgeを発現させる。
 - 既知のfailure signatureが現れた時、recovery knowledgeを発現させる。
@@ -445,37 +397,26 @@ moduleだけを発現させる。
 
 この比喩において、
 
-- **再プログラム**は、モノリシックな文書群を、統治されたruntime roleへ
-  変換する。
+- **再プログラム**は、モノリシックな文書群を、統治されたruntime roleへ変換する。
 - **分化**は、現在の状態に適したコンテキストを形成する。
 - **発現**は、具体的なsignalが選択した一つの機能を起動する。
 - **休眠**は、無関係なknowledgeを作業コンテキストの外に保つ。
 
-比喩は設計思想を伝える。一方で、検査可能な仕様語には、**route**、**select**、
-**load**、**activate**、**transition**、**return**、**prove**、**validate**を
-使用する。
+比喩は設計思想を伝える。一方で、検査可能な仕様語には、**route**、**select**、**load**、**activate**、**transition**、**return**、**prove**、**validate**を使用する。
 
-### 分離された二つのグラフ
+### 分離された人間向け物語とruntime graph
 
-このリポジトリは、意図的に二つの異なるnavigation graphを持つ。
+このリポジトリは、この人間向け物語をruntime governance graphから意図的に分離している。
 
-**human navigation graph**はポートフォリオを説明し、リポジトリのルートREADME
-からこのページを発見可能にする。人間は名称、比喩、歴史、アーキテクチャーを
-自由に読むことができる。
+この物語にはリポジトリ内のnavigation entryがない。人間が`ips-microkernel`ディレクトリを閲覧するか、ファイルそのものに気づいた時だけ出会い、名称、比喩、歴史、アーキテクチャーを自由に読むことができる。
 
-**runtime governance graph**は`GIT_AGENTS.md`から始まり、runtime roleを持つ
-router、selector、procedure、reference、knowledge module、exception、および
-選択されたdesign indexだけへ到達する。このREADMEはruntime roleやrule markerを
-持たず、route targetではなく、iPS Microkernel treeの内部からlinkすることも
-できない。
+**runtime governance graph**は`GIT_AGENTS.md`から始まり、runtime roleを持つrouter、selector、procedure、reference、knowledge module、exception、および選択されたdesign indexだけへ到達する。このファイルはruntime roleやrule markerを持たず、route targetではない。
 
-`scripts/check_docs.py`がこの分離を強制する。このページにruntime markerが
-追加された場合、routed surfaceへ入った場合、またはリポジトリのルートREADME
-以外からinbound linkが追加された場合、検証は失敗する。
+filename固有のnavigation ruleやinbound-link ruleは、この物語を登録していない。human-only context markerによってruntime inventoryの外側に保たれる。linkがないことは現在のtopologyであり、恒久的な再発防止guardではない。
 
 その結果、意図的な非対称性が生まれる。
 
-- 人間は説明を発見できる。
+- ファイルに出会った人間は説明を読むことができる。
 - runtime agentは、そのコンテキストコストを支払わない。
 
 ### 誕生
@@ -490,15 +431,9 @@ router、selector、procedure、reference、knowledge module、exception、お�
 >
 > そのため、薄いrouterから始め、現在の状態が必要とする機能だけを発現させる。
 
-この連鎖によって、progressive disclosureは文書整理上の好みではなく、
-ガバナンスアーキテクチャーとなった。
+この連鎖によって、progressive disclosureは文書整理上の好みではなく、ガバナンスアーキテクチャーとなった。
 
-旧名称の**AIOS**は、成長したシステムをoperating layerとして表していた。
-しかし、その意味は広く、既存の概念やservice名と衝突し、このシステムを
-特徴づける仕組みそのものを表してはいなかった。新しい名称は、operating
-systemとしての洞察を残しつつ、真の核心を名指す。すなわち、意図的な
-non-loading、progressive disclosure、統治されたrole、薄いdispatch kernel
-である。
+旧名称の**AIOS**は、成長したシステムをoperating layerとして表していた。しかし、その意味は広く、既存の概念やservice名と衝突し、このシステムを特徴づける仕組みそのものを表してはいなかった。新しい名称は、operating systemとしての洞察を残しつつ、真の核心を名指す。すなわち、意図的なnon-loading、progressive disclosure、統治されたrole、薄いdispatch kernelである。
 
 そして、次の誕生物語へ至った。
 
@@ -512,7 +447,4 @@ non-loading、progressive disclosure、統治されたrole、薄いdispatch kern
 >
 > **その結果、AIOSはiPS Microkernelとなった。**
 
-このアーキテクチャー決定は
-[ADR-0013](adr/0013-name-ips-microkernel.md)に記録されている。それ以前の
-ADRに残るAIOSという名称は、システムが進化した証拠として変更せず保持する。
-それらは歴史であり、第二のlive routeではない。
+このアーキテクチャー決定は[ADR-0013](adr/0013-name-ips-microkernel.md)に記録されている。それ以前のADRに残るAIOSという名称は、システムが進化した証拠として変更せず保持する。それらは歴史であり、第二のlive routeではない。
