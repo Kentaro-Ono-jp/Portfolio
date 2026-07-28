@@ -27,207 +27,6 @@ def test_repository_owned_governance_invariants_pass(
     assert documentation_checker.governance_failures() == []
 
 
-def test_human_only_readme_is_outside_the_runtime_governance_graph(
-    documentation_checker: ModuleType,
-) -> None:
-    human_readme = documentation_checker.IPS_HUMAN_README
-
-    assert human_readme not in documentation_checker.IPS_FILE_ROLES
-    assert human_readme not in documentation_checker.ROUTED_PUBLIC_SURFACE
-    assert human_readme in documentation_checker.resolved_local_links(Path("README.md"))
-    assert all(
-        human_readme not in documentation_checker.resolved_local_links(source)
-        for source in {
-            *documentation_checker.ENTRYPOINT_FILE_ROLES,
-            *documentation_checker.IPS_FILE_ROLES,
-            *documentation_checker.ROUTED_PUBLIC_SURFACE,
-        }
-    )
-
-
-def test_human_only_readme_rejects_a_runtime_marker(
-    documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    root_readme = tmp_path / "README.md"
-    root_readme.write_text(
-        "[iPS Microkernel](ips-microkernel/README.md)\n",
-        encoding="utf-8",
-    )
-    human_readme = tmp_path / "ips-microkernel" / "README.md"
-    human_readme.parent.mkdir(parents=True)
-    human_readme.write_text(
-        "<!-- ips-context: human-only -->\n<!-- ips-role: router -->\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    failures: list[str] = []
-
-    documentation_checker._validate_human_only_readme(failures)
-
-    assert (
-        "ips-microkernel/README.md: human-only README must not declare an iPS runtime role or rule"
-    ) in failures
-
-
-def test_human_only_readme_rejects_an_inbound_runtime_link(
-    documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    root_readme = tmp_path / "README.md"
-    root_readme.write_text(
-        "[iPS Microkernel](ips-microkernel/README.md)\n",
-        encoding="utf-8",
-    )
-    human_readme = tmp_path / "ips-microkernel" / "README.md"
-    human_readme.parent.mkdir(parents=True)
-    human_readme.write_text(
-        "<!-- ips-context: human-only -->\n",
-        encoding="utf-8",
-    )
-    work_router = tmp_path / "ips-microkernel" / "work-router.md"
-    work_router.write_text("[origin](README.md)\n", encoding="utf-8")
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    failures: list[str] = []
-
-    documentation_checker._validate_human_only_readme(failures)
-
-    assert (
-        "ips-microkernel/work-router.md: human-only README may be linked only "
-        "by the repository root README"
-    ) in failures
-
-
-def test_human_only_readme_rejects_an_inbound_reference_style_runtime_link(
-    documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    root_readme = tmp_path / "README.md"
-    root_readme.write_text(
-        "[iPS Microkernel](ips-microkernel/README.md)\n",
-        encoding="utf-8",
-    )
-    human_readme = tmp_path / "ips-microkernel" / "README.md"
-    human_readme.parent.mkdir(parents=True)
-    human_readme.write_text(
-        "<!-- ips-context: human-only -->\n",
-        encoding="utf-8",
-    )
-    work_router = tmp_path / "ips-microkernel" / "work-router.md"
-    work_router.write_text(
-        "[origin][human]\n\n[human]: README.md\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    failures: list[str] = []
-
-    documentation_checker._validate_human_only_readme(failures)
-
-    assert (
-        "ips-microkernel/work-router.md: human-only README may be linked only "
-        "by the repository root README"
-    ) in failures
-
-
-def test_human_only_readme_rejects_a_line_broken_reference_definition(
-    documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    root_readme = tmp_path / "README.md"
-    root_readme.write_text(
-        "[iPS Microkernel](ips-microkernel/README.md)\n",
-        encoding="utf-8",
-    )
-    human_readme = tmp_path / "ips-microkernel" / "README.md"
-    human_readme.parent.mkdir(parents=True)
-    human_readme.write_text(
-        "<!-- ips-context: human-only -->\n",
-        encoding="utf-8",
-    )
-    work_router = tmp_path / "ips-microkernel" / "work-router.md"
-    work_router.write_text(
-        "[origin][human]\n\n[human]:\nREADME.md\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    failures: list[str] = []
-
-    documentation_checker._validate_human_only_readme(failures)
-
-    assert (
-        "ips-microkernel/work-router.md: human-only README may be linked only "
-        "by the repository root README"
-    ) in failures
-
-
-def test_human_only_readme_rejects_a_multiline_label_inside_a_block_quote(
-    documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    root_readme = tmp_path / "README.md"
-    root_readme.write_text(
-        "[iPS Microkernel](ips-microkernel/README.md)\n",
-        encoding="utf-8",
-    )
-    human_readme = tmp_path / "ips-microkernel" / "README.md"
-    human_readme.parent.mkdir(parents=True)
-    human_readme.write_text(
-        "<!-- ips-context: human-only -->\n",
-        encoding="utf-8",
-    )
-    work_router = tmp_path / "ips-microkernel" / "work-router.md"
-    work_router.write_text(
-        "[Human Label]\n\n> [human\n> label]: README.md\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    failures: list[str] = []
-
-    documentation_checker._validate_human_only_readme(failures)
-
-    assert (
-        "ips-microkernel/work-router.md: human-only README may be linked only "
-        "by the repository root README"
-    ) in failures
-
-
-def test_human_only_readme_rejects_a_query_bearing_runtime_link(
-    documentation_checker: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    root_readme = tmp_path / "README.md"
-    root_readme.write_text(
-        "[iPS Microkernel](ips-microkernel/README.md)\n",
-        encoding="utf-8",
-    )
-    human_readme = tmp_path / "ips-microkernel" / "README.md"
-    human_readme.parent.mkdir(parents=True)
-    human_readme.write_text(
-        "<!-- ips-context: human-only -->\n",
-        encoding="utf-8",
-    )
-    work_router = tmp_path / "ips-microkernel" / "work-router.md"
-    work_router.write_text(
-        "[origin](README.md?plain=1#architecture)\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    failures: list[str] = []
-
-    documentation_checker._validate_human_only_readme(failures)
-
-    assert (
-        "ips-microkernel/work-router.md: human-only README may be linked only "
-        "by the repository root README"
-    ) in failures
-
-
 @pytest.mark.parametrize(
     ("content", "target"),
     (
@@ -1051,7 +850,7 @@ def test_owner_confirmation_validation_rejects_a_reintroduced_gate(
 
     assert (
         "ips-microkernel/procedures/publish.md: contains forbidden owner direction gate; "
-        "owner confirmation is reserved for focused-slice selection"
+        "standing owner-confirmation gates are reserved for focused-slice selection"
     ) in failures
 
 
@@ -1327,7 +1126,7 @@ def test_governance_failures_rejects_a_wrapped_gate_in_selected_design(
 
     assert (
         "ips-microkernel/delivery/0002-selected.md: contains forbidden owner "
-        "authorization gate; owner confirmation is reserved for "
+        "authorization gate; standing owner-confirmation gates are reserved for "
         "focused-slice selection"
     ) in failures
 

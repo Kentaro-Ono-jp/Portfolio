@@ -16,11 +16,14 @@ exception.
 
 - Map every acceptance criterion to implementation, review, PR-run, main-run,
   failure-path, scope, and cleanup evidence as applicable.
-- Check only fully proved criteria. Leave the rest unchecked and record what
-  is missing, even if the Issue is already closed.
-- When all criteria are proved, preserve the original scope, failure model,
-  non-targets, and definition of done, then add `Completion evidence` with
-  stable links and exact SHAs.
+- Check a criterion only when it is fully proved or the owner explicitly
+  accepts its named residual gap. An owner-accepted criterion must link the
+  residual evidence and state that acceptance is a waiver rather than proof.
+  Otherwise leave it unchecked and record what is missing, even if the Issue
+  is already closed.
+- When all criteria are proved or explicitly owner-accepted, preserve the
+  original scope, failure model, non-targets, and definition of done, then add
+  `Completion evidence` with stable links, exact SHAs, and every waiver.
 
 ## Governing tracking Issue
 

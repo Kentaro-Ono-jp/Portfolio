@@ -48,7 +48,6 @@ Portfolio/
 |-- packages/
 |   `-- contracts/           # Language-neutral cross-service contracts
 |-- ips-microkernel/
-|   |-- README.md            # Human-only architecture and origin
 |   |-- work-router.md       # iPS Microkernel lifecycle router
 |   |-- procedures/          # Focused lifecycle procedures
 |   |-- references/          # Durable boundary references
@@ -104,12 +103,6 @@ reviewed engineering artifacts rather than machine-local memory. The explicit
 router. Implementation, independent review, CI exceptions, and failure
 knowledge are loaded one applicable route at a time instead of as one complete
 manual.
-
-The human-only [iPS Microkernel architecture and origin](ips-microkernel/README.md)
-explains why intentional progressive disclosure is implemented as a
-document-driven microkernel. That narrative is discoverable from this product
-README but is excluded from the runtime governance graph and normal agent
-context.
 
 The independent reviewer uses an isolated temporary shallow clone, runs
 non-Docker static verification, and has comment-only GitHub write authority.

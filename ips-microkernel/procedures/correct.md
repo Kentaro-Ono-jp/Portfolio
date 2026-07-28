@@ -14,15 +14,20 @@ findings.
    review head.
 2. Judge each finding against accepted design, focused scope, and concrete
    evidence. Do not implement speculative expansion.
-3. Route a correction that materially changes scope or accepted design to
+3. If the owner explicitly accepts named residual findings for this exact head
+   and authorizes merge without correction, record the real verdict URL,
+   residuals, exact head, required proof, and owner waiver in the PR
+   checkpoint. Do not relabel the verdict. Route that checkpoint to
+   [merge](merge.md).
+4. Route a correction that materially changes scope or accepted design to
    [focus](focus.md) as a new slice decision.
-4. For a non-material in-scope correction, return to
+5. For a non-material in-scope correction, return to
    [implement and verify](implement.md). Standing policy covers diagnosis,
    correction, verification, commit, push, PR-evidence update, Actions
    execution, and an unchanged-head rerun when appropriate.
-5. After the corrected candidate is verified and staged, use
+6. After the corrected candidate is verified and staged, use
    [publish](publish.md) as a follow-up push.
-6. Require the new exact head to pass or satisfy a qualified Markdown-only
+7. Require the new exact head to pass or satisfy a qualified Markdown-only
    exception, then request re-review.
 
 A verdict applies only to its exact reviewed head.
@@ -43,3 +48,4 @@ A verdict applies only to its exact reviewed head.
 - Corrected push required: move to [publish](publish.md).
 - New verdict: re-enter this workflow for findings or move an approved exact
   head to [merge](merge.md).
+- Exact owner waiver recorded: move the reviewed head to [merge](merge.md).

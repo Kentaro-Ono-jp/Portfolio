@@ -27,8 +27,8 @@ solely to detect an unknown writer while the trusted baseline is consistent.
 | Branch | Clean workspace, fetched `origin/main`, and intended base SHA |
 | Push | Intended diff, local branch, remote branch, and full head SHA |
 | Verdict reliance | Verdict SHA, current PR head, relevant Actions conclusion, and finding evidence |
-| Merge | Reviewed head, passing exact-head proof or qualified exception, and established merge method |
-| Checklist update | Exact merge commit, successful main run or qualified exception, and criterion-by-criterion proof |
+| Merge | Reviewed head, `Approved` verdict or exact recorded owner waiver, passing exact-head proof or qualified exception, and established merge method |
+| Checklist update | Exact merge commit, successful main run or qualified exception, and criterion-by-criterion proof or named owner acceptance |
 | Cleanup | Identified task-owned target, exact tip or root, and recoverable scope |
 
 ## Deterministic recovery

@@ -33,7 +33,6 @@ MARKDOWN_SHORTCUT_REFERENCE_LINK = re.compile(
 IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 
 IPS_ROOT = Path("ips-microkernel")
-IPS_HUMAN_README = IPS_ROOT / "README.md"
 IPS_HUMAN_CONTEXT_MARKER = "<!-- ips-context: human-only -->"
 IPS_RUNTIME_DIRECTORIES = (
     Path("selectors"),
@@ -48,7 +47,6 @@ EXPECTED_IPS_TOP_LEVEL_ENTRIES = frozenset(
         "architecture",
         "delivery",
         *(path.as_posix() for path in IPS_RUNTIME_DIRECTORIES),
-        "README.md",
         "work-router.md",
     }
 )
@@ -106,10 +104,10 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("ips-microkernel/adr/0011-deterministic-shallow-review-diff.md"),
     Path("ips-microkernel/adr/0012-name-aios-nodes-by-runtime-role.md"),
     Path("ips-microkernel/adr/0013-name-ips-microkernel.md"),
+    Path("ips-microkernel/adr/0014-adopt-revisitable-state-governance.md"),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
-    IPS_HUMAN_README,
     *ENTRYPOINT_FILE_ROLES,
     *IPS_FILE_ROLES,
 )
@@ -401,7 +399,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Select the first matching state",
         "Do not read all ADRs or delivery specifications",
         "A loop-back is valid only after state changed",
-        "The only owner-confirmation STOP",
+        "The only required owner-confirmation STOP",
+        "An exact-head owner waiver is optional and owner-initiated",
         "reusable non-CI process or review knowledge",
     ),
     Path("ips-microkernel/review/router.md"): (
@@ -413,11 +412,12 @@ REQUIRED_GOVERNANCE_TEXT = {
         *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("ips-microkernel/review/router.md")],
     ),
     Path("ips-microkernel/references/authority.md"): (
-        "The only owner-confirmation boundary",
+        "The normal owner-confirmation boundary",
+        "An exact-head owner waiver is a second, optional decision boundary",
         "standing policy",
         "Docker-backed proof runs in GitHub Actions",
         "A Markdown-only skip is machine-qualified",
-        "Only proved checklist criteria change state",
+        "A checklist criterion changes state through proof or an explicit owner acceptance",
         "A remote branch is deleted only after",
         "Public participant",
     ),
@@ -429,7 +429,8 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path("ips-microkernel/references/evidence.md"): (
         "Completion evidence",
         "umbrella gate",
-        "Check only fully proved criteria",
+        "Check a criterion only when it is fully proved or the owner explicitly accepts",
+        "acceptance is a waiver rather than proof",
         "independent reviewer never edits Issue checklists",
     ),
     Path("ips-microkernel/references/local-tools.md"): (
@@ -438,9 +439,11 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path("ips-microkernel/procedures/publish.md"): (
         "machine-qualified Markdown-only CI exception",
-        "Approved exact head with required proof",
+        "Approved exact head, or exact reviewed head with a recorded owner waiver",
     ),
     Path("ips-microkernel/procedures/merge.md"): (
+        "durable owner waiver",
+        "Never infer or manufacture a waiver",
         "without a separate confirmation pause",
         "defer the merge mutation",
     ),
@@ -456,6 +459,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "accepted focused governance Issue",
         "independently reviewed update",
         "do not create a recursive empty Issue",
+        "no owner-selected recurrence-prevention or reusable-rule outcome exists",
+        "without requesting a decision",
         "CI runner or Actions signals",
         "ordered candidate queue",
         "For each queued candidate",
@@ -522,6 +527,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "no new reusable finding",
         "Revise or add one knowledge leaf",
         "focused playbook-update Issue",
+        "Reconciliation does not block the next feature increment",
+        "when it has not been owner-selected",
         "Publish a knowledge change only through its focused Issue",
     ),
     Path("ips-microkernel/ci/procedures/failure-triage.md"): (
@@ -579,16 +586,13 @@ REQUIRED_GOVERNANCE_TEXT = {
         "legacy `aios/` root",
         "ADR-0012 remains immutable historical evidence",
     ),
-    IPS_HUMAN_README: (
-        "This page explains the architecture; it does not participate in its runtime",
-        "intentional Progressive-disclosure System Microkernel",
-        "Not reading is a design decision",
-        "Reprogramming, differentiation, and expression",
-        "AIOS became the iPS Microkernel",
-        "## 日本語",
-        "読まないことは設計判断である",
-        "再プログラム、分化、発現",
-        "その結果、AIOSはiPS Microkernelとなった",
+    Path("ips-microkernel/adr/0014-adopt-revisitable-state-governance.md"): (
+        "Treat repository states as revisitable",
+        "Make recurrence prevention opt-in",
+        "Do not ban destructive or breaking change by category",
+        "Allow an exact owner-waiver path",
+        "Treat selective CI as proof disclosure",
+        "skipped without evidence",
     ),
 }
 
@@ -680,7 +684,6 @@ PUBLIC_GOVERNANCE_SCAN_FILES = ROUTED_PUBLIC_SURFACE | {
     Path("CONTRIBUTING.md"),
     Path(".github/workflows/README.md"),
     Path("scripts/README.md"),
-    IPS_HUMAN_README,
     Path("ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md"),
 }
 DESIGN_SELECTION_DIRECTORIES = (
@@ -951,11 +954,20 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
         failures.append("missing iPS Microkernel directory ips-microkernel")
         return []
 
+    human_context_documents = {
+        path
+        for path in ips_root.glob("*.md")
+        if IPS_HUMAN_CONTEXT_MARKER in path.read_text(encoding="utf-8")
+        and not IPS_RUNTIME_MARKER.search(path.read_text(encoding="utf-8"))
+    }
     actual_top_level_entries = frozenset(
         path.name
         for path in ips_root.iterdir()
-        if path.is_file()
-        or (path.is_dir() and any(child.is_file() for child in path.rglob("*")))
+        if (
+            path.is_file()
+            or (path.is_dir() and any(child.is_file() for child in path.rglob("*")))
+        )
+        and path not in human_context_documents
     )
     for unexpected_name in sorted(
         actual_top_level_entries - EXPECTED_IPS_TOP_LEVEL_ENTRIES
@@ -971,9 +983,7 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
         )
 
     runtime_paths = [
-        path
-        for path in ips_root.glob("*.md")
-        if path.relative_to(REPOSITORY_ROOT) != IPS_HUMAN_README
+        path for path in ips_root.glob("*.md") if path not in human_context_documents
     ]
     for relative_directory in IPS_RUNTIME_DIRECTORIES:
         runtime_directory = ips_root / relative_directory
@@ -1106,53 +1116,6 @@ def _validate_legacy_governance_layout(failures: list[str]) -> None:
             )
 
 
-def _validate_human_only_readme(failures: list[str]) -> None:
-    readme = REPOSITORY_ROOT / IPS_HUMAN_README
-    if not readme.is_file():
-        return
-
-    content = readme.read_text(encoding="utf-8")
-    if content.count(IPS_HUMAN_CONTEXT_MARKER) != 1:
-        failures.append(
-            f"{IPS_HUMAN_README.as_posix()}: expected exactly one human-only "
-            f"context marker {IPS_HUMAN_CONTEXT_MARKER!r}"
-        )
-    if IPS_RUNTIME_MARKER.search(content):
-        failures.append(
-            f"{IPS_HUMAN_README.as_posix()}: human-only README must not declare "
-            "an iPS runtime role or rule"
-        )
-
-    runtime_surface = {
-        *ENTRYPOINT_FILE_ROLES,
-        *IPS_FILE_ROLES,
-        *ROUTED_PUBLIC_SURFACE,
-    }
-    if IPS_HUMAN_README in runtime_surface:
-        failures.append(
-            f"{IPS_HUMAN_README.as_posix()}: human-only README must not be part "
-            "of the runtime governance graph"
-        )
-
-    allowed_inbound_sources = {Path("README.md")}
-    for markdown_path in iter_markdown_files():
-        source = markdown_path.relative_to(REPOSITORY_ROOT)
-        if source == IPS_HUMAN_README:
-            continue
-        if IPS_HUMAN_README not in resolved_local_links(source):
-            continue
-        if source not in allowed_inbound_sources:
-            failures.append(
-                f"{source.as_posix()}: human-only README may be linked only by "
-                "the repository root README"
-            )
-
-    if IPS_HUMAN_README not in resolved_local_links(Path("README.md")):
-        failures.append(
-            f"README.md: missing human navigation link to {IPS_HUMAN_README.as_posix()}"
-        )
-
-
 def _validate_rule_ownership(failures: list[str], governance_paths: list[Path]) -> None:
     contents = {
         path.relative_to(REPOSITORY_ROOT): path.read_text(encoding="utf-8")
@@ -1262,7 +1225,8 @@ def _validate_owner_confirmation_boundary(
             if pattern.search(normalized_content):
                 failures.append(
                     f"{relative_path.as_posix()}: contains forbidden {label}; "
-                    "owner confirmation is reserved for focused-slice selection"
+                    "standing owner-confirmation gates are reserved for "
+                    "focused-slice selection"
                 )
 
     expected = [(OWNER_CONFIRMATION_OWNER, OWNER_CONFIRMATION_HEADING)]
@@ -1297,7 +1261,6 @@ def governance_failures() -> list[str]:
     failures: list[str] = []
 
     _validate_legacy_governance_layout(failures)
-    _validate_human_only_readme(failures)
 
     for relative_path in REQUIRED_GOVERNANCE_FILES:
         if not (REPOSITORY_ROOT / relative_path).is_file():

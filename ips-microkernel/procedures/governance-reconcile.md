@@ -38,9 +38,12 @@ recorded reusable process or review candidate.
      it as product-specific, one-off, or already represented
    - **already satisfied:** link the current accepted focused governance PR
      and its proof; do not create a recursive empty Issue
-   - **new reusable rule:** return to focus for owner selection, create or link
-     one accepted focused governance Issue, and publish its independently
-     reviewed update before the next feature increment
+   - **not selected:** no owner-selected recurrence-prevention or reusable-rule
+     outcome exists; record that state without requesting a decision, creating
+     an Issue, or blocking the current completion or next feature
+   - **new reusable rule:** only after owner selection, return to focus, create
+     or link one accepted focused governance Issue, and publish its
+     independently reviewed update on that Issue's own lifecycle
    - **unclassified:** record the exact candidate and gap without mutating a
      nearby rule
    After recording the outcome, return to step 4 for the next queued candidate.
@@ -60,6 +63,8 @@ recorded reusable process or review candidate.
   field and other proved correction evidence.
 - A follow-up governance Issue may remain linked without weakening or
   duplicating the current feature's proved completion evidence.
+- An unselected recurrence-prevention candidate is recorded and closed in this
+  reconciliation; it is not a mandatory follow-up.
 
 ## Return
 
