@@ -24,6 +24,7 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0010: Preserve every reusable review candidate in one verdict](0010-lossless-review-candidate-capture.md)
 - [ADR-0011: Prove complete review diffs without a local merge base](0011-deterministic-shallow-review-diff.md)
 - [ADR-0013: Name the document governance architecture iPS Microkernel](0013-name-ips-microkernel.md)
+- [ADR-0014: Adopt revisitable-state and non-prohibitive change governance](0014-adopt-revisitable-state-governance.md)
 
 ## Superseded records
 

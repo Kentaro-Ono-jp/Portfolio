@@ -40,22 +40,53 @@ state; route a material effect on the focused slice back to focus.
 Change routed AI governance only through a focused Issue and reviewed PR. A
 task conversation or local-memory instruction cannot silently weaken it.
 
-## Single confirmation boundary
+## Revisitable-state policy
 
-The only owner-confirmation boundary is selection of the initial focused slice
-or a material redefinition of its outcome, scope, non-targets, or accepted
-design. Focus owns that decision and resumes only after the slice is accepted.
+A prior incident, rejected approach, review finding, or completed correction
+is evidence, not a permanent prohibition.
+
+Within accepted scope, existing work may be revised, replaced, reverted, or
+intentionally returned to a previously observed state. Recurrence prevention
+is not a default completion requirement; it enters the slice only when the
+owner selects it as part of the outcome.
+
+Destructive or breaking effects are not prohibited by category. Each concrete
+mutation still requires accepted scope, an exact identified target, applicable
+actor authority, preservation of unrelated work, proportionate evidence, and
+an explicit recovery path or recorded irreversible limitation. This rule does
+not authorize untrusted actors or unrelated destruction.
+
+An independent finding does not own the outcome. The repository owner may
+explicitly accept named residual findings for an exact reviewed head and
+authorize that head to merge. The durable record must retain the real verdict,
+its URL, the residuals, the exact head, and the owner's waiver. Never relabel a
+waived `Changes requested` verdict as `Approved`.
+
+## Owner decision boundaries
+
+The normal owner-confirmation boundary is selection of the initial focused
+slice or a material redefinition of its outcome, scope, non-targets, or
+accepted design. Focus owns that decision and resumes only after the slice is
+accepted.
+
+An exact-head owner waiver is a second, optional decision boundary. The agent
+does not request it merely to avoid correction. When the owner supplies it,
+the workflow records the accepted residuals and continues through the exact
+merge guards.
 
 Within an accepted focused slice, the implementation agent has standing policy
 to diagnose and correct failures, verify, commit, push, maintain the Draft PR,
-request independent review, change Ready state, merge an approved exact head,
-reconcile proved Issue evidence, and perform scoped cleanup.
+request independent review, change Ready state, merge an independently
+approved or explicitly owner-waived exact head, reconcile Issue evidence, and
+perform scoped cleanup.
 
 The standing policy has deterministic safety limits:
 
 - Docker-backed proof runs in GitHub Actions, never through local Docker.
 - A Markdown-only skip is machine-qualified by its dedicated procedure.
-- Only proved checklist criteria change state; unproved criteria remain open.
+- A checklist criterion changes state through proof or an explicit owner
+  acceptance that names the residual gap; the evidence record distinguishes
+  the two.
 - Only verified task-owned temporary data and fully merged branches are cleanup
   candidates.
 - A remote branch is deleted only after exact merged-tip and open-PR checks;

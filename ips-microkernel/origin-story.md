@@ -1,4 +1,4 @@
-# iPS Microkernel
+# iPS Microkernel: Origin Story
 
 <!-- ips-context: human-only -->
 
@@ -110,6 +110,60 @@ document-driven microkernel:
 The term *microkernel* describes the architecture of responsibility and
 loading. It does not claim literal operating-system process isolation, memory
 protection, or hardware privilege levels.
+
+## Selective CI: progressive disclosure of proof
+
+Selective CI applies the same architecture to verification.
+
+It is not shorthand for “run fewer tests.” The planner begins with the exact
+candidate, maps changed paths and dependencies to verification groups, and
+discloses only the proof required by those affected boundaries.
+
+The reported states have distinct meanings:
+
+| Verification state | Meaning |
+|---|---|
+| **selected** | The current candidate requires this group |
+| **executed** | This group ran against the current candidate |
+| **carried** | Successful evidence from an unaffected trusted baseline remains applicable |
+| **skipped without evidence** | The group did not run and no proof is claimed; the gap stays explicit |
+
+A report such as `2/9 selected` therefore does not mean that seven groups were
+quietly ignored. It means that two groups were activated by the current change,
+while every other group must be accounted for as carried evidence or an
+explicit unproved gap.
+
+Renames and copies disclose both sides of the boundary. Missing lineage forces
+conservative execution instead of invented confidence. Docker-backed groups
+obey the same selection model, but their authoritative execution occurs in
+GitHub Actions rather than local Docker.
+
+Selective CI spends verification time in proportion to the state that actually
+changed. It is progressive disclosure of proof.
+
+## Revisitable states, not permanent prohibitions
+
+The iPS Microkernel is not a monotonic ratchet in which every incident adds a
+permanent prohibition.
+
+Changing existing work includes the freedom to revise it, replace it, revert
+it, or intentionally return to a previously observed state. A prior defect,
+review finding, or abandoned approach is evidence for the next decision; it
+does not automatically make that state or technique forbidden.
+
+Recurrence prevention is optional. It becomes part of the work only when the
+focused outcome explicitly selects it. A correction may fix only the current
+case, and a repository owner may knowingly accept a residual finding.
+
+Destructive or breaking effects are likewise not banned merely because they
+belong to a risky category. Each concrete mutation is still governed by its
+accepted scope, exact target, actor authority, evidence, and stated recovery or
+limitation. The policy permits deliberate change; it does not authorize
+unrelated or unidentified destruction.
+
+An owner may accept the residual findings of an exact-head review and authorize
+that head to merge. The record must preserve the real verdict and the accepted
+residuals. An owner waiver is not an `Approved` verdict.
 
 ## Reprogramming, differentiation, and expression
 
@@ -318,6 +372,58 @@ kernelと、状態によって起動するgovernance serviceへ置き換える�
 *Microkernel*という語が表すのは、責務とロード方式のアーキテクチャーである。
 OSが持つ文字どおりのprocess isolation、memory protection、hardware privilege
 levelを備えていると主張するものではない。
+
+### 選択的CI：証拠のprogressive disclosure
+
+選択的CIは、同じアーキテクチャーを検証へ適用する。
+
+これは単に「テストを減らす」という意味ではない。plannerはexact candidateから
+始め、変更されたpathとdependencyをverification groupへ対応付け、影響を受ける
+境界に必要な証拠だけを開示する。
+
+報告される状態には、それぞれ異なる意味がある。
+
+| verification state | 意味 |
+|---|---|
+| **selected** | 現在のcandidateがこのgroupを必要としている |
+| **executed** | このgroupを現在のcandidateに対して実行した |
+| **carried** | 影響を受けないtrusted baselineの成功証拠を引き続き適用できる |
+| **skipped without evidence** | 実行せず、成功証拠も主張しない。gapを明示したままにする |
+
+したがって、`2/9 selected`という報告は、残りの7 groupを黙って無視したという
+意味ではない。現在の変更によって2 groupが発現し、それ以外のgroupについても、
+carried evidenceまたは明示的な未証明gapとして説明できなければならない。
+
+renameやcopyは境界の両側を開示する。evidence lineageが欠けている場合は、根拠の
+ない確信を作らず、保守的な実行へ戻る。Docker-backed groupも同じ選択modelに
+従うが、authoritativeな実行場所はlocal DockerではなくGitHub Actionsである。
+
+選択的CIは、実際に変化した状態に応じて検証時間を配分する。これは証拠の
+progressive disclosureである。
+
+### 永久禁止ではなく、再訪可能な状態
+
+iPS Microkernelは、一度のincidentごとに永久禁止事項が増えていく単調な
+ratchetではない。
+
+既存のものを変更する自由には、修正、置換、revertだけでなく、以前に観測した
+状態へ意図的に戻ることも含まれる。過去のdefect、review finding、放棄した
+approachは次の判断に使うevidenceであり、その状態や技法を自動的に禁止する
+ものではない。
+
+再発防止は任意である。focused outcomeが明示的に選択した場合にだけ、現在の
+作業へ含める。correctionは現在の事例だけを直してもよく、repository ownerは
+残存findingを理解したうえで受容してもよい。
+
+破壊的またはbreakingな影響も、危険なcategoryに属するという理由だけでは
+禁止しない。ただし、個々のmutationには、accepted scope、exact target、
+actor authority、evidence、および明示されたrecoveryまたはlimitationが必要で
+ある。この方針が許可するのは意図的な変更であり、無関係または未特定の対象を
+破壊することではない。
+
+ownerは、exact-head reviewの残存findingを受容し、そのheadのmergeを承認できる。
+記録には実際のverdictと受容した残件を残さなければならない。owner waiverは
+`Approved` verdictではない。
 
 ### 再プログラム、分化、発現
 

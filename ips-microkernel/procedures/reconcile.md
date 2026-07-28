@@ -21,8 +21,8 @@ evidence reconciliation, or scoped cleanup remains.
 5. Open [governance knowledge reconciliation](governance-reconcile.md), record
    its exact outcome in the focused Issue, and return here.
 6. Read the [Issue evidence reference](../references/evidence.md), reconcile
-   only fully proved focused and governing tracking-Issue criteria, then return
-   here.
+   only fully proved or explicitly owner-accepted focused and governing
+   tracking-Issue criteria, then return here.
 7. Remove verified task-owned temporary data and a local branch only after its
    exact tip is proved fully merged.
 8. Delete the remote branch only when the PR is merged, its remote tip equals
@@ -38,8 +38,9 @@ evidence reconciliation, or scoped cleanup remains.
 - Unresolved reusable CI knowledge remains an explicit reconciliation outcome.
 - Unresolved reusable governance knowledge remains linked or unclassified; it
   is never copied into a nearby canonical rule.
-- Contradictory or incomplete evidence leaves affected criteria unchecked and
-  records the exact gap.
+- Contradictory or incomplete evidence leaves affected criteria unchecked
+  unless the owner explicitly accepts the named residual gap; record that
+  waiver without calling it proof.
 - Cleanup whose ownership or exact target cannot be proved is retained and
   reported without blocking proved evidence reconciliation.
 

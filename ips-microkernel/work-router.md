@@ -48,10 +48,11 @@ routes until the selected route returns here with changed state.
    [implement and verify](procedures/implement.md).
 8. **The verified candidate is ready to commit, push, or publish as a Draft
    PR, including a follow-up push:** use [publish](procedures/publish.md).
-9. **An independent verdict contains actionable findings:** use
-   [correct](procedures/correct.md).
-10. **An independently approved exact head has its required proof:** use
-   [merge](procedures/merge.md).
+9. **An independent verdict contains actionable findings and no exact
+   owner waiver accepts them:** use [correct](procedures/correct.md).
+10. **An independently approved exact head, or an exact reviewed head with a
+    recorded owner waiver, has its required proof:** use
+    [merge](procedures/merge.md).
 11. **The PR is merged and evidence or cleanup remains:** use
     [reconcile](procedures/reconcile.md).
 
@@ -78,8 +79,10 @@ Do not read all ADRs or delivery specifications at cold start.
   condition. Read it, return to the calling workflow, and re-evaluate state.
 - A loop-back is valid only after state changed, a bounded retry became
   available, or a deterministic fallback produced new evidence.
-- The only owner-confirmation STOP is initial or material focused-slice
-  selection in focus. Every other guard retries, reroutes, defers its exact
-  side effect, or terminates with evidence without requesting authority.
+- The only required owner-confirmation STOP is initial or material
+  focused-slice selection in focus. An exact-head owner waiver is optional and
+  owner-initiated; never request one merely to bypass correction. Every other
+  guard retries, reroutes, defers its exact side effect, or terminates with
+  evidence without requesting authority.
 - Fast-changing status remains in GitHub. Do not add a tracked handoff or
   current-status duplicate.

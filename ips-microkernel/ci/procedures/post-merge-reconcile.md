@@ -5,8 +5,9 @@
 
 ## Read when
 
-Read this file after every feature PR merge and before the next feature
-increment, once the exact merge commit's automatic `push` workflow completes.
+Read this file after every feature PR merge, once the exact merge commit's
+automatic `push` workflow completes. Reconciliation does not block the next
+feature increment merely because prevention work was not selected.
 
 ## Procedure
 
@@ -20,8 +21,10 @@ increment, once the exact merge commit's automatic `push` workflow completes.
 5. Revise or add one knowledge leaf only when the reusable decision rule is
    new.
 6. Record the outcome in the merged feature's focused Issue:
-   - link a focused playbook-update Issue and publish that reviewed update
-     before the next feature increment when new knowledge exists
+   - when the owner selects reusable prevention work, link a focused
+     playbook-update Issue and publish it on that Issue's own lifecycle
+   - when it has not been owner-selected, record the candidate as not selected;
+     do not create an Issue or block the current completion or next feature
    - otherwise record `CI knowledge reconciliation: no new reusable finding`
      and do not create an empty documentation change
 
@@ -35,6 +38,7 @@ increment, once the exact merge commit's automatic `push` workflow completes.
   change.
 - Publish a knowledge change only through its focused Issue, exact proof, and
   independent review.
+- A failed run or correction does not make recurrence prevention mandatory.
 
 ## Return
 
