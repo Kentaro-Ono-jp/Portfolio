@@ -9,6 +9,13 @@ from urllib.parse import unquote
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+MARKDOWN_REFERENCE_DEFINITION = re.compile(
+    r"(?m)^[ \t]{0,3}\[([^\]\r\n]+)\]:[ \t]*(?:<([^>\r\n]+)>|([^\s]+))"
+)
+MARKDOWN_REFERENCE_LINK = re.compile(r"(?<!!)\[([^\]\r\n]+)\]\[([^\]\r\n]*)\]")
+MARKDOWN_SHORTCUT_REFERENCE_LINK = re.compile(
+    r"(?<![!\]])\[([^\]\r\n]+)\](?![ \t]*(?:\(|\[|:))"
+)
 IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 
 IPS_ROOT = Path("ips-microkernel")
@@ -742,6 +749,31 @@ def local_target(raw_target: str) -> str | None:
     return unquote(target.split("#", maxsplit=1)[0])
 
 
+def _normalize_reference_label(label: str) -> str:
+    return " ".join(label.split()).casefold()
+
+
+def markdown_link_targets(content: str) -> list[str]:
+    targets = [match.group(1) for match in MARKDOWN_LINK.finditer(content)]
+    definitions: dict[str, str] = {}
+    for match in MARKDOWN_REFERENCE_DEFINITION.finditer(content):
+        label = _normalize_reference_label(match.group(1))
+        definitions.setdefault(label, match.group(2) or match.group(3))
+
+    for match in MARKDOWN_REFERENCE_LINK.finditer(content):
+        label = match.group(2) or match.group(1)
+        target = definitions.get(_normalize_reference_label(label))
+        if target is not None:
+            targets.append(target)
+
+    for match in MARKDOWN_SHORTCUT_REFERENCE_LINK.finditer(content):
+        target = definitions.get(_normalize_reference_label(match.group(1)))
+        if target is not None:
+            targets.append(target)
+
+    return targets
+
+
 def resolved_local_links(relative_source: Path) -> set[Path]:
     path = REPOSITORY_ROOT / relative_source
     if not path.is_file():
@@ -749,8 +781,8 @@ def resolved_local_links(relative_source: Path) -> set[Path]:
 
     links: set[Path] = set()
     content = path.read_text(encoding="utf-8")
-    for match in MARKDOWN_LINK.finditer(content):
-        target = local_target(match.group(1))
+    for raw_target in markdown_link_targets(content):
+        target = local_target(raw_target)
         if not target:
             continue
         resolved = (path.parent / target).resolve()
@@ -1308,8 +1340,8 @@ def main() -> int:
 
     for document in markdown_files:
         content = document.read_text(encoding="utf-8")
-        for match in MARKDOWN_LINK.finditer(content):
-            target = local_target(match.group(1))
+        for raw_target in markdown_link_targets(content):
+            target = local_target(raw_target)
             if not target:
                 continue
             checked_links += 1
