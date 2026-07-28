@@ -105,6 +105,7 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("ips-microkernel/adr/0012-name-aios-nodes-by-runtime-role.md"),
     Path("ips-microkernel/adr/0013-name-ips-microkernel.md"),
     Path("ips-microkernel/adr/0014-adopt-revisitable-state-governance.md"),
+    Path("ips-microkernel/adr/0015-hide-the-human-origin-narrative.md"),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -593,6 +594,13 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Allow an exact owner-waiver path",
         "Treat selective CI as proof disclosure",
         "skipped without evidence",
+    ),
+    Path("ips-microkernel/adr/0015-hide-the-human-origin-narrative.md"): (
+        "Amends: ADR-0013 human-only narrative topology",
+        "has no repository navigation entry and is not a README",
+        "does not establish a filename-specific inbound-link checker",
+        "Japanese prose uses structural Markdown line breaks only",
+        "does not change or settle whether a human-only narrative participates",
     ),
 }
 
