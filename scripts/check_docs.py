@@ -3,12 +3,19 @@ from __future__ import annotations
 import os
 import re
 from collections import Counter, deque
+from html import unescape
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+MARKDOWN_HTML_ANCHOR = re.compile(
+    r"""(?is)<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))"""
+)
+MARKDOWN_BACKSLASH_ESCAPE = re.compile(
+    r"""\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])"""
+)
 MARKDOWN_REFERENCE_LABEL = r"(?:\\.|[^\]]){1,999}"
 MARKDOWN_OPTIONAL_REFERENCE_LABEL = r"(?:\\.|[^\]]){0,999}"
 MARKDOWN_REFERENCE_DEFINITION = re.compile(
@@ -751,17 +758,23 @@ def design_governance_paths() -> list[Path]:
 
 def local_target(raw_target: str) -> str | None:
     target = raw_target.strip().strip("<>").split(maxsplit=1)[0]
-    if target.startswith(IGNORED_PREFIXES):
+    target = MARKDOWN_BACKSLASH_ESCAPE.sub(r"\1", unescape(target))
+    if target.casefold().startswith(IGNORED_PREFIXES):
         return None
-    return unquote(target.split("#", maxsplit=1)[0])
+    return unquote(urlsplit(target).path)
 
 
 def _normalize_reference_label(label: str) -> str:
+    label = re.sub(r"(?m)^[ \t]*(?:>[ \t]?)+", "", label)
     return " ".join(label.split()).casefold()
 
 
 def markdown_link_targets(content: str) -> list[str]:
     targets = [match.group(1) for match in MARKDOWN_LINK.finditer(content)]
+    targets.extend(
+        next(group for group in match.groups() if group is not None)
+        for match in MARKDOWN_HTML_ANCHOR.finditer(content)
+    )
     definitions: dict[str, str] = {}
     for match in MARKDOWN_REFERENCE_DEFINITION.finditer(content):
         label = _normalize_reference_label(match.group(1))
