@@ -3,7 +3,7 @@
 GitHub Actions will be the authoritative build and runtime verification
 environment for this portfolio.
 
-Use the thin [CI router](../../aios/ci/router.md) after a complete
+Use the thin [CI router](../../ips-microkernel/ci/router.md) after a complete
 implementation and its tests have been staged without a commit. It selects
 staged preflight, local rehearsal, an explicit exception, failed-run triage,
 post-merge reconciliation, or one relevant knowledge leaf without loading them

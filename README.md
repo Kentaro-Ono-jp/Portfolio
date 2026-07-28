@@ -47,8 +47,9 @@ Portfolio/
 |   `-- ml/                  # ML inference and evaluation application
 |-- packages/
 |   `-- contracts/           # Language-neutral cross-service contracts
-|-- aios/
-|   |-- work-router.md       # AIOS lifecycle router
+|-- ips-microkernel/
+|   |-- README.md            # Human-only architecture and origin
+|   |-- work-router.md       # iPS Microkernel lifecycle router
 |   |-- procedures/          # Focused lifecycle procedures
 |   |-- references/          # Durable boundary references
 |   |-- selectors/           # Knowledge destination selectors
@@ -69,20 +70,22 @@ Portfolio/
 
 ## Accepted architecture decisions
 
-- [ADR-0001: Adopt a modular monorepo](aios/adr/0001-modular-monorepo.md)
-- [ADR-0002: Target an AI-enabled document intelligence platform](aios/adr/0002-target-document-intelligence-platform.md)
-- [ADR-0003: Adopt the initial technology stack](aios/adr/0003-initial-technology-stack.md)
-- [ADR-0004: Keep state ownership in the API and use a transactional outbox](aios/adr/0004-api-state-ownership-and-transactional-outbox.md)
-- [ADR-0007: Define the authentication, session, and API authorization boundary](aios/adr/0007-authentication-session-and-api-authorization.md)
-- [ADR-0008: Route AI guidance through progressive disclosure](aios/adr/0008-progressive-disclosure-ai-guidance.md)
+- [ADR-0001: Adopt a modular monorepo](ips-microkernel/adr/0001-modular-monorepo.md)
+- [ADR-0002: Target an AI-enabled document intelligence platform](ips-microkernel/adr/0002-target-document-intelligence-platform.md)
+- [ADR-0003: Adopt the initial technology stack](ips-microkernel/adr/0003-initial-technology-stack.md)
+- [ADR-0004: Keep state ownership in the API and use a transactional outbox](ips-microkernel/adr/0004-api-state-ownership-and-transactional-outbox.md)
+- [ADR-0007: Define the authentication, session, and API authorization boundary](ips-microkernel/adr/0007-authentication-session-and-api-authorization.md)
+- [ADR-0008: Route AI guidance through progressive disclosure](ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md)
+- [ADR-0013: Name the document governance architecture iPS Microkernel](ips-microkernel/adr/0013-name-ips-microkernel.md)
 
-Superseded decisions remain under [`aios/adr/`](aios/adr/index.md) as design
-history.
+Superseded decisions remain under the
+[ADR index](ips-microkernel/adr/index.md) as design history.
 
 ## Delivery specifications
 
-Use the thin [delivery index](aios/delivery/index.md) to select the governing
-contract without loading completed and current specifications together.
+Use the thin [delivery index](ips-microkernel/delivery/index.md) to select the
+governing contract without loading completed and current specifications
+together.
 
 ## Contributing and security
 
@@ -97,9 +100,16 @@ contract without loading completed and current specifications together.
 The repository treats AI collaboration rules and reusable CI knowledge as
 reviewed engineering artifacts rather than machine-local memory. The explicit
 [`GIT_AGENTS.md`](GIT_AGENTS.md) entrypoint reaches a thin
-[`aios/work-router.md`](aios/work-router.md) state router. Implementation,
-independent review, CI exceptions, and failure knowledge are loaded one
-applicable route at a time instead of as one complete manual.
+[`ips-microkernel/work-router.md`](ips-microkernel/work-router.md) state
+router. Implementation, independent review, CI exceptions, and failure
+knowledge are loaded one applicable route at a time instead of as one complete
+manual.
+
+The human-only [iPS Microkernel architecture and origin](ips-microkernel/README.md)
+explains why intentional progressive disclosure is implemented as a
+document-driven microkernel. That narrative is discoverable from this product
+README but is excluded from the runtime governance graph and normal agent
+context.
 
 The independent reviewer uses an isolated temporary shallow clone, runs
 non-Docker static verification, and has comment-only GitHub write authority.
@@ -205,8 +215,8 @@ re-proved the completed tree without maintainer-specific state. After the
 `main` Actions caches were removed, a second
 [cold-cache dispatch](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29735196072)
 re-proved the same exact tree. Repository-owned AI collaboration is defined by
-[ADR-0008](aios/adr/0008-progressive-disclosure-ai-guidance.md) and
-`aios/`.
+[ADR-0013](ips-microkernel/adr/0013-name-ips-microkernel.md) and the live
+`ips-microkernel/` governance root.
 
 ## License
 
