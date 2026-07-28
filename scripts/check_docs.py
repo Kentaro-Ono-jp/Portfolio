@@ -9,12 +9,19 @@ from urllib.parse import unquote
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+MARKDOWN_REFERENCE_LABEL = r"(?:\\.|[^\]]){1,999}"
+MARKDOWN_OPTIONAL_REFERENCE_LABEL = r"(?:\\.|[^\]]){0,999}"
 MARKDOWN_REFERENCE_DEFINITION = re.compile(
-    r"(?m)^[ \t]{0,3}\[([^\]\r\n]+)\]:[ \t]*(?:<([^>\r\n]+)>|([^\s]+))"
+    rf"\[({MARKDOWN_REFERENCE_LABEL})\]:[ \t]*"
+    rf"(?:(?:\r\n|\r|\n)[ \t]*(?:>[ \t]*)*)?"
+    rf"(?:<([^>\r\n]+)>|([^\s]+))"
 )
-MARKDOWN_REFERENCE_LINK = re.compile(r"(?<!!)\[([^\]\r\n]+)\]\[([^\]\r\n]*)\]")
+MARKDOWN_REFERENCE_LINK = re.compile(
+    rf"(?<!!)\[({MARKDOWN_REFERENCE_LABEL})\]"
+    rf"\[({MARKDOWN_OPTIONAL_REFERENCE_LABEL})\]"
+)
 MARKDOWN_SHORTCUT_REFERENCE_LINK = re.compile(
-    r"(?<![!\]])\[([^\]\r\n]+)\](?![ \t]*(?:\(|\[|:))"
+    rf"(?<![!\]])\[({MARKDOWN_REFERENCE_LABEL})\](?![ \t]*(?:\(|\[|:))"
 )
 IGNORED_PREFIXES = ("#", "http://", "https://", "mailto:")
 

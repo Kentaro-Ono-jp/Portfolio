@@ -132,6 +132,55 @@ def test_human_only_readme_rejects_an_inbound_reference_style_runtime_link(
     ) in failures
 
 
+def test_human_only_readme_rejects_a_line_broken_reference_definition(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root_readme = tmp_path / "README.md"
+    root_readme.write_text(
+        "[iPS Microkernel](ips-microkernel/README.md)\n",
+        encoding="utf-8",
+    )
+    human_readme = tmp_path / "ips-microkernel" / "README.md"
+    human_readme.parent.mkdir(parents=True)
+    human_readme.write_text(
+        "<!-- ips-context: human-only -->\n",
+        encoding="utf-8",
+    )
+    work_router = tmp_path / "ips-microkernel" / "work-router.md"
+    work_router.write_text(
+        "[origin][human]\n\n[human]:\nREADME.md\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_human_only_readme(failures)
+
+    assert (
+        "ips-microkernel/work-router.md: human-only README may be linked only "
+        "by the repository root README"
+    ) in failures
+
+
+@pytest.mark.parametrize(
+    ("content", "target"),
+    (
+        ("[origin][human]\n\n[human]: README.md\n", "README.md"),
+        ("[origin][]\n\n[origin]:\n    <README.md>\n", "README.md"),
+        ("[Human Label]\n\n[human\n label]: README.md\n", "README.md"),
+        ("[human]\n\n> [human]:\n> README.md\n", "README.md"),
+    ),
+)
+def test_markdown_link_targets_supports_gfm_reference_forms_and_layouts(
+    documentation_checker: ModuleType,
+    content: str,
+    target: str,
+) -> None:
+    assert documentation_checker.markdown_link_targets(content) == [target]
+
+
 def test_progressive_routing_covers_the_complete_guidance_surface(
     documentation_checker: ModuleType,
 ) -> None:
