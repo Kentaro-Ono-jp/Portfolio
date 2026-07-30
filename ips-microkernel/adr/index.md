@@ -26,6 +26,7 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0013: Name the document governance architecture iPS Microkernel](0013-name-ips-microkernel.md)
 - [ADR-0014: Adopt revisitable-state and non-prohibitive change governance](0014-adopt-revisitable-state-governance.md)
 - [ADR-0015: Keep the human origin narrative unlinked](0015-hide-the-human-origin-narrative.md)
+- [ADR-0016: Adjudicate review findings before correction](0016-adjudicate-review-findings-before-correction.md)
 
 ## Superseded records
 

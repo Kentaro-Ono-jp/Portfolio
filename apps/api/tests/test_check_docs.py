@@ -102,6 +102,14 @@ def test_progressive_routing_covers_the_complete_guidance_surface(
         in routes[Path("ips-microkernel/procedures/correct.md")]
     )
     assert (
+        Path("ips-microkernel/procedures/adjudicate.md")
+        in routes[Path("ips-microkernel/work-router.md")]
+    )
+    assert (
+        Path("ips-microkernel/procedures/adjudicate.md")
+        not in routes[Path("ips-microkernel/review/router.md")]
+    )
+    assert (
         Path("ips-microkernel/procedures/merge.md")
         in routes[Path("ips-microkernel/procedures/correct.md")]
     )
@@ -132,6 +140,111 @@ def test_every_canonical_rule_has_one_declared_owner(
     assert owners["governance-knowledge-reconciliation"] == Path(
         "ips-microkernel/procedures/governance-reconcile.md"
     )
+    assert owners["review-adjudication"] == Path("ips-microkernel/procedures/adjudicate.md")
+
+
+def test_review_adjudication_contract_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    contract = documentation_checker.REVIEW_ADJUDICATION_FRAGMENTS
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    routes = documentation_checker.REQUIRED_ROUTE_LINKS
+    roles = documentation_checker.IPS_FILE_ROLES
+    adjudication = Path("ips-microkernel/procedures/adjudicate.md")
+
+    assert roles[adjudication] == "procedure"
+    assert documentation_checker.CANONICAL_RULE_OWNERS["review-adjudication"] == (adjudication)
+    assert adjudication in routes[Path("ips-microkernel/work-router.md")]
+    assert adjudication in routes[Path("ips-microkernel/procedures/publish.md")]
+    assert Path("ips-microkernel/procedures/correct.md") in routes[adjudication]
+    assert Path("ips-microkernel/procedures/merge.md") in routes[adjudication]
+    assert adjudication not in routes[Path("ips-microkernel/review/router.md")]
+    assert all(
+        path in required_text and all(fragment in required_text[path] for fragment in fragments)
+        for path, fragments in contract.items()
+    )
+    assert (
+        "The only permitted GitHub write" in required_text[Path("ips-microkernel/review/router.md")]
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "fragment"),
+    (
+        (
+            Path("ips-microkernel/work-router.md"),
+            "`Changes requested` verdict contains findings whose disposition is incomplete",
+        ),
+        (
+            Path("ips-microkernel/references/authority.md"),
+            "does not silently adjudicate while implementing",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "Do not modify implementation",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "materially breaks the Issue-defined accepted product design "
+            "at Critical or High impact",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "human discoverability and bounded recoverability",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "external technical explanation cost",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "material product-quality effect",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "Do not use a numeric score",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "append one adjudication checkpoint to the focused Issue",
+        ),
+        (
+            Path("ips-microkernel/procedures/publish.md"),
+            "`Changes requested` with incomplete finding disposition",
+        ),
+        (
+            Path("ips-microkernel/procedures/correct.md"),
+            "only after a complete exact-head adjudication",
+        ),
+        (
+            Path("ips-microkernel/procedures/merge.md"),
+            "records zero required corrections",
+        ),
+    ),
+)
+def test_review_adjudication_rejects_each_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    fragment: str,
+) -> None:
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+    assert fragment in normalized
+    weakened = normalized.replace(fragment, "removed adjudication boundary")
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(weakened, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_required_governance_text(
+        failures,
+        {relative_path: (fragment,)},
+    )
+
+    assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
 
 
 def test_governance_knowledge_write_route_is_complete(
@@ -154,6 +267,7 @@ def test_governance_knowledge_write_route_is_complete(
         Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/adjudicate.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
@@ -473,6 +587,19 @@ def test_shallow_review_diff_contract_is_complete(
         (
             Path("ips-microkernel/work-router.md"),
             "Read [GIT_AGENTS.md] and its required design sources",
+        ),
+        (
+            Path("ips-microkernel/work-router.md"),
+            "An independent verdict contains actionable findings and no exact "
+            "owner waiver accepts them",
+        ),
+        (
+            Path("ips-microkernel/procedures/publish.md"),
+            "Actionable verdict: open [correct](correct.md).",
+        ),
+        (
+            Path("ips-microkernel/procedures/correct.md"),
+            "Read this file when an independent exact-head verdict contains actionable findings.",
         ),
         (
             Path("ips-microkernel/review/router.md"),

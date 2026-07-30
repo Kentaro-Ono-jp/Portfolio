@@ -66,6 +66,7 @@ IPS_FILE_ROLES = {
     Path("ips-microkernel/procedures/focus.md"): "procedure",
     Path("ips-microkernel/procedures/implement.md"): "procedure",
     Path("ips-microkernel/procedures/publish.md"): "procedure",
+    Path("ips-microkernel/procedures/adjudicate.md"): "procedure",
     Path("ips-microkernel/procedures/correct.md"): "procedure",
     Path("ips-microkernel/procedures/merge.md"): "procedure",
     Path("ips-microkernel/procedures/reconcile.md"): "procedure",
@@ -106,6 +107,7 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("ips-microkernel/adr/0013-name-ips-microkernel.md"),
     Path("ips-microkernel/adr/0014-adopt-revisitable-state-governance.md"),
     Path("ips-microkernel/adr/0015-hide-the-human-origin-narrative.md"),
+    Path("ips-microkernel/adr/0016-adjudicate-review-findings-before-correction.md"),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -137,6 +139,7 @@ CANONICAL_RULE_OWNERS = {
     "focus-workflow": Path("ips-microkernel/procedures/focus.md"),
     "implementation-workflow": Path("ips-microkernel/procedures/implement.md"),
     "publication-workflow": Path("ips-microkernel/procedures/publish.md"),
+    "review-adjudication": Path("ips-microkernel/procedures/adjudicate.md"),
     "correction-workflow": Path("ips-microkernel/procedures/correct.md"),
     "merge-workflow": Path("ips-microkernel/procedures/merge.md"),
     "reconciliation-workflow": Path("ips-microkernel/procedures/reconcile.md"),
@@ -181,6 +184,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/adjudicate.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
@@ -211,6 +215,13 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/ci/exceptions/markdown-only.md"),
         Path("ips-microkernel/review/router.md"),
         Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/correct.md"),
+        Path("ips-microkernel/procedures/merge.md"),
+    ),
+    Path("ips-microkernel/procedures/adjudicate.md"): (
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
     ),
@@ -218,12 +229,14 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/adjudicate.md"),
         Path("ips-microkernel/procedures/merge.md"),
     ),
     Path("ips-microkernel/procedures/merge.md"): (
         Path("ips-microkernel/references/live-state.md"),
         Path("ips-microkernel/ci/exceptions/markdown-only.md"),
         Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/procedures/adjudicate.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
     ),
     Path("ips-microkernel/procedures/reconcile.md"): (
@@ -246,6 +259,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
+        Path("ips-microkernel/procedures/adjudicate.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
@@ -314,6 +328,7 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
     "focus": Path("ips-microkernel/procedures/focus.md"),
     "implementation": Path("ips-microkernel/procedures/implement.md"),
     "publication": Path("ips-microkernel/procedures/publish.md"),
+    "adjudication": Path("ips-microkernel/procedures/adjudicate.md"),
     "correction": Path("ips-microkernel/procedures/correct.md"),
     "merge": Path("ips-microkernel/procedures/merge.md"),
     "reconciliation": Path("ips-microkernel/procedures/reconcile.md"),
@@ -326,6 +341,11 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
     "delivery": Path("ips-microkernel/delivery/index.md"),
 }
 GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
+    "adjudication": (
+        "Review-finding disposition",
+        "human-scale lenses",
+        "adjudicated-RC routing",
+    ),
     "issue-evidence": (
         "Checklist criterion mapping",
         "completion-evidence content",
@@ -383,6 +403,62 @@ SHALLOW_REVIEW_DIFF_FRAGMENTS = {
     ),
 }
 
+REVIEW_ADJUDICATION_FRAGMENTS = {
+    Path("ips-microkernel/work-router.md"): (
+        "`Changes requested` verdict contains findings whose disposition is incomplete",
+        "[review finding adjudication](procedures/adjudicate.md)",
+        "fully adjudicated exact head with zero required corrections",
+    ),
+    Path("ips-microkernel/references/authority.md"): (
+        "Review Adjudicator",
+        "distinct runtime role",
+        "does not silently adjudicate while implementing",
+        "fully adjudicated",
+    ),
+    Path("ips-microkernel/references/live-state.md"): (
+        "| Adjudication | Verdict SHA and URL",
+        "complete zero-required-correction adjudication",
+    ),
+    Path("ips-microkernel/procedures/publish.md"): (
+        "`Changes requested` with incomplete finding disposition",
+        "[adjudicate](adjudicate.md)",
+        "fully adjudicated exact head with zero required corrections",
+    ),
+    Path("ips-microkernel/procedures/adjudicate.md"): (
+        "distinct runtime role",
+        "Do not modify implementation",
+        "materially breaks the Issue-defined accepted product design at Critical or High impact",
+        "human discoverability and bounded recoverability",
+        "external technical explanation cost",
+        "material product-quality effect",
+        "Do not use a numeric score",
+        "append one adjudication checkpoint to the focused Issue",
+        "exact reviewed head and stable real-verdict URL",
+        "reviewer severity and adjudicated actual impact",
+        "`required-correction`",
+        "`accepted-residual`",
+        "`non-material`",
+        "Complete adjudication with zero required corrections",
+        "real RC remains visible",
+    ),
+    Path("ips-microkernel/procedures/correct.md"): (
+        "only after a complete exact-head adjudication",
+        "Implement only findings recorded as `required-correction`",
+        "Preserve `accepted-residual` and `non-material` dispositions",
+        "[adjudication](adjudicate.md) before any further correction",
+    ),
+    Path("ips-microkernel/procedures/merge.md"): (
+        "complete focused-Issue adjudication",
+        "records zero required corrections",
+        "never relabel RC as Approved",
+        "[adjudication](adjudicate.md)",
+    ),
+    Path("ips-microkernel/selectors/governance-knowledge.md"): (
+        "| `adjudication` |",
+        "[Review adjudication](../procedures/adjudicate.md)",
+    ),
+}
+
 REQUIRED_GOVERNANCE_TEXT = {
     Path("GIT_AGENTS.md"): (
         "thin, tracked entrypoint",
@@ -403,6 +479,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "The only required owner-confirmation STOP",
         "An exact-head owner waiver is optional and owner-initiated",
         "reusable non-CI process or review knowledge",
+        *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/work-router.md")],
     ),
     Path("ips-microkernel/review/router.md"): (
         "Governing tracking Issue URL",
@@ -421,11 +498,15 @@ REQUIRED_GOVERNANCE_TEXT = {
         "A checklist criterion changes state through proof or an explicit owner acceptance",
         "A remote branch is deleted only after",
         "Public participant",
+        *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
     ),
     Path("ips-microkernel/references/live-state.md"): (
         "Do not enumerate every branch",
         "Do not infer current PR, Issue, check, or merge state",
         "Deterministic recovery",
+        *REVIEW_ADJUDICATION_FRAGMENTS[
+            Path("ips-microkernel/references/live-state.md")
+        ],
     ),
     Path("ips-microkernel/references/evidence.md"): (
         "Completion evidence",
@@ -440,13 +521,22 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path("ips-microkernel/procedures/publish.md"): (
         "machine-qualified Markdown-only CI exception",
-        "Approved exact head, or exact reviewed head with a recorded owner waiver",
+        *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
+    ),
+    Path("ips-microkernel/procedures/adjudicate.md"): (
+        *REVIEW_ADJUDICATION_FRAGMENTS[
+            Path("ips-microkernel/procedures/adjudicate.md")
+        ],
+    ),
+    Path("ips-microkernel/procedures/correct.md"): (
+        *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/correct.md")],
     ),
     Path("ips-microkernel/procedures/merge.md"): (
         "durable owner waiver",
-        "Never infer or manufacture a waiver",
+        "Never infer or manufacture a disposition or waiver",
         "without a separate confirmation pause",
         "defer the merge mutation",
+        *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/merge.md")],
     ),
     Path("ips-microkernel/procedures/reconcile.md"): (
         "Delete the remote branch only when",
@@ -480,6 +570,9 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Rows are ordered precedence",
         "split it into atomic candidates",
         "never assign one candidate to two targets",
+        *REVIEW_ADJUDICATION_FRAGMENTS[
+            Path("ips-microkernel/selectors/governance-knowledge.md")
+        ],
     ),
     Path("ips-microkernel/review/inspect.md"): (
         *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("ips-microkernel/review/inspect.md")],
@@ -602,6 +695,18 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Japanese prose uses structural Markdown line breaks only",
         "does not change or settle whether a human-only narrative participates",
     ),
+    Path("ips-microkernel/adr/0016-adjudicate-review-findings-before-correction.md"): (
+        "Add a Review Adjudicator runtime role",
+        "Make actual Critical or High design breakage mandatory",
+        "Apply three human-scale lenses below the mandatory threshold",
+        "Human discoverability and bounded recoverability",
+        "External technical explanation cost",
+        "Material product-quality effect",
+        "Record disposition before mutation",
+        "Route by disposition",
+        "Owner waiver remains the strong exception",
+        "original RC remains RC",
+    ),
 }
 
 FORBIDDEN_STALE_ROUTING_TEXT = {
@@ -619,6 +724,17 @@ FORBIDDEN_STALE_ROUTING_TEXT = {
         "Read [GIT_AGENTS.md] and its required design sources",
         "Issue #1 is the live portfolio ledger",
         "Implementation lifecycle",
+        "An independent verdict contains actionable findings and no exact "
+        "owner waiver accepts them",
+    ),
+    Path("ips-microkernel/procedures/publish.md"): (
+        "Actionable verdict: open [correct](correct.md).",
+    ),
+    Path("ips-microkernel/procedures/correct.md"): (
+        "Read this file when an independent exact-head verdict contains "
+        "actionable findings.",
+        "Judge each finding against accepted design, focused scope, and "
+        "concrete evidence.",
     ),
     Path("ips-microkernel/review/router.md"): (
         "accepted ADRs and accepted delivery specifications in numeric order",
@@ -1265,18 +1381,11 @@ def _validate_public_governance_surface(
                 )
 
 
-def governance_failures() -> list[str]:
-    failures: list[str] = []
-
-    _validate_legacy_governance_layout(failures)
-
-    for relative_path in REQUIRED_GOVERNANCE_FILES:
-        if not (REPOSITORY_ROOT / relative_path).is_file():
-            failures.append(
-                f"missing required governance file {relative_path.as_posix()}"
-            )
-
-    for relative_path, required_fragments in REQUIRED_GOVERNANCE_TEXT.items():
+def _validate_required_governance_text(
+    failures: list[str],
+    required_text: dict[Path, tuple[str, ...]],
+) -> None:
+    for relative_path, required_fragments in required_text.items():
         path = REPOSITORY_ROOT / relative_path
         if not path.is_file():
             failures.append(f"missing governance entrypoint {relative_path.as_posix()}")
@@ -1288,6 +1397,20 @@ def governance_failures() -> list[str]:
                     f"{relative_path.as_posix()}: missing governance invariant "
                     f"{fragment!r}"
                 )
+
+
+def governance_failures() -> list[str]:
+    failures: list[str] = []
+
+    _validate_legacy_governance_layout(failures)
+
+    for relative_path in REQUIRED_GOVERNANCE_FILES:
+        if not (REPOSITORY_ROOT / relative_path).is_file():
+            failures.append(
+                f"missing required governance file {relative_path.as_posix()}"
+            )
+
+    _validate_required_governance_text(failures, REQUIRED_GOVERNANCE_TEXT)
 
     for relative_path, forbidden_fragments in FORBIDDEN_STALE_ROUTING_TEXT.items():
         path = REPOSITORY_ROOT / relative_path
