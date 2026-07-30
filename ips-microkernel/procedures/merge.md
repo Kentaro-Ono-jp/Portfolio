@@ -5,18 +5,25 @@
 
 ## Read when
 
-Read this file after independent review approves the current exact head, or the
-owner explicitly accepts the exact verdict's named residual findings, and the
-required proof is successful or machine-qualified.
+Read this file after independent review approves the current exact head,
+complete adjudication records zero required corrections, or the owner
+explicitly accepts every named required correction for the exact reviewed
+head, and the required proof is successful or machine-qualified.
 
 ## Procedure
 
 1. Use [live-state exact checks](../references/live-state.md), return here, and
    require the live PR head, reviewed head, and intended merge target to agree.
-2. Require either an `Approved` verdict for that head or a durable owner waiver
-   that preserves the real verdict URL, names every accepted residual, pins the
-   exact head, and explicitly authorizes merge. Never infer or manufacture a
-   waiver.
+2. Require exactly one valid outcome for that head:
+   - an `Approved` verdict;
+   - a complete focused-Issue adjudication that preserves the real RC URL,
+     exact head, every finding and disposition, all accepted residuals, and
+     records zero required corrections;
+   - a durable owner waiver that preserves the real verdict URL and
+     adjudication checkpoint, names every accepted required correction and
+     residual, pins the exact head, and explicitly authorizes merge.
+   Never infer or manufacture a disposition or waiver, and never relabel RC as
+   Approved.
 3. Require successful exact-head Actions proof or the complete qualified
    Markdown-only exception.
 4. Pin merge to the reviewed head and use the repository's established merge
@@ -33,8 +40,11 @@ required proof is successful or machine-qualified.
 
 - A moved head or superseded verdict returns to publication and exact-head
   review.
-- A waiver that omits the verdict, residuals, exact head, or explicit merge
-  authorization returns to correction; do not broaden it by inference.
+- An incomplete or stale finding disposition returns to
+  [adjudication](adjudicate.md).
+- A waiver that omits the verdict, adjudication, required corrections,
+  residuals, exact head, or explicit merge authorization returns to
+  correction; do not broaden it by inference.
 - Missing proof returns through the
   [CI router](../ci/router.md).
 - A merge-method discrepancy uses live-state recovery and the repository's

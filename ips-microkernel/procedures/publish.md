@@ -72,6 +72,9 @@ exception field. An absent run is never passing proof.
 
 - No verdict: start the independent review task at the
   [review router](../review/router.md).
-- Actionable verdict: open [correct](correct.md).
-- Approved exact head, or exact reviewed head with a recorded owner waiver,
-  and required proof: open [merge](merge.md).
+- `Changes requested` with incomplete finding disposition: open
+  [adjudicate](adjudicate.md).
+- Complete adjudication with required corrections: open [correct](correct.md).
+- Approved exact head, fully adjudicated exact head with zero required
+  corrections, or exact reviewed head with a recorded owner waiver and
+  required proof: open [merge](merge.md).

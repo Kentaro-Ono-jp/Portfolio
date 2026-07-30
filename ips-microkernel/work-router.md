@@ -48,13 +48,17 @@ routes until the selected route returns here with changed state.
    [implement and verify](procedures/implement.md).
 8. **The verified candidate is ready to commit, push, or publish as a Draft
    PR, including a follow-up push:** use [publish](procedures/publish.md).
-9. **An independent verdict contains actionable findings and no exact
-   owner waiver accepts them:** use [correct](procedures/correct.md).
-10. **An independently approved exact head, or an exact reviewed head with a
-    recorded owner waiver, has its required proof:** use
-    [merge](procedures/merge.md).
-11. **The PR is merged and evidence or cleanup remains:** use
-    [reconcile](procedures/reconcile.md).
+9. **An exact-head `Changes requested` verdict contains findings whose
+   disposition is incomplete:** use
+   [review finding adjudication](procedures/adjudicate.md).
+10. **Complete adjudication records one or more required corrections and no
+    exact owner waiver accepts them:** use [correct](procedures/correct.md).
+11. **An independently approved exact head, a fully adjudicated exact head
+    with zero required corrections, or an exact reviewed head with a recorded
+    owner waiver has its required proof:** use
+   [merge](procedures/merge.md).
+12. **The PR is merged and evidence or cleanup remains:** use
+   [reconcile](procedures/reconcile.md).
 
 If no condition matches, refresh bounded live state once and repeat the ordered
 selection. If no focused slice exists, use focus. Otherwise preserve the last

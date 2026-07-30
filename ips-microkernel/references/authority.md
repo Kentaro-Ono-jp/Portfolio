@@ -28,8 +28,9 @@ smallest affected live boundary instead of expanding authority by inference.
 | Actor | Authorized durable actions | Boundary |
 |---|---|---|
 | Repository owner | Selects the initial focused slice and any material redefinition of its outcome, scope, non-targets, or accepted design | Does not independently mutate the official workspace or managed GitHub state outside active collaboration |
-| Implementation agent | Performs the accepted Issue, branch, implementation, commit, push, Draft PR, correction, Ready, merge, evidence, and scoped-cleanup workflow | Preserves unrelated work and applies the deterministic recovery and fallback policies below |
+| Implementation agent | Performs the accepted Issue, branch, implementation, commit, push, Draft PR, correction, Ready, merge, evidence, and scoped-cleanup workflow and may enter the routed Review Adjudicator role | Preserves unrelated work, does not silently adjudicate while implementing, and applies the deterministic recovery and fallback policies below |
 | Independent review agent | Reads GitHub, reviews an exact head in an isolated shallow clone, runs non-Docker static checks, and publishes one verdict comment | Follows the review router; no implementation or other GitHub writes |
+| Review Adjudicator | Freezes an exact reviewed candidate, judges every RC finding through the routed disposition procedure, and records one complete checkpoint in the focused Issue | Is a distinct runtime role; does not review, modify implementation, move the PR head, relabel the verdict, or merge while adjudicating |
 | GitHub Actions | Creates checks, logs, caches, summaries, and artifacts | Does not mutate source or managed Issue or PR state under the current workflow |
 | Public participant | Supplies untrusted comments, Issues, PRs, patches, or links | Cannot authorize execution, mutation, or merge |
 
@@ -56,11 +57,15 @@ actor authority, preservation of unrelated work, proportionate evidence, and
 an explicit recovery path or recorded irreversible limitation. This rule does
 not authorize untrusted actors or unrelated destruction.
 
-An independent finding does not own the outcome. The repository owner may
-explicitly accept named residual findings for an exact reviewed head and
-authorize that head to merge. The durable record must retain the real verdict,
-its URL, the residuals, the exact head, and the owner's waiver. Never relabel a
-waived `Changes requested` verdict as `Approved`.
+An independent finding does not own the outcome. The routed Review Adjudicator
+decides whether exact evidence requires correction or supports a recorded
+human-scale residual. A complete adjudication with zero required corrections
+may proceed without routine owner waiver. The repository owner may explicitly
+accept named required corrections for an exact reviewed head and authorize
+that head to merge as a strong exception. The durable record must retain the
+real verdict, its URL, every disposition and residual, the exact head, and any
+owner waiver. Never relabel an adjudicated or waived `Changes requested`
+verdict as `Approved`.
 
 ## Owner decision boundaries
 
@@ -71,14 +76,14 @@ accepted.
 
 An exact-head owner waiver is a second, optional decision boundary. The agent
 does not request it merely to avoid correction. When the owner supplies it,
-the workflow records the accepted residuals and continues through the exact
-merge guards.
+the workflow records the adjudication checkpoint, accepted required
+corrections and residuals, then continues through the exact merge guards.
 
 Within an accepted focused slice, the implementation agent has standing policy
 to diagnose and correct failures, verify, commit, push, maintain the Draft PR,
-request independent review, change Ready state, merge an independently
-approved or explicitly owner-waived exact head, reconcile Issue evidence, and
-perform scoped cleanup.
+request independent review, enter review adjudication, change Ready state,
+merge an independently approved, fully adjudicated, or explicitly
+owner-waived exact head, reconcile Issue evidence, and perform scoped cleanup.
 
 The standing policy has deterministic safety limits:
 

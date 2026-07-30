@@ -5,19 +5,22 @@
 
 ## Read when
 
-Read this file when an independent exact-head verdict contains actionable
-findings.
+Read this file only after a complete exact-head adjudication records one or
+more `required-correction` dispositions and no exact owner waiver accepts
+them.
 
 ## Procedure
 
-1. Require the verdict SHA to equal the reviewed PR head and current expected
-   review head.
-2. Judge each finding against accepted design, focused scope, and concrete
-   evidence. Do not implement speculative expansion.
-3. If the owner explicitly accepts named residual findings for this exact head
-   and authorizes merge without correction, record the real verdict URL,
-   residuals, exact head, required proof, and owner waiver in the PR
-   checkpoint. Do not relabel the verdict. Route that checkpoint to
+1. Require the adjudication's exact head, verdict SHA, reviewed PR head, and
+   current expected review head to agree.
+2. Implement only findings recorded as `required-correction`. Preserve
+   `accepted-residual` and `non-material` dispositions without silently
+   reopening or correcting them.
+3. If the owner explicitly accepts every named required correction for this
+   exact head and authorizes merge without correction, record the real verdict
+   URL, adjudication checkpoint, accepted required corrections, exact head,
+   required proof, and owner waiver in the PR checkpoint. Do not relabel the
+   verdict. Route that checkpoint to
    [merge](merge.md).
 4. Route a correction that materially changes scope or accepted design to
    [focus](focus.md) as a new slice decision.
@@ -30,12 +33,13 @@ findings.
 7. Require the new exact head to pass or satisfy a qualified Markdown-only
    exception, then request re-review.
 
-A verdict applies only to its exact reviewed head.
+A verdict and its adjudication apply only to their exact reviewed head.
 
 ## Recovery
 
-- Refresh an untrusted or mismatched verdict through live-state checks and
-  request a new independent review of the exact head.
+- Refresh an untrusted or mismatched verdict or adjudication through
+  live-state checks and request a new independent review when the exact head
+  cannot be preserved.
 - Reject prohibited review mutation as evidence and preserve the canonical
   workspace.
 - Route a finding that requires material scope or design change to focus.
@@ -46,6 +50,7 @@ A verdict applies only to its exact reviewed head.
 
 - Correction required: loop to [implement and verify](implement.md).
 - Corrected push required: move to [publish](publish.md).
-- New verdict: re-enter this workflow for findings or move an approved exact
-  head to [merge](merge.md).
+- New `Changes requested` verdict: enter
+  [adjudication](adjudicate.md) before any further correction.
+- New Approved verdict: move the exact head to [merge](merge.md).
 - Exact owner waiver recorded: move the reviewed head to [merge](merge.md).

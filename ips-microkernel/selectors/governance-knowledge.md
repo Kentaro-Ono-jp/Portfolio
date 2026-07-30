@@ -26,6 +26,7 @@ atomic candidates before selection; never assign one candidate to two targets.
 | `focus` | Focused-slice selection or material redefinition | [Focus workflow](../procedures/focus.md) |
 | `implementation` | Implementation, verification, or staged-candidate preparation | [Implementation workflow](../procedures/implement.md) |
 | `publication` | Commit, push, Draft PR, or exact-head evidence publication | [Publication workflow](../procedures/publish.md) |
+| `adjudication` | Review-finding disposition, human-scale lenses, or adjudicated-RC routing | [Review adjudication](../procedures/adjudicate.md) |
 | `correction` | Actionable-review correction and re-review loop | [Correction workflow](../procedures/correct.md) |
 | `merge` | Ready or exact-head merge guard | [Merge workflow](../procedures/merge.md) |
 | `reconciliation` | Post-merge sequencing, main fast-forward, branch deletion, or task-owned cleanup | [Reconciliation workflow](../procedures/reconcile.md) |
