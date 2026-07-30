@@ -325,6 +325,7 @@ def test_real_postgres_failure_compensates_real_s3_object(
         session.add(
             DocumentRow(
                 id=conflict_document_id,
+                submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
                 original_filename="existing.pdf",
                 object_key=f"documents/{conflict_document_id}/source.pdf",
                 sha256="a" * 64,
