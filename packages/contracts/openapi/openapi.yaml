@@ -11,7 +11,8 @@ info:
 servers:
   - url: http://localhost:8000
     description: Local Compose environment
-security: []
+security:
+  - bearerAuth: []
 tags:
   - name: Documents
     description: Document submission and processing status.
@@ -20,6 +21,7 @@ tags:
 paths:
   /api/v1/documents:
     post:
+      security: []
       tags:
         - Documents
       summary: Submit a PDF for classification
@@ -64,6 +66,7 @@ paths:
           $ref: '#/components/responses/DependencyUnavailable'
   /api/v1/documents/{documentId}:
     get:
+      security: []
       tags:
         - Documents
       summary: Get document processing status
@@ -89,6 +92,7 @@ paths:
           $ref: '#/components/responses/DependencyUnavailable'
   /health:
     get:
+      security: []
       tags:
         - Operations
       summary: Check whether the API process is running
@@ -102,6 +106,7 @@ paths:
                 $ref: '#/components/schemas/Health'
   /ready:
     get:
+      security: []
       tags:
         - Operations
       summary: Check whether the API can accept useful work
@@ -116,6 +121,15 @@ paths:
         '503':
           $ref: '#/components/responses/DependencyUnavailable'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        OAuth access token validated independently by the API. The scheme is
+        defined for the authenticated-review boundary but is not applied to
+        document operations until the Web session path is delivered.
   parameters:
     DocumentId:
       name: documentId
@@ -139,7 +153,32 @@ components:
       schema:
         type: string
         format: uuid
+    BearerChallenge:
+      description: Sanitized OAuth bearer-token challenge.
+      schema:
+        type: string
+        pattern: '^Bearer realm="reactorfront-api"$'
   responses:
+    AuthenticationRequired:
+      description: A missing or invalid bearer access token.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+        WWW-Authenticate:
+          $ref: '#/components/headers/BearerChallenge'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AuthenticationRequiredProblem'
+    InsufficientCapability:
+      description: The authenticated principal lacks the required capability.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/InsufficientCapabilityProblem'
     InvalidRequest:
       description: A path, header, or request-body value violates the API contract.
       headers:
@@ -409,6 +448,38 @@ components:
         correlationId:
           type: string
           format: uuid
+    AuthenticationRequiredProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 401
+            code:
+              type: string
+              const: AUTHENTICATION_REQUIRED
+      unevaluatedProperties: false
+    InsufficientCapabilityProblem:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 403
+            code:
+              type: string
+              const: INSUFFICIENT_CAPABILITY
+      unevaluatedProperties: false
     InvalidRequestProblem:
       type: object
       allOf:

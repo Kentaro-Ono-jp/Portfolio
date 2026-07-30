@@ -37,6 +37,25 @@ class Settings(BaseSettings):
     events_prefetch_count: int = Field(default=1, ge=1, le=100)
     events_requeue_delay_seconds: float = Field(default=0.25, gt=0, le=5)
     events_reconnect_delay_seconds: float = Field(default=1.0, gt=0, le=30)
+    oidc_issuer: str = "http://127.0.0.1:5556/dex"
+    oidc_discovery_url: str = "http://127.0.0.1:5556/dex/.well-known/openid-configuration"
+    oidc_jwks_url: str = "http://127.0.0.1:5556/dex/keys"
+    oidc_audience: str = "reactorfront-api"
+    oidc_allowed_algorithm: str = "RS256"
+    oidc_jwks_cache_seconds: int = Field(default=300, ge=1, le=3600)
+    oidc_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
+    oidc_http_timeout_seconds: float = Field(default=2.0, gt=0, le=10)
+    oidc_capability_claim: str = "groups"
+    oidc_capability_mapping: dict[str, list[str]] = Field(
+        default_factory=lambda: {
+            "reactorfront-reviewers": [
+                "documents:submit",
+                "documents:read",
+                "reviews:write",
+                "audit:read",
+            ]
+        }
+    )
     event_contract_directory: Path = REPOSITORY_ROOT / "packages" / "contracts" / "events"
 
 

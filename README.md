@@ -135,7 +135,7 @@ python scripts/verify.py --static-only
 
 GitHub Actions runs `python scripts/verify.py` without the flag. That full path
 builds and starts only this repository's Compose project, proves the complete
-eight-service environment and browser E2E, and stops the project afterward. A
+nine-service environment and browser E2E, and stops the project afterward. A
 human reviewer may deliberately run the same full command with local Docker,
 but it is not the default AI-agent workflow:
 
@@ -201,7 +201,7 @@ base URL server-only behind same-origin route handlers, and presents accessible
 queued, processing, completed, failed, retry, and reset states. The final
 verification adds Playwright coverage for the real browser upload,
 completed invoice result, terminal ML failure, invalid-file rejection, and
-cross-service correlation evidence against the complete eight-service Compose
+cross-service correlation evidence against the complete nine-service Compose
 environment. A final manual full
 [main verification](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29734521272)
 re-proved the completed tree without maintainer-specific state. After the

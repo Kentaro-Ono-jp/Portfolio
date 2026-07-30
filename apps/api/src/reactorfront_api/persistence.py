@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
 
 from sqlalchemy import (
     CheckConstraint,
@@ -32,6 +32,8 @@ from reactorfront_api.domain import (
     DocumentSubmission,
     OutboxInvariantError,
     OutboxLease,
+    PrincipalKind,
+    PrincipalRecord,
     ProcessingStatus,
     PublishFailureCode,
     PublishFinalizeResult,
@@ -45,9 +47,35 @@ from reactorfront_api.domain import (
     SubmissionPersistenceError,
 )
 
+LEGACY_SYSTEM_PRINCIPAL_ID = UUID("00000000-0000-4000-8000-000000000001")
+LEGACY_SYSTEM_PRINCIPAL_KEY = "legacy-first-slice"
+
 
 class Base(DeclarativeBase):
     pass
+
+
+class PrincipalRow(Base):
+    __tablename__ = "principals"
+    __table_args__ = (
+        CheckConstraint(
+            "(kind = 'oidc' AND issuer IS NOT NULL AND length(issuer) > 0 "
+            "AND subject IS NOT NULL AND length(subject) > 0 AND system_key IS NULL) OR "
+            "(kind = 'system' AND issuer IS NULL AND subject IS NULL "
+            "AND system_key IS NOT NULL AND length(system_key) > 0)",
+            name="ck_principals_identity_shape",
+        ),
+        CheckConstraint("kind IN ('oidc', 'system')", name="ck_principals_kind"),
+        UniqueConstraint("issuer", "subject", name="uq_principals_oidc_identity"),
+        UniqueConstraint("system_key", name="uq_principals_system_key"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    issuer: Mapped[str | None] = mapped_column(String(2048))
+    subject: Mapped[str | None] = mapped_column(String(255))
+    system_key: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class DocumentRow(Base):
@@ -58,6 +86,11 @@ class DocumentRow(Base):
     )
 
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    submitted_by_principal_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     original_filename: Mapped[str] = mapped_column(String(255))
     object_key: Mapped[str] = mapped_column(String(1024), unique=True)
     sha256: Mapped[str] = mapped_column(String(64))
@@ -184,6 +217,55 @@ def create_database_engine(database_url: str) -> Engine:
     return create_engine(database_url, pool_pre_ping=True)
 
 
+class SqlAlchemyPrincipalRepository:
+    def __init__(self, *, engine: Engine) -> None:
+        self._engine = engine
+
+    def resolve_oidc_principal(self, *, issuer: str, subject: str) -> PrincipalRecord:
+        if not issuer or len(issuer) > 2048 or not subject or len(subject) > 255:
+            raise ValueError("OIDC issuer and subject must be non-empty and bounded.")
+        principal_id = uuid4()
+        created_at = datetime.now(UTC)
+        statement = (
+            insert(PrincipalRow)
+            .values(
+                id=principal_id,
+                kind=PrincipalKind.OIDC.value,
+                issuer=issuer,
+                subject=subject,
+                system_key=None,
+                created_at=created_at,
+            )
+            .on_conflict_do_nothing(index_elements=[PrincipalRow.issuer, PrincipalRow.subject])
+            .returning(PrincipalRow)
+        )
+        lookup = select(PrincipalRow).where(
+            PrincipalRow.issuer == issuer,
+            PrincipalRow.subject == subject,
+        )
+        with Session(self._engine) as session, session.begin():
+            row = session.scalar(statement)
+            if row is None:
+                row = session.scalar(lookup)
+            if row is None:
+                raise RuntimeError("The stable OIDC principal could not be resolved.")
+            return self._record_from_row(row)
+
+    def close(self) -> None:
+        self._engine.dispose()
+
+    @staticmethod
+    def _record_from_row(row: PrincipalRow) -> PrincipalRecord:
+        return PrincipalRecord(
+            principal_id=row.id,
+            kind=PrincipalKind(row.kind),
+            issuer=row.issuer,
+            subject=row.subject,
+            system_key=row.system_key,
+            created_at=row.created_at,
+        )
+
+
 class SqlAlchemySubmissionRepository:
     def __init__(self, *, engine: Engine) -> None:
         self._engine = engine
@@ -194,6 +276,7 @@ class SqlAlchemySubmissionRepository:
             try:
                 document = DocumentRow(
                     id=submission.document_id,
+                    submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
                     original_filename=submission.original_filename,
                     object_key=submission.object_key,
                     sha256=submission.sha256,

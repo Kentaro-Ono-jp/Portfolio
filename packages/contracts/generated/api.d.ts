@@ -181,6 +181,18 @@ export interface components {
             /** Format: uuid */
             correlationId: string;
         };
+        AuthenticationRequiredProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 401;
+            /** @constant */
+            code: "AUTHENTICATION_REQUIRED";
+        };
+        InsufficientCapabilityProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 403;
+            /** @constant */
+            code: "INSUFFICIENT_CAPABILITY";
+        };
         InvalidRequestProblem: components["schemas"]["Problem"] & {
             /** @constant */
             status: 422;
@@ -219,6 +231,27 @@ export interface components {
         };
     };
     responses: {
+        /** @description A missing or invalid bearer access token. */
+        AuthenticationRequired: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                "WWW-Authenticate": components["headers"]["BearerChallenge"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["AuthenticationRequiredProblem"];
+            };
+        };
+        /** @description The authenticated principal lacks the required capability. */
+        InsufficientCapability: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["InsufficientCapabilityProblem"];
+            };
+        };
         /** @description A path, header, or request-body value violates the API contract. */
         InvalidRequest: {
             headers: {
@@ -290,6 +323,8 @@ export interface components {
     headers: {
         /** @description Correlation identifier assigned to this request flow. */
         CorrelationId: string;
+        /** @description Sanitized OAuth bearer-token challenge. */
+        BearerChallenge: string;
     };
     pathItems: never;
 }
