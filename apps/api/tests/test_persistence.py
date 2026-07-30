@@ -19,6 +19,7 @@ from reactorfront_api.domain import (
     SubmissionPersistenceError,
 )
 from reactorfront_api.persistence import (
+    LEGACY_SYSTEM_PRINCIPAL_ID,
     DocumentRow,
     OutboxEventRow,
     ProcessingJobRow,
@@ -229,6 +230,9 @@ def test_save_flushes_all_rows_before_committing(monkeypatch: pytest.MonkeyPatch
         ProcessingJobRow,
         OutboxEventRow,
     ]
+    document = session.added[0]
+    assert isinstance(document, DocumentRow)
+    assert document.submitted_by_principal_id == LEGACY_SYSTEM_PRINCIPAL_ID
     assert session.flush_snapshots == [
         [DocumentRow],
         [DocumentRow, ProcessingJobRow],
@@ -271,6 +275,7 @@ def test_commit_observation_requires_all_three_matching_rows(
     candidate = submission()
     document = DocumentRow(
         id=DOCUMENT_ID,
+        submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
         original_filename="invoice.pdf",
         object_key=candidate.object_key,
         sha256=candidate.sha256,

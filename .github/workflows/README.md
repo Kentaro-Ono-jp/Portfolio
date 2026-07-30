@@ -18,9 +18,10 @@ passing evidence.
 requests, `main`, and manual dispatch. It proves the canonical contracts,
 generated types, documentation links, static analysis, pinned API/ML dependency
 audits, API/dispatcher/ML images, deterministic model generation, real
-PostgreSQL/MinIO/RabbitMQ behavior, CPU PyTorch inference, publisher
+PostgreSQL/MinIO/RabbitMQ behavior, CPU PyTorch inference, pinned Dex OIDC
+validation, populated principal migration, publisher
 confirmation, stable ML failure, at-least-once duplicate handling, restart
-recovery, complete eight-service readiness, and the Playwright
+recovery, complete nine-service readiness, and the Playwright
 browser-to-ML-to-browser completed and failed paths from a clean GitHub-hosted
 runner.
 

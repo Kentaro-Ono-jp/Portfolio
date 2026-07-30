@@ -50,6 +50,12 @@ function responseValidator(pathName, method, httpStatus) {
   return schema.$ref ? compileReference(schema.$ref) : ajv.compile(schema);
 }
 
+function componentResponseValidator(responseName) {
+  const response = openapi.components.responses[responseName];
+  const schema = response.content["application/problem+json"].schema;
+  return schema.$ref ? compileReference(schema.$ref) : ajv.compile(schema);
+}
+
 function expectValid(validate, value, name) {
   if (!validate(value)) {
     throw new Error(`${name} should be valid: ${formatErrors(validate.errors)}`);
@@ -128,6 +134,18 @@ for (const invalidCase of invalidDocumentStatuses) {
 }
 
 const correlationId = "11111111-1111-4111-8111-111111111111";
+const authenticationContracts = [
+  {
+    responseName: "AuthenticationRequired",
+    httpStatus: 401,
+    code: "AUTHENTICATION_REQUIRED",
+  },
+  {
+    responseName: "InsufficientCapability",
+    httpStatus: 403,
+    code: "INSUFFICIENT_CAPABILITY",
+  },
+];
 const problemContracts = [
   {
     pathName: "/api/v1/documents",
@@ -185,6 +203,23 @@ const problemContracts = [
   },
 ];
 
+for (const contract of authenticationContracts) {
+  const validate = componentResponseValidator(contract.responseName);
+  const validProblem = {
+    type: `urn:reactorfront:problem:${contract.code.toLowerCase().replaceAll("_", "-")}`,
+    title: "Stable public problem",
+    status: contract.httpStatus,
+    code: contract.code,
+    correlationId,
+  };
+  expectValid(validate, validProblem, contract.responseName);
+  expectInvalid(
+    validate,
+    { ...validProblem, status: contract.httpStatus === 401 ? 403 : 401 },
+    `${contract.responseName} with mismatched body status`,
+  );
+}
+
 for (const contract of problemContracts) {
   const validate = responseValidator(
     contract.pathName,
@@ -215,5 +250,6 @@ for (const contract of problemContracts) {
 console.log(
   `Validated ${validDocumentStatuses.length} document states, ` +
     `${invalidDocumentStatuses.length} invalid state cases, and ` +
-    `${problemContracts.length * 2} invalid problem cases.`,
+    `${problemContracts.length * 2 + authenticationContracts.length} ` +
+    `invalid problem cases.`,
 );

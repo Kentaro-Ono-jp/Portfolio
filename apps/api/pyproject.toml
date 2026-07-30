@@ -16,6 +16,7 @@ dependencies = [
   "jsonschema==4.26.0",
   "pika==1.4.1",
   "psycopg[binary]==3.3.4",
+  "pyjwt[crypto]==2.13.0",
   "pydantic==2.13.4",
   "pydantic-settings==2.14.2",
   "python-multipart==0.0.32",

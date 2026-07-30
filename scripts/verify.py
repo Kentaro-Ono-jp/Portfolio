@@ -36,6 +36,7 @@ EXPECTED_COMPOSE_SERVICES = frozenset(
         "postgres",
         "minio",
         "rabbitmq",
+        "identity",
         "api",
         "api-outbox",
         "api-events",
@@ -240,6 +241,8 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
 
     api_runtime_helpers = {
         "scripts/prepare_integration.py",
+        "scripts/verify_identity_runtime.py",
+        "scripts/verify_principal_migration.py",
         "scripts/verify_outbox_runtime.py",
         "scripts/verify_result_consumer_runtime.py",
     }
@@ -257,6 +260,9 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
 
     if normalized == "scripts/check_ml_compose_boundary.py":
         return frozenset({"compose", "ml-static"})
+
+    if normalized == "scripts/check_identity_boundary.py":
+        return frozenset({"compose", "api-static"})
 
     if normalized.startswith("apps/web/"):
         groups = {"web-static"}
@@ -596,9 +602,12 @@ def static_checks(
                 "scripts/verify.py",
                 "scripts/plan_ci.py",
                 "scripts/prepare_integration.py",
+                "scripts/verify_identity_runtime.py",
+                "scripts/verify_principal_migration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
+                "scripts/check_identity_boundary.py",
             ],
         ),
         (
@@ -617,9 +626,12 @@ def static_checks(
                 "scripts/verify.py",
                 "scripts/plan_ci.py",
                 "scripts/prepare_integration.py",
+                "scripts/verify_identity_runtime.py",
+                "scripts/verify_principal_migration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
+                "scripts/check_identity_boundary.py",
             ],
         ),
         (
@@ -738,6 +750,10 @@ def static_checks(
             "Validate deployable Compose boundaries",
             [sys.executable, "scripts/check_ml_compose_boundary.py"],
         ),
+        (
+            "Validate test identity boundary",
+            [sys.executable, "scripts/check_identity_boundary.py"],
+        ),
     ]
     check_groups = {
         "Validate canonical contracts": "contracts",
@@ -762,6 +778,7 @@ def static_checks(
         "Audit the normalized PyTorch CPU release identity": "ml-static",
         "Prove deterministic ML model generation": "ml-static",
         "Validate deployable Compose boundaries": "compose",
+        "Validate test identity boundary": "compose",
     }
     filtered = [check for check in checks if check_groups[check[0]] in groups]
     if "api-static" in groups:
@@ -826,12 +843,12 @@ def prove_complete_compose_readiness(docker: str) -> None:
         missing = EXPECTED_COMPOSE_SERVICES - running
         unexpected = running - EXPECTED_COMPOSE_SERVICES
         raise RuntimeError(
-            "Complete Compose readiness did not expose the exact eight services; "
+            "Complete Compose readiness did not expose the exact nine services; "
             f"missing={','.join(sorted(missing)) or 'none'}, "
             f"unexpected={','.join(sorted(unexpected)) or 'none'}."
         )
     capture_runtime_diagnostic(
-        label="Record complete eight-service readiness",
+        label="Record complete nine-service readiness",
         command=compose_command(docker, "ps", "--all"),
         filename="compose-ready.txt",
     )
@@ -907,7 +924,7 @@ def run_runtime_checks(
             compose_command(docker, "build", "--pull"),
         )
     run(
-        "Build and start isolated PostgreSQL, MinIO, and RabbitMQ",
+        "Build and start isolated PostgreSQL, MinIO, RabbitMQ, and test identity",
         compose_command(
             docker,
             "up",
@@ -917,6 +934,7 @@ def run_runtime_checks(
             "postgres",
             "minio",
             "rabbitmq",
+            "identity",
         ),
     )
     run(
@@ -928,6 +946,17 @@ def run_runtime_checks(
             "apps/api",
             "python",
             "scripts/prepare_integration.py",
+        ],
+    )
+    run(
+        "Prove populated first-slice migration into the principal foundation",
+        [
+            uv,
+            "run",
+            "--project",
+            "apps/api",
+            "python",
+            "scripts/verify_principal_migration.py",
         ],
     )
     run(
@@ -983,6 +1012,17 @@ def run_runtime_checks(
         )
     if "api-runtime" in groups:
         run(
+            "Prove protocol-faithful identity validation and stable principal mapping",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/api",
+                "python",
+                "scripts/verify_identity_runtime.py",
+            ],
+        )
+        run(
             "Run API unit and real-service integration tests",
             pytest_command(uv, include_integration=True),
         )
@@ -1022,7 +1062,7 @@ def run_runtime_checks(
         )
     if full_e2e:
         run(
-            "Start the complete eight-service Compose environment",
+            "Start the complete nine-service Compose environment",
             compose_command(
                 docker,
                 "up",

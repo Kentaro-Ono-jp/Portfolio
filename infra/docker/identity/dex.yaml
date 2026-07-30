@@ -1,0 +1,38 @@
+issuer: http://127.0.0.1:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  grantTypes:
+    - authorization_code
+  responseTypes:
+    - code
+  skipApprovalScreen: true
+  alwaysShowLoginScreen: false
+
+expiry:
+  signingKeys: 6h
+  idTokens: 5m
+  authRequests: 5m
+
+enablePasswordDB: true
+
+staticClients:
+  - id: reactorfront-api
+    public: true
+    name: ReactorFront synthetic API verifier
+    redirectURIs:
+      - http://127.0.0.1:5557/callback
+
+staticPasswords:
+  - email: reviewer@synthetic.invalid
+    # Public test credential "password"; never authorize this fixture outside Compose.
+    hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+    username: synthetic-reviewer
+    userID: synthetic-reviewer
+    groups:
+      - reactorfront-reviewers

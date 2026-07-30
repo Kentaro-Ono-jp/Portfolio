@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 import pytest
+import yaml
 from jsonschema import ValidationError
 
 from reactorfront_api.domain import DocumentStatusRecord, ProcessingStatus
@@ -13,6 +15,7 @@ from reactorfront_api.schemas import serialize_document_status
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_DIRECTORY = REPOSITORY_ROOT / "packages" / "contracts" / "events"
+OPENAPI_PATH = REPOSITORY_ROOT / "packages" / "contracts" / "openapi" / "openapi.yaml"
 DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
 JOB_ID = UUID("33333333-3333-4333-8333-333333333333")
 NOW = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
@@ -29,6 +32,37 @@ def requested_event() -> dict[str, object]:
         "objectKey": f"documents/{DOCUMENT_ID}/source.pdf",
         "sourceSha256": "a" * 64,
     }
+
+
+def test_authentication_contract_is_staged_without_protecting_current_routes() -> None:
+    contract = cast(
+        dict[str, object],
+        yaml.safe_load(OPENAPI_PATH.read_text(encoding="utf-8")),
+    )
+    assert contract["security"] == [{"bearerAuth": []}]
+    paths = cast(dict[str, dict[str, dict[str, object]]], contract["paths"])
+    operations = [
+        paths["/api/v1/documents"]["post"],
+        paths["/api/v1/documents/{documentId}"]["get"],
+        paths["/health"]["get"],
+        paths["/ready"]["get"],
+    ]
+    assert all(operation["security"] == [] for operation in operations)
+    components = cast(dict[str, dict[str, object]], contract["components"])
+    assert components["securitySchemes"]["bearerAuth"] == {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": (
+            "OAuth access token validated independently by the API. The scheme "
+            "is defined for the authenticated-review boundary but is not applied "
+            "to document operations until the Web session path is delivered."
+        ),
+    }
+    assert {
+        "AuthenticationRequired",
+        "InsufficientCapability",
+    } <= components["responses"].keys()
 
 
 def test_event_validator_uses_repository_contracts() -> None:

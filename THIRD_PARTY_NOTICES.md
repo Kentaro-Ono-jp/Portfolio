@@ -11,6 +11,7 @@ under their own licenses.
 | PostgreSQL | `postgres:18.4-bookworm` manifest digest in `compose.yaml` | PostgreSQL License | API-owned persistence |
 | MinIO | official source commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` | AGPL-3.0-only | separate S3-compatible test service |
 | RabbitMQ | `rabbitmq:4.3.2-alpine` manifest digest in `compose.yaml` | MPL-2.0 | durable message broker |
+| Dex | `ghcr.io/dexidp/dex:v2.45.1` manifest digest in `compose.yaml` | Apache-2.0 | separate protocol-faithful OIDC test service |
 | Python | `python:3.13.14-slim-bookworm` manifest digest in the API and ML Dockerfiles | Python Software Foundation License | API and ML runtimes |
 | Node.js | `node:24.18.0-bookworm-slim` manifest digest in the Web Dockerfile | MIT and bundled third-party licenses | Next.js Web runtime |
 
@@ -29,6 +30,10 @@ dependency licenses.
 The Web runtime's principal introduced packages are Next.js, React, TanStack
 Query, Zod, and Tailwind CSS. Their package metadata, bundled notices, and the
 exact `pnpm-lock.yaml` resolution remain authoritative.
+
+The API runtime uses PyJWT `2.13.0` with its cryptography extra (MIT) for
+asymmetric OAuth access-token validation and bounded JWKS caching. Its exact
+direct and transitive dependency metadata is preserved in `apps/api/uv.lock`.
 
 The ML runtime's principal introduced packages include the CPU-only PyTorch
 wheel from the official PyTorch index (Apache-2.0 and bundled third-party

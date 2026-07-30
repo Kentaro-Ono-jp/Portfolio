@@ -17,6 +17,7 @@ from reactorfront_api.domain import (
     ResultEventType,
 )
 from reactorfront_api.persistence import (
+    LEGACY_SYSTEM_PRINCIPAL_ID,
     DocumentRow,
     OutboxEventRow,
     ProcessingJobRow,
@@ -89,6 +90,7 @@ def result_event(
 def document() -> DocumentRow:
     return DocumentRow(
         id=DOCUMENT_ID,
+        submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
         original_filename="invoice.pdf",
         object_key=OBJECT_KEY,
         sha256=SOURCE_SHA256,

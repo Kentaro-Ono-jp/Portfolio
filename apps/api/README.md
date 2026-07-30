@@ -24,6 +24,9 @@ API image roles.
 - FastAPI and Pydantic transport models
 - SQLAlchemy 2 and PostgreSQL 18 persistence
 - explicit Alembic migrations
+- PyJWT access-token validation with exact issuer, audience, algorithm, time,
+  JWKS-cache, and API-owned capability policy
+- API-owned OIDC and controlled-system principals with populated-v1 migration
 - S3-compatible source-object storage through boto3
 - canonical JSON Schema validation before outbox persistence
 - safe PostgreSQL outbox leasing with process-unique ownership, attempt fencing,
@@ -120,6 +123,15 @@ examples and are overridden inside Compose.
 | `PORTFOLIO_EVENTS_PREFETCH_COUNT` | `1` |
 | `PORTFOLIO_EVENTS_REQUEUE_DELAY_SECONDS` | `0.25` |
 | `PORTFOLIO_EVENTS_RECONNECT_DELAY_SECONDS` | `1` |
+| `PORTFOLIO_OIDC_ISSUER` | `http://127.0.0.1:5556/dex` |
+| `PORTFOLIO_OIDC_DISCOVERY_URL` | loopback Dex discovery document |
+| `PORTFOLIO_OIDC_JWKS_URL` | loopback Dex JWKS; Compose uses the internal backchannel |
+| `PORTFOLIO_OIDC_AUDIENCE` | `reactorfront-api` |
+| `PORTFOLIO_OIDC_ALLOWED_ALGORITHM` | `RS256` |
+| `PORTFOLIO_OIDC_JWKS_CACHE_SECONDS` | `300` |
+| `PORTFOLIO_OIDC_CLOCK_SKEW_SECONDS` | `30` |
+| `PORTFOLIO_OIDC_HTTP_TIMEOUT_SECONDS` | `2` |
+| `PORTFOLIO_OIDC_CAPABILITY_CLAIM` | `groups` |
 
 These values are development-only. Required host ports bind to `127.0.0.1`,
 and the MinIO administration console is not published to the host.
@@ -140,5 +152,8 @@ exercises the real HTTP, database, object-storage, publisher-confirm, result
 persistence, duplicate-delivery, ordering-race, poison-input, restart-recovery,
 stale-attempt fencing, and confirmation-deadline boundaries.
 
-Authentication and authorization are deliberately deferred beyond the first
-vertical slice.
+The authentication and principal foundation is implemented, but the existing
+document operations remain anonymous until the Next.js server-owned session
+and ownership boundary can switch them coherently. The OpenAPI bearer scheme
+and canonical `401`/`403` problems are therefore reusable contracts, not a
+claim that document routes are protected in this increment.

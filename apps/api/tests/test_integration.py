@@ -41,10 +41,13 @@ from reactorfront_api.outbox import (
     OutboxDispatcher,
 )
 from reactorfront_api.persistence import (
+    LEGACY_SYSTEM_PRINCIPAL_ID,
     DocumentRow,
     OutboxEventRow,
+    PrincipalRow,
     ProcessingJobRow,
     SqlAlchemyOutboxRepository,
+    SqlAlchemyPrincipalRepository,
     SqlAlchemyResultEventRepository,
     SqlAlchemySubmissionRepository,
 )
@@ -85,10 +88,12 @@ def engine(settings: Settings) -> Iterator[Engine]:
     try:
         with database_engine.begin() as connection:
             connection.execute(truncate)
+            connection.execute(text("DELETE FROM principals WHERE kind = 'oidc'"))
         yield database_engine
     finally:
         with database_engine.begin() as connection:
             connection.execute(truncate)
+            connection.execute(text("DELETE FROM principals WHERE kind = 'oidc'"))
         database_engine.dispose()
 
 
@@ -130,11 +135,37 @@ def table_count(engine: Engine, table_name: str) -> int:
         "processing_jobs",
         "outbox_events",
         "result_event_receipts",
+        "principals",
     }
     if table_name not in allowed_tables:
         raise ValueError(f"Unexpected table name: {table_name}")
     with engine.connect() as connection:
         return int(connection.execute(text(f"SELECT count(*) FROM {table_name}")).scalar_one())
+
+
+def test_oidc_principal_resolution_is_stable_and_distinct_from_legacy(
+    engine: Engine,
+) -> None:
+    repository = SqlAlchemyPrincipalRepository(engine=engine)
+
+    first = repository.resolve_oidc_principal(
+        issuer="http://127.0.0.1:5556/dex",
+        subject="synthetic-reviewer",
+    )
+    repeated = repository.resolve_oidc_principal(
+        issuer="http://127.0.0.1:5556/dex",
+        subject="synthetic-reviewer",
+    )
+
+    assert first.principal_id == repeated.principal_id
+    assert first.principal_id != LEGACY_SYSTEM_PRINCIPAL_ID
+    assert table_count(engine, "principals") == 2
+    with Session(engine) as session:
+        legacy = session.get(PrincipalRow, LEGACY_SYSTEM_PRINCIPAL_ID)
+        assert legacy is not None
+        assert legacy.kind == "system"
+        assert legacy.issuer is None
+        assert legacy.subject is None
 
 
 def test_submission_crosses_real_http_postgres_and_s3_boundaries(
@@ -237,7 +268,8 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
     with engine.connect() as connection:
         document = connection.execute(
             text(
-                "SELECT object_key, sha256, content_type, size_bytes "
+                "SELECT object_key, sha256, content_type, size_bytes, "
+                "submitted_by_principal_id "
                 "FROM documents WHERE id = :document_id"
             ),
             {"document_id": document_id},
@@ -255,7 +287,13 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
 
     digest = hashlib.sha256(PDF).hexdigest()
     object_key = f"documents/{document_id}/source.pdf"
-    assert tuple(document) == (object_key, digest, "application/pdf", len(PDF))
+    assert tuple(document) == (
+        object_key,
+        digest,
+        "application/pdf",
+        len(PDF),
+        LEGACY_SYSTEM_PRINCIPAL_ID,
+    )
     assert tuple(job) == ("accepted", 0)
     assert outbox.event_type == "document.processing.requested.v1"
     assert outbox.aggregate_id == job_id
@@ -287,6 +325,7 @@ def test_real_postgres_failure_compensates_real_s3_object(
         session.add(
             DocumentRow(
                 id=conflict_document_id,
+                submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
                 original_filename="existing.pdf",
                 object_key=f"documents/{conflict_document_id}/source.pdf",
                 sha256="a" * 64,

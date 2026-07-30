@@ -56,6 +56,24 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
 
+  identity:
+    image: ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
+    command: ["dex", "serve", "/etc/dex/dex.yaml"]
+    ports:
+      - "127.0.0.1:${PORTFOLIO_IDENTITY_PORT:-5556}:5556"
+    volumes:
+      - ./infra/docker/identity/dex.yaml:/etc/dex/dex.yaml:ro
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --output-document=-
+        - http://127.0.0.1:5556/dex/.well-known/openid-configuration
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   api:
     image: reactorfront-portfolio-api:local
     build:
@@ -70,6 +88,10 @@ services:
       PORTFOLIO_S3_REGION: us-east-1
       PORTFOLIO_RABBITMQ_URL: amqp://portfolio:portfolio-local-password@rabbitmq:5672/%2F
       PORTFOLIO_EVENT_CONTRACT_DIRECTORY: /workspace/packages/contracts/events
+      PORTFOLIO_OIDC_ISSUER: http://127.0.0.1:5556/dex
+      PORTFOLIO_OIDC_DISCOVERY_URL: http://identity:5556/dex/.well-known/openid-configuration
+      PORTFOLIO_OIDC_JWKS_URL: http://identity:5556/dex/keys
+      PORTFOLIO_OIDC_AUDIENCE: reactorfront-api
     command:
       - /bin/sh
       - -c

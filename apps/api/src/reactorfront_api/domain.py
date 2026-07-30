@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -13,6 +14,11 @@ class ProcessingStatus(StrEnum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class PrincipalKind(StrEnum):
+    OIDC = "oidc"
+    SYSTEM = "system"
 
 
 class SubmissionCommitOutcome(StrEnum):
@@ -89,6 +95,8 @@ class SubmissionPersistenceError(Exception):
 
 
 class ProblemCode(StrEnum):
+    AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED"
+    INSUFFICIENT_CAPABILITY = "INSUFFICIENT_CAPABILITY"
     INVALID_REQUEST = "INVALID_REQUEST"
     INVALID_DOCUMENT = "INVALID_DOCUMENT"
     DOCUMENT_TOO_LARGE = "DOCUMENT_TOO_LARGE"
@@ -106,6 +114,7 @@ class PublicProblem(Exception):
         title: str,
         detail: str,
         correlation_id: UUID,
+        response_headers: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(detail)
         self.status = status
@@ -113,6 +122,7 @@ class PublicProblem(Exception):
         self.title = title
         self.detail = detail
         self.correlation_id = correlation_id
+        self.response_headers = dict(response_headers or {})
 
     @property
     def type_uri(self) -> str:
@@ -154,6 +164,16 @@ class DocumentStatusRecord:
     confidence: float | None = None
     model_version: str | None = None
     failure_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PrincipalRecord:
+    principal_id: UUID
+    kind: PrincipalKind
+    issuer: str | None
+    subject: str | None
+    system_key: str | None
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)

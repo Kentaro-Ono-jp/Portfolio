@@ -72,7 +72,10 @@ def public_problem_response(problem: PublicProblem) -> JSONResponse:
         status_code=problem.status,
         content=jsonable_encoder(body, by_alias=True),
         media_type="application/problem+json",
-        headers={CORRELATION_HEADER: str(problem.correlation_id)},
+        headers={
+            **problem.response_headers,
+            CORRELATION_HEADER: str(problem.correlation_id),
+        },
     )
 
 

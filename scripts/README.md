@@ -33,7 +33,7 @@ repository structure and then starts only the
 `reactorfront-portfolio` Compose project for migration, API and ML images,
 PostgreSQL, S3-compatible storage, RabbitMQ, publisher-confirm, model, Web,
 result-event persistence, duplicate-delivery, restart-recovery, exact
-eight-service readiness, and Playwright browser checks. It stops that project
+nine-service readiness, and Playwright browser checks. It stops that project
 afterward. AI agents never start or mutate local Docker Desktop; Docker-backed
 proof runs in GitHub Actions.
 GitHub Actions also removes
@@ -73,6 +73,17 @@ Supporting scripts are implementation details of that entrypoint:
   without confusing valid uncommitted output with stale output.
 - `prepare_integration.py` idempotently creates the deterministic S3 test
   bucket after MinIO is healthy.
+- `verify_principal_migration.py` upgrades a populated first-slice schema and
+  proves that documents, jobs, outbox rows, and result receipts retain their
+  identities while receiving only the controlled legacy-system principal.
+- `verify_identity_runtime.py` follows Dex Authorization Code flow with PKCE,
+  validates the real access token and capabilities both host-side and inside
+  the API container through its backchannel, resolves one stable API principal,
+  rejects a tampered signature, and proves the token is absent from persistence,
+  logs, and evidence.
+- `check_identity_boundary.py` constrains the pinned Dex image, loopback-only
+  exposure, authorization-code-only configuration, synthetic identity, and
+  pinned JWT library.
 - `pdf_fixture.py` builds deterministic, repository-owned single-page text PDFs.
 - `verify_ml_model.py` proves independent model generations, checksum metadata,
   and real CPU PyTorch inference.

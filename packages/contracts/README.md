@@ -21,6 +21,8 @@ boundaries:
 ## Accepted initial direction
 
 - OpenAPI 3.1 is canonical for synchronous API contracts.
+- The reusable OAuth bearer scheme and canonical `401`/`403` problems are
+  defined before operation-level security is activated with the Web session.
 - JSON Schema is canonical for asynchronous event payloads.
 - Requested, started, completed, and failed processing events are versioned and
   carry event, correlation, document, and job identifiers.
