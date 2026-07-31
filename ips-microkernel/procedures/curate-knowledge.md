@@ -11,6 +11,11 @@ adjudication, and every required correction, if any, has successful exact-head
 proof or a qualified exception. Also read it for an uncurated late candidate
 during post-merge reconciliation.
 
+Do not enter this general curation role for an unresolved direct
+Behavior/Proof careless-mistake write-back after a review or CI correction.
+That narrow route is completed in Gate A first; any other reusable governance
+candidate returns here afterward.
+
 ## Required inputs
 
 - focused Issue and exact current lifecycle state;
@@ -46,7 +51,8 @@ deferred or follow-up Issue required by its disposition.
    every required correction, if any. A candidate with no associated
    actionable finding or required correction remains eligible; an unproved or
    stale candidate is not eligible for curation.
-4. Separate CI runner and Actions signals to the [CI router](../ci/router.md).
+4. Separate reusable Proof semantics, CI runner, and Actions signals to the
+   [CI router](../ci/router.md).
    Return material product, delivery, architecture, security, or actor-authority
    redefinition to [focus](focus.md). Continue here only for bounded reusable
    collaboration knowledge.

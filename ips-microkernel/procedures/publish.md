@@ -5,34 +5,47 @@
 
 ## Read when
 
-Read this file when a complete candidate is verified, CI-hardened, and staged,
-or after a correction must be pushed to an existing Draft PR.
+Read this file when a complete first-pass candidate is verified and staged, or
+after a correction must be committed and pushed to an existing Draft PR.
 
 ## Initial publication
 
 1. Inspect the complete staged diff and staged file list.
 2. Use [live-state exact checks](../references/live-state.md), return here, and
-   require the intended branch and head.
-3. Commit tersely, push the focused branch, and open a Draft PR linked to the
-   focused Issue and governing tracking Issue.
-4. Treat the pushed commit and Draft PR as the recoverable task checkpoint.
+   require the intended branch, focused base, and expected remote tip.
+3. Commit the complete verified candidate tersely without pushing.
+4. Enter the [CI router](../ci/router.md), complete Gate A pre-CI / pre-push
+   hardening against that exact local commit, and return here. If hardening
+   moves local HEAD, Gate A restarts before publication continues.
+5. Push only the exact checked HEAD and open a Draft PR linked to the focused
+   Issue and governing tracking Issue. Read back the remote branch tip and live
+   PR head; require both to equal the full pushed SHA.
+6. Treat the pushed commit and Draft PR as the recoverable task checkpoint.
    Uncommitted or unpushed work is not durable handoff state.
-5. Require the workflow result to target the exact pushed head.
-6. Reconcile the PR description with current scope, non-targets, failure model,
+7. Require the workflow result to target the exact pushed head. A different
+   pushed SHA makes older CI, verdict, and endpoint evidence stale.
+8. Complete Gate B by reading only triggered `pre-review` entries in the
+   [Behavior careless-mistake guide](../knowledge/behavior.md). Compare the
+   live PR base/head, exact-head workflow, and lifecycle links with the PR.
+9. Reconcile the PR description with current scope, non-targets, failure model,
    acceptance criteria, selected/executed/carried/skipped groups and both N/NN
-   counts, exact head, and exact-head workflow state.
-7. Read the live PR description back and require its declared head to equal the
-   live PR head.
-8. Supply a copyable initial-review prompt with repository, PR, governing
-   tracking Issue, focused Issue, expected full SHA, review cycle `initial`,
-   previous verdict `none`, and current workflow evidence or qualified
-   limitation.
+   counts, exact full base and head SHAs, exact-head workflow state, and any
+   `Knowledge write-back` correction decision.
+10. Read the live title and description back. Require both declared endpoints
+    to equal the live PR endpoints and confirm that the metadata update did not
+    move the PR head.
+11. Supply a copyable initial-review prompt with repository, PR, governing
+    tracking Issue, focused Issue, expected full base SHA, expected full head
+    SHA, review cycle `initial`, previous verdict `none`, and current workflow
+    evidence or qualified limitation. Dispatch only after Gate B passes.
 
 ## Follow-up push
 
-After every correction push:
+For every correction, repeat Gate A before push. After the exact correction
+push and its successful CI:
 
-1. Require the live PR head to equal the full pushed SHA.
+1. Read the remote branch and live PR head back and require both to equal the
+   full pushed SHA.
 2. Replace the current-review head and describe why it moved plus the exact
    delta from the previous head.
 3. Record the previous verdict and every finding's disposition.
@@ -43,12 +56,18 @@ After every correction push:
    `Verification-Skip` trailer, including inherited gaps not re-executed.
 6. State whether scope, non-targets, failure model, or acceptance criteria
    changed.
-7. Read the live description back and require its declared head to match.
+7. Complete Gate B through triggered `pre-review` Behavior entries, then read
+   the live description back and require its declared exact base and head to
+   match the live endpoints.
 8. Supply a refreshed initial-review prompt when no verdict exists; otherwise
-   supply a re-review prompt with the real previous-verdict URL and every
-   finding disposition.
+   supply a re-review prompt with expected full base and head SHAs, the real
+   previous-verdict URL, every finding disposition, correction links, and the
+   direct knowledge write-back decision.
 
 A pushed checkpoint is incomplete without the applicable populated prompt.
+Editing only PR title or body is head-neutral and may reuse successful
+exact-head CI. If Gate B requires a repository-file change, return to
+implementation, commit it, repeat Gate A, push, and obtain new exact-head CI.
 
 ## Conditional exception
 
@@ -64,6 +83,7 @@ exception field. An absent run is never passing proof.
   work.
 - Refresh a moved remote head through live-state recovery.
 - Rewrite and read back a stale PR description.
+- Return any Gate B repository-file correction through Gate A and new CI.
 - Route missing exact-head proof through the CI router.
 - Return a material scope change to [focus](focus.md) before publication
   continues.

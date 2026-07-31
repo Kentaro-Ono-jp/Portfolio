@@ -1,30 +1,47 @@
-# Staged pre-commit hardening
+# Pre-CI / pre-push hardening
 
 <!-- ips-role: procedure -->
 <!-- ips-rule: ci-preflight -->
 
 ## Read when
 
-Read this file only after implementation and test intent are complete and the
-exact candidate is staged without a commit.
+Read this file only after first-pass Behavior and Proof implementation is
+complete, verified, locally committed, and ready for an initial or follow-up
+task-branch push. Past-mistake knowledge is not a first-pass design input.
 
 ## Procedure
 
-1. Inspect the complete intended diff and staged file list.
-2. Run `python scripts/verify.py --plan --staged`.
+1. Resolve the exact comparison endpoint: focused base to local `HEAD` for an
+   initial push, or the expected current remote/PR head to local `HEAD` for a
+   follow-up. Require the intended remote tip, a complete local commit, and a
+   clean worktree and index.
+2. Inspect the complete committed endpoint diff and run
+   `python scripts/verify.py --plan --base <comparison-endpoint>`.
 3. Record both N/NN counts and the selected, executed, carried, and skipped
    groups.
-4. If changed boundaries match reusable runner knowledge, use the
-   [knowledge selector](../knowledge/selector.md), read one matching leaf at a time,
-   return here, and apply only relevant rules.
-5. Correct portability, dependency, real-service, recovery, evidence, or
-   teardown risks without weakening intended proof.
-6. Rerun required verification after every correction.
-7. Inspect and stage the corrected candidate again. Commit only the verified
-   staged state.
-
-The first staging is a review snapshot, not permission to commit stale index
-content after later edits.
+4. Use the [CI knowledge selector](../knowledge/selector.md) for each boundary
+   triggered by the complete Proof delta. Read one leaf at a time, return here,
+   and apply relevant proof-semantic and execution rules.
+5. Use the [Behavior careless-mistake guide](../../knowledge/behavior.md) for
+   each `pre-CI` entry triggered by the complete Behavior delta. Do not read its
+   `pre-review` entries at this gate.
+6. For every review or CI correction, make one explicit direct knowledge
+   write-back decision before push:
+   - Behavior lesson: strengthen or add one atomic entry in the Behavior guide
+     with the correct phase;
+   - Proof lesson: strengthen the matching CI leaf;
+   - compound lesson: split it between the canonical homes;
+   - admitted unowned Proof lesson: add one bounded CI leaf and selector route;
+   - no reusable lesson: prepare `Knowledge write-back: none` plus concrete
+     rationale for the PR correction evidence.
+   There is no temporary intake or pending-candidate queue.
+7. Correct every known failed check without weakening accepted behavior or
+   proof. Run canonical verification, stage, and locally commit the complete
+   correction and direct write-back.
+8. Whenever local `HEAD` changes, restart at step 1. Never push a head that was
+   not the exact clean head checked by the restarted gate.
+9. Return the exact checked local SHA, comparison endpoint, verification plan,
+   and knowledge write-back decision to publication.
 
 ## Selection and evidence lineage
 
@@ -70,7 +87,7 @@ focus. Local Docker always falls back to Actions.
 - Replan an untrusted baseline from the nearest trusted successful base.
 - Add an undisclosed affected omission to the selected set or record it as an
   explicit evidence gap.
-- Reverify and restage stale content.
+- Reverify, restage, and commit stale content, then restart Gate A.
 - Return a material correction to the caller for focus selection.
 - When a changed boundary cannot map to accepted proof, select conservative
   full verification and record the missing mapping for a focused knowledge
@@ -82,5 +99,4 @@ focus. Local Docker always falls back to Actions.
   and return here.
 - Failed Actions after publication: read
   [failed-run triage](failure-triage.md).
-- Hardened verified staged state: return to the calling implementation or
-  publication workflow.
+- Hardened exact committed state: return to publication for push and read-back.

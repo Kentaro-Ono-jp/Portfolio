@@ -5,14 +5,17 @@
 
 ## Read when
 
-Read this selector only after staged preflight, failed-run triage, or post-merge
-reconciliation identifies a concrete changed boundary or failure signal.
+Read this selector only after complete first-pass Proof implementation,
+failed-run triage, or post-merge reconciliation identifies a concrete changed
+boundary or failure signal.
 Select one matching leaf at a time; do not preload the knowledge directory.
 
 ## Select a leaf
 
 | Changed boundary or signal | Read only |
 |---|---|
+| Authenticated principal ownership, token `iss/sub`, synthetic identity-provider fixtures | [Identity proof knowledge](identity.md) |
+| Server-side state crossing independently bundled framework entrypoints | [Framework runtime proof knowledge](framework-runtime.md) |
 | Python runtime imports, dependency groups, exact JavaScript framework pins, lockfile advisories | [Dependency knowledge](dependencies.md) |
 | Direct execution, working directory, import path, documented command | [Invocation knowledge](invocation.md) |
 | PostgreSQL constraints, migrations, transactions, commit or rollback order | [Persistence knowledge](persistence.md) |
@@ -22,6 +25,7 @@ Select one matching leaf at a time; do not preload the knowledge directory.
 | Health budgets, liveness convergence, retry or recovery orchestration | [Readiness and recovery knowledge](recovery.md) |
 | Diagnostics, artifacts, causal failure retention, teardown | [Evidence and teardown knowledge](evidence.md) |
 
+The leaves own admitted reusable proof semantics as well as runner mechanics.
 If several boundaries match, read and apply one leaf, return to the caller,
 then select the next. If none matches, treat the signal as new or product-
 specific; do not force it into a nearby category.

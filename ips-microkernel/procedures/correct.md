@@ -28,12 +28,21 @@ them.
    [implement and verify](implement.md). Standing policy covers diagnosis,
    correction, verification, commit, push, PR-evidence update, Actions
    execution, and an unchanged-head rerun when appropriate.
-6. After the corrected candidate is verified and staged, use
-   [publish](publish.md) as a follow-up push.
-7. Require the new exact head to pass or satisfy a qualified Markdown-only
-   exception. When the correction chain proves one or more reusable candidates,
-   enter [knowledge curation](curate-knowledge.md) before re-review. Otherwise
-   request re-review.
+6. After the complete correction exists, classify every reusable
+   careless-mistake lesson. Write Behavior lessons directly to the
+   [Behavior guide](../knowledge/behavior.md) in the correct phase and Proof
+   lessons through the CI selector selected by publication's Gate A. Split
+   compound lessons. If none qualifies, record `Knowledge write-back: none`
+   with concrete rationale in PR correction evidence. Do not use a temporary
+   intake queue.
+7. After the corrected candidate and direct write-back are verified and staged,
+   use [publish](publish.md) as a follow-up commit, Gate A, and push.
+8. Require the new exact head to pass or satisfy a qualified Markdown-only
+   exception, then complete Gate B before re-review. When the correction chain
+   proves other reusable governance candidates outside this direct
+   Behavior/Proof careless-mistake route, enter
+   [knowledge curation](curate-knowledge.md) before re-review. Otherwise request
+   re-review.
 
 A verdict and its adjudication apply only to their exact reviewed head.
 

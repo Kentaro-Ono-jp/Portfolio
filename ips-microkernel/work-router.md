@@ -30,11 +30,12 @@ routes until the selected route returns here with changed state.
 
 1. **Stable reusable candidates have complete disposition for every associated
    actionable finding and successful proof for every required correction, but
-   lack complete curation:** use
+   lack complete curation and are not an unresolved direct Behavior/Proof
+   correction write-back:** use
    [knowledge curation](procedures/curate-knowledge.md).
 2. **Independent initial review or re-review:** use the dedicated
    [review router](review/router.md).
-3. **A complete candidate is staged, a GitHub Actions run failed, a local
+3. **A complete candidate is locally committed for pre-push hardening, a GitHub Actions run failed, a local
    rehearsal is blocked, a Markdown-only exception is requested, or CI
    knowledge must be reconciled:** use the
    [CI router](ci/router.md).
@@ -50,7 +51,7 @@ routes until the selected route returns here with changed state.
 8. **An accepted focused Issue and exact branch exist, but implementation is
    not a complete staged candidate:** use
    [implement and verify](procedures/implement.md).
-9. **The verified candidate is ready to commit, push, or publish as a Draft
+9. **The verified candidate is ready to commit, enter Gate A, push, or publish as a Draft
    PR, including a follow-up push:** use [publish](procedures/publish.md).
 10. **An exact-head `Changes requested` verdict contains findings whose
    disposition is incomplete:** use

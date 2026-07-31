@@ -38,6 +38,7 @@ IPS_RUNTIME_DIRECTORIES = (
     Path("selectors"),
     Path("references"),
     Path("procedures"),
+    Path("knowledge"),
     Path("review"),
     Path("ci"),
 )
@@ -72,6 +73,7 @@ IPS_FILE_ROLES = {
     Path("ips-microkernel/procedures/merge.md"): "procedure",
     Path("ips-microkernel/procedures/reconcile.md"): "procedure",
     Path("ips-microkernel/procedures/governance-reconcile.md"): "procedure",
+    Path("ips-microkernel/knowledge/behavior.md"): "knowledge",
     Path("ips-microkernel/review/setup.md"): "procedure",
     Path("ips-microkernel/review/inspect.md"): "procedure",
     Path("ips-microkernel/review/verdict.md"): "procedure",
@@ -91,6 +93,8 @@ IPS_FILE_ROLES = {
     Path("ips-microkernel/ci/knowledge/browser.md"): "knowledge",
     Path("ips-microkernel/ci/knowledge/recovery.md"): "knowledge",
     Path("ips-microkernel/ci/knowledge/evidence.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/identity.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/framework-runtime.md"): "knowledge",
 }
 ENTRYPOINT_FILE_ROLES = {
     Path("GIT_AGENTS.md"): "router",
@@ -149,6 +153,7 @@ CANONICAL_RULE_OWNERS = {
     "governance-knowledge-reconciliation": Path(
         "ips-microkernel/procedures/governance-reconcile.md"
     ),
+    "behavior-careless-mistake-guide": Path("ips-microkernel/knowledge/behavior.md"),
     "review-setup": Path("ips-microkernel/review/setup.md"),
     "review-inspection": Path("ips-microkernel/review/inspect.md"),
     "review-verdict": Path("ips-microkernel/review/verdict.md"),
@@ -170,6 +175,10 @@ CANONICAL_RULE_OWNERS = {
     "ci-knowledge-browser": Path("ips-microkernel/ci/knowledge/browser.md"),
     "ci-knowledge-recovery": Path("ips-microkernel/ci/knowledge/recovery.md"),
     "ci-knowledge-evidence": Path("ips-microkernel/ci/knowledge/evidence.md"),
+    "ci-knowledge-identity": Path("ips-microkernel/ci/knowledge/identity.md"),
+    "ci-knowledge-framework-runtime": Path(
+        "ips-microkernel/ci/knowledge/framework-runtime.md"
+    ),
 }
 
 REQUIRED_ROUTE_LINKS = {
@@ -211,11 +220,12 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/references/local-tools.md"),
         Path("ips-microkernel/references/public-safety.md"),
-        Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/procedures/publish.md"),
     ),
     Path("ips-microkernel/procedures/publish.md"): (
         Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/knowledge/behavior.md"),
+        Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/ci/exceptions/markdown-only.md"),
         Path("ips-microkernel/review/router.md"),
         Path("ips-microkernel/procedures/focus.md"),
@@ -245,6 +255,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/adjudicate.md"),
         Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/merge.md"),
+        Path("ips-microkernel/knowledge/behavior.md"),
     ),
     Path("ips-microkernel/procedures/merge.md"): (
         Path("ips-microkernel/references/live-state.md"),
@@ -286,6 +297,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/adr/index.md"),
         Path("ips-microkernel/delivery/index.md"),
+        Path("ips-microkernel/knowledge/behavior.md"),
     ),
     Path("ips-microkernel/review/setup.md"): (
         Path("ips-microkernel/references/local-tools.md"),
@@ -310,6 +322,7 @@ REQUIRED_ROUTE_LINKS = {
     ),
     Path("ips-microkernel/ci/procedures/preflight.md"): (
         Path("ips-microkernel/ci/knowledge/selector.md"),
+        Path("ips-microkernel/knowledge/behavior.md"),
         Path("ips-microkernel/ci/procedures/local-rehearsal.md"),
         Path("ips-microkernel/ci/procedures/failure-triage.md"),
     ),
@@ -319,6 +332,7 @@ REQUIRED_ROUTE_LINKS = {
     Path("ips-microkernel/ci/procedures/failure-triage.md"): (
         Path("ips-microkernel/ci/knowledge/selector.md"),
         Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/knowledge/behavior.md"),
     ),
     Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (
         Path("ips-microkernel/ci/knowledge/selector.md"),
@@ -332,6 +346,8 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/ci/knowledge/browser.md"),
         Path("ips-microkernel/ci/knowledge/recovery.md"),
         Path("ips-microkernel/ci/knowledge/evidence.md"),
+        Path("ips-microkernel/ci/knowledge/identity.md"),
+        Path("ips-microkernel/ci/knowledge/framework-runtime.md"),
     ),
 }
 
@@ -343,6 +359,7 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
     "issue-evidence": Path("ips-microkernel/references/evidence.md"),
     "focus": Path("ips-microkernel/procedures/focus.md"),
     "implementation": Path("ips-microkernel/procedures/implement.md"),
+    "behavior-careless": Path("ips-microkernel/knowledge/behavior.md"),
     "publication": Path("ips-microkernel/procedures/publish.md"),
     "adjudication": Path("ips-microkernel/procedures/adjudicate.md"),
     "curation": Path("ips-microkernel/procedures/curate-knowledge.md"),
@@ -660,6 +677,9 @@ REQUIRED_GOVERNANCE_TEXT = {
         "A checklist criterion changes state through proof or an explicit owner acceptance",
         "A remote branch is deleted only after",
         "Public participant",
+        "direct careless-mistake write-back",
+        "Knowledge write-back: none",
+        "not permission to silently curate unrelated governance",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
     ),
@@ -687,10 +707,20 @@ REQUIRED_GOVERNANCE_TEXT = {
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/focus.md")],
     ),
     Path("ips-microkernel/procedures/implement.md"): (
+        "Build Behavior implementation from accepted design",
+        "Build Proof implementation from accepted design",
+        "Do not use past-mistake guides as templates",
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/implement.md")],
     ),
     Path("ips-microkernel/procedures/publish.md"): (
         "machine-qualified Markdown-only CI exception",
+        "Gate A pre-CI / pre-push",
+        "Complete Gate B",
+        "expected full base SHA",
+        "expected full head SHA",
+        "remote branch tip and live PR head",
+        "Editing only PR title or body is head-neutral",
+        "repository-file change",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
     ),
@@ -701,11 +731,16 @@ REQUIRED_GOVERNANCE_TEXT = {
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/adjudicate.md")],
     ),
     Path("ips-microkernel/procedures/curate-knowledge.md"): (
+        "Do not enter this general curation role for an unresolved direct",
+        "reusable Proof semantics, CI runner, and Actions signals",
         *KNOWLEDGE_CURATION_FRAGMENTS[
             Path("ips-microkernel/procedures/curate-knowledge.md")
         ],
     ),
     Path("ips-microkernel/procedures/correct.md"): (
+        "Knowledge write-back: none",
+        "Do not use a temporary intake queue",
+        "complete Gate B before re-review",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/correct.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/correct.md")],
     ),
@@ -742,6 +777,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Rows are ordered precedence",
         "split it into atomic candidates",
         "never assign one candidate to two targets",
+        "| `behavior-careless` |",
+        "Behavior careless-mistake guide",
         *REVIEW_ADJUDICATION_FRAGMENTS[
             Path("ips-microkernel/selectors/governance-knowledge.md")
         ],
@@ -773,10 +810,18 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path("ips-microkernel/ci/router.md"): (
         "thin router",
+        "what production-shaped proof must exercise",
+        "how CI executes that proof",
         "Do not preload every procedure",
         "Select the first matching state",
     ),
     Path("ips-microkernel/ci/procedures/preflight.md"): (
+        "after first-pass Behavior and Proof implementation is complete",
+        "CI knowledge selector",
+        "Behavior careless-mistake guide",
+        "Knowledge write-back: none",
+        "There is no temporary intake or pending-candidate queue",
+        "Whenever local `HEAD` changes",
         "keeps baseline and current-head trust separate",
         "Verification-Skip",
         "cold full selection",
@@ -804,6 +849,34 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path("ips-microkernel/ci/procedures/failure-triage.md"): (
         "Promote only a new reusable decision rule",
         "Update one canonical knowledge leaf or add one routed leaf",
+        "Knowledge write-back: none",
+        "Do not create a pending intake",
+        "publication's Gate A before push",
+    ),
+    Path("ips-microkernel/knowledge/behavior.md"): (
+        "Do not read this guide before the first complete Behavior implementation",
+        "Phase, Trigger, Mistake, Check, Guard, and Evidence",
+        "Authenticate before request validation",
+        "Publish exact review endpoints",
+        "Invalidate head-bound review evidence",
+        "Editing only the PR title or body does not change the Git commit",
+        "Knowledge write-back: none",
+        "There is no pending intake queue",
+    ),
+    Path("ips-microkernel/ci/knowledge/selector.md"): (
+        "Identity proof knowledge",
+        "Framework runtime proof knowledge",
+        "proof semantics as well as runner mechanics",
+    ),
+    Path("ips-microkernel/ci/knowledge/identity.md"): (
+        "Reject legacy ownership assumptions",
+        "Derive exact validated token identity",
+        "run 30627309389",
+        "run 30627826543",
+    ),
+    Path("ips-microkernel/ci/knowledge/framework-runtime.md"): (
+        "Prove state across production bundle boundaries",
+        "run 30628514591",
     ),
     Path("ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md"): (
         "Supersedes",

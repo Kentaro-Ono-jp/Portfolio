@@ -28,7 +28,7 @@ smallest affected live boundary instead of expanding authority by inference.
 | Actor | Authorized durable actions | Boundary |
 |---|---|---|
 | Repository owner | Selects the initial focused slice and any material redefinition of its outcome, scope, non-targets, or accepted design | Does not independently mutate the official workspace or managed GitHub state outside active collaboration |
-| Implementation agent | Performs the accepted Issue, branch, implementation, commit, push, Draft PR, correction, Ready, merge, evidence, and scoped-cleanup workflow and may enter the routed Review Adjudicator or Knowledge Curator role | Preserves unrelated work, does not silently adjudicate while implementing or silently curate while implementing, and applies the deterministic recovery and fallback policies below |
+| Implementation agent | Performs the accepted Issue, branch, implementation, commit, push, Draft PR, correction, direct careless-mistake write-back, Ready, merge, evidence, and scoped-cleanup workflow and may enter the routed Review Adjudicator or Knowledge Curator role | Preserves unrelated work, does not silently adjudicate while implementing or silently curate general governance while implementing, makes every direct Behavior/Proof write-back decision explicit, and applies the deterministic recovery and fallback policies below |
 | Independent review agent | Reads GitHub, reviews an exact head in an isolated shallow clone, runs non-Docker static checks, and publishes one verdict comment | Follows the review router; no implementation or other GitHub writes |
 | Review Adjudicator | Freezes an exact reviewed candidate, judges every RC finding through the routed disposition procedure, and records one complete checkpoint in the focused Issue | Is a distinct runtime role; does not review, modify implementation, move the PR head, relabel the verdict, or merge while adjudicating |
 | Knowledge Curator | Freezes proved reusable candidates, selects one canonical target, records one disposition per atomic candidate, and creates or links the one deferred or follow-up Issue required by that disposition | Is a distinct runtime role; does not review, implement, move the PR head, relabel a verdict, or merge while curating |
@@ -49,10 +49,14 @@ is evidence, not a permanent prohibition.
 
 Within accepted scope, existing work may be revised, replaced, reverted, or
 intentionally returned to a previously observed state. Recurrence prevention
-is not a default completion requirement. A proved, bounded collaboration rule
-enters the current or a focused follow-up slice only through the routed
-Knowledge Curator. Material product, delivery, architecture, security, or
-actor-authority redefinition still requires owner-selected focus.
+is not a default completion requirement. General proved collaboration rules
+enter the current or a focused follow-up slice only through the routed
+Knowledge Curator. The narrow Behavior/Proof careless-mistake route selected
+by a focused Issue instead writes an admitted atomic lesson directly after a
+real correction and before the next push; it records an explicit `Knowledge
+write-back: none` rationale when no lesson qualifies. Material product,
+delivery, architecture, security, or actor-authority redefinition still
+requires owner-selected focus.
 
 Destructive or breaking effects are not prohibited by category. Each concrete
 mutation still requires accepted scope, an exact identified target, applicable
@@ -79,6 +83,9 @@ accepted.
 A complete Knowledge Curator checkpoint may select a bounded governance rule
 for the current PR or one focused follow-up without routine owner confirmation;
 it cannot redefine the material boundaries reserved here.
+An accepted focused Issue may also authorize direct careless-mistake write-back
+under Gate A's stable-evidence, recurrence, actionability, and low-cost admission
+guards. That route is not permission to silently curate unrelated governance.
 
 An exact-head owner waiver is a second, optional decision boundary. The agent
 does not request it merely to avoid correction. When the owner supplies it,
