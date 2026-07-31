@@ -124,14 +124,21 @@ async function requestJson<T>(
   return parsed.data;
 }
 
-export async function createDocument(file: File): Promise<DocumentAccepted> {
+export async function createDocument(
+  file: File,
+  csrfToken: string,
+): Promise<DocumentAccepted> {
   const form = new FormData();
   form.set("file", file, file.name);
   return requestJson(
     "/api/documents",
     {
       method: "POST",
-      headers: { "X-Correlation-ID": crypto.randomUUID() },
+      headers: {
+        "X-Correlation-ID": crypto.randomUUID(),
+        "X-CSRF-Token": csrfToken,
+      },
+      credentials: "same-origin",
       body: form,
     },
     202,
@@ -145,6 +152,7 @@ export async function getDocument(documentId: string): Promise<DocumentStatus> {
     {
       method: "GET",
       headers: { "X-Correlation-ID": crypto.randomUUID() },
+      credentials: "same-origin",
     },
     200,
     documentStatusSchema,

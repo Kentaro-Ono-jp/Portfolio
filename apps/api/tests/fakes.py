@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from uuid import UUID
 
+from reactorfront_api.authentication import Capability
 from reactorfront_api.domain import (
+    DocumentSourceRecord,
     DocumentStatusRecord,
     DocumentSubmission,
+    PrincipalKind,
+    PrincipalRecord,
     ProcessingStatus,
+    StoredObject,
     SubmissionCommitObservation,
     SubmissionCommitOutcome,
     SubmissionPersistenceError,
@@ -30,6 +36,8 @@ class FakeReadinessProbe:
 class FakeRepository:
     submissions: list[DocumentSubmission] = field(default_factory=list)
     records: dict[UUID, DocumentStatusRecord] = field(default_factory=dict)
+    owners: dict[UUID, UUID] = field(default_factory=dict)
+    sources: dict[UUID, DocumentSourceRecord] = field(default_factory=dict)
     ready: bool = True
     save_error: Exception | None = None
     commit_acknowledgement_error: Exception | None = None
@@ -44,11 +52,20 @@ class FakeRepository:
                 commit_outcome=SubmissionCommitOutcome.NOT_COMMITTED
             ) from self.save_error
         self.submissions.append(submission)
+        self.owners[submission.document_id] = submission.submitted_by_principal_id
         self.records[submission.document_id] = DocumentStatusRecord(
             document_id=submission.document_id,
             job_id=submission.job_id,
             status=ProcessingStatus.ACCEPTED,
             created_at=submission.occurred_at,
+        )
+        self.sources[submission.document_id] = DocumentSourceRecord(
+            document_id=submission.document_id,
+            original_filename=submission.original_filename,
+            object_key=submission.object_key,
+            sha256=submission.sha256,
+            content_type=submission.content_type,
+            size_bytes=submission.size_bytes,
         )
         if self.commit_acknowledgement_error is not None:
             raise SubmissionPersistenceError(
@@ -66,10 +83,19 @@ class FakeRepository:
             return SubmissionCommitObservation.COMMITTED
         return SubmissionCommitObservation.ABSENT
 
-    def get_status(self, document_id: UUID) -> DocumentStatusRecord | None:
+    def get_status(self, document_id: UUID, principal_id: UUID) -> DocumentStatusRecord | None:
         if self.get_error is not None:
             raise self.get_error
+        if self.owners.get(document_id) != principal_id:
+            return None
         return self.records.get(document_id)
+
+    def get_source(self, document_id: UUID, principal_id: UUID) -> DocumentSourceRecord | None:
+        if self.get_error is not None:
+            raise self.get_error
+        if self.owners.get(document_id) != principal_id:
+            return None
+        return self.sources.get(document_id)
 
     def is_ready(self) -> bool:
         return self.ready
@@ -86,6 +112,7 @@ class FakeStorage:
     put_error: Exception | None = None
     delete_error: Exception | None = None
     readiness_error: Exception | None = None
+    get_error: Exception | None = None
 
     def put(
         self,
@@ -105,6 +132,19 @@ class FakeStorage:
         self.deleted.append(object_key)
         self.objects.pop(object_key, None)
 
+    def get(self, *, object_key: str, maximum_bytes: int) -> StoredObject:
+        if self.get_error is not None:
+            raise self.get_error
+        content, content_type, sha256 = self.objects[object_key]
+        if len(content) > maximum_bytes:
+            raise ValueError("object too large")
+        return StoredObject(
+            content=content,
+            content_type=content_type,
+            size_bytes=len(content),
+            sha256=sha256,
+        )
+
     def is_ready(self) -> bool:
         if self.readiness_error is not None:
             raise self.readiness_error
@@ -117,3 +157,34 @@ class FakeValidator:
 
     def validate(self, *, event_type: str, payload: dict[str, object]) -> None:
         self.payloads.append((event_type, payload))
+
+
+@dataclass
+class FakeRequestAuthorizer:
+    principal_id: UUID
+    expected_token: str = "synthetic-access-token"
+    calls: list[tuple[str | None, object]] = field(default_factory=list)
+    closed: bool = False
+
+    def authorize(
+        self,
+        *,
+        authorization_header: str | None,
+        capability: Capability,
+        correlation_id: UUID,
+    ) -> PrincipalRecord:
+        del correlation_id
+        self.calls.append((authorization_header, capability))
+        if authorization_header != f"Bearer {self.expected_token}":
+            raise AssertionError("A test request omitted the synthetic bearer token.")
+        return PrincipalRecord(
+            principal_id=self.principal_id,
+            kind=PrincipalKind.OIDC,
+            issuer="https://identity.example.invalid/dex",
+            subject="synthetic-reviewer",
+            system_key=None,
+            created_at=datetime(2026, 7, 31, tzinfo=UTC),
+        )
+
+    def close(self) -> None:
+        self.closed = True

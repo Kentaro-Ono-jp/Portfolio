@@ -1,8 +1,29 @@
 import { proxyDocumentUpload } from "@/lib/upstream-proxy";
+import {
+  requireCsrf,
+  requireWebSession,
+  sanitizedAuthProblem,
+  WebAuthenticationError,
+} from "@/lib/web-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return proxyDocumentUpload(request);
+  try {
+    const session = await requireWebSession(request);
+    requireCsrf(request, session);
+    return proxyDocumentUpload(request, session.accessToken);
+  } catch (error) {
+    if (error instanceof WebAuthenticationError) {
+      return sanitizedAuthProblem(error);
+    }
+    return sanitizedAuthProblem(
+      new WebAuthenticationError(
+        503,
+        "WEB_SESSION_UNAVAILABLE",
+        "The browser session is temporarily unavailable.",
+      ),
+    );
+  }
 }

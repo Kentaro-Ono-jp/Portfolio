@@ -1,6 +1,13 @@
-import { DocumentWorkflow } from "@/components/document-workflow";
+import { cookies } from "next/headers";
 
-export default function HomePage() {
+import { DocumentWorkflow } from "@/components/document-workflow";
+import { SessionControls } from "@/components/session-controls";
+import { currentBrowserSession, SESSION_COOKIE } from "@/lib/web-auth";
+
+export default async function HomePage() {
+  const cookieStore = await cookies();
+  const session = currentBrowserSession(cookieStore.get(SESSION_COOKIE)?.value);
+
   return (
     <main className="min-h-screen px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(34rem,1.1fr)] lg:items-start">
@@ -13,14 +20,38 @@ export default function HomePage() {
             From source PDF to a traceable ML result.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-            Submit one synthetic, single-page PDF. The API stores it, a durable
-            queue hands it to a real PyTorch worker, and API-owned state returns
-            the final classification.
+            Sign in as the synthetic reviewer and submit one single-page PDF.
+            The API binds it to your stable principal, a durable queue hands it
+            to a real PyTorch worker, and API-owned state returns the result.
           </p>
+          {session === null ? null : (
+            <SessionControls csrfToken={session.csrfToken} />
+          )}
         </section>
 
         <div className="lg:sticky lg:top-12 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-          <DocumentWorkflow />
+          {session === null ? (
+            <section className="workflow-shell px-6 py-8 sm:px-8">
+              <p className="font-mono text-xs uppercase tracking-[0.18em] text-teal-700">
+                Protected workflow
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-slate-950">
+                Sign in to classify a document
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                The deterministic Compose identity is synthetic and exists only
+                for reproducible verification.
+              </p>
+              <a
+                href="/api/auth/sign-in"
+                className="mt-6 inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-800"
+              >
+                Sign in as synthetic reviewer
+              </a>
+            </section>
+          ) : (
+            <DocumentWorkflow csrfToken={session.csrfToken} />
+          )}
         </div>
 
         <section
@@ -46,8 +77,8 @@ export default function HomePage() {
 
           <p className="mt-8 max-w-xl text-sm leading-6 text-slate-500">
             Scope is deliberately narrow: PDF only, up to 5 MiB, with
-            extractable text. No OCR, authentication, or production quality
-            claim is implied.
+            extractable text and one synthetic reviewer. No OCR, production
+            identity-provider, or production quality claim is implied.
           </p>
         </section>
       </div>

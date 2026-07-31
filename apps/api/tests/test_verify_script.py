@@ -153,6 +153,24 @@ def test_web_test_change_selects_only_web_static_group(verifier: ModuleType) -> 
     assert plan.base == "baseline"
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "apps/web/src/lib/web-auth.ts",
+        "apps/web/src/app/api/auth/callback/route.ts",
+        "apps/web/src/app/api/documents/route.ts",
+        "apps/web/src/app/api/documents/id/source/route.ts",
+    ],
+)
+def test_web_auth_boundary_change_selects_full_cross_service_proof(
+    verifier: ModuleType,
+    path: str,
+) -> None:
+    plan = verifier.plan_for_paths([path])
+
+    assert plan.groups == verifier.ALL_GROUPS
+
+
 def test_api_source_change_selects_static_runtime_and_compose(
     verifier: ModuleType,
 ) -> None:
@@ -458,10 +476,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 39
-    assert len(verifier.selected_test_files(plan.groups)) == 9
+    assert len(inventory) == 45
+    assert len(verifier.selected_test_files(plan.groups)) == 15
     assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 9/39 selected" in verifier.plan_lines(plan)
+    assert "Test files: 15/45 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(

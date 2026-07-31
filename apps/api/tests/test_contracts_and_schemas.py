@@ -34,34 +34,39 @@ def requested_event() -> dict[str, object]:
     }
 
 
-def test_authentication_contract_is_staged_without_protecting_current_routes() -> None:
+def test_document_contract_requires_bearer_authentication_and_source_ownership() -> None:
     contract = cast(
         dict[str, object],
         yaml.safe_load(OPENAPI_PATH.read_text(encoding="utf-8")),
     )
     assert contract["security"] == [{"bearerAuth": []}]
     paths = cast(dict[str, dict[str, dict[str, object]]], contract["paths"])
-    operations = [
+    protected_operations = [
         paths["/api/v1/documents"]["post"],
         paths["/api/v1/documents/{documentId}"]["get"],
-        paths["/health"]["get"],
-        paths["/ready"]["get"],
+        paths["/api/v1/documents/{documentId}/source"]["get"],
     ]
-    assert all(operation["security"] == [] for operation in operations)
+    assert all("security" not in operation for operation in protected_operations)
+    assert paths["/health"]["get"]["security"] == []
+    assert paths["/ready"]["get"]["security"] == []
+    assert all(
+        {"401", "403"} <= cast(dict[str, object], operation["responses"]).keys()
+        for operation in protected_operations
+    )
     components = cast(dict[str, dict[str, object]], contract["components"])
     assert components["securitySchemes"]["bearerAuth"] == {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "description": (
-            "OAuth access token validated independently by the API. The scheme "
-            "is defined for the authenticated-review boundary but is not applied "
-            "to document operations until the Web session path is delivered."
+            "OAuth access token validated independently by the API. Document "
+            "operations require a capability and matching resource ownership."
         ),
     }
     assert {
         "AuthenticationRequired",
         "InsufficientCapability",
+        "SourceAccessUnavailable",
     } <= components["responses"].keys()
 
 

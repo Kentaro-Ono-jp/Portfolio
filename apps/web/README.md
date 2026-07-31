@@ -2,14 +2,16 @@
 
 ## Responsibility
 
-This Next.js application owns the first-slice browser experience: selecting a
-supported document, submitting it, following API-owned processing state, and
-presenting the completed or failed terminal result.
+This Next.js application owns the authenticated browser experience: completing
+the OIDC Authorization Code flow with PKCE, selecting a supported document,
+submitting it, following API-owned processing state, retrieving the verified
+source, and presenting the completed or failed terminal result.
 
 The browser calls only same-origin route handlers under `/api/documents`. Those
-server-only handlers forward to the API base URL in
-`PORTFOLIO_API_BASE_URL`, preserve canonical problem responses, and prevent the
-private upstream address from entering the client bundle.
+server-only handlers require an opaque Web session, forward its access token to
+the API base URL in `PORTFOLIO_API_BASE_URL`, preserve canonical problem
+responses, and prevent tokens and the private upstream address from entering
+the client bundle.
 
 ## Boundary rules
 
@@ -20,6 +22,14 @@ private upstream address from entering the client bundle.
   every runtime response with local Zod schemas at the HTTP boundary.
 - Keep upload constraints aligned with the API: one PDF at most 5 MiB.
 - Stop polling when the document reaches `completed` or `failed`.
+- Keep access, refresh, and ID tokens only in the bounded server-side session
+  store. The browser receives only an opaque `HttpOnly`, `SameSite=Lax` cookie.
+- Require CSRF verification for state-changing same-origin routes.
+- Derive the callback URI from the configured public base URL, validate OIDC
+  discovery and callback state/nonce/PKCE, and allow plaintext transport only
+  for the explicit loopback Compose profile.
+- Stream a source PDF to the browser only after the API verifies its owner,
+  metadata, size, and SHA-256 digest.
 
 ## Implementation
 
@@ -27,20 +37,29 @@ private upstream address from entering the client bundle.
 - Tailwind CSS for the visual system
 - TanStack Query for mutations, polling, and server state
 - Zod for server and browser response validation
+- openid-client for OIDC Authorization Code, PKCE, callback, and refresh-token
+  protocol handling
 - Vitest and Testing Library for focused behavior tests
 - A numeric non-root standalone Node.js container exposed on loopback by
   Compose
 
-Authentication remains outside this slice. Browser-level Playwright coverage
-is owned by `tests/e2e` because it crosses Web, API, broker, ML, persistence,
-and browser boundaries rather than belonging to Web internals.
+Browser-level Playwright coverage is owned by `tests/e2e` because sign-in and
+document processing cross Web, identity, API, broker, ML, persistence, and
+browser boundaries rather than belonging to Web internals.
 
 ## Configuration
 
-`PORTFOLIO_API_BASE_URL` is required by the server-side proxy. In Compose it is
-`http://api:8000`; for host-side development it is normally
-`http://127.0.0.1:58000`. `PORTFOLIO_WEB_UPSTREAM_TIMEOUT_MS` is optional and
-defaults to 8000 milliseconds.
+`PORTFOLIO_API_BASE_URL`, `PORTFOLIO_WEB_PUBLIC_BASE_URL`, the four
+`PORTFOLIO_WEB_OIDC_*_URL`/issuer values, and
+`PORTFOLIO_WEB_OIDC_CLIENT_ID` are required server settings. The optional
+client secret enables a confidential client; the committed Compose fixture is
+an intentionally public loopback-only client. Session absolute, inactivity,
+transaction, refresh-leeway, scopes, and upstream-timeout settings have bounded
+defaults documented in [`.env.example`](../../.env.example).
+
+Production-shaped configuration requires HTTPS for the public Web URL and all
+OIDC endpoints. `PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK=true` is accepted
+only when both the public Web URL and issuer are HTTP loopback URLs.
 
 Run the app from the repository root after installing the pinned workspace:
 
@@ -48,7 +67,8 @@ Run the app from the repository root after installing the pinned workspace:
 pnpm --filter @reactorfront/web dev
 ```
 
-The development server is available at `http://127.0.0.1:3000` by default.
+The development server is available at `http://127.0.0.1:3000` by default;
+configure that exact origin and callback URI in the selected identity client.
 The Compose service is published at `http://127.0.0.1:53000` unless
 `PORTFOLIO_WEB_PORT` overrides that host port.
 

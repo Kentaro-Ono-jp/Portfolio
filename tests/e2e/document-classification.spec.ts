@@ -121,6 +121,23 @@ test("proves completed, failed, correlation, and invalid-file browser paths", as
       name: "From source PDF to a traceable ML result.",
     }),
   ).toBeVisible();
+  await page
+    .getByRole("link", {
+      name: "Sign in as synthetic reviewer",
+      exact: true,
+    })
+    .click();
+  await page.locator('input[name="login"]').fill("reviewer@synthetic.invalid");
+  await page.locator('input[name="password"]').fill("password");
+  await page.locator('button[type="submit"]').click();
+  await expect(page.getByText("Synthetic reviewer signed in")).toBeVisible();
+  await expect(sourcePdfInput(page)).toBeVisible();
+  expect(
+    await page.evaluate(() => ({
+      local: Object.keys(localStorage),
+      session: Object.keys(sessionStorage),
+    })),
+  ).toEqual({ local: [], session: [] });
 
   const completedResponses = await upload(
     page,

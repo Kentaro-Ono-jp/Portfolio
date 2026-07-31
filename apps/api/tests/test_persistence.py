@@ -162,6 +162,7 @@ def submission() -> DocumentSubmission:
         job_id=JOB_ID,
         event_id=EVENT_ID,
         correlation_id=CORRELATION_ID,
+        submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
         original_filename="invoice.pdf",
         object_key=object_key,
         sha256="a" * 64,

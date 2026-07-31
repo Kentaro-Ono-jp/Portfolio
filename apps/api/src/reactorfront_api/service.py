@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from reactorfront_api.domain import (
     BinaryDocument,
+    DocumentSource,
     DocumentStatusRecord,
     DocumentSubmission,
     EventContractValidator,
@@ -57,6 +58,7 @@ class DocumentService:
         original_filename: str | None,
         content_type: str | None,
         correlation_id: UUID,
+        principal_id: UUID,
     ) -> SubmissionResult:
         normalized_content_type = (content_type or "").split(";", maxsplit=1)[0].strip().lower()
         if normalized_content_type != PDF_CONTENT_TYPE:
@@ -101,6 +103,7 @@ class DocumentService:
             job_id=job_id,
             event_id=event_id,
             correlation_id=correlation_id,
+            submitted_by_principal_id=principal_id,
             original_filename=self._display_filename(original_filename),
             object_key=object_key,
             sha256=digest,
@@ -178,9 +181,15 @@ class DocumentService:
             status=ProcessingStatus.ACCEPTED,
         )
 
-    def get_status(self, *, document_id: UUID, correlation_id: UUID) -> DocumentStatusRecord:
+    def get_status(
+        self,
+        *,
+        document_id: UUID,
+        principal_id: UUID,
+        correlation_id: UUID,
+    ) -> DocumentStatusRecord:
         try:
-            result = self._repository.get_status(document_id)
+            result = self._repository.get_status(document_id, principal_id)
         except Exception as error:
             LOGGER.exception(
                 "Document lookup failed",
@@ -197,6 +206,67 @@ class DocumentService:
                 correlation_id=correlation_id,
             )
         return result
+
+    def get_source(
+        self,
+        *,
+        document_id: UUID,
+        principal_id: UUID,
+        correlation_id: UUID,
+    ) -> DocumentSource:
+        try:
+            record = self._repository.get_source(document_id, principal_id)
+        except Exception as error:
+            LOGGER.exception(
+                "Document source lookup failed",
+                extra={"correlation_id": str(correlation_id), "document_id": str(document_id)},
+            )
+            raise self._dependency_problem(correlation_id) from error
+
+        if record is None:
+            raise PublicProblem(
+                status=404,
+                code=ProblemCode.DOCUMENT_NOT_FOUND,
+                title="Document not found",
+                detail="No document exists for the supplied identifier.",
+                correlation_id=correlation_id,
+            )
+
+        try:
+            stored = self._object_storage.get(
+                object_key=record.object_key,
+                maximum_bytes=MAX_DOCUMENT_BYTES,
+            )
+        except Exception as error:
+            LOGGER.exception(
+                "Document source retrieval failed",
+                extra={"correlation_id": str(correlation_id), "document_id": str(document_id)},
+            )
+            raise self._source_unavailable_problem(correlation_id) from error
+
+        digest = hashlib.sha256(stored.content).hexdigest()
+        if (
+            record.content_type != PDF_CONTENT_TYPE
+            or stored.content_type != record.content_type
+            or stored.size_bytes != record.size_bytes
+            or len(stored.content) != record.size_bytes
+            or stored.sha256 != record.sha256
+            or digest != record.sha256
+        ):
+            LOGGER.error(
+                "Document source integrity verification failed",
+                extra={"correlation_id": str(correlation_id), "document_id": str(document_id)},
+            )
+            raise self._source_unavailable_problem(correlation_id)
+
+        return DocumentSource(
+            document_id=record.document_id,
+            filename=record.original_filename,
+            content=stored.content,
+            content_type=record.content_type,
+            size_bytes=record.size_bytes,
+            sha256=record.sha256,
+        )
 
     def is_ready(self) -> bool:
         try:
@@ -271,5 +341,15 @@ class DocumentService:
             code=ProblemCode.DEPENDENCY_UNAVAILABLE,
             title="Dependency unavailable",
             detail="A required service is temporarily unavailable.",
+            correlation_id=correlation_id,
+        )
+
+    @staticmethod
+    def _source_unavailable_problem(correlation_id: UUID) -> PublicProblem:
+        return PublicProblem(
+            status=503,
+            code=ProblemCode.SOURCE_UNAVAILABLE,
+            title="Source unavailable",
+            detail="The document source is temporarily unavailable.",
             correlation_id=correlation_id,
         )

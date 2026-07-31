@@ -40,7 +40,7 @@ function progressIndex(
   return PROGRESS_STATES.indexOf(status);
 }
 
-export function DocumentWorkflow() {
+export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -48,7 +48,7 @@ export function DocumentWorkflow() {
   const [accepted, setAccepted] = useState<DocumentAccepted | null>(null);
 
   const submission = useMutation({
-    mutationFn: createDocument,
+    mutationFn: (selectedFile: File) => createDocument(selectedFile, csrfToken),
     onSuccess: (result) => {
       setAccepted(result);
       setLocalError(null);
@@ -236,6 +236,17 @@ export function DocumentWorkflow() {
                 );
               })}
             </ol>
+
+            {accepted !== null ? (
+              <a
+                className="mt-5 inline-flex rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:border-teal-600 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                href={`/api/documents/${encodeURIComponent(accepted.documentId)}/source`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View private source PDF
+              </a>
+            ) : null}
 
             {statusQuery.data?.status === "completed" ? (
               <div className="result-card mt-7">

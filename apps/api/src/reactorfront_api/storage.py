@@ -8,6 +8,8 @@ from botocore.config import Config
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
 
+from reactorfront_api.domain import StoredObject
+
 
 class S3ObjectStorage:
     def __init__(self, *, client: S3Client, bucket: str) -> None:
@@ -57,6 +59,30 @@ class S3ObjectStorage:
 
     def delete(self, *, object_key: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=object_key)
+
+    def get(self, *, object_key: str, maximum_bytes: int) -> StoredObject:
+        response = self._client.get_object(Bucket=self._bucket, Key=object_key)
+        body = response["Body"]
+        try:
+            content = body.read(maximum_bytes + 1)
+        finally:
+            body.close()
+        if len(content) > maximum_bytes:
+            raise ValueError("The stored source exceeds the supported size limit.")
+
+        content_type = response.get("ContentType")
+        content_length = response.get("ContentLength")
+        metadata = response.get("Metadata") or {}
+        if not isinstance(content_type, str) or not isinstance(content_length, int):
+            raise ValueError("The stored source metadata is incomplete.")
+
+        stored_sha256 = metadata.get("sha256")
+        return StoredObject(
+            content=content,
+            content_type=content_type,
+            size_bytes=content_length,
+            sha256=stored_sha256 if isinstance(stored_sha256, str) else None,
+        )
 
     def is_ready(self) -> bool:
         self._client.head_bucket(Bucket=self._bucket)

@@ -14,7 +14,8 @@ import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientError, PyJWTError
 
-from reactorfront_api.domain import ProblemCode, PublicProblem
+from reactorfront_api.domain import PrincipalRecord, ProblemCode, PublicProblem
+from reactorfront_api.persistence import SqlAlchemyPrincipalRepository, create_database_engine
 from reactorfront_api.settings import Settings
 
 MAX_DISCOVERY_DOCUMENT_BYTES = 64 * 1024
@@ -55,6 +56,24 @@ class AuthorizationDenied(Exception):
 
 class SigningKeyClient(Protocol):
     def get_signing_key_from_jwt(self, token: str) -> Any: ...
+
+
+class PrincipalResolver(Protocol):
+    def resolve_oidc_principal(self, *, issuer: str, subject: str) -> PrincipalRecord: ...
+
+    def close(self) -> None: ...
+
+
+class RequestAuthorizer(Protocol):
+    def authorize(
+        self,
+        *,
+        authorization_header: str | None,
+        capability: Capability,
+        correlation_id: UUID,
+    ) -> PrincipalRecord: ...
+
+    def close(self) -> None: ...
 
 
 def _require_http_url(value: object, *, field: str) -> str:
@@ -208,6 +227,68 @@ class JwtAccessTokenValidator:
             raise AuthorizationDenied
 
 
+class BearerRequestAuthorizer:
+    def __init__(
+        self,
+        *,
+        validator: JwtAccessTokenValidator,
+        principal_resolver: PrincipalResolver,
+    ) -> None:
+        self._validator = validator
+        self._principal_resolver = principal_resolver
+
+    def authorize(
+        self,
+        *,
+        authorization_header: str | None,
+        capability: Capability,
+        correlation_id: UUID,
+    ) -> PrincipalRecord:
+        token = self._bearer_token(authorization_header, correlation_id)
+        try:
+            principal = self._validator.validate(token)
+        except AuthenticationFailed as error:
+            raise authentication_problem(correlation_id) from error
+        try:
+            self._validator.require_capability(principal, capability)
+        except AuthorizationDenied as error:
+            raise authorization_problem(correlation_id) from error
+        try:
+            return self._principal_resolver.resolve_oidc_principal(
+                issuer=principal.issuer,
+                subject=principal.subject,
+            )
+        except Exception as error:
+            raise PublicProblem(
+                status=503,
+                code=ProblemCode.DEPENDENCY_UNAVAILABLE,
+                title="Dependency unavailable",
+                detail="A required service is temporarily unavailable.",
+                correlation_id=correlation_id,
+            ) from error
+
+    def close(self) -> None:
+        self._principal_resolver.close()
+
+    @staticmethod
+    def _bearer_token(
+        authorization_header: str | None,
+        correlation_id: UUID,
+    ) -> str:
+        if authorization_header is None or len(authorization_header) > MAX_ACCESS_TOKEN_BYTES + 7:
+            raise authentication_problem(correlation_id)
+        scheme, separator, token = authorization_header.partition(" ")
+        if (
+            separator != " "
+            or scheme.lower() != "bearer"
+            or not token
+            or token.strip() != token
+            or any(character.isspace() for character in token)
+        ):
+            raise authentication_problem(correlation_id)
+        return token
+
+
 def build_access_token_validator(settings: Settings) -> JwtAccessTokenValidator:
     metadata = load_oidc_provider_metadata(
         discovery_url=settings.oidc_discovery_url,
@@ -233,6 +314,15 @@ def build_access_token_validator(settings: Settings) -> JwtAccessTokenValidator:
         capability_mapping=settings.oidc_capability_mapping,
         clock_skew_seconds=settings.oidc_clock_skew_seconds,
         signing_key_client=key_client,
+    )
+
+
+def build_request_authorizer(settings: Settings) -> BearerRequestAuthorizer:
+    return BearerRequestAuthorizer(
+        validator=build_access_token_validator(settings),
+        principal_resolver=SqlAlchemyPrincipalRepository(
+            engine=create_database_engine(settings.database_url)
+        ),
     )
 
 

@@ -26,8 +26,13 @@ API image roles.
 - explicit Alembic migrations
 - PyJWT access-token validation with exact issuer, audience, algorithm, time,
   JWKS-cache, and API-owned capability policy
+- bearer authorization on every document route, with stable-principal
+  ownership filtering that deliberately returns the same `404` for an absent
+  document and another principal's document
 - API-owned OIDC and controlled-system principals with populated-v1 migration
 - S3-compatible source-object storage through boto3
+- authenticated source retrieval that checks persisted and object metadata,
+  bounded size, and SHA-256 before returning a PDF
 - canonical JSON Schema validation before outbox persistence
 - safe PostgreSQL outbox leasing with process-unique ownership, attempt fencing,
   and expired-lease recovery
@@ -152,8 +157,9 @@ exercises the real HTTP, database, object-storage, publisher-confirm, result
 persistence, duplicate-delivery, ordering-race, poison-input, restart-recovery,
 stale-attempt fencing, and confirmation-deadline boundaries.
 
-The authentication and principal foundation is implemented, but the existing
-document operations remain anonymous until the Next.js server-owned session
-and ownership boundary can switch them coherently. The OpenAPI bearer scheme
-and canonical `401`/`403` problems are therefore reusable contracts, not a
-claim that document routes are protected in this increment.
+All document operations require a validated bearer token and the mapped
+`documents:submit` or `documents:read` capability. Submission persists the
+resolved stable principal as owner. Status and source reads filter by that same
+principal, so cross-owner probes do not reveal document existence. The Next.js
+boundary owns the browser session and forwards access tokens only on the
+server; health and readiness probes remain intentionally anonymous.

@@ -28,6 +28,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from reactorfront_api.domain import (
+    DocumentSourceRecord,
     DocumentStatusRecord,
     DocumentSubmission,
     OutboxInvariantError,
@@ -276,7 +277,7 @@ class SqlAlchemySubmissionRepository:
             try:
                 document = DocumentRow(
                     id=submission.document_id,
-                    submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+                    submitted_by_principal_id=submission.submitted_by_principal_id,
                     original_filename=submission.original_filename,
                     object_key=submission.object_key,
                     sha256=submission.sha256,
@@ -334,7 +335,8 @@ class SqlAlchemySubmissionRepository:
             return SubmissionCommitObservation.INCONSISTENT
 
         matches_submission = (
-            document.object_key == submission.object_key
+            document.submitted_by_principal_id == submission.submitted_by_principal_id
+            and document.object_key == submission.object_key
             and document.sha256 == submission.sha256
             and document.size_bytes == submission.size_bytes
             and job.document_id == submission.document_id
@@ -347,11 +349,14 @@ class SqlAlchemySubmissionRepository:
             return SubmissionCommitObservation.COMMITTED
         return SubmissionCommitObservation.INCONSISTENT
 
-    def get_status(self, document_id: UUID) -> DocumentStatusRecord | None:
+    def get_status(self, document_id: UUID, principal_id: UUID) -> DocumentStatusRecord | None:
         statement = (
             select(DocumentRow, ProcessingJobRow)
             .join(ProcessingJobRow, ProcessingJobRow.document_id == DocumentRow.id)
-            .where(DocumentRow.id == document_id)
+            .where(
+                DocumentRow.id == document_id,
+                DocumentRow.submitted_by_principal_id == principal_id,
+            )
         )
         with Session(self._engine) as session:
             result = session.execute(statement).one_or_none()
@@ -369,6 +374,24 @@ class SqlAlchemySubmissionRepository:
                 confidence=float(job.confidence) if job.confidence is not None else None,
                 model_version=job.model_version,
                 failure_code=job.failure_code,
+            )
+
+    def get_source(self, document_id: UUID, principal_id: UUID) -> DocumentSourceRecord | None:
+        statement = select(DocumentRow).where(
+            DocumentRow.id == document_id,
+            DocumentRow.submitted_by_principal_id == principal_id,
+        )
+        with Session(self._engine) as session:
+            document = session.scalar(statement)
+            if document is None:
+                return None
+            return DocumentSourceRecord(
+                document_id=document.id,
+                original_filename=document.original_filename,
+                object_key=document.object_key,
+                sha256=document.sha256,
+                content_type=document.content_type,
+                size_bytes=document.size_bytes,
             )
 
     def is_ready(self) -> bool:
