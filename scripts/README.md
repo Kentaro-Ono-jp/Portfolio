@@ -81,24 +81,31 @@ Supporting scripts are implementation details of that entrypoint:
   the API container through its backchannel, resolves one stable API principal,
   rejects a tampered signature, and proves the token is absent from persistence,
   logs, and evidence.
+- `oidc_test_client.py` owns the dependency-free synthetic Authorization Code
+  client shared by direct API and ML runtime verifiers; it stops at the
+  repository-owned callback and never writes the access token to evidence.
 - `check_identity_boundary.py` constrains the pinned Dex image, loopback-only
   exposure, authorization-code-only configuration, synthetic identity, and
   pinned JWT library.
 - `pdf_fixture.py` builds deterministic, repository-owned single-page text PDFs.
 - `verify_ml_model.py` proves independent model generations, checksum metadata,
   and real CPU PyTorch inference.
-- `verify_ml_runtime.py` proves the real API-to-outbox-to-worker path, source
-  integrity, result contracts, stable failure, duplicate delivery, persistent
-  result messages, and RabbitMQ/worker recovery.
-- `verify_result_consumer_runtime.py` proves outbox/result ordering recovery,
+- `verify_ml_runtime.py` obtains a synthetic OIDC access token and proves the
+  authenticated API-to-outbox-to-worker path, source integrity, result
+  contracts, stable failure, duplicate delivery, persistent result messages,
+  and RabbitMQ/worker recovery.
+- `verify_result_consumer_runtime.py` uses the same authenticated document
+  boundary and proves outbox/result ordering recovery,
   atomic API-owned receipts and terminal persistence, logical deduplication,
   poison/conflict rejection, broker/consumer restart, and dependency readiness.
-- `verify_outbox_runtime.py` proves expired-lease recovery, dispatcher restart,
-  RabbitMQ restart, persistent delivery, and the queued-state transition.
-- `tests/e2e/document-classification.spec.ts` proves the browser-visible
-  completed and failed workflows, correlation propagation, and non-PDF
-  rejection while Playwright retains failure traces, screenshots, video, and
-  JUnit/HTML reports under `artifacts/verification/`.
+- `verify_outbox_runtime.py` uses a synthetic OIDC access token to prove
+  expired-lease recovery, dispatcher restart, RabbitMQ restart, persistent
+  delivery, and the queued-state transition.
+- `tests/e2e/document-classification.spec.ts` proves browser-visible OIDC
+  sign-in without browser token storage, completed and failed workflows,
+  correlation propagation, and non-PDF rejection while Playwright retains
+  failure traces, screenshots, video, and JUnit/HTML reports under
+  `artifacts/verification/`.
 - `validate-openapi.mjs` proves valid state variants and rejects impossible
   document states or unstable problem-response combinations.
 - `validate-events.mjs` validates canonical event examples and representative

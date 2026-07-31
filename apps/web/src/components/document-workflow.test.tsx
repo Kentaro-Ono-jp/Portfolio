@@ -41,7 +41,7 @@ function renderWorkflow() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <DocumentWorkflow />
+      <DocumentWorkflow csrfToken="csrf-proof" />
     </QueryClientProvider>,
   );
 }

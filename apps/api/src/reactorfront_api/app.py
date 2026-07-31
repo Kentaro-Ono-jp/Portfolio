@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated, cast
 from uuid import UUID, uuid4
@@ -10,7 +10,17 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from reactorfront_api.domain import ProblemCode, ProcessingStatus, PublicProblem
+from reactorfront_api.authentication import (
+    Capability,
+    RequestAuthorizer,
+    build_request_authorizer,
+)
+from reactorfront_api.domain import (
+    PrincipalRecord,
+    ProblemCode,
+    ProcessingStatus,
+    PublicProblem,
+)
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
 from reactorfront_api.persistence import SqlAlchemySubmissionRepository, create_database_engine
 from reactorfront_api.rabbitmq import PikaOutboxPublisher
@@ -33,6 +43,8 @@ CORRELATION_HEADER = "X-Correlation-ID"
 DOCUMENT_UPLOAD_PATH = "/api/v1/documents"
 PdfUpload = Annotated[UploadFile, File()]
 CorrelationIdHeader = Annotated[UUID | None, Header(alias=CORRELATION_HEADER)]
+DOCUMENT_PRINCIPAL_STATE = "document_principal"
+DOCUMENT_CORRELATION_STATE = "document_correlation_id"
 
 
 def build_document_service(settings: Settings) -> DocumentService:
@@ -101,17 +113,54 @@ def request_correlation_id(request: Request) -> UUID:
     return uuid4()
 
 
-def create_app(*, service: DocumentService | None = None) -> FastAPI:
+def document_capability(method: str, path: str) -> Capability | None:
+    normalized_path = path[:-1] if path.endswith("/") else path
+    if method == "POST" and normalized_path == DOCUMENT_UPLOAD_PATH:
+        return Capability.DOCUMENTS_SUBMIT
+    if method != "GET":
+        return None
+    segments = normalized_path.split("/")
+    if segments[:4] != ["", "api", "v1", "documents"]:
+        return None
+    if len(segments) == 5 and segments[4]:
+        return Capability.DOCUMENTS_READ
+    if len(segments) == 6 and segments[4] and segments[5] == "source":
+        return Capability.DOCUMENTS_READ
+    return None
+
+
+def authorized_document_context(request: Request) -> tuple[PrincipalRecord, UUID]:
+    principal = cast(
+        PrincipalRecord,
+        getattr(request.state, DOCUMENT_PRINCIPAL_STATE),
+    )
+    correlation_id = cast(
+        UUID,
+        getattr(request.state, DOCUMENT_CORRELATION_STATE),
+    )
+    return principal, correlation_id
+
+
+def create_app(
+    *,
+    service: DocumentService | None = None,
+    authorizer: RequestAuthorizer | None = None,
+) -> FastAPI:
     owns_service = service is None
+    owns_authorizer = authorizer is None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.document_service = service or build_document_service(get_settings())
+        settings = get_settings()
+        app.state.document_service = service or build_document_service(settings)
+        app.state.request_authorizer = authorizer or build_request_authorizer(settings)
         try:
             yield
         finally:
             if owns_service:
                 get_document_service(app).close()
+            if owns_authorizer:
+                get_request_authorizer(app).close()
 
     app = FastAPI(
         title="ReactorFront Document Intelligence API",
@@ -124,6 +173,27 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
         max_body_bytes=MAX_DOCUMENT_BYTES + MULTIPART_ENVELOPE_BYTES,
         response_factory=document_too_large_response,
     )
+
+    @app.middleware("http")
+    async def authorize_document_operation(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        capability = document_capability(request.method, request.url.path)
+        if capability is None:
+            return await call_next(request)
+        correlation_id = request_correlation_id(request)
+        try:
+            principal = get_request_authorizer(app).authorize(
+                authorization_header=request.headers.get("Authorization"),
+                capability=capability,
+                correlation_id=correlation_id,
+            )
+        except PublicProblem as problem:
+            return public_problem_response(problem)
+        setattr(request.state, DOCUMENT_PRINCIPAL_STATE, principal)
+        setattr(request.state, DOCUMENT_CORRELATION_STATE, correlation_id)
+        return await call_next(request)
 
     @app.exception_handler(PublicProblem)
     async def handle_public_problem(_request: Request, problem: PublicProblem) -> JSONResponse:
@@ -149,6 +219,8 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
         response_model=DocumentAcceptedResponse,
         status_code=status.HTTP_202_ACCEPTED,
         responses={
+            401: {"model": ProblemResponse},
+            403: {"model": ProblemResponse},
             400: {"model": ProblemResponse},
             413: {"model": ProblemResponse},
             415: {"model": ProblemResponse},
@@ -157,16 +229,18 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
         },
     )
     def create_document(
+        request: Request,
         response: Response,
         file: PdfUpload,
         correlation_id: CorrelationIdHeader = None,
     ) -> DocumentAcceptedResponse:
-        request_correlation_id = correlation_id or uuid4()
+        principal, request_correlation_id = authorized_document_context(request)
         result = get_document_service(app).submit(
             stream=file.file,
             original_filename=file.filename,
             content_type=file.content_type,
             correlation_id=request_correlation_id,
+            principal_id=principal.principal_id,
         )
         response.headers[CORRELATION_HEADER] = str(request_correlation_id)
         return DocumentAcceptedResponse(
@@ -180,23 +254,66 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
         response_model=DocumentStatusResponse,
         response_model_exclude_none=True,
         responses={
+            401: {"model": ProblemResponse},
+            403: {"model": ProblemResponse},
             404: {"model": ProblemResponse},
             422: {"model": ProblemResponse},
             503: {"model": ProblemResponse},
         },
     )
     def get_document(
+        request: Request,
         document_id: UUID,
         response: Response,
         correlation_id: CorrelationIdHeader = None,
     ) -> DocumentStatusResponse:
-        request_correlation_id = correlation_id or uuid4()
+        principal, request_correlation_id = authorized_document_context(request)
         result = get_document_service(app).get_status(
             document_id=document_id,
+            principal_id=principal.principal_id,
             correlation_id=request_correlation_id,
         )
         response.headers[CORRELATION_HEADER] = str(request_correlation_id)
         return serialize_document_status(result)
+
+    @app.get(
+        "/api/v1/documents/{document_id}/source",
+        response_class=Response,
+        responses={
+            200: {
+                "content": {"application/pdf": {}},
+                "description": "The authorized private PDF source.",
+            },
+            401: {"model": ProblemResponse},
+            403: {"model": ProblemResponse},
+            404: {"model": ProblemResponse},
+            422: {"model": ProblemResponse},
+            503: {"model": ProblemResponse},
+        },
+    )
+    def get_document_source(
+        request: Request,
+        document_id: UUID,
+        correlation_id: CorrelationIdHeader = None,
+    ) -> Response:
+        principal, request_correlation_id = authorized_document_context(request)
+        source = get_document_service(app).get_source(
+            document_id=document_id,
+            principal_id=principal.principal_id,
+            correlation_id=request_correlation_id,
+        )
+        return Response(
+            content=source.content,
+            status_code=status.HTTP_200_OK,
+            media_type=source.content_type,
+            headers={
+                CORRELATION_HEADER: str(request_correlation_id),
+                "Content-Disposition": 'inline; filename="source.pdf"',
+                "Content-Length": str(source.size_bytes),
+                "ETag": f'"{source.sha256}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @app.get("/health", response_model=HealthResponse)
     def get_health() -> HealthResponse:
@@ -223,3 +340,7 @@ def create_app(*, service: DocumentService | None = None) -> FastAPI:
 
 def get_document_service(app: FastAPI) -> DocumentService:
     return cast(DocumentService, app.state.document_service)
+
+
+def get_request_authorizer(app: FastAPI) -> RequestAuthorizer:
+    return cast(RequestAuthorizer, app.state.request_authorizer)

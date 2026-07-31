@@ -57,6 +57,26 @@ def main() -> int:
         raise RuntimeError(
             "The API must validate the public issuer through the Dex backchannel."
         )
+    web_environment = config["services"]["web"].get("environment", {})
+    required_web_environment = {
+        "PORTFOLIO_WEB_PUBLIC_BASE_URL": "http://127.0.0.1:53000",
+        "PORTFOLIO_WEB_OIDC_ISSUER": "http://127.0.0.1:5556/dex",
+        "PORTFOLIO_WEB_OIDC_DISCOVERY_URL": (
+            "http://identity:5556/dex/.well-known/openid-configuration"
+        ),
+        "PORTFOLIO_WEB_OIDC_TOKEN_URL": "http://identity:5556/dex/token",
+        "PORTFOLIO_WEB_OIDC_JWKS_URL": "http://identity:5556/dex/keys",
+        "PORTFOLIO_WEB_OIDC_CLIENT_ID": "reactorfront-api",
+        "PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK": "true",
+    }
+    if any(
+        web_environment.get(name) != value
+        for name, value in required_web_environment.items()
+    ):
+        raise RuntimeError(
+            "The Web OIDC session must use the public issuer and internal "
+            "Dex backchannels in the loopback Compose profile."
+        )
 
     dex_config = (
         REPOSITORY_ROOT / "infra" / "docker" / "identity" / "dex.yaml"
@@ -65,6 +85,7 @@ def main() -> int:
         "grantTypes:\n    - authorization_code",
         "responseTypes:\n    - code",
         "public: true",
+        "http://127.0.0.1:53000/api/auth/callback",
         "reviewer@synthetic.invalid",
         "reactorfront-reviewers",
     )
@@ -82,13 +103,28 @@ def main() -> int:
     )
     if "pyjwt[crypto]==2.13.0" not in api_project["project"]["dependencies"]:
         raise RuntimeError("The reviewed PyJWT cryptographic dependency is not pinned.")
+    web_package = json.loads(
+        (REPOSITORY_ROOT / "apps" / "web" / "package.json").read_text(encoding="utf-8")
+    )
+    if web_package["dependencies"].get("openid-client") != "6.8.4":
+        raise RuntimeError("The reviewed openid-client dependency is not pinned.")
     notices = (REPOSITORY_ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
-    for required_notice in ("Dex", "v2.45.1", "Apache-2.0", "PyJWT", "2.13.0", "MIT"):
+    for required_notice in (
+        "Dex",
+        "v2.45.1",
+        "Apache-2.0",
+        "PyJWT",
+        "2.13.0",
+        "openid-client",
+        "6.8.4",
+        "MIT",
+    ):
         if required_notice not in notices:
             raise RuntimeError(f"Third-party notices omit {required_notice}.")
     print(
         "Identity boundary passed: pinned Dex, authorization-code-only test flow, "
-        "loopback exposure, synthetic identity, and pinned JWT verification."
+        "loopback exposure, synthetic identity, pinned JWT verification, and "
+        "server-owned Web OIDC session configuration."
     )
     return 0
 

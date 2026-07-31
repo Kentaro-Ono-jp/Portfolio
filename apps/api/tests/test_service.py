@@ -23,6 +23,7 @@ IDS = (
     UUID("44444444-4444-4444-8444-444444444444"),
 )
 CORRELATION_ID = UUID("11111111-1111-4111-8111-111111111111")
+PRINCIPAL_ID = UUID("55555555-5555-4555-8555-555555555555")
 NOW = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
 PDF = b"%PDF-1.7\nportfolio test document"
 
@@ -72,6 +73,7 @@ def test_submit_persists_object_job_and_validated_outbox_event() -> None:
         original_filename=r"C:\private\quarterly.pdf",
         content_type="application/pdf; charset=binary",
         correlation_id=CORRELATION_ID,
+        principal_id=PRINCIPAL_ID,
     )
 
     assert result.document_id == IDS[0]
@@ -120,6 +122,7 @@ def test_submit_rejects_unsupported_media_type(
             original_filename="document.pdf",
             content_type=content_type,
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=expected_status,
         code=expected_code,
@@ -137,6 +140,7 @@ def test_submit_rejects_invalid_pdf_signature() -> None:
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=400,
         code=ProblemCode.INVALID_DOCUMENT,
@@ -153,6 +157,7 @@ def test_submit_accepts_exact_size_limit_and_rejects_one_extra_byte() -> None:
         original_filename=None,
         content_type="application/pdf",
         correlation_id=CORRELATION_ID,
+        principal_id=PRINCIPAL_ID,
     )
     assert repository.submissions[0].original_filename == "document.pdf"
 
@@ -163,6 +168,7 @@ def test_submit_accepts_exact_size_limit_and_rejects_one_extra_byte() -> None:
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=413,
         code=ProblemCode.DOCUMENT_TOO_LARGE,
@@ -181,6 +187,7 @@ def test_storage_failure_is_sanitized_without_database_write() -> None:
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=503,
         code=ProblemCode.DEPENDENCY_UNAVAILABLE,
@@ -206,6 +213,7 @@ def test_database_failure_attempts_object_compensation(delete_fails: bool) -> No
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=503,
         code=ProblemCode.DEPENDENCY_UNAVAILABLE,
@@ -229,6 +237,7 @@ def test_lost_commit_acknowledgement_returns_accepted_without_deleting_source() 
         original_filename="document.pdf",
         content_type="application/pdf",
         correlation_id=CORRELATION_ID,
+        principal_id=PRINCIPAL_ID,
     )
 
     assert result.status is ProcessingStatus.ACCEPTED
@@ -249,6 +258,7 @@ def test_lost_commit_acknowledgement_with_absent_observation_retains_source() ->
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=503,
         code=ProblemCode.DEPENDENCY_UNAVAILABLE,
@@ -270,6 +280,7 @@ def test_inconsistent_commit_observation_retains_source_for_reconciliation() -> 
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=503,
         code=ProblemCode.DEPENDENCY_UNAVAILABLE,
@@ -291,6 +302,7 @@ def test_failed_commit_observation_retains_source_for_reconciliation() -> None:
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=503,
         code=ProblemCode.DEPENDENCY_UNAVAILABLE,
@@ -313,6 +325,7 @@ def test_unexpected_repository_failure_retains_source_conservatively() -> None:
             original_filename="document.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=PRINCIPAL_ID,
         ),
         status=503,
         code=ProblemCode.DEPENDENCY_UNAVAILABLE,
@@ -329,21 +342,90 @@ def test_get_status_returns_record_or_stable_problem() -> None:
         status=ProcessingStatus.ACCEPTED,
         created_at=NOW,
     )
+    repository.owners[IDS[0]] = PRINCIPAL_ID
     service, _repository, _storage, _validator = make_service(repository=repository)
-    actual = service.get_status(document_id=IDS[0], correlation_id=CORRELATION_ID)
+    actual = service.get_status(
+        document_id=IDS[0],
+        principal_id=PRINCIPAL_ID,
+        correlation_id=CORRELATION_ID,
+    )
     assert actual == repository.records[IDS[0]]
 
     assert_problem(
-        lambda: service.get_status(document_id=IDS[2], correlation_id=CORRELATION_ID),
+        lambda: service.get_status(
+            document_id=IDS[2],
+            principal_id=PRINCIPAL_ID,
+            correlation_id=CORRELATION_ID,
+        ),
         status=404,
         code=ProblemCode.DOCUMENT_NOT_FOUND,
     )
 
     repository.get_error = RuntimeError("private database detail")
     assert_problem(
-        lambda: service.get_status(document_id=IDS[0], correlation_id=CORRELATION_ID),
+        lambda: service.get_status(
+            document_id=IDS[0],
+            principal_id=PRINCIPAL_ID,
+            correlation_id=CORRELATION_ID,
+        ),
         status=503,
         code=ProblemCode.DEPENDENCY_UNAVAILABLE,
+    )
+
+
+def test_source_read_requires_owner_and_verifies_every_persisted_identity() -> None:
+    service, repository, storage, _validator = make_service()
+    service.submit(
+        stream=BytesIO(PDF),
+        original_filename="invoice.pdf",
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+        principal_id=PRINCIPAL_ID,
+    )
+
+    source = service.get_source(
+        document_id=IDS[0],
+        principal_id=PRINCIPAL_ID,
+        correlation_id=CORRELATION_ID,
+    )
+
+    assert source.content == PDF
+    assert source.content_type == "application/pdf"
+    assert source.size_bytes == len(PDF)
+    assert source.sha256 == hashlib.sha256(PDF).hexdigest()
+    assert source.filename == "invoice.pdf"
+
+    other_principal = UUID("66666666-6666-4666-8666-666666666666")
+    assert_problem(
+        lambda: service.get_source(
+            document_id=IDS[0],
+            principal_id=other_principal,
+            correlation_id=CORRELATION_ID,
+        ),
+        status=404,
+        code=ProblemCode.DOCUMENT_NOT_FOUND,
+    )
+    assert_problem(
+        lambda: service.get_status(
+            document_id=IDS[0],
+            principal_id=other_principal,
+            correlation_id=CORRELATION_ID,
+        ),
+        status=404,
+        code=ProblemCode.DOCUMENT_NOT_FOUND,
+    )
+
+    object_key = repository.sources[IDS[0]].object_key
+    content, content_type, _sha256 = storage.objects[object_key]
+    storage.objects[object_key] = (content, content_type, "f" * 64)
+    assert_problem(
+        lambda: service.get_source(
+            document_id=IDS[0],
+            principal_id=PRINCIPAL_ID,
+            correlation_id=CORRELATION_ID,
+        ),
+        status=503,
+        code=ProblemCode.SOURCE_UNAVAILABLE,
     )
 
 

@@ -30,7 +30,14 @@ services:
     ports:
       - "127.0.0.1:${PORTFOLIO_MINIO_PORT:-59000}:9000"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:9000/minio/health/live"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--output-document=-",
+          "http://127.0.0.1:9000/minio/health/live",
+        ]
       interval: 2s
       timeout: 3s
       retries: 60
@@ -218,10 +225,24 @@ services:
     environment:
       PORTFOLIO_API_BASE_URL: http://api:8000
       PORTFOLIO_WEB_UPSTREAM_TIMEOUT_MS: "8000"
+      PORTFOLIO_WEB_PUBLIC_BASE_URL: http://127.0.0.1:53000
+      PORTFOLIO_WEB_OIDC_ISSUER: http://127.0.0.1:5556/dex
+      PORTFOLIO_WEB_OIDC_DISCOVERY_URL: http://identity:5556/dex/.well-known/openid-configuration
+      PORTFOLIO_WEB_OIDC_TOKEN_URL: http://identity:5556/dex/token
+      PORTFOLIO_WEB_OIDC_JWKS_URL: http://identity:5556/dex/keys
+      PORTFOLIO_WEB_OIDC_CLIENT_ID: reactorfront-api
+      PORTFOLIO_WEB_OIDC_SCOPES: openid groups offline_access
+      PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK: "true"
+      PORTFOLIO_WEB_SESSION_ABSOLUTE_SECONDS: "28800"
+      PORTFOLIO_WEB_SESSION_INACTIVITY_SECONDS: "1800"
+      PORTFOLIO_WEB_OIDC_TRANSACTION_SECONDS: "300"
+      PORTFOLIO_WEB_TOKEN_REFRESH_LEEWAY_SECONDS: "30"
     ports:
       - "127.0.0.1:${PORTFOLIO_WEB_PORT:-53000}:3000"
     depends_on:
       api:
+        condition: service_healthy
+      identity:
         condition: service_healthy
     healthcheck:
       test:

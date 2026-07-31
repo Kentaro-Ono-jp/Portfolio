@@ -28,8 +28,9 @@ upstream package metadata are the authoritative inventories for transitive
 dependency licenses.
 
 The Web runtime's principal introduced packages are Next.js, React, TanStack
-Query, Zod, and Tailwind CSS. Their package metadata, bundled notices, and the
-exact `pnpm-lock.yaml` resolution remain authoritative.
+Query, Zod, Tailwind CSS, and openid-client `6.8.4` (MIT) for OAuth/OIDC
+protocol handling. Their package metadata, bundled notices, and the exact
+`pnpm-lock.yaml` resolution remain authoritative.
 
 The API runtime uses PyJWT `2.13.0` with its cryptography extra (MIT) for
 asymmetric OAuth access-token validation and bounded JWKS caching. Its exact

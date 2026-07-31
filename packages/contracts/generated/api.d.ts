@@ -39,6 +39,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{documentId}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an owned document's private PDF source */
+        get: operations["getDocumentSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -229,6 +246,12 @@ export interface components {
             /** @constant */
             code: "DEPENDENCY_UNAVAILABLE";
         };
+        SourceUnavailableProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 503;
+            /** @constant */
+            code: "SOURCE_UNAVAILABLE";
+        };
     };
     responses: {
         /** @description A missing or invalid bearer access token. */
@@ -312,6 +335,16 @@ export interface components {
                 "application/problem+json": components["schemas"]["DependencyUnavailableProblem"];
             };
         };
+        /** @description Source storage or source integrity is temporarily unavailable. */
+        SourceAccessUnavailable: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["SourceUnavailableProblem"] | components["schemas"]["DependencyUnavailableProblem"];
+            };
+        };
     };
     parameters: {
         /** @description Server-generated document identifier. */
@@ -360,6 +393,8 @@ export interface operations {
                 };
             };
             400: components["responses"]["InvalidDocument"];
+            401: components["responses"]["AuthenticationRequired"];
+            403: components["responses"]["InsufficientCapability"];
             413: components["responses"]["DocumentTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["InvalidRequest"];
@@ -391,9 +426,51 @@ export interface operations {
                     "application/json": components["schemas"]["DocumentStatus"];
                 };
             };
+            401: components["responses"]["AuthenticationRequired"];
+            403: components["responses"]["InsufficientCapability"];
             404: components["responses"]["DocumentNotFound"];
             422: components["responses"]["InvalidRequest"];
             503: components["responses"]["DependencyUnavailable"];
+        };
+    };
+    getDocumentSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional caller-provided identifier used for traceability. */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                /** @description Server-generated document identifier. */
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The verified private PDF source. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    /** @description Sanitized inline source filename. */
+                    "Content-Disposition"?: "inline; filename=\"source.pdf\"";
+                    /** @description Verified source size in bytes. */
+                    "Content-Length"?: number;
+                    /** @description Strong entity tag derived from the persisted SHA-256 digest. */
+                    ETag?: string;
+                    /** @description Disables content-type sniffing. */
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            401: components["responses"]["AuthenticationRequired"];
+            403: components["responses"]["InsufficientCapability"];
+            404: components["responses"]["DocumentNotFound"];
+            422: components["responses"]["InvalidRequest"];
+            503: components["responses"]["SourceAccessUnavailable"];
         };
     };
     getHealth: {

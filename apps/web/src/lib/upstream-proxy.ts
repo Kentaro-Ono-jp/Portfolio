@@ -12,6 +12,8 @@ import { readServerConfig } from "@/lib/server-config";
 
 const JSON_MEDIA_TYPE = "application/json";
 const PROBLEM_MEDIA_TYPE = "application/problem+json";
+const PDF_MEDIA_TYPE = "application/pdf";
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 interface ProxyDependencies {
   fetch: typeof fetch;
@@ -142,6 +144,7 @@ function isFile(value: FormDataEntryValue | null): value is File {
 
 async function callUpstream<T>(
   request: Request,
+  accessToken: string,
   path: string,
   init: RequestInit,
   successStatus: number,
@@ -158,6 +161,7 @@ async function callUpstream<T>(
     const config = readServerConfig(resolved.environment);
     const headers = new Headers(init.headers);
     headers.set("Accept", `${JSON_MEDIA_TYPE}, ${PROBLEM_MEDIA_TYPE}`);
+    headers.set("Authorization", `Bearer ${accessToken}`);
     headers.set("X-Correlation-ID", correlationId);
     const response = await resolved.fetch(
       new URL(path, `${config.apiBaseUrl}/`),
@@ -195,6 +199,7 @@ async function callUpstream<T>(
 
 export async function proxyDocumentUpload(
   request: Request,
+  accessToken: string,
   overrides: ProxyDependencyOverrides = {},
 ): Promise<Response> {
   const resolved = dependencies(overrides);
@@ -230,6 +235,7 @@ export async function proxyDocumentUpload(
   outgoing.set("file", file, file.name);
   return callUpstream(
     request,
+    accessToken,
     "/api/v1/documents",
     { method: "POST", body: outgoing },
     202,
@@ -241,6 +247,7 @@ export async function proxyDocumentUpload(
 export async function proxyDocumentStatus(
   request: Request,
   documentId: string,
+  accessToken: string,
   overrides: ProxyDependencyOverrides = {},
 ): Promise<Response> {
   const resolved = dependencies(overrides);
@@ -261,10 +268,153 @@ export async function proxyDocumentStatus(
 
   return callUpstream(
     request,
+    accessToken,
     `/api/v1/documents/${parsedDocumentId.data}`,
     { method: "GET" },
     200,
     documentStatusSchema,
     overrides,
   );
+}
+
+function bytesToHex(bytes: ArrayBuffer): string {
+  return Array.from(new Uint8Array(bytes), (value) =>
+    value.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+async function readBoundedBody(
+  response: Response,
+  maximumBytes: number,
+): Promise<ArrayBuffer> {
+  if (response.body === null) {
+    throw new InvalidUpstreamResponseError();
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > maximumBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new InvalidUpstreamResponseError();
+    }
+    chunks.push(value);
+  }
+  const content = new Uint8Array(new ArrayBuffer(total));
+  let offset = 0;
+  for (const chunk of chunks) {
+    content.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return content.buffer;
+}
+
+export async function proxyDocumentSource(
+  request: Request,
+  documentId: string,
+  accessToken: string,
+  overrides: ProxyDependencyOverrides = {},
+): Promise<Response> {
+  const resolved = dependencies(overrides);
+  const correlationId = requestCorrelationId(
+    request,
+    resolved.createCorrelationId,
+  );
+  const parsedDocumentId = documentIdSchema.safeParse(documentId);
+  if (!parsedDocumentId.success) {
+    return webProblem(
+      400,
+      "WEB_INVALID_DOCUMENT_ID",
+      "The document identifier is invalid.",
+      "Start a new submission from the upload form.",
+      correlationId,
+    );
+  }
+
+  try {
+    const config = readServerConfig(resolved.environment);
+    const response = await resolved.fetch(
+      new URL(
+        `/api/v1/documents/${parsedDocumentId.data}/source`,
+        `${config.apiBaseUrl}/`,
+      ),
+      {
+        method: "GET",
+        headers: {
+          Accept: `${PDF_MEDIA_TYPE}, ${PROBLEM_MEDIA_TYPE}`,
+          Authorization: `Bearer ${accessToken}`,
+          "X-Correlation-ID": correlationId,
+        },
+        signal: resolved.timeoutSignal(config.timeoutMilliseconds),
+      },
+    );
+    if (!response.ok) {
+      return await validatedUpstreamResponse(
+        response,
+        correlationId,
+        200,
+        documentStatusSchema,
+      );
+    }
+
+    const upstreamCorrelation = response.headers.get("X-Correlation-ID");
+    const contentLength = Number(response.headers.get("Content-Length"));
+    const etag = response.headers.get("ETag");
+    if (
+      upstreamCorrelation !== correlationId ||
+      mediaType(response) !== PDF_MEDIA_TYPE ||
+      !Number.isSafeInteger(contentLength) ||
+      contentLength < 1 ||
+      contentLength > MAX_DOCUMENT_BYTES ||
+      response.headers.get("Content-Disposition") !==
+        'inline; filename="source.pdf"' ||
+      response.headers.get("X-Content-Type-Options") !== "nosniff" ||
+      etag === null ||
+      !/^"[a-f0-9]{64}"$/.test(etag)
+    ) {
+      throw new InvalidUpstreamResponseError();
+    }
+    const content = await readBoundedBody(response, MAX_DOCUMENT_BYTES);
+    if (content.byteLength !== contentLength) {
+      throw new InvalidUpstreamResponseError();
+    }
+    const digest = bytesToHex(await crypto.subtle.digest("SHA-256", content));
+    if (`"${digest}"` !== etag) {
+      throw new InvalidUpstreamResponseError();
+    }
+    return new Response(content, {
+      status: 200,
+      headers: {
+        "Content-Type": PDF_MEDIA_TYPE,
+        "Content-Length": String(contentLength),
+        "Content-Disposition": 'inline; filename="source.pdf"',
+        "X-Content-Type-Options": "nosniff",
+        ETag: etag,
+        "X-Correlation-ID": correlationId,
+        "Cache-Control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    if (error instanceof InvalidUpstreamResponseError) {
+      return webProblem(
+        502,
+        "WEB_INVALID_UPSTREAM_RESPONSE",
+        "The processing service returned an invalid response.",
+        "Please retry. If the problem continues, use the correlation ID when reporting it.",
+        correlationId,
+      );
+    }
+    return webProblem(
+      503,
+      "WEB_UPSTREAM_UNAVAILABLE",
+      "The processing service is temporarily unavailable.",
+      "Please wait a moment and try again.",
+      correlationId,
+    );
+  }
 }

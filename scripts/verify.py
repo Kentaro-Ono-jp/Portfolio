@@ -264,6 +264,27 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
     if normalized == "scripts/check_identity_boundary.py":
         return frozenset({"compose", "api-static"})
 
+    web_auth_runtime_paths = {
+        "apps/web/src/app/page.tsx",
+        "apps/web/src/lib/auth-session-store.ts",
+        "apps/web/src/lib/oidc.ts",
+        "apps/web/src/lib/server-config.ts",
+        "apps/web/src/lib/web-auth.ts",
+    }
+    if (
+        normalized in web_auth_runtime_paths
+        or (
+            normalized.startswith("apps/web/src/app/api/auth/")
+            and normalized.endswith("/route.ts")
+        )
+        or (
+            normalized.startswith("apps/web/src/app/api/documents/")
+            and normalized.endswith("/route.ts")
+        )
+        or normalized == "apps/web/src/app/api/documents/route.ts"
+    ):
+        return ALL_GROUPS
+
     if normalized.startswith("apps/web/"):
         groups = {"web-static"}
         if normalized in {
@@ -601,6 +622,7 @@ def static_checks(
                 "apps/api/tests",
                 "scripts/verify.py",
                 "scripts/plan_ci.py",
+                "scripts/oidc_test_client.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_identity_runtime.py",
                 "scripts/verify_principal_migration.py",
@@ -625,6 +647,7 @@ def static_checks(
                 "apps/api/tests",
                 "scripts/verify.py",
                 "scripts/plan_ci.py",
+                "scripts/oidc_test_client.py",
                 "scripts/prepare_integration.py",
                 "scripts/verify_identity_runtime.py",
                 "scripts/verify_principal_migration.py",

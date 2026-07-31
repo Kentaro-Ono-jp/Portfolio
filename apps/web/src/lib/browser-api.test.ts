@@ -40,13 +40,16 @@ describe("browser API client", () => {
       type: "application/pdf",
     });
 
-    await expect(createDocument(file)).resolves.toEqual(acceptedDocument);
+    await expect(createDocument(file, "csrf-proof")).resolves.toEqual(
+      acceptedDocument,
+    );
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/documents");
     expect(init?.method).toBe("POST");
     expect(new Headers(init?.headers).get("X-Correlation-ID")).toBe(
       CORRELATION_ID,
     );
+    expect(new Headers(init?.headers).get("X-CSRF-Token")).toBe("csrf-proof");
     expect((init?.body as FormData).get("file")).toBeInstanceOf(File);
   });
 

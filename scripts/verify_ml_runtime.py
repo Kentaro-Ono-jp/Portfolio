@@ -28,6 +28,14 @@ from reactorfront_ml.rabbitmq import (
 from reactorfront_ml.model import MODEL_VERSION
 from reactorfront_ml.settings import Settings
 from pdf_fixture import build_fixture
+from oidc_test_client import obtain_access_token
+
+
+@dataclass(frozen=True, slots=True)
+class HostOidcSettings:
+    oidc_discovery_url: str
+    oidc_issuer: str
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
@@ -119,7 +127,9 @@ def isolate_ml_result_queue(settings: Settings) -> None:
     compose("up", "--detach", "--wait", "api-outbox")
 
 
-def submit_document(*, base_url: str, content: bytes, correlation_id: UUID) -> UUID:
+def submit_document(
+    *, base_url: str, access_token: str, content: bytes, correlation_id: UUID
+) -> UUID:
     boundary = "reactorfront-portfolio-boundary"
     body = (
         (
@@ -137,6 +147,7 @@ def submit_document(*, base_url: str, content: bytes, correlation_id: UUID) -> U
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
+            "Authorization": f"Bearer {access_token}",
             "X-Correlation-ID": str(correlation_id),
         },
     )
@@ -147,14 +158,18 @@ def submit_document(*, base_url: str, content: bytes, correlation_id: UUID) -> U
     return UUID(value["documentId"])
 
 
-def wait_for_status(*, base_url: str, document_id: UUID, expected: str) -> None:
+def wait_for_status(
+    *, base_url: str, access_token: str, document_id: UUID, expected: str
+) -> None:
     deadline = time.monotonic() + 30
     last_status = "unavailable"
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(
-                f"{base_url}/api/v1/documents/{document_id}", timeout=5
-            ) as response:
+            request = urllib.request.Request(
+                f"{base_url}/api/v1/documents/{document_id}",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            with urllib.request.urlopen(request, timeout=5) as response:
                 value = json.loads(response.read())
             last_status = str(value["status"])
             if last_status == expected:
@@ -484,6 +499,7 @@ def prove_retry_publish_failure_recovery(
     settings: Settings,
     *,
     base_url: str,
+    access_token: str,
     invoice_pdf: bytes,
 ) -> dict[str, object]:
     compose("stop", "ml-worker", "api-outbox", "api-events")
@@ -492,10 +508,16 @@ def prove_retry_publish_failure_recovery(
 
     document_id = submit_document(
         base_url=base_url,
+        access_token=access_token,
         content=invoice_pdf,
         correlation_id=CORRELATION_IDS[2],
     )
-    wait_for_status(base_url=base_url, document_id=document_id, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=document_id,
+        expected="queued",
+    )
     request = take_requested_message(settings)
     compose("up", "--detach", "--wait", "ml-worker")
 
@@ -541,12 +563,28 @@ def prove_retry_publish_failure_recovery(
     all_events = [*initial_events, *recovered_events]
     assert_preserved_identifiers(all_events, request=request)
     completed = assert_retry_publish_recovery(all_events)
-    wait_for_status(base_url=base_url, document_id=document_id, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=document_id,
+        expected="queued",
+    )
     return completed
 
 
 def main() -> int:
     settings = Settings()
+    access_token, _identity_metadata = obtain_access_token(
+        HostOidcSettings(
+            oidc_discovery_url=os.environ.get(
+                "PORTFOLIO_OIDC_DISCOVERY_URL",
+                "http://127.0.0.1:5556/dex/.well-known/openid-configuration",
+            ),
+            oidc_issuer=os.environ.get(
+                "PORTFOLIO_OIDC_ISSUER", "http://127.0.0.1:5556/dex"
+            ),
+        )
+    )
     base_url = os.environ.get("PORTFOLIO_API_BASE_URL", "http://127.0.0.1:58000")
     invoice_pdf = build_fixture(INVOICE_TEXT)
 
@@ -554,10 +592,16 @@ def main() -> int:
 
     success_document = submit_document(
         base_url=base_url,
+        access_token=access_token,
         content=invoice_pdf,
         correlation_id=CORRELATION_IDS[0],
     )
-    wait_for_status(base_url=base_url, document_id=success_document, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=success_document,
+        expected="queued",
+    )
     success_request = take_requested_message(settings)
     publish_requested_duplicates(settings, message=success_request, copies=2)
 
@@ -569,7 +613,12 @@ def main() -> int:
     success_events = consume_results(settings, expected_count=4)
     assert_preserved_identifiers(success_events, request=success_request)
     completed = assert_success_events(success_events)
-    wait_for_status(base_url=base_url, document_id=success_document, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=success_document,
+        expected="queued",
+    )
 
     image_checksum = compose(
         "exec",
@@ -586,10 +635,16 @@ def main() -> int:
     prepare_queues(settings)
     failure_document = submit_document(
         base_url=base_url,
+        access_token=access_token,
         content=invoice_pdf,
         correlation_id=CORRELATION_IDS[1],
     )
-    wait_for_status(base_url=base_url, document_id=failure_document, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=failure_document,
+        expected="queued",
+    )
     failure_request = take_requested_message(settings)
     overwrite_source(settings, object_key=str(failure_request.payload["objectKey"]))
     requeue_requested_message(settings, failure_request)
@@ -597,11 +652,17 @@ def main() -> int:
     failure_events = consume_results(settings, expected_count=2)
     assert_preserved_identifiers(failure_events, request=failure_request)
     failed = assert_failure_events(failure_events)
-    wait_for_status(base_url=base_url, document_id=failure_document, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=failure_document,
+        expected="queued",
+    )
 
     retry_recovery_completed = prove_retry_publish_failure_recovery(
         settings,
         base_url=base_url,
+        access_token=access_token,
         invoice_pdf=invoice_pdf,
     )
 

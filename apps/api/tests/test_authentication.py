@@ -19,6 +19,7 @@ from reactorfront_api.authentication import (
     AuthenticatedPrincipal,
     AuthenticationFailed,
     AuthorizationDenied,
+    BearerRequestAuthorizer,
     Capability,
     JwtAccessTokenValidator,
     OidcProviderMetadata,
@@ -27,6 +28,7 @@ from reactorfront_api.authentication import (
     build_access_token_validator,
     load_oidc_provider_metadata,
 )
+from reactorfront_api.domain import PrincipalKind, PrincipalRecord, PublicProblem
 from reactorfront_api.settings import Settings
 
 ISSUER = "https://identity.example.invalid/dex"
@@ -36,6 +38,7 @@ AUDIENCE = "reactorfront-api"
 SUBJECT = "synthetic-reviewer"
 CORRELATION_ID = UUID("11111111-1111-4111-8111-111111111111")
 NOW = datetime.now(UTC)
+PRINCIPAL_ID = UUID("55555555-5555-4555-8555-555555555555")
 
 
 @dataclass
@@ -68,6 +71,31 @@ class FakeResponse:
 
     def read(self, _size: int) -> bytes:
         return self._payload
+
+
+@dataclass
+class FakePrincipalResolver:
+    error: Exception | None = None
+    calls: list[tuple[str, str]] | None = None
+    closed: bool = False
+
+    def resolve_oidc_principal(self, *, issuer: str, subject: str) -> PrincipalRecord:
+        if self.calls is None:
+            self.calls = []
+        self.calls.append((issuer, subject))
+        if self.error is not None:
+            raise self.error
+        return PrincipalRecord(
+            principal_id=PRINCIPAL_ID,
+            kind=PrincipalKind.OIDC,
+            issuer=issuer,
+            subject=subject,
+            system_key=None,
+            created_at=NOW,
+        )
+
+    def close(self) -> None:
+        self.closed = True
 
 
 @pytest.fixture(scope="module")
@@ -405,3 +433,90 @@ def test_validator_factory_rejects_a_mismatched_jwks_backchannel(
 
     with pytest.raises(AuthenticationFailed):
         build_access_token_validator(settings)
+
+
+def test_request_authorizer_resolves_stable_principal_after_capability_check(
+    private_key: rsa.RSAPrivateKey,
+) -> None:
+    resolver = FakePrincipalResolver()
+    authorizer = BearerRequestAuthorizer(
+        validator=validator(private_key),
+        principal_resolver=resolver,
+    )
+
+    principal = authorizer.authorize(
+        authorization_header=f"Bearer {token(private_key)}",
+        capability=Capability.DOCUMENTS_READ,
+        correlation_id=CORRELATION_ID,
+    )
+
+    assert principal.principal_id == PRINCIPAL_ID
+    assert resolver.calls == [(ISSUER, SUBJECT)]
+    authorizer.close()
+    assert resolver.closed
+
+
+@pytest.mark.parametrize(
+    "header",
+    [None, "", "Basic value", "Bearer", "Bearer  value", "Bearer value extra"],
+)
+def test_request_authorizer_rejects_missing_or_malformed_bearer_header(
+    private_key: rsa.RSAPrivateKey,
+    header: str | None,
+) -> None:
+    authorizer = BearerRequestAuthorizer(
+        validator=validator(private_key),
+        principal_resolver=FakePrincipalResolver(),
+    )
+
+    with pytest.raises(PublicProblem) as captured:
+        authorizer.authorize(
+            authorization_header=header,
+            capability=Capability.DOCUMENTS_READ,
+            correlation_id=CORRELATION_ID,
+        )
+
+    assert captured.value.status == 401
+    assert captured.value.response_headers == {
+        "WWW-Authenticate": 'Bearer realm="reactorfront-api"'
+    }
+
+
+def test_request_authorizer_separates_invalid_token_capability_and_dependency(
+    private_key: rsa.RSAPrivateKey,
+) -> None:
+    cases = [
+        (
+            BearerRequestAuthorizer(
+                validator=validator(private_key),
+                principal_resolver=FakePrincipalResolver(),
+            ),
+            "Bearer not-a-jwt",
+            401,
+        ),
+        (
+            BearerRequestAuthorizer(
+                validator=validator(private_key),
+                principal_resolver=FakePrincipalResolver(),
+            ),
+            f"Bearer {token(private_key, claim_overrides={'groups': []})}",
+            403,
+        ),
+        (
+            BearerRequestAuthorizer(
+                validator=validator(private_key),
+                principal_resolver=FakePrincipalResolver(error=RuntimeError("private")),
+            ),
+            f"Bearer {token(private_key)}",
+            503,
+        ),
+    ]
+    for authorizer, header, expected_status in cases:
+        with pytest.raises(PublicProblem) as captured:
+            authorizer.authorize(
+                authorization_header=header,
+                capability=Capability.DOCUMENTS_READ,
+                correlation_id=CORRELATION_ID,
+            )
+        assert captured.value.status == expected_status
+        assert "private" not in captured.value.detail

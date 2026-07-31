@@ -1,9 +1,11 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 import {
   proxyDocumentStatus,
+  proxyDocumentSource,
   proxyDocumentUpload,
   type ProxyDependencyOverrides,
 } from "@/lib/upstream-proxy";
@@ -15,12 +17,22 @@ import {
   DOCUMENT_ID,
 } from "@/test/fixtures";
 
+const ACCESS_TOKEN = "synthetic-access-token";
+
 function overrides(fetchMock: typeof fetch): ProxyDependencyOverrides {
   return {
     fetch: fetchMock,
     environment: {
       PORTFOLIO_API_BASE_URL: "http://api:8000",
       PORTFOLIO_WEB_UPSTREAM_TIMEOUT_MS: "1200",
+      PORTFOLIO_WEB_PUBLIC_BASE_URL: "http://127.0.0.1:53000",
+      PORTFOLIO_WEB_OIDC_ISSUER: "http://127.0.0.1:5556/dex",
+      PORTFOLIO_WEB_OIDC_DISCOVERY_URL:
+        "http://identity:5556/dex/.well-known/openid-configuration",
+      PORTFOLIO_WEB_OIDC_TOKEN_URL: "http://identity:5556/dex/token",
+      PORTFOLIO_WEB_OIDC_JWKS_URL: "http://identity:5556/dex/keys",
+      PORTFOLIO_WEB_OIDC_CLIENT_ID: "reactorfront-api",
+      PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK: "true",
     },
     createCorrelationId: () => CORRELATION_ID,
     timeoutSignal: () => new AbortController().signal,
@@ -61,6 +73,7 @@ describe("upstream document proxy", () => {
       uploadRequest(
         new File(["%PDF-1.7"], "invoice.pdf", { type: "application/pdf" }),
       ),
+      ACCESS_TOKEN,
       overrides(fetchMock),
     );
 
@@ -73,6 +86,9 @@ describe("upstream document proxy", () => {
     expect(new Headers(init?.headers).get("X-Correlation-ID")).toBe(
       CORRELATION_ID,
     );
+    expect(new Headers(init?.headers).get("Authorization")).toBe(
+      `Bearer ${ACCESS_TOKEN}`,
+    );
     expect((init?.body as FormData).get("file")).toBeInstanceOf(File);
   });
 
@@ -82,6 +98,7 @@ describe("upstream document proxy", () => {
       .mockResolvedValue(upstreamJson(canonicalProblem, 415, true));
     const response = await proxyDocumentUpload(
       uploadRequest(new File(["text"], "notes.txt", { type: "text/plain" })),
+      ACCESS_TOKEN,
       overrides(fetchMock),
     );
 
@@ -100,6 +117,7 @@ describe("upstream document proxy", () => {
         method: "POST",
         body: emptyForm,
       }),
+      ACCESS_TOKEN,
       overrides(fetchMock),
     );
     const malformed = await proxyDocumentUpload(
@@ -108,6 +126,7 @@ describe("upstream document proxy", () => {
         headers: { "Content-Type": "application/json" },
         body: "{}",
       }),
+      ACCESS_TOKEN,
       overrides(fetchMock),
     );
 
@@ -125,11 +144,13 @@ describe("upstream document proxy", () => {
     const success = await proxyDocumentStatus(
       request,
       DOCUMENT_ID,
+      ACCESS_TOKEN,
       overrides(fetchMock),
     );
     const invalid = await proxyDocumentStatus(
       request,
       "not-a-uuid",
+      ACCESS_TOKEN,
       overrides(fetchMock),
     );
 
@@ -151,12 +172,18 @@ describe("upstream document proxy", () => {
     const network = await proxyDocumentStatus(
       request,
       DOCUMENT_ID,
+      ACCESS_TOKEN,
       overrides(fetchMock),
     );
-    const configuration = await proxyDocumentStatus(request, DOCUMENT_ID, {
-      ...overrides(fetchMock),
-      environment: {},
-    });
+    const configuration = await proxyDocumentStatus(
+      request,
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      {
+        ...overrides(fetchMock),
+        environment: {},
+      },
+    );
 
     for (const response of [network, configuration]) {
       expect(response.status).toBe(503);
@@ -207,6 +234,7 @@ describe("upstream document proxy", () => {
       const response = await proxyDocumentStatus(
         new Request(`http://web.test/api/documents/${DOCUMENT_ID}`),
         DOCUMENT_ID,
+        ACCESS_TOKEN,
         overrides(vi.fn<typeof fetch>().mockResolvedValue(upstream)),
       );
       expect(response.status).toBe(502);
@@ -214,5 +242,93 @@ describe("upstream document proxy", () => {
         "WEB_INVALID_UPSTREAM_RESPONSE",
       );
     }
+  });
+
+  it("verifies the complete private source response before returning PDF bytes", async () => {
+    const content = new TextEncoder().encode("%PDF-1.7 synthetic source");
+    const digest = createHash("sha256").update(content).digest("hex");
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(content, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Length": String(content.byteLength),
+          "Content-Disposition": 'inline; filename="source.pdf"',
+          "X-Content-Type-Options": "nosniff",
+          "X-Correlation-ID": CORRELATION_ID,
+          ETag: `"${digest}"`,
+        },
+      }),
+    );
+
+    const response = await proxyDocumentSource(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/source`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(fetchMock),
+    );
+
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(content);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(
+      new Headers(fetchMock.mock.calls[0]![1]?.headers).get("Authorization"),
+    ).toBe(`Bearer ${ACCESS_TOKEN}`);
+  });
+
+  it("preserves source problems and rejects unverified source metadata", async () => {
+    const problem = await proxyDocumentSource(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/source`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(upstreamJson(canonicalProblem, 415, true)),
+      ),
+    );
+    expect(problem.status).toBe(415);
+
+    const invalid = await proxyDocumentSource(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/source`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi.fn<typeof fetch>().mockResolvedValue(
+          new Response("%PDF-invalid", {
+            headers: {
+              "Content-Type": "application/pdf",
+              "Content-Length": "12",
+              "Content-Disposition": 'inline; filename="source.pdf"',
+              "X-Content-Type-Options": "nosniff",
+              "X-Correlation-ID": CORRELATION_ID,
+              ETag: `"${"0".repeat(64)}"`,
+            },
+          }),
+        ),
+      ),
+    );
+    expect(invalid.status).toBe(502);
+    expect((await invalid.json()).code).toBe("WEB_INVALID_UPSTREAM_RESPONSE");
+
+    const oversized = await proxyDocumentSource(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/source`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi.fn<typeof fetch>().mockResolvedValue(
+          new Response(new Uint8Array(5 * 1024 * 1024 + 1), {
+            headers: {
+              "Content-Type": "application/pdf",
+              "Content-Length": "1",
+              "Content-Disposition": 'inline; filename="source.pdf"',
+              "X-Content-Type-Options": "nosniff",
+              "X-Correlation-ID": CORRELATION_ID,
+              ETag: `"${"0".repeat(64)}"`,
+            },
+          }),
+        ),
+      ),
+    );
+    expect(oversized.status).toBe(502);
   });
 });

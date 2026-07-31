@@ -35,6 +35,22 @@ def test_storage_uses_path_style_s3_and_integrity_metadata() -> None:
         Metadata={"sha256": "a" * 64},
     )
 
+    body = MagicMock()
+    body.read.return_value = b"%PDF-test"
+    client.get_object.return_value = {
+        "Body": body,
+        "ContentType": "application/pdf",
+        "ContentLength": 9,
+        "Metadata": {"sha256": "a" * 64},
+    }
+    stored = storage.get(object_key="documents/id/source.pdf", maximum_bytes=10)
+    assert stored.content == b"%PDF-test"
+    assert stored.content_type == "application/pdf"
+    assert stored.size_bytes == 9
+    assert stored.sha256 == "a" * 64
+    body.read.assert_called_once_with(11)
+    body.close.assert_called_once_with()
+
     storage.delete(object_key="documents/id/source.pdf")
     client.delete_object.assert_called_once_with(
         Bucket="portfolio-documents",

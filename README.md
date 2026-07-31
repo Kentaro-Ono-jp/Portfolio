@@ -162,18 +162,15 @@ docker compose -p reactorfront-portfolio up --detach --build --wait web
 ```
 
 The Web application is available at `http://127.0.0.1:53000` and the API at
-`http://127.0.0.1:58000`. Required development ports bind only to loopback and
-can be changed with the safe examples in
+`http://127.0.0.1:58000`. Open the Web application, choose **Sign in as
+synthetic reviewer**, and use the repository-owned identity defined by the
+loopback-only [Dex fixture](infra/docker/identity/dex.yaml) before submitting a
+PDF of at most 5 MiB. Browser document
+operations use an opaque Web session; direct API document calls require a
+valid bearer token and capability. Required development ports bind only to
+loopback and can be changed with the safe examples in
 [`.env.example`](.env.example). The MinIO console is intentionally not
 published to the host.
-
-Submit a PDF of at most 5 MiB:
-
-```console
-curl --request POST http://localhost:58000/api/v1/documents \
-  --header "X-Correlation-ID: 11111111-1111-4111-8111-111111111111" \
-  --form "file=@sample.pdf;type=application/pdf"
-```
 
 ## Completed first vertical slice
 
@@ -199,9 +196,12 @@ transitions atomically, deduplicates logical redelivery, and exposes processing,
 completed, or failed state through the existing API.
 
 The Web uses generated OpenAPI types plus runtime Zod validation, keeps the API
-base URL server-only behind same-origin route handlers, and presents accessible
-queued, processing, completed, failed, retry, and reset states. The final
-verification adds Playwright coverage for the real browser upload,
+base URL and OIDC tokens server-only behind an opaque, bounded Web session,
+requires CSRF verification for mutation, and presents accessible queued,
+processing, completed, failed, retry, reset, and verified-source states. API
+document routes require bearer capabilities and filter status/source access by
+the resolved stable owner. The final verification adds Playwright coverage for
+the real OIDC sign-in and browser upload,
 completed invoice result, terminal ML failure, invalid-file rejection, and
 cross-service correlation evidence against the complete nine-service Compose
 environment. A final manual full

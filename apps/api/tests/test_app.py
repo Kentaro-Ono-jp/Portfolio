@@ -9,13 +9,14 @@ from reactorfront_api.app import CORRELATION_HEADER, create_app
 from reactorfront_api.domain import DocumentStatusRecord, ProcessingStatus
 from reactorfront_api.request_limits import MULTIPART_ENVELOPE_BYTES
 from reactorfront_api.service import MAX_DOCUMENT_BYTES, DocumentService
-from tests.fakes import FakeRepository, FakeStorage, FakeValidator
+from tests.fakes import FakeRepository, FakeRequestAuthorizer, FakeStorage, FakeValidator
 from tests.openapi_contract import assert_openapi_response
 
 CORRELATION_ID = UUID("11111111-1111-4111-8111-111111111111")
 DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
 JOB_ID = UUID("33333333-3333-4333-8333-333333333333")
 EVENT_ID = UUID("44444444-4444-4444-8444-444444444444")
+PRINCIPAL_ID = UUID("55555555-5555-4555-8555-555555555555")
 NOW = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
 
 
@@ -34,7 +35,15 @@ def make_client(
         id_factory=lambda: next(ids),
         clock=lambda: NOW,
     )
-    return TestClient(create_app(service=service)), selected_repository, selected_storage
+    authorizer = FakeRequestAuthorizer(principal_id=PRINCIPAL_ID)
+    return (
+        TestClient(
+            create_app(service=service, authorizer=authorizer),
+            headers={"Authorization": "Bearer synthetic-access-token"},
+        ),
+        selected_repository,
+        selected_storage,
+    )
 
 
 def test_document_submission_and_lookup_preserve_correlation_id() -> None:
@@ -130,6 +139,42 @@ def test_invalid_document_and_unknown_document_match_contract() -> None:
     assert missing.json()["status"] == 404
 
 
+def test_private_source_is_verified_and_other_owner_matches_unknown_document() -> None:
+    client, repository, _storage = make_client()
+    with client:
+        accepted = client.post(
+            "/api/v1/documents",
+            files={"file": ("invoice.pdf", b"%PDF-1.7\ntest", "application/pdf")},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        source = client.get(
+            f"/api/v1/documents/{DOCUMENT_ID}/source",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+
+    assert accepted.status_code == 202
+    assert repository.submissions[0].submitted_by_principal_id == PRINCIPAL_ID
+    assert source.status_code == 200
+    assert source.content == b"%PDF-1.7\ntest"
+    assert source.headers["Content-Type"] == "application/pdf"
+    assert source.headers["Content-Disposition"] == 'inline; filename="source.pdf"'
+    assert source.headers["X-Content-Type-Options"] == "nosniff"
+    assert source.headers["Content-Length"] == str(len(source.content))
+    assert source.headers["ETag"].startswith('"')
+    assert source.headers[CORRELATION_HEADER] == str(CORRELATION_ID)
+
+    repository.owners[DOCUMENT_ID] = UUID("66666666-6666-4666-8666-666666666666")
+    with client:
+        hidden_source = client.get(f"/api/v1/documents/{DOCUMENT_ID}/source")
+        hidden_status = client.get(f"/api/v1/documents/{DOCUMENT_ID}")
+        unknown_source = client.get("/api/v1/documents/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/source")
+
+    assert hidden_source.status_code == 404
+    assert hidden_status.status_code == 404
+    assert unknown_source.status_code == 404
+    assert hidden_source.json()["code"] == unknown_source.json()["code"]
+
+
 def test_request_validation_problems_match_contract_and_skip_service() -> None:
     client, repository, storage = make_client()
 
@@ -174,6 +219,48 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
     assert not storage.objects
 
 
+def test_anonymous_malformed_document_requests_authenticate_before_validation() -> None:
+    client, repository, storage = make_client()
+    client.headers.pop("Authorization")
+
+    with client:
+        missing_file = client.post(
+            "/api/v1/documents",
+            data={"unexpected": "value"},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        invalid_path = client.get(
+            "/api/v1/documents/not-a-uuid",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        invalid_source_path = client.get(
+            "/api/v1/documents/not-a-uuid/source",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+
+    contracts = [
+        (missing_file, "/api/v1/documents", "post"),
+        (invalid_path, "/api/v1/documents/{documentId}", "get"),
+        (invalid_source_path, "/api/v1/documents/{documentId}/source", "get"),
+    ]
+    for response, path, method in contracts:
+        assert response.status_code == 401
+        assert_openapi_response(response, path=path, method=method)
+        assert response.headers["content-type"].startswith("application/problem+json")
+        assert response.headers[CORRELATION_HEADER] == str(CORRELATION_ID)
+        assert response.json() == {
+            "type": "urn:reactorfront:problem:authentication-required",
+            "title": "Authentication required",
+            "status": 401,
+            "detail": "A valid bearer access token is required.",
+            "code": "AUTHENTICATION_REQUIRED",
+            "correlationId": str(CORRELATION_ID),
+        }
+
+    assert not repository.submissions
+    assert not storage.objects
+
+
 def test_health_and_readiness_distinguish_process_from_dependencies() -> None:
     storage = FakeStorage(ready=False)
     client, _repository, _storage = make_client(storage=storage)
@@ -213,6 +300,7 @@ def test_completed_and_failed_statuses_emit_only_their_allowed_fields() -> None:
         confidence=0.98,
         model_version="document-type-v1",
     )
+    repository.owners[DOCUMENT_ID] = PRINCIPAL_ID
     client, _repository, _storage = make_client(repository=repository)
     with client:
         completed = client.get(f"/api/v1/documents/{DOCUMENT_ID}")
@@ -233,6 +321,7 @@ def test_completed_and_failed_statuses_emit_only_their_allowed_fields() -> None:
         completed_at=NOW,
         failure_code="PDF_TEXT_EXTRACTION_FAILED",
     )
+    repository.owners[DOCUMENT_ID] = PRINCIPAL_ID
     with client:
         failed = client.get(f"/api/v1/documents/{DOCUMENT_ID}")
     assert failed.status_code == 200

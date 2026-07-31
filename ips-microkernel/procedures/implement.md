@@ -19,19 +19,22 @@ complete intended candidate is not yet staged and hardened.
 3. Use `python scripts/verify.py`; do not create a competing root verifier.
 4. Select the smallest sufficient verification groups from the staged or
    review delta. Carry only successful unaffected evidence.
-5. Record an intentionally omitted affected group as skipped without evidence,
+5. When adding or changing a protected request boundary, include
+   security-negative proof that authentication runs before path, header, or
+   body validation, including malformed unauthenticated input.
+6. Record an intentionally omitted affected group as skipped without evidence,
    with focused-Issue rationale and the complete exact-head
    `Verification-Skip` trailer. Never relabel affected evidence as carried.
-6. Run Docker-backed groups only in GitHub Actions. Never pause to request
+7. Run Docker-backed groups only in GitHub Actions. Never pause to request
    local Docker.
-7. If a required local tool is missing, read
+8. If a required local tool is missing, read
    [local tool authorization](../references/local-tools.md), then return here.
-8. Inspect the complete intended diff. For public guidance or evidence, read
+9. Inspect the complete intended diff. For public guidance or evidence, read
    [public safety](../references/public-safety.md), then return here.
-9. Stage the exact complete candidate without committing.
-10. Enter the [CI router](../ci/router.md) and select
+10. Stage the exact complete candidate without committing.
+11. Enter the [CI router](../ci/router.md) and select
     its staged pre-commit route.
-11. Reverify and restage every correction. The index must equal the verified
+12. Reverify and restage every correction. The index must equal the verified
     working tree before publication.
 
 The first staging is a review snapshot. Later edits make that snapshot stale.

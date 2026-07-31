@@ -21,6 +21,7 @@ from reactorfront_api.result_consumer import (
 )
 from reactorfront_api.settings import Settings
 from pdf_fixture import build_fixture
+from oidc_test_client import obtain_access_token
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
@@ -80,7 +81,9 @@ def prepare_queues(settings: Settings) -> None:
         connection.close()
 
 
-def submit_document(*, base_url: str, content: bytes, correlation_id: UUID) -> UUID:
+def submit_document(
+    *, base_url: str, access_token: str, content: bytes, correlation_id: UUID
+) -> UUID:
     boundary = "reactorfront-result-consumer-boundary"
     body = (
         (
@@ -98,6 +101,7 @@ def submit_document(*, base_url: str, content: bytes, correlation_id: UUID) -> U
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
+            "Authorization": f"Bearer {access_token}",
             "X-Correlation-ID": str(correlation_id),
         },
     )
@@ -108,11 +112,14 @@ def submit_document(*, base_url: str, content: bytes, correlation_id: UUID) -> U
     return UUID(value["documentId"])
 
 
-def get_status(*, base_url: str, document_id: UUID) -> dict[str, object]:
-    with urllib.request.urlopen(
+def get_status(
+    *, base_url: str, access_token: str, document_id: UUID
+) -> dict[str, object]:
+    request = urllib.request.Request(
         f"{base_url}/api/v1/documents/{document_id}",
-        timeout=5,
-    ) as response:
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    with urllib.request.urlopen(request, timeout=5) as response:
         value = json.loads(response.read())
     if not isinstance(value, dict):
         raise RuntimeError("Document status was not a JSON object")
@@ -122,6 +129,7 @@ def get_status(*, base_url: str, document_id: UUID) -> dict[str, object]:
 def wait_for_status(
     *,
     base_url: str,
+    access_token: str,
     document_id: UUID,
     expected: str,
     timeout_seconds: float = 60,
@@ -130,7 +138,11 @@ def wait_for_status(
     last_status = "unavailable"
     while time.monotonic() < deadline:
         try:
-            value = get_status(base_url=base_url, document_id=document_id)
+            value = get_status(
+                base_url=base_url,
+                access_token=access_token,
+                document_id=document_id,
+            )
             last_status = str(value["status"])
             if last_status == expected:
                 return value
@@ -399,6 +411,7 @@ def overwrite_source(settings: Settings, *, object_key: str) -> None:
 
 def main() -> int:
     settings = Settings()
+    access_token, _identity_metadata = obtain_access_token(settings)
     base_url = os.environ.get("PORTFOLIO_API_BASE_URL", "http://127.0.0.1:58000")
     invoice_pdf = build_fixture(INVOICE_TEXT)
 
@@ -408,6 +421,7 @@ def main() -> int:
 
     success_document = submit_document(
         base_url=base_url,
+        access_token=access_token,
         content=invoice_pdf,
         correlation_id=UUID("cccccccc-cccc-4ccc-8ccc-ccccccccccc1"),
     )
@@ -424,6 +438,7 @@ def main() -> int:
     compose("up", "--detach", "--wait", "api-outbox")
     processing = wait_for_status(
         base_url=base_url,
+        access_token=access_token,
         document_id=success_document,
         expected="processing",
     )
@@ -451,6 +466,7 @@ def main() -> int:
     compose("up", "--detach", "--wait", "api-events")
     completed = wait_for_status(
         base_url=base_url,
+        access_token=access_token,
         document_id=success_document,
         expected="completed",
     )
@@ -509,7 +525,14 @@ def main() -> int:
         failure_code="INVALID_EVENT",
     )
     wait_for_queue_empty(settings)
-    if get_status(base_url=base_url, document_id=success_document) != completed:
+    if (
+        get_status(
+            base_url=base_url,
+            access_token=access_token,
+            document_id=success_document,
+        )
+        != completed
+    ):
         raise RuntimeError("Rejected result events changed the first terminal result")
 
     compose("stop", "api-events", "ml-worker")
@@ -517,11 +540,13 @@ def main() -> int:
     compose("up", "--detach", "--wait", "api-events", "api-outbox")
     failed_document = submit_document(
         base_url=base_url,
+        access_token=access_token,
         content=invoice_pdf,
         correlation_id=UUID("cccccccc-cccc-4ccc-8ccc-ccccccccccc2"),
     )
     wait_for_status(
         base_url=base_url,
+        access_token=access_token,
         document_id=failed_document,
         expected="queued",
     )
@@ -537,6 +562,7 @@ def main() -> int:
     compose("up", "--detach", "--wait", "ml-worker")
     failed = wait_for_status(
         base_url=base_url,
+        access_token=access_token,
         document_id=failed_document,
         expected="failed",
     )

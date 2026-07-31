@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import subprocess
 import textwrap
-from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
-import httpx2 as httpx
 from sqlalchemy import create_engine, text
 
 from reactorfront_api.authentication import (
@@ -24,137 +19,11 @@ from reactorfront_api.persistence import (
     SqlAlchemyPrincipalRepository,
 )
 from reactorfront_api.settings import Settings
+from oidc_test_client import obtain_access_token
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
-CLIENT_ID = "reactorfront-api"
-REDIRECT_URI = "http://127.0.0.1:5557/callback"
-SYNTHETIC_EMAIL = "reviewer@synthetic.invalid"
-SYNTHETIC_PASSWORD = "password"
-STATE = "reactorfront-synthetic-state"
-NONCE = "reactorfront-synthetic-nonce"
-VERIFIER = "reactorfront-synthetic-pkce-verifier-000000000000000000000000"
-
-
-class FormActionParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.action: str | None = None
-
-    def handle_starttag(
-        self,
-        tag: str,
-        attrs: list[tuple[str, str | None]],
-    ) -> None:
-        if tag != "form" or self.action is not None:
-            return
-        attributes = dict(attrs)
-        self.action = attributes.get("action")
-
-
-def pkce_challenge(verifier: str) -> str:
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-
-def _redirect_location(response: httpx.Response) -> str | None:
-    if not response.is_redirect:
-        return None
-    location = response.headers.get("location")
-    if location is None:
-        raise RuntimeError("OIDC redirect omitted its location.")
-    return urljoin(str(response.url), location)
-
-
-def obtain_access_token(settings: Settings) -> tuple[str, dict[str, object]]:
-    discovery = httpx.get(settings.oidc_discovery_url, timeout=5)
-    discovery.raise_for_status()
-    metadata = discovery.json()
-    if metadata.get("issuer") != settings.oidc_issuer:
-        raise RuntimeError("OIDC discovery returned an unexpected issuer.")
-    authorization_endpoint = metadata.get("authorization_endpoint")
-    token_endpoint = metadata.get("token_endpoint")
-    if not isinstance(authorization_endpoint, str) or not isinstance(
-        token_endpoint, str
-    ):
-        raise RuntimeError("OIDC discovery omitted required endpoints.")
-
-    with httpx.Client(follow_redirects=False, timeout=5) as client:
-        response = client.get(
-            authorization_endpoint,
-            params={
-                "client_id": CLIENT_ID,
-                "redirect_uri": REDIRECT_URI,
-                "response_type": "code",
-                "scope": "openid groups",
-                "state": STATE,
-                "nonce": NONCE,
-                "code_challenge": pkce_challenge(VERIFIER),
-                "code_challenge_method": "S256",
-            },
-        )
-        for _ in range(5):
-            location = _redirect_location(response)
-            if location is None:
-                break
-            if location.startswith(REDIRECT_URI):
-                raise RuntimeError("OIDC flow bypassed the synthetic login boundary.")
-            response = client.get(location)
-        if response.status_code != 200:
-            raise RuntimeError("OIDC synthetic login form was unavailable.")
-
-        parser = FormActionParser()
-        parser.feed(response.text)
-        if parser.action is None:
-            raise RuntimeError("OIDC synthetic login form omitted its action.")
-        response = client.post(
-            urljoin(str(response.url), parser.action),
-            content=urlencode(
-                {
-                    "login": SYNTHETIC_EMAIL,
-                    "password": SYNTHETIC_PASSWORD,
-                }
-            ),
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        callback: str | None = None
-        for _ in range(5):
-            location = _redirect_location(response)
-            if location is None:
-                break
-            if location.startswith(REDIRECT_URI):
-                callback = location
-                break
-            response = client.get(location)
-        if callback is None:
-            raise RuntimeError("OIDC authorization code callback was not produced.")
-
-        query = parse_qs(urlparse(callback).query)
-        if query.get("state") != [STATE] or len(query.get("code", [])) != 1:
-            raise RuntimeError("OIDC callback state or authorization code was invalid.")
-        token_response = client.post(
-            token_endpoint,
-            auth=(CLIENT_ID, ""),
-            data={
-                "grant_type": "authorization_code",
-                "redirect_uri": REDIRECT_URI,
-                "code": query["code"][0],
-                "code_verifier": VERIFIER,
-            },
-        )
-        token_response.raise_for_status()
-        token_payload = token_response.json()
-
-    access_token = token_payload.get("access_token")
-    if not isinstance(access_token, str) or not access_token:
-        raise RuntimeError("OIDC token response omitted the access token.")
-    public_metadata = {
-        "tokenType": token_payload.get("token_type"),
-        "expiresIn": token_payload.get("expires_in"),
-        "authorizationCodePkce": True,
-    }
-    return access_token, public_metadata
 
 
 def assert_token_absent_from_persistence(database_url: str, access_token: str) -> None:

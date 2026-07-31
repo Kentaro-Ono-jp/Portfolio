@@ -18,11 +18,13 @@ import pytest
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
+from scripts.oidc_test_client import obtain_access_token
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import reactorfront_api.rabbitmq as rabbitmq
+from reactorfront_api.authentication import build_access_token_validator
 from reactorfront_api.domain import (
     ProcessingStatus,
     PublicProblem,
@@ -174,8 +176,11 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
     s3: S3Client,
 ) -> None:
     base_url = os.environ.get("PORTFOLIO_API_BASE_URL", "http://127.0.0.1:58000")
+    access_token, _identity_metadata = obtain_access_token(settings)
+    authenticated_principal = build_access_token_validator(settings).validate(access_token)
+    authorization = {"Authorization": f"Bearer {access_token}"}
 
-    with httpx.Client(base_url=base_url, timeout=10) as client:
+    with httpx.Client(base_url=base_url, timeout=10, headers=authorization) as client:
         health = client.get("/health")
         readiness = client.get("/ready")
         assert health.json() == {"status": "ok"}
@@ -266,6 +271,13 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
     assert table_count(engine, "outbox_events") == 1
 
     with engine.connect() as connection:
+        authenticated_owner_id = connection.execute(
+            text("SELECT id FROM principals WHERE issuer = :issuer AND subject = :subject"),
+            {
+                "issuer": authenticated_principal.issuer,
+                "subject": authenticated_principal.subject,
+            },
+        ).scalar_one()
         document = connection.execute(
             text(
                 "SELECT object_key, sha256, content_type, size_bytes, "
@@ -292,8 +304,9 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
         digest,
         "application/pdf",
         len(PDF),
-        LEGACY_SYSTEM_PRINCIPAL_ID,
+        authenticated_owner_id,
     )
+    assert authenticated_owner_id != LEGACY_SYSTEM_PRINCIPAL_ID
     assert tuple(job) == ("accepted", 0)
     assert outbox.event_type == "document.processing.requested.v1"
     assert outbox.aggregate_id == job_id
@@ -363,6 +376,7 @@ def test_real_postgres_failure_compensates_real_s3_object(
             original_filename="invoice.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
         )
 
     assert captured.value.status == 503
@@ -398,6 +412,7 @@ def test_commit_acknowledgement_loss_reconciles_real_postgres_and_keeps_source(
             original_filename="invoice.pdf",
             content_type="application/pdf",
             correlation_id=CORRELATION_ID,
+            principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
         )
     finally:
         event.remove(Session, "after_commit", lose_acknowledgement)
@@ -427,6 +442,7 @@ def test_real_postgres_leases_once_and_recovers_expired_work(
         original_filename="invoice.pdf",
         content_type="application/pdf",
         correlation_id=CORRELATION_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
     )
     repository = SqlAlchemyOutboxRepository(engine=engine)
 
@@ -514,6 +530,7 @@ def test_real_rabbitmq_confirm_duplicate_and_atomic_queued_transition(
         original_filename="invoice.pdf",
         content_type="application/pdf",
         correlation_id=CORRELATION_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
     )
     repository = SqlAlchemyOutboxRepository(engine=engine)
     publisher = PikaOutboxPublisher(
@@ -581,7 +598,9 @@ def test_real_rabbitmq_confirm_duplicate_and_atomic_queued_transition(
         assert task_body[0][0]["eventType"] == REQUEST_ROUTING_KEY
         assert task_body[0][0]["eventId"] == str(EVENT_ID)
 
-    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(
+        DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID
+    )
     assert status is not None
     assert status.status is ProcessingStatus.QUEUED
     with engine.connect() as connection:
@@ -613,6 +632,7 @@ def test_real_confirm_deadline_returns_and_keeps_job_accepted(
         original_filename="invoice.pdf",
         content_type="application/pdf",
         correlation_id=CORRELATION_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
     )
     original_confirm_delivery = pika.channel.Channel.confirm_delivery
 
@@ -654,7 +674,9 @@ def test_real_confirm_deadline_returns_and_keeps_job_accepted(
         elapsed = time.monotonic() - started
         assert 0.8 <= elapsed <= 1.75
 
-        status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+        status = SqlAlchemySubmissionRepository(engine=engine).get_status(
+            DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID
+        )
         assert status is not None
         assert status.status is ProcessingStatus.ACCEPTED
         with engine.connect() as connection:
@@ -685,6 +707,7 @@ def test_real_unroutable_publish_stays_accepted_and_records_retry(
         original_filename="invoice.pdf",
         content_type="application/pdf",
         correlation_id=CORRELATION_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
     )
     repository = SqlAlchemyOutboxRepository(engine=engine)
     publisher = PikaOutboxPublisher(
@@ -735,7 +758,9 @@ def test_real_unroutable_publish_stays_accepted_and_records_retry(
             routing_key=REQUEST_ROUTING_KEY,
         )
 
-    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(
+        DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID
+    )
     assert status is not None
     assert status.status is ProcessingStatus.ACCEPTED
     with engine.connect() as connection:
@@ -802,6 +827,7 @@ def seed_queued_integration_job(
         original_filename="invoice.pdf",
         content_type="application/pdf",
         correlation_id=CORRELATION_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
     )
     with engine.begin() as connection:
         connection.execute(
@@ -846,7 +872,9 @@ def test_result_events_commit_idempotently_and_preserve_first_terminal_state(
         repository.apply(failed)
     assert captured.value.code is ResultEventFailureCode.TERMINAL_CONFLICT
 
-    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(
+        DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID
+    )
     assert status is not None
     assert status.status is ProcessingStatus.COMPLETED
     assert status.predicted_class == "invoice"
@@ -876,7 +904,9 @@ def test_result_event_transaction_rolls_back_receipt_and_invalid_result(
     with pytest.raises(IntegrityError):
         repository.apply(invalid)
 
-    status = SqlAlchemySubmissionRepository(engine=engine).get_status(DOCUMENT_ID)
+    status = SqlAlchemySubmissionRepository(engine=engine).get_status(
+        DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID
+    )
     assert status is not None
     assert status.status is ProcessingStatus.PROCESSING
     assert status.predicted_class is None

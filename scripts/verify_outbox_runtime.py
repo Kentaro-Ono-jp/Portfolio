@@ -15,6 +15,7 @@ from sqlalchemy import create_engine, text
 from reactorfront_api.persistence import SqlAlchemyOutboxRepository
 from reactorfront_api.rabbitmq import REQUEST_QUEUE, REQUEST_TASK_NAME
 from reactorfront_api.settings import Settings
+from oidc_test_client import obtain_access_token
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
@@ -33,12 +34,17 @@ def compose(*arguments: str) -> None:
     )
 
 
-def submit_document(*, base_url: str, correlation_id: UUID) -> tuple[UUID, UUID]:
+def submit_document(
+    *, base_url: str, access_token: str, correlation_id: UUID
+) -> tuple[UUID, UUID]:
     with httpx.Client(base_url=base_url, timeout=10) as client:
         response = client.post(
             "/api/v1/documents",
             files={"file": ("invoice.pdf", PDF, "application/pdf")},
-            headers={"X-Correlation-ID": str(correlation_id)},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "X-Correlation-ID": str(correlation_id),
+            },
         )
     response.raise_for_status()
     body = response.json()
@@ -47,13 +53,18 @@ def submit_document(*, base_url: str, correlation_id: UUID) -> tuple[UUID, UUID]
     return UUID(body["documentId"]), UUID(body["jobId"])
 
 
-def wait_for_status(*, base_url: str, document_id: UUID, expected: str) -> None:
+def wait_for_status(
+    *, base_url: str, access_token: str, document_id: UUID, expected: str
+) -> None:
     deadline = time.monotonic() + 30
     last_status = "unavailable"
     while time.monotonic() < deadline:
         try:
             with httpx.Client(base_url=base_url, timeout=5) as client:
-                response = client.get(f"/api/v1/documents/{document_id}")
+                response = client.get(
+                    f"/api/v1/documents/{document_id}",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
             if response.is_success:
                 last_status = str(response.json()["status"])
                 if last_status == expected:
@@ -162,6 +173,7 @@ def consume_requested_events(
 
 def main() -> int:
     settings = Settings()
+    access_token, _identity_metadata = obtain_access_token(settings)
     base_url = os.environ.get("PORTFOLIO_API_BASE_URL", "http://127.0.0.1:58000")
     database_url = settings.database_url
 
@@ -170,17 +182,24 @@ def main() -> int:
 
     first_document, first_job = submit_document(
         base_url=base_url,
+        access_token=access_token,
         correlation_id=CORRELATION_IDS[0],
     )
     first_event = event_id_for_job(database_url=database_url, job_id=first_job)
     create_expired_crash_lease(database_url=database_url, event_id=first_event)
 
     compose("up", "--detach", "--wait", "api-outbox")
-    wait_for_status(base_url=base_url, document_id=first_document, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=first_document,
+        expected="queued",
+    )
 
     compose("stop", "api-outbox")
     second_document, second_job = submit_document(
         base_url=base_url,
+        access_token=access_token,
         correlation_id=CORRELATION_IDS[1],
     )
     second_event = event_id_for_job(database_url=database_url, job_id=second_job)
@@ -188,7 +207,12 @@ def main() -> int:
     compose("restart", "rabbitmq")
     compose("up", "--detach", "--wait", "rabbitmq", "api")
     compose("up", "--detach", "--wait", "api-outbox")
-    wait_for_status(base_url=base_url, document_id=second_document, expected="queued")
+    wait_for_status(
+        base_url=base_url,
+        access_token=access_token,
+        document_id=second_document,
+        expected="queued",
+    )
 
     consume_requested_events(
         settings,

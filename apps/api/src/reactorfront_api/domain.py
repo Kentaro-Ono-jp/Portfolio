@@ -102,6 +102,7 @@ class ProblemCode(StrEnum):
     DOCUMENT_TOO_LARGE = "DOCUMENT_TOO_LARGE"
     UNSUPPORTED_MEDIA_TYPE = "UNSUPPORTED_MEDIA_TYPE"
     DOCUMENT_NOT_FOUND = "DOCUMENT_NOT_FOUND"
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
     DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
 
 
@@ -136,6 +137,7 @@ class DocumentSubmission:
     job_id: UUID
     event_id: UUID
     correlation_id: UUID
+    submitted_by_principal_id: UUID
     original_filename: str
     object_key: str
     sha256: str
@@ -164,6 +166,34 @@ class DocumentStatusRecord:
     confidence: float | None = None
     model_version: str | None = None
     failure_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentSourceRecord:
+    document_id: UUID
+    original_filename: str
+    object_key: str
+    sha256: str
+    content_type: str
+    size_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentSource:
+    document_id: UUID
+    filename: str
+    content: bytes
+    content_type: str
+    size_bytes: int
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class StoredObject:
+    content: bytes
+    content_type: str
+    size_bytes: int
+    sha256: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +251,8 @@ class ObjectStorage(Protocol):
 
     def delete(self, *, object_key: str) -> None: ...
 
+    def get(self, *, object_key: str, maximum_bytes: int) -> StoredObject: ...
+
     def is_ready(self) -> bool: ...
 
 
@@ -231,7 +263,9 @@ class SubmissionRepository(Protocol):
         self, submission: DocumentSubmission
     ) -> SubmissionCommitObservation: ...
 
-    def get_status(self, document_id: UUID) -> DocumentStatusRecord | None: ...
+    def get_status(self, document_id: UUID, principal_id: UUID) -> DocumentStatusRecord | None: ...
+
+    def get_source(self, document_id: UUID, principal_id: UUID) -> DocumentSourceRecord | None: ...
 
     def is_ready(self) -> bool: ...
 
