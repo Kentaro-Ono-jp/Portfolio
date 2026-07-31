@@ -6,10 +6,10 @@
 ## Read when
 
 Read this file when one or more atomic reusable governance candidates have
-stable evidence, associated actionable findings have complete adjudication,
-and every required correction has successful exact-head proof or a qualified
-exception. Also read it for an uncurated late candidate during post-merge
-reconciliation.
+stable evidence, every associated actionable finding, if any, has complete
+adjudication, and every required correction, if any, has successful exact-head
+proof or a qualified exception. Also read it for an uncurated late candidate
+during post-merge reconciliation.
 
 ## Required inputs
 
@@ -41,9 +41,11 @@ deferred or follow-up Issue required by its disposition.
    reconciliation, or cleanup. Split compound observations into atomic root
    causes, preserve stable source order, and deduplicate only identical stable
    evidence. Never stop ingestion after the first verdict item.
-3. For each queued candidate, require complete disposition of an associated
-   actionable finding and successful proof of every required correction. An
-   unproved or stale candidate is not eligible for curation.
+3. For each queued candidate, require stable evidence, complete disposition
+   for every associated actionable finding, if any, and successful proof of
+   every required correction, if any. A candidate with no associated
+   actionable finding or required correction remains eligible; an unproved or
+   stale candidate is not eligible for curation.
 4. Separate CI runner and Actions signals to the [CI router](../ci/router.md).
    Return material product, delivery, architecture, security, or actor-authority
    redefinition to [focus](focus.md). Continue here only for bounded reusable
@@ -113,7 +115,8 @@ deferred or follow-up Issue required by its disposition.
 ## Recovery
 
 - A moved or unproved head returns through live-state and CI recovery.
-- An incomplete actionable-finding disposition returns to adjudication.
+- An incomplete associated actionable-finding disposition returns to
+  adjudication.
 - A selected rule that materially changes accepted scope returns to focus.
 - A candidate with no canonical target remains `unclassified`; never copy it
   into a nearby rule.

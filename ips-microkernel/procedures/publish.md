@@ -70,7 +70,8 @@ exception field. An absent run is never passing proof.
 
 ## Next
 
-- A proved reusable candidate with complete finding disposition but no complete
+- A proved reusable candidate with complete disposition for every associated
+  actionable finding and proof for every required correction, but no complete
   curation checkpoint: open [knowledge curation](curate-knowledge.md).
 - No verdict and no pending eligible candidate: start the independent review task at the
   [review router](../review/router.md).

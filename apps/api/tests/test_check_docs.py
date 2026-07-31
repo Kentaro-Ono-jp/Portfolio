@@ -346,7 +346,8 @@ def test_knowledge_curator_actor_boundary_rejects_a_weakened_boundary(
     (
         (
             Path("ips-microkernel/work-router.md"),
-            "Stable reusable candidates have complete finding disposition and required proof",
+            "Stable reusable candidates have complete disposition for every associated "
+            "actionable finding and successful proof for every required correction",
         ),
         (
             Path("ips-microkernel/references/authority.md"),
@@ -358,7 +359,12 @@ def test_knowledge_curator_actor_boundary_rejects_a_weakened_boundary(
         ),
         (
             Path("ips-microkernel/procedures/curate-knowledge.md"),
-            "complete disposition of an associated actionable finding",
+            "complete disposition for every associated actionable finding, if any",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "A candidate with no associated actionable finding or required correction "
+            "remains eligible",
         ),
         (
             Path("ips-microkernel/procedures/curate-knowledge.md"),
@@ -434,6 +440,114 @@ def test_knowledge_curation_dispositions_are_complete() -> None:
         )
     ]
     assert all(disposition in disposition_block for disposition in dispositions)
+
+
+@pytest.mark.parametrize(
+    (
+        "stable_evidence",
+        "associated_finding_disposition_complete",
+        "required_correction_proof_complete",
+        "expected",
+    ),
+    (
+        (True, None, None, True),
+        (True, True, None, True),
+        (True, True, True, True),
+        (False, None, None, False),
+        (True, False, None, False),
+        (True, None, False, False),
+    ),
+)
+def test_knowledge_curation_candidate_eligibility_is_conditional(
+    documentation_checker: ModuleType,
+    stable_evidence: bool,
+    associated_finding_disposition_complete: bool | None,
+    required_correction_proof_complete: bool | None,
+    expected: bool,
+) -> None:
+    assert (
+        documentation_checker._knowledge_curation_candidate_is_eligible(
+            stable_evidence=stable_evidence,
+            associated_finding_disposition_complete=(associated_finding_disposition_complete),
+            required_correction_proof_complete=required_correction_proof_complete,
+        )
+        is expected
+    )
+
+
+def test_knowledge_curation_disposition_semantics_are_structurally_bound(
+    documentation_checker: ModuleType,
+) -> None:
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curation_disposition_semantics(failures)
+
+    assert failures == []
+
+
+def test_knowledge_curation_dispositions_reject_collapsed_follow_up_semantics(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATION_DISPOSITION_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    follow_up = (
+        "`promote-follow-up`: the reusable rule is late, cross-boundary, or too\n"
+        "     broad for the current PR;"
+    )
+    collapsed = (
+        "`promote-follow-up`: one bounded causal rule can enter the unmerged\n"
+        "     current focused PR;"
+    )
+    assert follow_up in source
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(source.replace(follow_up, collapsed), encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curation_disposition_semantics(failures)
+
+    assert any(
+        "'promote-follow-up' disposition definition missing semantic" in failure
+        for failure in failures
+    )
+
+
+def test_knowledge_curation_dispositions_reject_swapped_deferred_semantics(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATION_DISPOSITION_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    deferred = "`deferred`: a named recurrence or additional-evidence trigger is required;"
+    unclassified = "`unclassified`: no honest canonical target or disposition is available."
+    assert deferred in source
+    assert unclassified in source
+    swapped = (
+        source.replace(deferred, "DEFERRED_DISPOSITION_SENTINEL")
+        .replace(unclassified, f"`unclassified`: {deferred.split(': ', 1)[1]}")
+        .replace(
+            "DEFERRED_DISPOSITION_SENTINEL",
+            f"`deferred`: {unclassified.split(': ', 1)[1]}",
+        )
+    )
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(swapped, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curation_disposition_semantics(failures)
+
+    assert any(
+        "'deferred' disposition definition missing semantic" in failure for failure in failures
+    )
+    assert any(
+        "'unclassified' disposition definition missing semantic" in failure for failure in failures
+    )
 
 
 def test_governance_knowledge_write_route_is_complete(

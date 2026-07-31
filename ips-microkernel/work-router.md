@@ -28,8 +28,9 @@ combining them or requesting a broader decision.
 The order below is precedence. Once a condition matches, do not inspect later
 routes until the selected route returns here with changed state.
 
-1. **Stable reusable candidates have complete finding disposition and required
-   proof, but lack complete curation:** use
+1. **Stable reusable candidates have complete disposition for every associated
+   actionable finding and successful proof for every required correction, but
+   lack complete curation:** use
    [knowledge curation](procedures/curate-knowledge.md).
 2. **Independent initial review or re-review:** use the dedicated
    [review router](review/router.md).
