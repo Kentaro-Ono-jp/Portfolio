@@ -18,8 +18,10 @@ evidence reconciliation, or scoped cleanup remains.
    exists. Do not dispatch, rerun, or create a trigger commit.
 4. Enter the [CI router](../ci/router.md), select
    post-merge knowledge reconciliation, and return here with its outcome.
-5. Open [governance knowledge reconciliation](governance-reconcile.md), record
-   its exact outcome in the focused Issue, and return here.
+5. Open [governance knowledge reconciliation](governance-reconcile.md), verify
+   every pre-merge curation checkpoint, route any late candidate through the
+   Knowledge Curator, record the exact aggregate in the focused Issue, and
+   return here.
 6. Read the [Issue evidence reference](../references/evidence.md), reconcile
    only fully proved or explicitly owner-accepted focused and governing
    tracking-Issue criteria, then return here.

@@ -27,8 +27,11 @@ material scope change requires a new slice decision.
 5. Propose one smallest coherent slice with outcome, scope, non-targets,
    failure model, acceptance criteria, and proof plan. Present materially
    different alternatives separately instead of silently combining them.
-6. After the owner selects that slice, create or update one focused Issue with
-   the accepted boundary.
+6. After the owner selects an initial or materially redefined slice, create or
+   update one focused Issue with the accepted boundary. A complete Knowledge
+   Curator checkpoint may instead select one bounded governance follow-up whose
+   exact boundary is already proved; it does not authorize material product,
+   delivery, architecture, security, or actor-authority redefinition.
 7. Keep material architecture or delivery-contract changes aligned with a new
    ADR or specification update in the same work.
 8. After a clean status and exact fetched base are proved, create the focused
@@ -38,9 +41,10 @@ Do not absorb an adjacent application boundary. Offer it as a later slice.
 
 ## Owner-confirmation STOP
 
-Stop only when the initial slice has not been selected or a material
-redefinition presents more than one materially different outcome. Ask the
-owner to select the proposed slice boundary.
+Stop only when the initial slice has not been selected, no complete curator
+checkpoint selects a bounded governance follow-up, or a material redefinition
+presents more than one materially different outcome. Ask the owner to select
+the proposed material slice boundary.
 
 Dirty state, a moved base, unavailable GitHub state, or contradictory live
 evidence uses live-state recovery first. Governing-specification ambiguity

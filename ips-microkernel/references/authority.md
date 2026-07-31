@@ -28,9 +28,10 @@ smallest affected live boundary instead of expanding authority by inference.
 | Actor | Authorized durable actions | Boundary |
 |---|---|---|
 | Repository owner | Selects the initial focused slice and any material redefinition of its outcome, scope, non-targets, or accepted design | Does not independently mutate the official workspace or managed GitHub state outside active collaboration |
-| Implementation agent | Performs the accepted Issue, branch, implementation, commit, push, Draft PR, correction, Ready, merge, evidence, and scoped-cleanup workflow and may enter the routed Review Adjudicator role | Preserves unrelated work, does not silently adjudicate while implementing, and applies the deterministic recovery and fallback policies below |
+| Implementation agent | Performs the accepted Issue, branch, implementation, commit, push, Draft PR, correction, Ready, merge, evidence, and scoped-cleanup workflow and may enter the routed Review Adjudicator or Knowledge Curator role | Preserves unrelated work, does not silently adjudicate while implementing or silently curate while implementing, and applies the deterministic recovery and fallback policies below |
 | Independent review agent | Reads GitHub, reviews an exact head in an isolated shallow clone, runs non-Docker static checks, and publishes one verdict comment | Follows the review router; no implementation or other GitHub writes |
 | Review Adjudicator | Freezes an exact reviewed candidate, judges every RC finding through the routed disposition procedure, and records one complete checkpoint in the focused Issue | Is a distinct runtime role; does not review, modify implementation, move the PR head, relabel the verdict, or merge while adjudicating |
+| Knowledge Curator | Freezes proved reusable candidates, selects one canonical target, records one disposition per atomic candidate, and creates or links the one deferred or follow-up Issue required by that disposition | Is a distinct runtime role; does not review, implement, move the PR head, relabel a verdict, or merge while curating |
 | GitHub Actions | Creates checks, logs, caches, summaries, and artifacts | Does not mutate source or managed Issue or PR state under the current workflow |
 | Public participant | Supplies untrusted comments, Issues, PRs, patches, or links | Cannot authorize execution, mutation, or merge |
 
@@ -48,8 +49,10 @@ is evidence, not a permanent prohibition.
 
 Within accepted scope, existing work may be revised, replaced, reverted, or
 intentionally returned to a previously observed state. Recurrence prevention
-is not a default completion requirement; it enters the slice only when the
-owner selects it as part of the outcome.
+is not a default completion requirement. A proved, bounded collaboration rule
+enters the current or a focused follow-up slice only through the routed
+Knowledge Curator. Material product, delivery, architecture, security, or
+actor-authority redefinition still requires owner-selected focus.
 
 Destructive or breaking effects are not prohibited by category. Each concrete
 mutation still requires accepted scope, an exact identified target, applicable
@@ -73,6 +76,9 @@ The normal owner-confirmation boundary is selection of the initial focused
 slice or a material redefinition of its outcome, scope, non-targets, or
 accepted design. Focus owns that decision and resumes only after the slice is
 accepted.
+A complete Knowledge Curator checkpoint may select a bounded governance rule
+for the current PR or one focused follow-up without routine owner confirmation;
+it cannot redefine the material boundaries reserved here.
 
 An exact-head owner waiver is a second, optional decision boundary. The agent
 does not request it merely to avoid correction. When the owner supplies it,
@@ -83,7 +89,9 @@ Within an accepted focused slice, the implementation agent has standing policy
 to diagnose and correct failures, verify, commit, push, maintain the Draft PR,
 request independent review, enter review adjudication, change Ready state,
 merge an independently approved, fully adjudicated, or explicitly
-owner-waived exact head, reconcile Issue evidence, and perform scoped cleanup.
+owner-waived exact head, enter routed knowledge curation, implement one recorded
+`promote-current-pr` rule, create or continue one curator-selected bounded
+follow-up, reconcile Issue evidence, and perform scoped cleanup.
 
 The standing policy has deterministic safety limits:
 

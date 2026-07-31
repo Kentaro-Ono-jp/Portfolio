@@ -13,7 +13,9 @@ complete intended candidate is not yet staged and hardened.
 1. Change only files required by the accepted slice and preserve unrelated
    work.
 2. Keep observable behavior aligned with accepted design and the focused
-   Issue. Return to [focus](focus.md) before a material expansion.
+   Issue. Apply one completed `promote-current-pr` checkpoint only at its
+   selected canonical target. Return to [focus](focus.md) before a material
+   expansion.
 3. Use `python scripts/verify.py`; do not create a competing root verifier.
 4. Select the smallest sufficient verification groups from the staged or
    review delta. Carry only successful unaffected evidence.

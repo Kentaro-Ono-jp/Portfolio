@@ -6,67 +6,62 @@
 ## Read when
 
 Read this file after every focused PR merge, once exact merged-main proof and
-CI knowledge reconciliation are complete, or when a proved merge still has a
-recorded reusable process or review candidate.
+CI knowledge reconciliation are complete, or when a proved merge still has an
+uncurated recovery, evidence, or cleanup candidate.
 
 ## Procedure
 
 1. Require the exact merged head, merge commit, successful default-branch
-   proof or qualified exception, focused Issue, PR, and all verdict URLs.
+   proof or qualified exception, focused Issue, PR, every verdict URL, and
+   every pre-merge curation checkpoint.
 2. Audit only this slice's review candidates, actionable findings, correction
-   chain, bounded recovery, evidence reconciliation, and cleanup outcomes.
-   Expand every numbered candidate item from every verdict into the
-   ordered candidate queue. Then add other proved signals, split compound
-   observations into atomic root-cause candidates, preserve stable source
-   order, and deduplicate only identical stable evidence.
-   Never stop ingestion after the first verdict item.
-3. When the queue is empty, skip to step 9.
-4. For each queued candidate, separate product defects and one-off observations
-   from reusable process rules. A reviewer candidate is evidence to classify,
-   not authority to mutate guidance.
-5. Return CI runner or Actions signals to the
-   [CI router](../ci/router.md). Return material
-   product or structural signals to [focus](focus.md) and ADR or delivery
-   change control.
-6. For one reusable collaboration signal, use the
-   [governance knowledge selector](../selectors/governance-knowledge.md), read the selected
-   canonical target, then return here.
-7. Compare the candidate with the existing rule and executable guards. Do not
-   create a second canonical home or preserve raw review transcripts.
-8. Record exactly one outcome for this candidate:
-   - **none:** record
-     it as product-specific, one-off, or already represented
-   - **already satisfied:** link the current accepted focused governance PR
-     and its proof; do not create a recursive empty Issue
-   - **not selected:** no owner-selected recurrence-prevention or reusable-rule
-     outcome exists; record that state without requesting a decision, creating
-     an Issue, or blocking the current completion or next feature
-   - **new reusable rule:** only after owner selection, return to focus, create
-     or link one accepted focused governance Issue, and publish its
-     independently reviewed update on that Issue's own lifecycle
-   - **unclassified:** record the exact candidate and gap without mutating a
-     nearby rule
-   After recording the outcome, return to step 4 for the next queued candidate.
-9. Only after the queue is exhausted, write one aggregate outcome in the
-   focused Issue. When no candidate produced an already-satisfied, new, or
-   unclassified reusable rule, record
-   `Governance knowledge reconciliation: no new reusable finding`.
-10. Return every per-candidate outcome and its stable evidence to post-merge
-    reconciliation.
+   chain, bounded recovery, evidence reconciliation, cleanup outcomes, and
+   completed curation dispositions.
+3. Require every pre-merge atomic candidate to have exactly one complete
+   curation checkpoint. Require every `promote-current-pr` outcome to be present
+   in the Approved merged head with fresh exact-head proof and review.
+4. Build an ordered queue from only distinct late recovery, evidence, cleanup,
+   or post-merge signals that no pre-merge checkpoint owns. Preserve stable
+   source order and deduplicate only identical stable evidence.
+5. When the late queue is non-empty, open
+   [knowledge curation](curate-knowledge.md) and return here with every outcome.
+   A post-merge candidate cannot use `promote-current-pr`.
+6. Return CI runner or Actions signals to the
+   [CI router](../ci/router.md). Return material product, delivery,
+   architecture, security, or actor-authority signals to
+   [focus](focus.md).
+7. Verify every `promote-follow-up` outcome links one bounded accepted focused
+   governance Issue. Verify every `deferred` or `unclassified` outcome links
+   one open `[Knowledge candidate]` Issue with its signal key, stable evidence,
+   origin, disposition, and deterministic resurfacing trigger.
+8. When the current focused governance PR already contains and proves the exact
+   accepted update, do not create a recursive empty Issue.
+9. Only after the complete pre-merge and late queues are exhausted, append one
+   aggregate outcome to the focused Issue:
+   - `Governance knowledge reconciliation: no new reusable finding` when every
+     candidate is `discarded` or `already-represented`, or no candidate exists;
+   - otherwise list each current-PR promotion, follow-up, deferred, and
+     unclassified outcome with its stable checkpoint.
+10. Return the exact aggregate, linked live-state Issues, and any bounded
+    follow-up to post-merge reconciliation.
 
 ## Recovery
 
 - A moved or unproved merge returns through live-state and CI recovery.
-- A candidate that changes the current slice materially returns to focus.
-- A proposed rule without one canonical target remains unclassified.
-- A reviewer omission does not authorize inference; use the verdict's exact
-  field and other proved correction evidence.
-- A follow-up governance Issue may remain linked without weakening or
-  duplicating the current feature's proved completion evidence.
-- An unselected recurrence-prevention candidate is recorded and closed in this
-  reconciliation; it is not a mandatory follow-up.
+- A missing or duplicate pre-merge disposition returns to
+  [knowledge curation](curate-knowledge.md); never infer it after merge.
+- An unimplemented `promote-current-pr` outcome is a merge-evidence
+  contradiction and cannot be relabelled as a follow-up silently.
+- A late candidate that changes the completed slice materially returns to
+  focus.
+- A proposed rule without one canonical target remains `unclassified`.
+- A deferred or follow-up Issue may remain open without weakening the current
+  feature's proved completion evidence.
+- Reconciliation never copies a candidate into a nearby rule or a tracked
+  incident ledger.
 
 ## Return
 
-Return to the post-merge reconciliation workflow with the exact Issue record,
-selected canonical target or `none`, and any required focused follow-up.
+Return to the post-merge reconciliation workflow with the exact focused-Issue
+record, complete disposition inventory, linked live-state Issues, and any
+required focused follow-up.

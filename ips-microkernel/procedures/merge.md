@@ -8,7 +8,8 @@
 Read this file after independent review approves the current exact head,
 complete adjudication records zero required corrections, or the owner
 explicitly accepts every named required correction for the exact reviewed
-head, and the required proof is successful or machine-qualified.
+head, every reusable candidate has complete curation, and the required proof is
+successful or machine-qualified.
 
 ## Procedure
 
@@ -26,14 +27,18 @@ head, and the required proof is successful or machine-qualified.
    Approved.
 3. Require successful exact-head Actions proof or the complete qualified
    Markdown-only exception.
-4. Pin merge to the reviewed head and use the repository's established merge
+4. Require one complete curation checkpoint for every reusable candidate in
+   the applicable verdict and correction chain. Every
+   `promote-current-pr` checkpoint must be implemented in this exact reviewed
+   head. A pending, stale, or unimplemented promotion cannot reach merge.
+5. Pin merge to the reviewed head and use the repository's established merge
    method.
-5. Change Draft to Ready and merge the pinned exact head without a separate
+6. Change Draft to Ready and merge the pinned exact head without a separate
    confirmation pause.
-6. For a Markdown-only squash, read the
+7. For a Markdown-only squash, read the
    [exception's squash boundary](../ci/exceptions/markdown-only.md#squash-merge-boundary),
    return here, and supply the explicit subject and body it requires.
-7. Record the exact merge commit. Do not reconcile checklists or delete
+8. Record the exact merge commit. Do not reconcile checklists or delete
    branches in this state.
 
 ## Recovery
@@ -42,6 +47,8 @@ head, and the required proof is successful or machine-qualified.
   review.
 - An incomplete or stale finding disposition returns to
   [adjudication](adjudicate.md).
+- Pending, stale, or unimplemented candidate curation returns to
+  [knowledge curation](curate-knowledge.md).
 - A waiver that omits the verdict, adjudication, required corrections,
   residuals, exact head, or explicit merge authorization returns to
   correction; do not broaden it by inference.

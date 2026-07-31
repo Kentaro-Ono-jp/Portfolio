@@ -70,11 +70,14 @@ exception field. An absent run is never passing proof.
 
 ## Next
 
-- No verdict: start the independent review task at the
+- A proved reusable candidate with complete finding disposition but no complete
+  curation checkpoint: open [knowledge curation](curate-knowledge.md).
+- No verdict and no pending eligible candidate: start the independent review task at the
   [review router](../review/router.md).
 - `Changes requested` with incomplete finding disposition: open
   [adjudicate](adjudicate.md).
 - Complete adjudication with required corrections: open [correct](correct.md).
 - Approved exact head, fully adjudicated exact head with zero required
   corrections, or exact reviewed head with a recorded owner waiver and
-  required proof: open [merge](merge.md).
+  required proof, after every candidate has complete curation: open
+  [merge](merge.md).

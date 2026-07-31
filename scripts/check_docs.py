@@ -67,6 +67,7 @@ IPS_FILE_ROLES = {
     Path("ips-microkernel/procedures/implement.md"): "procedure",
     Path("ips-microkernel/procedures/publish.md"): "procedure",
     Path("ips-microkernel/procedures/adjudicate.md"): "procedure",
+    Path("ips-microkernel/procedures/curate-knowledge.md"): "procedure",
     Path("ips-microkernel/procedures/correct.md"): "procedure",
     Path("ips-microkernel/procedures/merge.md"): "procedure",
     Path("ips-microkernel/procedures/reconcile.md"): "procedure",
@@ -108,6 +109,7 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("ips-microkernel/adr/0014-adopt-revisitable-state-governance.md"),
     Path("ips-microkernel/adr/0015-hide-the-human-origin-narrative.md"),
     Path("ips-microkernel/adr/0016-adjudicate-review-findings-before-correction.md"),
+    Path("ips-microkernel/adr/0017-delegate-evidence-bound-knowledge-curation.md"),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -140,6 +142,7 @@ CANONICAL_RULE_OWNERS = {
     "implementation-workflow": Path("ips-microkernel/procedures/implement.md"),
     "publication-workflow": Path("ips-microkernel/procedures/publish.md"),
     "review-adjudication": Path("ips-microkernel/procedures/adjudicate.md"),
+    "knowledge-curation": Path("ips-microkernel/procedures/curate-knowledge.md"),
     "correction-workflow": Path("ips-microkernel/procedures/correct.md"),
     "merge-workflow": Path("ips-microkernel/procedures/merge.md"),
     "reconciliation-workflow": Path("ips-microkernel/procedures/reconcile.md"),
@@ -185,6 +188,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
         Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
@@ -216,20 +220,30 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/review/router.md"),
         Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
     ),
     Path("ips-microkernel/procedures/adjudicate.md"): (
         Path("ips-microkernel/references/live-state.md"),
         Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
+    ),
+    Path("ips-microkernel/procedures/curate-knowledge.md"): (
+        Path("ips-microkernel/references/live-state.md"),
+        Path("ips-microkernel/ci/router.md"),
+        Path("ips-microkernel/procedures/focus.md"),
+        Path("ips-microkernel/selectors/governance-knowledge.md"),
+        Path("ips-microkernel/procedures/implement.md"),
     ),
     Path("ips-microkernel/procedures/correct.md"): (
         Path("ips-microkernel/procedures/focus.md"),
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
         Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/merge.md"),
     ),
     Path("ips-microkernel/procedures/merge.md"): (
@@ -237,6 +251,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/ci/exceptions/markdown-only.md"),
         Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
     ),
     Path("ips-microkernel/procedures/reconcile.md"): (
@@ -248,7 +263,7 @@ REQUIRED_ROUTE_LINKS = {
     Path("ips-microkernel/procedures/governance-reconcile.md"): (
         Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/procedures/focus.md"),
-        Path("ips-microkernel/selectors/governance-knowledge.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
     ),
     Path("ips-microkernel/selectors/governance-knowledge.md"): (
         Path("ips-microkernel/references/authority.md"),
@@ -260,6 +275,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
         Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
@@ -329,6 +345,7 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
     "implementation": Path("ips-microkernel/procedures/implement.md"),
     "publication": Path("ips-microkernel/procedures/publish.md"),
     "adjudication": Path("ips-microkernel/procedures/adjudicate.md"),
+    "curation": Path("ips-microkernel/procedures/curate-knowledge.md"),
     "correction": Path("ips-microkernel/procedures/correct.md"),
     "merge": Path("ips-microkernel/procedures/merge.md"),
     "reconciliation": Path("ips-microkernel/procedures/reconcile.md"),
@@ -345,6 +362,11 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_FRAGMENTS = {
         "Review-finding disposition",
         "human-scale lenses",
         "adjudicated-RC routing",
+    ),
+    "curation": (
+        "Reusable-candidate evidence threshold",
+        "promotion timing",
+        "deferred recovery",
     ),
     "issue-evidence": (
         "Checklist criterion mapping",
@@ -372,7 +394,7 @@ REVIEW_CANDIDATE_CAPTURE_FRAGMENTS = {
         "never use it as a substitute for a second or later item",
         "every reusable-governance candidate or valid `none`",
     ),
-    Path("ips-microkernel/procedures/governance-reconcile.md"): (
+    Path("ips-microkernel/procedures/curate-knowledge.md"): (
         "Expand every numbered candidate item from every verdict",
         "preserve stable source order",
         "Never stop ingestion after the first verdict item",
@@ -459,6 +481,98 @@ REVIEW_ADJUDICATION_FRAGMENTS = {
     ),
 }
 
+KNOWLEDGE_CURATION_FRAGMENTS = {
+    Path("ips-microkernel/work-router.md"): (
+        "Stable reusable candidates have complete finding disposition and required proof",
+        "[knowledge curation](procedures/curate-knowledge.md)",
+        "complete candidate curation",
+    ),
+    Path("ips-microkernel/references/authority.md"): (
+        "Knowledge Curator",
+        "distinct runtime role",
+        "`promote-current-pr` rule",
+        "without routine owner confirmation",
+    ),
+    Path("ips-microkernel/references/live-state.md"): (
+        "| Knowledge curation | Candidate source and ordinal",
+        "complete curation for every reusable candidate",
+    ),
+    Path("ips-microkernel/procedures/focus.md"): (
+        "A complete Knowledge Curator checkpoint",
+        "does not authorize material product",
+        "no complete curator checkpoint selects a bounded governance follow-up",
+    ),
+    Path("ips-microkernel/procedures/implement.md"): (
+        "Apply one completed `promote-current-pr` checkpoint",
+        "selected canonical target",
+    ),
+    Path("ips-microkernel/procedures/publish.md"): (
+        "A proved reusable candidate with complete finding disposition",
+        "[knowledge curation](curate-knowledge.md)",
+        "after every candidate has complete curation",
+    ),
+    Path("ips-microkernel/procedures/adjudicate.md"): (
+        "Do not classify or promote them while the Review Adjudicator role is active",
+        "[knowledge curation](curate-knowledge.md)",
+    ),
+    Path("ips-microkernel/procedures/correct.md"): (
+        "enter [knowledge curation](curate-knowledge.md) before re-review",
+        "Proved correction with pending reusable candidates",
+    ),
+    Path("ips-microkernel/procedures/curate-knowledge.md"): (
+        "distinct runtime role",
+        "Freeze the candidate queue",
+        "Do not review, modify implementation or guidance",
+        "complete disposition of an associated actionable finding",
+        "Critical or High product impact alone never forces promotion",
+        "`discarded`",
+        "`already-represented`",
+        "`promote-current-pr`",
+        "`promote-follow-up`",
+        "`deferred`",
+        "`unclassified`",
+        "append one curation checkpoint to the focused Issue",
+        "before any promotion mutation",
+        "title begins `[Knowledge candidate]`",
+        "deterministic resurfacing trigger",
+        "invalidates older exact-head proof and verdicts",
+        "final changed head must pass required proof and independent exact-head review",
+        "A post-merge candidate cannot use `promote-current-pr`",
+        "ordered candidate queue",
+        "For each queued candidate",
+        "return to step 3 for the next queued candidate",
+        "Only after the queue is exhausted",
+        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[
+            Path("ips-microkernel/procedures/curate-knowledge.md")
+        ],
+    ),
+    Path("ips-microkernel/procedures/merge.md"): (
+        "every reusable candidate has complete curation",
+        "Every `promote-current-pr` checkpoint must be implemented",
+        "Pending, stale, or unimplemented candidate curation",
+    ),
+    Path("ips-microkernel/procedures/reconcile.md"): (
+        "verify every pre-merge curation checkpoint",
+        "route any late candidate through the Knowledge Curator",
+    ),
+    Path("ips-microkernel/procedures/governance-reconcile.md"): (
+        "every pre-merge atomic candidate",
+        "A post-merge candidate cannot use `promote-current-pr`",
+        "one open `[Knowledge candidate]` Issue",
+        "Governance knowledge reconciliation: no new reusable finding",
+    ),
+    Path("ips-microkernel/selectors/governance-knowledge.md"): (
+        "Knowledge Curator",
+        "normally enters the current focused PR",
+        "fresh proof and independent review",
+        "independently reviewed follow-up PR",
+    ),
+    Path("ips-microkernel/review/verdict.md"): (
+        "evidence for routed knowledge curation",
+        "not permission for the reviewer to classify a disposition",
+    ),
+}
+
 REQUIRED_GOVERNANCE_TEXT = {
     Path("GIT_AGENTS.md"): (
         "thin, tracked entrypoint",
@@ -480,6 +594,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "An exact-head owner waiver is optional and owner-initiated",
         "reusable non-CI process or review knowledge",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/work-router.md")],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/work-router.md")],
     ),
     Path("ips-microkernel/review/router.md"): (
         "Governing tracking Issue URL",
@@ -499,6 +614,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "A remote branch is deleted only after",
         "Public participant",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
     ),
     Path("ips-microkernel/references/live-state.md"): (
         "Do not enumerate every branch",
@@ -507,6 +623,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         *REVIEW_ADJUDICATION_FRAGMENTS[
             Path("ips-microkernel/references/live-state.md")
         ],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/references/live-state.md")],
     ),
     Path("ips-microkernel/references/evidence.md"): (
         "Completion evidence",
@@ -519,17 +636,31 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Do not request elevated privileges",
         "route Docker-backed or environment-dependent proof to GitHub Actions",
     ),
+    Path("ips-microkernel/procedures/focus.md"): (
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/focus.md")],
+    ),
+    Path("ips-microkernel/procedures/implement.md"): (
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/implement.md")],
+    ),
     Path("ips-microkernel/procedures/publish.md"): (
         "machine-qualified Markdown-only CI exception",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
     ),
     Path("ips-microkernel/procedures/adjudicate.md"): (
         *REVIEW_ADJUDICATION_FRAGMENTS[
             Path("ips-microkernel/procedures/adjudicate.md")
         ],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/adjudicate.md")],
+    ),
+    Path("ips-microkernel/procedures/curate-knowledge.md"): (
+        *KNOWLEDGE_CURATION_FRAGMENTS[
+            Path("ips-microkernel/procedures/curate-knowledge.md")
+        ],
     ),
     Path("ips-microkernel/procedures/correct.md"): (
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/correct.md")],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/correct.md")],
     ),
     Path("ips-microkernel/procedures/merge.md"): (
         "durable owner waiver",
@@ -537,27 +668,21 @@ REQUIRED_GOVERNANCE_TEXT = {
         "without a separate confirmation pause",
         "defer the merge mutation",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/merge.md")],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/merge.md")],
     ),
     Path("ips-microkernel/procedures/reconcile.md"): (
         "Delete the remote branch only when",
         "Otherwise retain it",
         "leaves affected criteria unchecked",
         "governance knowledge reconciliation",
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/reconcile.md")],
     ),
     Path("ips-microkernel/procedures/governance-reconcile.md"): (
         "after every focused PR merge",
         "Governance knowledge reconciliation: no new reusable finding",
-        "accepted focused governance Issue",
-        "independently reviewed update",
         "do not create a recursive empty Issue",
-        "no owner-selected recurrence-prevention or reusable-rule outcome exists",
-        "without requesting a decision",
         "CI runner or Actions signals",
-        "ordered candidate queue",
-        "For each queued candidate",
-        "return to step 4 for the next queued candidate",
-        "Only after the queue is exhausted",
-        *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[
+        *KNOWLEDGE_CURATION_FRAGMENTS[
             Path("ips-microkernel/procedures/governance-reconcile.md")
         ],
     ),
@@ -565,12 +690,15 @@ REQUIRED_GOVERNANCE_TEXT = {
         "not an append-only incident ledger",
         "Select one canonical target",
         "accepted focused governance Issue",
-        "independently reviewed PR",
-        "current focused governance PR",
+        "independently reviewed follow-up PR",
+        "current focused PR",
         "Rows are ordered precedence",
         "split it into atomic candidates",
         "never assign one candidate to two targets",
         *REVIEW_ADJUDICATION_FRAGMENTS[
+            Path("ips-microkernel/selectors/governance-knowledge.md")
+        ],
+        *KNOWLEDGE_CURATION_FRAGMENTS[
             Path("ips-microkernel/selectors/governance-knowledge.md")
         ],
     ),
@@ -583,6 +711,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Reusable governance candidate",
         "not permission for the reviewer",
         *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("ips-microkernel/review/verdict.md")],
+        *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/review/verdict.md")],
     ),
     Path("ips-microkernel/review/setup.md"): (
         "--depth 1",
@@ -706,6 +835,23 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Route by disposition",
         "Owner waiver remains the strong exception",
         "original RC remains RC",
+    ),
+    Path("ips-microkernel/adr/0017-delegate-evidence-bound-knowledge-curation.md"): (
+        "Add a Knowledge Curator runtime actor",
+        "Require evidence-bound curation",
+        "Record one explicit disposition",
+        "Prefer promotion in the current PR",
+        "Keep late reconciliation",
+        "Guard the delegated route",
+        "`discarded`",
+        "`already-represented`",
+        "`promote-current-pr`",
+        "`promote-follow-up`",
+        "`deferred`",
+        "`unclassified`",
+        "without routine owner selection",
+        "Final independent review and exact-head proof remain mandatory",
+        "[Knowledge candidate]",
     ),
 }
 

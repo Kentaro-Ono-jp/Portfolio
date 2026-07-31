@@ -52,9 +52,9 @@ discovery order and one numbered item for every atomic reusable candidate.
 `none` is permitted only when no reusable candidate was discovered; never use
 it as a substitute for a second or later item.
 
-The reusable-governance candidates are evidence for the implementation
-lifecycle's post-merge classification. They are not permission for the
-reviewer to edit guidance, implementation, an Issue, or the PR.
+The reusable-governance candidates are evidence for routed knowledge curation.
+They are not permission for the reviewer to classify a disposition or edit
+guidance, implementation, an Issue, or the PR.
 
 ## Publication guard
 

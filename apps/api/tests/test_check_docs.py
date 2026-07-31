@@ -141,6 +141,7 @@ def test_every_canonical_rule_has_one_declared_owner(
         "ips-microkernel/procedures/governance-reconcile.md"
     )
     assert owners["review-adjudication"] == Path("ips-microkernel/procedures/adjudicate.md")
+    assert owners["knowledge-curation"] == Path("ips-microkernel/procedures/curate-knowledge.md")
 
 
 def test_review_adjudication_contract_is_complete(
@@ -247,17 +248,141 @@ def test_review_adjudication_rejects_each_weakened_boundary(
     assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
 
 
+def test_knowledge_curation_contract_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    contract = documentation_checker.KNOWLEDGE_CURATION_FRAGMENTS
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    routes = documentation_checker.REQUIRED_ROUTE_LINKS
+    roles = documentation_checker.IPS_FILE_ROLES
+    curation = Path("ips-microkernel/procedures/curate-knowledge.md")
+
+    assert roles[curation] == "procedure"
+    assert documentation_checker.CANONICAL_RULE_OWNERS["knowledge-curation"] == curation
+    assert curation in routes[Path("ips-microkernel/work-router.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/publish.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/adjudicate.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/correct.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/merge.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/governance-reconcile.md")]
+    assert Path("ips-microkernel/selectors/governance-knowledge.md") in routes[curation]
+    assert curation not in routes[Path("ips-microkernel/review/router.md")]
+    assert curation not in routes[Path("ips-microkernel/review/inspect.md")]
+    assert all(
+        path in required_text and all(fragment in required_text[path] for fragment in fragments)
+        for path, fragments in contract.items()
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "fragment"),
+    (
+        (
+            Path("ips-microkernel/work-router.md"),
+            "Stable reusable candidates have complete finding disposition and required proof",
+        ),
+        (
+            Path("ips-microkernel/references/authority.md"),
+            "without routine owner confirmation",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "Do not review, modify implementation or guidance",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "complete disposition of an associated actionable finding",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "Critical or High product impact alone never forces promotion",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "before any promotion mutation",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "deterministic resurfacing trigger",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "invalidates older exact-head proof and verdicts",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "final changed head must pass required proof and independent exact-head review",
+        ),
+        (
+            Path("ips-microkernel/procedures/merge.md"),
+            "Every `promote-current-pr` checkpoint must be implemented",
+        ),
+        (
+            Path("ips-microkernel/procedures/governance-reconcile.md"),
+            "A post-merge candidate cannot use `promote-current-pr`",
+        ),
+    ),
+)
+def test_knowledge_curation_rejects_each_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    fragment: str,
+) -> None:
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+    assert fragment in normalized
+    weakened = normalized.replace(fragment, "removed knowledge curation boundary")
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(weakened, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_required_governance_text(
+        failures,
+        {relative_path: (fragment,)},
+    )
+
+    assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
+
+
+def test_knowledge_curation_dispositions_are_complete() -> None:
+    procedure = (
+        REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "curate-knowledge.md"
+    ).read_text(encoding="utf-8")
+    dispositions = (
+        "`discarded`",
+        "`already-represented`",
+        "`promote-current-pr`",
+        "`promote-follow-up`",
+        "`deferred`",
+        "`unclassified`",
+    )
+
+    disposition_block = procedure[
+        procedure.index("7. Assign exactly one disposition") : procedure.index(
+            "8. Before implementation"
+        )
+    ]
+    assert all(disposition in disposition_block for disposition in dispositions)
+
+
 def test_governance_knowledge_write_route_is_complete(
     documentation_checker: ModuleType,
 ) -> None:
     routes = documentation_checker.REQUIRED_ROUTE_LINKS
     required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
     reconciliation = Path("ips-microkernel/procedures/governance-reconcile.md")
+    curation = Path("ips-microkernel/procedures/curate-knowledge.md")
     selector = Path("ips-microkernel/selectors/governance-knowledge.md")
 
     assert reconciliation in routes[Path("ips-microkernel/work-router.md")]
     assert reconciliation in routes[Path("ips-microkernel/procedures/reconcile.md")]
-    assert selector in routes[reconciliation]
+    assert curation in routes[Path("ips-microkernel/work-router.md")]
+    assert curation in routes[reconciliation]
+    assert selector in routes[curation]
     assert set(routes[selector]) == {
         Path("ips-microkernel/references/authority.md"),
         Path("ips-microkernel/references/live-state.md"),
@@ -268,6 +393,7 @@ def test_governance_knowledge_write_route_is_complete(
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
         Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
@@ -283,19 +409,23 @@ def test_governance_knowledge_write_route_is_complete(
     expected_write_guards = {
         reconciliation: (
             "Governance knowledge reconciliation: no new reusable finding",
-            "accepted focused governance Issue",
-            "independently reviewed update",
             "do not create a recursive empty Issue",
+            "every pre-merge atomic candidate",
+            "A post-merge candidate cannot use `promote-current-pr`",
+        ),
+        curation: (
             "ordered candidate queue",
             "For each queued candidate",
-            "return to step 4 for the next queued candidate",
+            "return to step 3 for the next queued candidate",
             "Only after the queue is exhausted",
+            "append one curation checkpoint to the focused Issue",
+            "final changed head must pass required proof and independent exact-head review",
         ),
         selector: (
             "not an append-only incident ledger",
             "Select one canonical target",
             "accepted focused governance Issue",
-            "independently reviewed PR",
+            "independently reviewed follow-up PR",
         ),
         Path("ips-microkernel/review/verdict.md"): (
             "Reusable governance candidate",
@@ -370,13 +500,13 @@ def test_governance_selector_rejects_ambiguous_evidence_wording(
 
 def test_governance_reconciliation_keeps_processing_multiple_candidates() -> None:
     procedure = (
-        REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "governance-reconcile.md"
+        REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "curate-knowledge.md"
     ).read_text(encoding="utf-8")
 
     assert (
         procedure.index("ordered candidate queue")
         < procedure.index("For each queued candidate")
-        < procedure.index("return to step 4 for the next queued candidate")
+        < procedure.index("return to step 3 for the next queued candidate")
         < procedure.index("Only after the queue is exhausted")
     )
 
@@ -401,7 +531,7 @@ def _write_review_candidate_capture_fixture(
     relative_paths = (
         Path("ips-microkernel/review/inspect.md"),
         Path("ips-microkernel/review/verdict.md"),
-        Path("ips-microkernel/procedures/governance-reconcile.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
     )
     for relative_path in relative_paths:
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
@@ -436,13 +566,13 @@ def _write_review_candidate_capture_fixture(
             "`none` is permitted only when no reusable candidate was discovered",
         ),
         (
-            Path("ips-microkernel/procedures/governance-reconcile.md"),
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
             "Expand every numbered candidate item from every verdict",
             "Expand the first candidate item from every verdict",
             "Expand every numbered candidate item from every verdict",
         ),
         (
-            Path("ips-microkernel/procedures/governance-reconcile.md"),
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
             "Never stop ingestion after the first verdict item",
             "Stop ingestion after the first verdict item",
             "Never stop ingestion after the first verdict item",
