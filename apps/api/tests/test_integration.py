@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import reactorfront_api.rabbitmq as rabbitmq
+from reactorfront_api.authentication import build_access_token_validator
 from reactorfront_api.domain import (
     ProcessingStatus,
     PublicProblem,
@@ -176,6 +177,7 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
 ) -> None:
     base_url = os.environ.get("PORTFOLIO_API_BASE_URL", "http://127.0.0.1:58000")
     access_token, _identity_metadata = obtain_access_token(settings)
+    authenticated_principal = build_access_token_validator(settings).validate(access_token)
     authorization = {"Authorization": f"Bearer {access_token}"}
 
     with httpx.Client(base_url=base_url, timeout=10, headers=authorization) as client:
@@ -272,8 +274,8 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
         authenticated_owner_id = connection.execute(
             text("SELECT id FROM principals WHERE issuer = :issuer AND subject = :subject"),
             {
-                "issuer": settings.oidc_issuer,
-                "subject": "synthetic-reviewer",
+                "issuer": authenticated_principal.issuer,
+                "subject": authenticated_principal.subject,
             },
         ).scalar_one()
         document = connection.execute(
