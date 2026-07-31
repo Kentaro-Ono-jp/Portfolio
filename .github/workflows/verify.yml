@@ -21,6 +21,8 @@ jobs:
     name: Web and service-boundary repository checks
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      selected_groups: ${{ steps.plan.outputs.groups }}
 
     steps:
       - name: Check out repository
@@ -102,6 +104,48 @@ jobs:
           fi
           python scripts/verify.py "${arguments[@]}"
 
+      - name: Validate selected coverage evidence
+        if: >-
+          success() &&
+          (
+            contains(steps.plan.outputs.groups, 'web-static') ||
+            contains(steps.plan.outputs.groups, 'api-static') ||
+            contains(steps.plan.outputs.groups, 'ml-static')
+          )
+        shell: bash
+        env:
+          SELECTED_GROUPS: ${{ steps.plan.outputs.groups }}
+        run: |
+          declare -A reports=(
+            [web-static]="artifacts/verification/web-coverage/lcov.info"
+            [api-static]="artifacts/verification/api-coverage.xml"
+            [ml-static]="artifacts/verification/ml-coverage.xml"
+          )
+          for group in web-static api-static ml-static; do
+            if [[ ",$SELECTED_GROUPS," == *",$group,"* ]]; then
+              test -s "${reports[$group]}"
+            fi
+          done
+
+      - name: Upload coverage evidence for publication
+        if: >-
+          success() &&
+          (
+            contains(steps.plan.outputs.groups, 'web-static') ||
+            contains(steps.plan.outputs.groups, 'api-static') ||
+            contains(steps.plan.outputs.groups, 'ml-static')
+          )
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ github.run_id }}
+          path: |
+            artifacts/verification/web-coverage/lcov.info
+            artifacts/verification/api-coverage.xml
+            artifacts/verification/ml-coverage.xml
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
       - name: Upload failure evidence
         if: failure()
         continue-on-error: true
@@ -117,3 +161,68 @@ jobs:
         run: >-
           docker compose -p reactorfront-portfolio down
           --remove-orphans --volumes
+
+  coverage:
+    name: Publish measured coverage
+    needs: verify
+    if: >-
+      needs.verify.result == 'success' &&
+      (
+        contains(needs.verify.outputs.selected_groups, 'web-static') ||
+        contains(needs.verify.outputs.selected_groups, 'api-static') ||
+        contains(needs.verify.outputs.selected_groups, 'ml-static')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download measured coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-${{ github.run_id }}
+          path: artifacts/verification
+
+      - name: Publish Web coverage
+        if: contains(needs.verify.outputs.selected_groups, 'web-static')
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          disable_search: true
+          fail_ci_if_error: true
+          files: artifacts/verification/web-coverage/lcov.info
+          flags: web
+          name: web
+          use_oidc: true
+          version: v11.3.1
+
+      - name: Publish API coverage
+        if: contains(needs.verify.outputs.selected_groups, 'api-static')
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          disable_search: true
+          fail_ci_if_error: true
+          files: artifacts/verification/api-coverage.xml
+          flags: api
+          name: api
+          use_oidc: true
+          version: v11.3.1
+
+      - name: Publish ML coverage
+        if: contains(needs.verify.outputs.selected_groups, 'ml-static')
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          disable_search: true
+          fail_ci_if_error: true
+          files: artifacts/verification/ml-coverage.xml
+          flags: ml
+          name: ml
+          use_oidc: true
+          version: v11.3.1

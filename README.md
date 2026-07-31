@@ -4,7 +4,9 @@
 > tracked in [Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27)
 > — 2026-07-20
 
-[![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml)
+[![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
+[![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
+[![License: MIT](https://img.shields.io/github/license/Kentaro-Ono-jp/Portfolio)](LICENSE)
 
 > AI-assisted work starts with [`GIT_AGENTS.md`](GIT_AGENTS.md).
 
