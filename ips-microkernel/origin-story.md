@@ -60,6 +60,8 @@ next capability:
 - an accepted issue and branch disclose the implementation procedure;
 - a complete staged candidate discloses the CI router;
 - a contested permission boundary discloses the authority reference;
+- a Changes-requested verdict discloses Review Adjudication;
+- a proved reusable candidate discloses Knowledge Curation;
 - a dependency failure discloses dependency knowledge;
 - a qualified Markdown-only change discloses its exception.
 
@@ -151,9 +153,15 @@ it, or intentionally return to a previously observed state. A prior defect,
 review finding, or abandoned approach is evidence for the next decision; it
 does not automatically make that state or technique forbidden.
 
-Recurrence prevention is optional. It becomes part of the work only when the
-focused outcome explicitly selects it. A correction may fix only the current
-case, and a repository owner may knowingly accept a residual finding.
+Recurrence prevention is not automatic, but it is no longer limited to rules
+selected in advance by the focused outcome. A correction may fix only the
+current case, and a repository owner may knowingly accept a residual finding.
+When stable evidence proves a distinct reusable candidate, the Knowledge
+Curator records exactly one explicit outcome: `discarded`,
+`already-represented`, `promote-current-pr`, `promote-follow-up`, `deferred`,
+or `unclassified`. A bounded causal rule may enter the current PR without
+routine owner selection only after applicable finding disposition and
+correction proof are complete.
 
 Destructive or breaking effects are likewise not banned merely because they
 belong to a risky category. Each concrete mutation is still governed by its
@@ -164,6 +172,53 @@ unrelated or unidentified destruction.
 An owner may accept the residual findings of an exact-head review and authorize
 that head to merge. The record must preserve the real verdict and the accepted
 residuals. An owner waiver is not an `Approved` verdict.
+
+## Review adjudication and knowledge curation
+
+Independent review remains evidence-maximizing, skeptical, and
+mutation-isolated. The reviewer inspects an exact head in a separate workspace,
+publishes one honest verdict, and does not repair the candidate it judges. A
+`Changes requested` verdict remains `Changes requested`; later actors may
+resolve or accept its findings, but they do not rewrite history by relabeling
+the verdict.
+
+The **Review Adjudicator**, introduced by
+[ADR-0016](adr/0016-adjudicate-review-findings-before-correction.md), is the
+decision role between review and correction. It freezes the reviewed head and
+real verdict, determines actual impact, and records each finding as
+`required-correction`, `accepted-residual`, or `non-material`. Actual Critical
+or High breakage of the Issue-defined design requires correction. Below that
+boundary, the adjudicator applies human discoverability and recoverability,
+external explanation cost, and material product-quality effect rather than a
+numeric score.
+
+The **Knowledge Curator**, introduced by
+[ADR-0017](adr/0017-delegate-evidence-bound-knowledge-curation.md), answers a
+different question: whether a proved observation should change future
+governance. It freezes the candidate queue and current head, selects one
+canonical target, compares existing rules and guards, judges permanent context
+cost, and records one of the six dispositions above. The Curator does not
+review, adjudicate, implement, move the head, or merge while curating.
+
+The roles therefore form a deliberate sequence:
+
+1. the Reviewer maximizes evidence and publishes the real verdict;
+2. the Review Adjudicator decides what the current product change must correct;
+3. the implementation role applies only required corrections and proves them;
+4. the Knowledge Curator decides what reusable governance, if any, is already
+   represented, should enter the current PR, should use a follow-up, or should
+   remain deferred, unclassified, or discarded;
+5. any curation-selected mutation moves the candidate head and therefore
+   requires fresh exact-head proof and independent review before merge.
+
+The change that introduced Knowledge Curation exercised this separation during
+its own review. Independent findings exposed a false-positive actor-boundary
+guard, an eligibility gate that excluded evidence-only candidates, and tests
+that preserved disposition labels without preserving their meanings. Review
+Adjudication retained the real verdicts and required the bounded corrections;
+the corrections converted all three signals into structural guards; Knowledge
+Curation then recorded those proved signals explicitly instead of letting them
+disappear into a generic “not selected” state.
 
 ## Reprogramming, differentiation, and expression
 
@@ -183,6 +238,8 @@ expresses only the matching module:
 - express invocation knowledge when a tool-entry boundary fails;
 - express the Markdown-only exception only when its qualifying conditions are
   proved;
+- express Review Adjudication when an exact-head verdict contains findings;
+- express Knowledge Curation when stable reusable evidence is ready;
 - express public-safety or authority references only when their boundaries are
   implicated.
 
@@ -306,6 +363,8 @@ second live route.
 - 受理済みIssueとbranchは、implementation procedureを開示する。
 - 完全にstageされた候補は、CI routerを開示する。
 - 権限境界に争点がある場合は、authority referenceを開示する。
+- Changes requested verdictは、Review Adjudicationを開示する。
+- 証明された再利用候補は、Knowledge Curationを開示する。
 - dependency failureは、dependency knowledgeを開示する。
 - 条件を満たしたMarkdown-only変更は、そのexceptionを開示する。
 
@@ -375,11 +434,29 @@ iPS Microkernelは、一度のincidentごとに永久禁止事項が増えてい
 
 既存のものを変更する自由には、修正、置換、revertだけでなく、以前に観測した状態へ意図的に戻ることも含まれる。過去のdefect、review finding、放棄したapproachは次の判断に使うevidenceであり、その状態や技法を自動的に禁止するものではない。
 
-再発防止は任意である。focused outcomeが明示的に選択した場合にだけ、現在の作業へ含める。correctionは現在の事例だけを直してもよく、repository ownerは残存findingを理解したうえで受容してもよい。
+再発防止は自動ではないが、focused outcomeが事前に選択したruleだけに限定されるものでもなくなった。correctionは現在の事例だけを直してもよく、repository ownerは残存findingを理解したうえで受容してもよい。stable evidenceによって独立した再利用候補が証明された場合、Knowledge Curatorは`discarded`、`already-represented`、`promote-current-pr`、`promote-follow-up`、`deferred`、`unclassified`のいずれか一つを明示的に記録する。boundedで因果関係のあるruleは、該当するfinding dispositionとcorrection proofが完了した後に限り、routine owner selectionを待たず現在のPRへ入ることができる。
 
 破壊的またはbreakingな影響も、危険なcategoryに属するという理由だけでは禁止しない。ただし、個々のmutationには、accepted scope、exact target、actor authority、evidence、および明示されたrecoveryまたはlimitationが必要である。この方針が許可するのは意図的な変更であり、無関係または未特定の対象を破壊することではない。
 
 ownerは、exact-head reviewの残存findingを受容し、そのheadのmergeを承認できる。記録には実際のverdictと受容した残件を残さなければならない。owner waiverは`Approved` verdictではない。
+
+### Review AdjudicationとKnowledge Curation
+
+独立reviewは、証拠を最大化し、懐疑的で、mutationから分離されたままである。Reviewerは分離workspaceでexact headを検査し、誠実なverdictを一件だけ公開し、自ら判定したcandidateを修正しない。`Changes requested` verdictは`Changes requested`のまま残る。後続roleはfindingを解消または受容できるが、verdictを付け替えて履歴を書き換えることはしない。
+
+[ADR-0016](adr/0016-adjudicate-review-findings-before-correction.md)で導入された**Review Adjudicator**は、reviewとcorrectionの間に置かれるdecision roleである。reviewed headと実際のverdictを凍結し、actual impactを判断し、各findingを`required-correction`、`accepted-residual`、`non-material`のいずれかとして記録する。Issueが定義した設計を実際にCriticalまたはHighで壊すfindingは必ず修正する。それ未満では数値scoreを使わず、人間による発見可能性と回復可能性、外部説明cost、material product-quality effectという三つの観点を適用する。
+
+[ADR-0017](adr/0017-delegate-evidence-bound-knowledge-curation.md)で導入された**Knowledge Curator**が答えるのは別の問いである。すなわち、証明された観測結果が将来のgovernanceを変えるべきかを判断する。candidate queueとcurrent headを凍結し、canonical targetを一つ選び、既存ruleとguardを比較し、恒久context costを判断し、六つのdispositionから一つを記録する。Curatorはcuration中にreview、adjudication、implementation、head移動、mergeを行わない。
+
+これらのroleは、意図的に次の順序を形成する。
+
+1. Reviewerが証拠を最大化し、実際のverdictを公開する。
+2. Review Adjudicatorが、現在のproduct changeで何を修正しなければならないかを決める。
+3. implementation roleがrequired correctionだけを適用し、その動作を証明する。
+4. Knowledge Curatorが、再利用可能なgovernanceを既存表現済みとするか、現在のPRへ入れるか、follow-upへ送るか、deferred、unclassified、discardedのいずれにするかを決める。
+5. curationが選択したmutationでcandidate headが動いた場合、merge前に新しいexact-head proofと独立reviewを必須とする。
+
+Knowledge Curationを導入した変更は、そのreview過程でこの分離を自ら実践した。独立findingは、actor boundaryのfalse-positive guard、evidence-only candidateを除外するeligibility gate、disposition labelを残しながら意味を保持しないtestを露呈させた。Review Adjudicationは実際のverdictを保持したままbounded correctionを必須とし、correctionは三つのsignalを構造的guardへ変換し、Knowledge Curationはそれらを汎用的な「not selected」へ消失させず、証明済みsignalとして明示的に記録した。
 
 ### 再プログラム、分化、発現
 
@@ -393,6 +470,8 @@ iPS細胞が、分化済みの細胞を再プログラムして別の可能性�
 - 既知のfailure signatureが現れた時、recovery knowledgeを発現させる。
 - tool entryの境界が失敗した時、invocation knowledgeを発現させる。
 - 適用条件が証明された時だけ、Markdown-only exceptionを発現させる。
+- exact-head verdictにfindingが含まれる時、Review Adjudicationを発現させる。
+- stable reusable evidenceの準備が整った時、Knowledge Curationを発現させる。
 - public safetyやauthorityの境界が関係する時だけ、そのreferenceを発現させる。
 
 この比喩において、
