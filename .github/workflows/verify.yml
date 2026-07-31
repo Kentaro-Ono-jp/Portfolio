@@ -137,12 +137,13 @@ jobs:
           )
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          name: coverage-${{ github.run_id }}
           path: |
             artifacts/verification/web-coverage/lcov.info
             artifacts/verification/api-coverage.xml
             artifacts/verification/ml-coverage.xml
           if-no-files-found: error
+          overwrite: true
           retention-days: 1
 
       - name: Upload failure evidence
@@ -187,7 +188,7 @@ jobs:
       - name: Download measured coverage
         uses: actions/download-artifact@v8
         with:
-          name: coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          name: coverage-${{ github.run_id }}
           path: artifacts/verification
 
       - name: Publish Web coverage

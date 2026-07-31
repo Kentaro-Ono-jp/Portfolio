@@ -12,6 +12,8 @@ ordering, or teardown.
 
 - Preserve the first causal failure even when diagnostics or cleanup also fail.
 - Sanitize and upload useful evidence without credentials or private input.
+- Keep cross-job artifact identity stable across failed-jobs-only reruns; use
+  explicit overwrite semantics when a full rerun regenerates the same artifact.
 - Artifact failure must not suppress unconditional teardown.
 - Teardown targets only the `reactorfront-portfolio` project and owned
   ephemeral resources.

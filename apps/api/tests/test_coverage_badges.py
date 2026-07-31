@@ -18,6 +18,9 @@ def test_coverage_publication_is_secretless_pinned_and_complete() -> None:
     assert "CODECOV_TOKEN" not in workflow
     assert workflow.count(f"uses: {CODECOV_ACTION}") == 3
     assert workflow.count(f"version: {CODECOV_CLI_VERSION}") == 3
+    assert workflow.count("name: coverage-${{ github.run_id }}") == 2
+    assert "name: coverage-${{ github.run_id }}-${{ github.run_attempt }}" not in workflow
+    assert "overwrite: true" in workflow
 
     expected_uploads = {
         "web": "artifacts/verification/web-coverage/lcov.info",
