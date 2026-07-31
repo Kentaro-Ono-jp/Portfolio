@@ -243,6 +243,34 @@ def test_gate_a_and_gate_b_order_push_and_review_dispatch() -> None:
     assert "repository-file change" in publish
     assert "push, and obtain new exact-head CI" in normalized_publish
 
+    follow_up = publish.split("## Follow-up push", 1)[1].split("## Conditional exception", 1)[0]
+    assert (
+        follow_up.index("repeat Gate A before push")
+        < follow_up.index("Push the exact checked correction HEAD")
+        < follow_up.index("Immediately read the remote branch and live PR head back")
+        < follow_up.index("Treat older CI, verdict, and endpoint evidence as stale")
+        < follow_up.index("Require GitHub Actions to succeed for the exact read-back head")
+        < follow_up.index("Complete Gate B")
+    )
+
+
+def test_post_correction_writeback_has_an_accepted_narrowing_adr(
+    documentation_checker: ModuleType,
+) -> None:
+    relative_path = Path(
+        "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"
+    )
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+
+    assert relative_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert "- Status: Accepted" in source
+    assert "- Amends: ADR-0017 direct-implementer promotion boundary" in source
+    assert "After directly correcting a real independent-review finding" in normalized
+    assert "the lesson is non-material and has one canonical home" in normalized
+    assert "Keep general curation separate" in source
+    assert "ADR-0017 remains authoritative" in normalized
+
 
 def test_every_correction_requires_direct_writeback_or_explicit_none() -> None:
     relative_paths = (
@@ -276,12 +304,20 @@ def test_every_correction_requires_direct_writeback_or_explicit_none() -> None:
             "Editing only PR title or body is head-neutral",
         ),
         (
+            Path("ips-microkernel/procedures/publish.md"),
+            "Immediately read the remote branch and live PR head back",
+        ),
+        (
             Path("ips-microkernel/knowledge/behavior.md"),
             "Phase, Trigger, Mistake, Check, Guard, and Evidence",
         ),
         (
             Path("ips-microkernel/ci/router.md"),
             "what production-shaped proof must exercise",
+        ),
+        (
+            Path("ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"),
+            "the lesson is non-material and has one canonical home",
         ),
     ),
 )

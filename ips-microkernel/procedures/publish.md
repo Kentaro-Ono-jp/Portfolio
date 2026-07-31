@@ -41,25 +41,31 @@ after a correction must be committed and pushed to an existing Draft PR.
 
 ## Follow-up push
 
-For every correction, repeat Gate A before push. After the exact correction
-push and its successful CI:
+For every correction:
 
-1. Read the remote branch and live PR head back and require both to equal the
-   full pushed SHA.
-2. Replace the current-review head and describe why it moved plus the exact
+1. Commit the complete verified correction and direct knowledge write-back,
+   then repeat Gate A before push.
+2. Push the exact checked correction HEAD.
+3. Immediately read the remote branch and live PR head back. Require both to
+   equal the full pushed SHA before waiting for CI or continuing the lifecycle.
+4. Treat older CI, verdict, and endpoint evidence as stale whenever the pushed
+   SHA differs. A mismatch enters live-state recovery and cannot consume or
+   claim another workflow result as current proof.
+5. Require GitHub Actions to succeed for the exact read-back head.
+6. Replace the current-review head and describe why it moved plus the exact
    delta from the previous head.
-3. Record the previous verdict and every finding's disposition.
-4. Record current-head local proof and exact-head workflow state as pending,
+7. Record the previous verdict and every finding's disposition.
+8. Record current-head local proof and exact-head workflow state as pending,
    successful, failed, or intentionally absent. Older runs are preceding or
    superseded, never current proof.
-5. Restate the complete current skipped-group set in the exact-head
+9. Restate the complete current skipped-group set in the exact-head
    `Verification-Skip` trailer, including inherited gaps not re-executed.
-6. State whether scope, non-targets, failure model, or acceptance criteria
+10. State whether scope, non-targets, failure model, or acceptance criteria
    changed.
-7. Complete Gate B through triggered `pre-review` Behavior entries, then read
+11. Complete Gate B through triggered `pre-review` Behavior entries, then read
    the live description back and require its declared exact base and head to
    match the live endpoints.
-8. Supply a refreshed initial-review prompt when no verdict exists; otherwise
+12. Supply a refreshed initial-review prompt when no verdict exists; otherwise
    supply a re-review prompt with expected full base and head SHAs, the real
    previous-verdict URL, every finding disposition, correction links, and the
    direct knowledge write-back decision.

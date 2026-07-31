@@ -11,10 +11,10 @@ adjudication, and every required correction, if any, has successful exact-head
 proof or a qualified exception. Also read it for an uncurated late candidate
 during post-merge reconciliation.
 
-Do not enter this general curation role for an unresolved direct
+Do not enter this general curation role for an unresolved ADR-0018 direct
 Behavior/Proof careless-mistake write-back after a review or CI correction.
-That narrow route is completed in Gate A first; any other reusable governance
-candidate returns here afterward.
+That narrow non-material route is completed in Gate A first; any other reusable
+governance candidate returns here afterward.
 
 ## Required inputs
 

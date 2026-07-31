@@ -26,7 +26,8 @@ task-branch push. Past-mistake knowledge is not a first-pass design input.
    each `pre-CI` entry triggered by the complete Behavior delta. Do not read its
    `pre-review` entries at this gate.
 6. For every review or CI correction, make one explicit direct knowledge
-   write-back decision before push:
+   write-back decision under ADR-0018's non-material admission guards before
+   push:
    - Behavior lesson: strengthen or add one atomic entry in the Behavior guide
      with the correct phase;
    - Proof lesson: strengthen the matching CI leaf;

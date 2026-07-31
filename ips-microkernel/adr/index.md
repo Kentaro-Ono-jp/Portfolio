@@ -28,6 +28,7 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0015: Keep the human origin narrative unlinked](0015-hide-the-human-origin-narrative.md)
 - [ADR-0016: Adjudicate review findings before correction](0016-adjudicate-review-findings-before-correction.md)
 - [ADR-0017: Delegate evidence-bound knowledge curation](0017-delegate-evidence-bound-knowledge-curation.md)
+- [ADR-0018: Bound post-correction careless-mistake write-back](0018-bound-post-correction-careless-mistake-writeback.md)
 
 ## Superseded records
 

@@ -51,9 +51,9 @@ Within accepted scope, existing work may be revised, replaced, reverted, or
 intentionally returned to a previously observed state. Recurrence prevention
 is not a default completion requirement. General proved collaboration rules
 enter the current or a focused follow-up slice only through the routed
-Knowledge Curator. The narrow Behavior/Proof careless-mistake route selected
-by a focused Issue instead writes an admitted atomic lesson directly after a
-real correction and before the next push; it records an explicit `Knowledge
+Knowledge Curator. The ADR-0018 narrow Behavior/Proof careless-mistake route
+selected by a focused Issue instead writes an admitted atomic lesson directly
+after a real correction and before the next push; it records an explicit `Knowledge
 write-back: none` rationale when no lesson qualifies. Material product,
 delivery, architecture, security, or actor-authority redefinition still
 requires owner-selected focus.
@@ -83,9 +83,10 @@ accepted.
 A complete Knowledge Curator checkpoint may select a bounded governance rule
 for the current PR or one focused follow-up without routine owner confirmation;
 it cannot redefine the material boundaries reserved here.
-An accepted focused Issue may also authorize direct careless-mistake write-back
-under Gate A's stable-evidence, recurrence, actionability, and low-cost admission
-guards. That route is not permission to silently curate unrelated governance.
+An accepted focused Issue may also authorize ADR-0018 direct careless-mistake
+write-back under Gate A's stable-evidence, recurrence, actionability, low-cost,
+and non-material admission guards. That route is not permission to silently
+curate unrelated governance.
 
 An exact-head owner waiver is a second, optional decision boundary. The agent
 does not request it merely to avoid correction. When the owner supplies it,

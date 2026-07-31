@@ -114,6 +114,9 @@ REQUIRED_GOVERNANCE_FILES = (
     Path("ips-microkernel/adr/0015-hide-the-human-origin-narrative.md"),
     Path("ips-microkernel/adr/0016-adjudicate-review-findings-before-correction.md"),
     Path("ips-microkernel/adr/0017-delegate-evidence-bound-knowledge-curation.md"),
+    Path(
+        "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"
+    ),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -678,6 +681,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "A remote branch is deleted only after",
         "Public participant",
         "direct careless-mistake write-back",
+        "ADR-0018 narrow Behavior/Proof careless-mistake route",
+        "non-material admission guards",
         "Knowledge write-back: none",
         "not permission to silently curate unrelated governance",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
@@ -721,6 +726,10 @@ REQUIRED_GOVERNANCE_TEXT = {
         "remote branch tip and live PR head",
         "Editing only PR title or body is head-neutral",
         "repository-file change",
+        "Push the exact checked correction HEAD",
+        "Immediately read the remote branch and live PR head back",
+        "before waiting for CI",
+        "Require GitHub Actions to succeed for the exact read-back head",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
     ),
@@ -731,7 +740,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/adjudicate.md")],
     ),
     Path("ips-microkernel/procedures/curate-knowledge.md"): (
-        "Do not enter this general curation role for an unresolved direct",
+        "Do not enter this general curation role for an unresolved ADR-0018 direct",
+        "ADR-0018 direct",
         "reusable Proof semantics, CI runner, and Actions signals",
         *KNOWLEDGE_CURATION_FRAGMENTS[
             Path("ips-microkernel/procedures/curate-knowledge.md")
@@ -821,6 +831,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Behavior careless-mistake guide",
         "Knowledge write-back: none",
         "There is no temporary intake or pending-candidate queue",
+        "ADR-0018's non-material admission guards",
         "Whenever local `HEAD` changes",
         "keeps baseline and current-head trust separate",
         "Verification-Skip",
@@ -877,6 +888,19 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path("ips-microkernel/ci/knowledge/framework-runtime.md"): (
         "Prove state across production bundle boundaries",
         "run 30628514591",
+    ),
+    Path(
+        "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"
+    ): (
+        "Add one narrow exception to ADR-0017",
+        "After directly correcting a real independent-review finding or exact-head CI failure",
+        "the lesson is non-material and has one canonical home",
+        "Knowledge write-back: none",
+        "There is no pending intake queue",
+        "Keep general curation separate",
+        "Gate A restarts on the new local HEAD",
+        "remote/PR head read-back",
+        "ADR-0017 remains authoritative",
     ),
     Path("ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md"): (
         "Supersedes",
