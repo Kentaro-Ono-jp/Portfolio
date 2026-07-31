@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import UUID
 
-from reactorfront_api.authentication import Capability
+from reactorfront_api.authentication import Capability, authentication_problem
 from reactorfront_api.domain import (
     DocumentSourceRecord,
     DocumentStatusRecord,
@@ -173,10 +173,9 @@ class FakeRequestAuthorizer:
         capability: Capability,
         correlation_id: UUID,
     ) -> PrincipalRecord:
-        del correlation_id
         self.calls.append((authorization_header, capability))
         if authorization_header != f"Bearer {self.expected_token}":
-            raise AssertionError("A test request omitted the synthetic bearer token.")
+            raise authentication_problem(correlation_id)
         return PrincipalRecord(
             principal_id=self.principal_id,
             kind=PrincipalKind.OIDC,

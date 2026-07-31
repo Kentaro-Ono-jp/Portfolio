@@ -219,6 +219,48 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
     assert not storage.objects
 
 
+def test_anonymous_malformed_document_requests_authenticate_before_validation() -> None:
+    client, repository, storage = make_client()
+    client.headers.pop("Authorization")
+
+    with client:
+        missing_file = client.post(
+            "/api/v1/documents",
+            data={"unexpected": "value"},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        invalid_path = client.get(
+            "/api/v1/documents/not-a-uuid",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        invalid_source_path = client.get(
+            "/api/v1/documents/not-a-uuid/source",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+
+    contracts = [
+        (missing_file, "/api/v1/documents", "post"),
+        (invalid_path, "/api/v1/documents/{documentId}", "get"),
+        (invalid_source_path, "/api/v1/documents/{documentId}/source", "get"),
+    ]
+    for response, path, method in contracts:
+        assert response.status_code == 401
+        assert_openapi_response(response, path=path, method=method)
+        assert response.headers["content-type"].startswith("application/problem+json")
+        assert response.headers[CORRELATION_HEADER] == str(CORRELATION_ID)
+        assert response.json() == {
+            "type": "urn:reactorfront:problem:authentication-required",
+            "title": "Authentication required",
+            "status": 401,
+            "detail": "A valid bearer access token is required.",
+            "code": "AUTHENTICATION_REQUIRED",
+            "correlationId": str(CORRELATION_ID),
+        }
+
+    assert not repository.submissions
+    assert not storage.objects
+
+
 def test_health_and_readiness_distinguish_process_from_dependencies() -> None:
     storage = FakeStorage(ready=False)
     client, _repository, _storage = make_client(storage=storage)
