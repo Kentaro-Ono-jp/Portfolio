@@ -269,6 +269,13 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
     assert table_count(engine, "outbox_events") == 1
 
     with engine.connect() as connection:
+        authenticated_owner_id = connection.execute(
+            text("SELECT id FROM principals WHERE issuer = :issuer AND subject = :subject"),
+            {
+                "issuer": settings.oidc_issuer,
+                "subject": "synthetic-reviewer",
+            },
+        ).scalar_one()
         document = connection.execute(
             text(
                 "SELECT object_key, sha256, content_type, size_bytes, "
@@ -295,8 +302,9 @@ def test_submission_crosses_real_http_postgres_and_s3_boundaries(
         digest,
         "application/pdf",
         len(PDF),
-        LEGACY_SYSTEM_PRINCIPAL_ID,
+        authenticated_owner_id,
     )
+    assert authenticated_owner_id != LEGACY_SYSTEM_PRINCIPAL_ID
     assert tuple(job) == ("accepted", 0)
     assert outbox.event_type == "document.processing.requested.v1"
     assert outbox.aggregate_id == job_id
