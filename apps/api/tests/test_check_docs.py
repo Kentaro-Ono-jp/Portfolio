@@ -142,6 +142,210 @@ def test_every_canonical_rule_has_one_declared_owner(
     )
     assert owners["review-adjudication"] == Path("ips-microkernel/procedures/adjudicate.md")
     assert owners["knowledge-curation"] == Path("ips-microkernel/procedures/curate-knowledge.md")
+    assert owners["behavior-careless-mistake-guide"] == Path(
+        "ips-microkernel/knowledge/behavior.md"
+    )
+    assert owners["ci-knowledge-identity"] == Path("ips-microkernel/ci/knowledge/identity.md")
+    assert owners["ci-knowledge-framework-runtime"] == Path(
+        "ips-microkernel/ci/knowledge/framework-runtime.md"
+    )
+
+
+def test_careless_mistake_guides_are_post_implementation_and_routed(
+    documentation_checker: ModuleType,
+) -> None:
+    routes = documentation_checker.REQUIRED_ROUTE_LINKS
+    roles = documentation_checker.IPS_FILE_ROLES
+    behavior = Path("ips-microkernel/knowledge/behavior.md")
+    identity = Path("ips-microkernel/ci/knowledge/identity.md")
+    framework_runtime = Path("ips-microkernel/ci/knowledge/framework-runtime.md")
+    implement = Path("ips-microkernel/procedures/implement.md")
+    publish = Path("ips-microkernel/procedures/publish.md")
+    preflight = Path("ips-microkernel/ci/procedures/preflight.md")
+    correction = Path("ips-microkernel/procedures/correct.md")
+    proof_selector = Path("ips-microkernel/ci/knowledge/selector.md")
+
+    assert roles[behavior] == roles[identity] == roles[framework_runtime] == "knowledge"
+    assert behavior not in routes[implement]
+    assert behavior in routes[preflight]
+    assert behavior in routes[publish]
+    assert behavior in routes[correction]
+    assert identity in routes[proof_selector]
+    assert framework_runtime in routes[proof_selector]
+    assert Path("ips-microkernel/ci/router.md") in routes[publish]
+
+
+def test_careless_mistake_entries_have_one_atomic_contract_and_seeded_evidence() -> None:
+    field_labels = ("Phase", "Trigger", "Mistake", "Check", "Guard", "Evidence")
+    sources_and_entries = (
+        (
+            REPOSITORY_ROOT / "ips-microkernel" / "knowledge" / "behavior.md",
+            (
+                ("Authenticate before request validation", "`pre-CI`", "issuecomment-5142938286"),
+                ("Publish exact review endpoints", "`pre-review`", "issuecomment-5143276537"),
+                (
+                    "Invalidate head-bound review evidence",
+                    "`pre-review`",
+                    "issuecomment-5143423042",
+                ),
+            ),
+        ),
+        (
+            REPOSITORY_ROOT / "ips-microkernel" / "ci" / "knowledge" / "identity.md",
+            (
+                ("Reject legacy ownership assumptions", "`pre-CI`", "30627309389"),
+                ("Derive exact validated token identity", "`pre-CI`", "30627826543"),
+            ),
+        ),
+        (
+            REPOSITORY_ROOT / "ips-microkernel" / "ci" / "knowledge" / "framework-runtime.md",
+            (("Prove state across production bundle boundaries", "`pre-CI`", "30628514591"),),
+        ),
+    )
+
+    for path, entries in sources_and_entries:
+        source = path.read_text(encoding="utf-8")
+        for heading, phase, evidence in entries:
+            block = source.split(f"### {heading}", 1)[1].split("\n### ", 1)[0]
+            assert all(block.count(f"**{label}:**") == 1 for label in field_labels)
+            assert f"**Phase:** {phase}" in block
+            assert evidence in block
+
+
+def test_gate_a_and_gate_b_order_push_and_review_dispatch() -> None:
+    publish = (REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "publish.md").read_text(
+        encoding="utf-8"
+    )
+    preflight = (
+        REPOSITORY_ROOT / "ips-microkernel" / "ci" / "procedures" / "preflight.md"
+    ).read_text(encoding="utf-8")
+    normalized_publish = " ".join(publish.split())
+
+    assert (
+        publish.index("Commit the complete verified candidate tersely without pushing")
+        < publish.index("complete Gate A pre-CI / pre-push")
+        < publish.index("Push only the exact checked HEAD")
+        < publish.index("Require the workflow result to target the exact pushed head")
+        < publish.index("Complete Gate B")
+        < publish.index("Dispatch only after Gate B passes")
+    )
+    assert (
+        preflight.index("complete local commit")
+        < preflight.index("CI knowledge selector")
+        < preflight.index("Behavior careless-mistake guide")
+        < preflight.index("direct knowledge")
+        < preflight.index("Whenever local `HEAD` changes")
+    )
+    assert "expected full base SHA" in normalized_publish
+    assert "expected full head SHA" in normalized_publish
+    assert "remote branch tip and live PR head" in normalized_publish
+    assert "Editing only PR title or body is head-neutral" in publish
+    assert "repository-file change" in publish
+    assert "push, and obtain new exact-head CI" in normalized_publish
+
+    follow_up = publish.split("## Follow-up push", 1)[1].split("## Conditional exception", 1)[0]
+    assert (
+        follow_up.index("repeat Gate A before push")
+        < follow_up.index("Push the exact checked correction HEAD")
+        < follow_up.index("Immediately read the remote branch and live PR head back")
+        < follow_up.index("Treat older CI, verdict, and endpoint evidence as stale")
+        < follow_up.index("Require GitHub Actions to succeed for the exact read-back head")
+        < follow_up.index("Complete Gate B")
+    )
+
+
+def test_post_correction_writeback_has_an_accepted_narrowing_adr(
+    documentation_checker: ModuleType,
+) -> None:
+    relative_path = Path(
+        "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"
+    )
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+
+    assert relative_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert "- Status: Accepted" in source
+    assert "- Amends: ADR-0017 direct-implementer promotion boundary" in source
+    assert "After directly correcting a real independent-review finding" in normalized
+    assert "the lesson is non-material and has one canonical home" in normalized
+    assert "Keep general curation separate" in source
+    assert "ADR-0017 remains authoritative" in normalized
+
+
+def test_every_correction_requires_direct_writeback_or_explicit_none() -> None:
+    relative_paths = (
+        Path("ips-microkernel/ci/procedures/preflight.md"),
+        Path("ips-microkernel/ci/procedures/failure-triage.md"),
+        Path("ips-microkernel/procedures/correct.md"),
+    )
+
+    for relative_path in relative_paths:
+        source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "Knowledge write-back: none" in " ".join(source.split())
+        assert "intake" in source
+    assert "There is no temporary intake or pending-candidate queue" in (
+        REPOSITORY_ROOT / relative_paths[0]
+    ).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "fragment"),
+    (
+        (
+            Path("ips-microkernel/procedures/implement.md"),
+            "Do not use past-mistake guides as templates",
+        ),
+        (
+            Path("ips-microkernel/ci/procedures/preflight.md"),
+            "Whenever local `HEAD` changes",
+        ),
+        (
+            Path("ips-microkernel/procedures/publish.md"),
+            "Editing only PR title or body is head-neutral",
+        ),
+        (
+            Path("ips-microkernel/procedures/publish.md"),
+            "Immediately read the remote branch and live PR head back",
+        ),
+        (
+            Path("ips-microkernel/knowledge/behavior.md"),
+            "Phase, Trigger, Mistake, Check, Guard, and Evidence",
+        ),
+        (
+            Path("ips-microkernel/ci/router.md"),
+            "what production-shaped proof must exercise",
+        ),
+        (
+            Path("ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"),
+            "the lesson is non-material and has one canonical home",
+        ),
+    ),
+)
+def test_careless_mistake_contract_rejects_a_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    fragment: str,
+) -> None:
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+    assert fragment in normalized
+    destination = tmp_path / relative_path
+    destination.parent.mkdir(parents=True)
+    destination.write_text(
+        normalized.replace(fragment, "weakened boundary"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_required_governance_text(
+        failures,
+        {relative_path: (fragment,)},
+    )
+
+    assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
 
 
 def test_review_adjudication_contract_is_complete(
@@ -585,6 +789,7 @@ def test_governance_knowledge_write_route_is_complete(
         Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/adr/index.md"),
         Path("ips-microkernel/delivery/index.md"),
+        Path("ips-microkernel/knowledge/behavior.md"),
     }
 
     expected_write_guards = {
