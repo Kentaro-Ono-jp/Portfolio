@@ -130,6 +130,61 @@ describe("Web authentication boundary", () => {
     expect(sessions.consumeTransaction(transactionId, NOW + 2)).toBeNull();
   });
 
+  it("keeps the bounded store across independently loaded server bundles", async () => {
+    const firstBundle = await import("@/lib/web-auth");
+    const started = await firstBundle.startSignIn({
+      environment: environment(),
+      now: () => NOW,
+      begin: vi.fn().mockResolvedValue({
+        authorizationUrl: new URL(
+          "http://127.0.0.1:5556/dex/auth?request=opaque",
+        ),
+        transaction: {
+          state: "state",
+          nonce: "nonce",
+          codeVerifier: "verifier",
+          returnTo: "/",
+        },
+      }),
+    });
+    const transactionId = cookieValue(
+      started.headers.get("Set-Cookie")!,
+      TRANSACTION_COOKIE,
+    );
+
+    vi.resetModules();
+    const secondBundle = await import("@/lib/web-auth");
+    const finished = await secondBundle.finishSignIn(
+      new Request(
+        "http://127.0.0.1:53000/api/auth/callback?code=code&state=state",
+        { headers: { Cookie: `${TRANSACTION_COOKIE}=${transactionId}` } },
+      ),
+      {
+        environment: environment(),
+        now: () => NOW + 1,
+        complete: vi.fn().mockResolvedValue({
+          subject: "synthetic-reviewer",
+          tokens: {
+            accessToken: "private-access-token",
+            accessTokenExpiresAt: NOW + 300_000,
+          },
+        }),
+      },
+    );
+
+    expect(finished.status).toBe(303);
+    const sessionId = cookieValue(
+      finished.headers.get("Set-Cookie")!,
+      SESSION_COOKIE,
+    );
+    expect(
+      secondBundle.currentBrowserSession(sessionId, {
+        environment: environment(),
+        now: () => NOW + 2,
+      }),
+    ).not.toBeNull();
+  });
+
   it("requires a live session, validates CSRF, and invalidates sign-out", async () => {
     const sessions = store();
     const session = sessions.createSession(

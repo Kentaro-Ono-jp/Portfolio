@@ -11,8 +11,27 @@ export const SESSION_COOKIE = "portfolio_session";
 export const TRANSACTION_COOKIE = "portfolio_oidc_transaction";
 export const CSRF_HEADER = "X-CSRF-Token";
 
-let sharedStore: SessionStore | undefined;
-let sharedStoreKey: string | undefined;
+interface SharedStoreState {
+  store?: SessionStore;
+  key?: string;
+}
+
+const SHARED_STORE_SYMBOL = Symbol.for(
+  "reactorfront.web-auth.bounded-session-store",
+);
+
+function sharedStoreState(): SharedStoreState {
+  const processGlobal = globalThis as typeof globalThis & {
+    [key: symbol]: SharedStoreState | undefined;
+  };
+  const existing = processGlobal[SHARED_STORE_SYMBOL];
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created: SharedStoreState = {};
+  processGlobal[SHARED_STORE_SYMBOL] = created;
+  return created;
+}
 
 export class WebAuthenticationError extends Error {
   constructor(
@@ -44,20 +63,21 @@ export interface WebAuthOverrides {
 }
 
 function sessionStore(settings: ServerConfig): SessionStore {
+  const shared = sharedStoreState();
   const key = [
     settings.sessionAbsoluteSeconds,
     settings.sessionInactivitySeconds,
     settings.oidcTransactionSeconds,
   ].join(":");
-  if (sharedStore === undefined || sharedStoreKey !== key) {
-    sharedStore = new SessionStore({
+  if (shared.store === undefined || shared.key !== key) {
+    shared.store = new SessionStore({
       absoluteLifetimeMilliseconds: settings.sessionAbsoluteSeconds * 1_000,
       inactivityLifetimeMilliseconds: settings.sessionInactivitySeconds * 1_000,
       transactionLifetimeMilliseconds: settings.oidcTransactionSeconds * 1_000,
     });
-    sharedStoreKey = key;
+    shared.key = key;
   }
-  return sharedStore;
+  return shared.store;
 }
 
 function dependencies(overrides: WebAuthOverrides): WebAuthDependencies {
