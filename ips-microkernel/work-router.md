@@ -28,36 +28,40 @@ combining them or requesting a broader decision.
 The order below is precedence. Once a condition matches, do not inspect later
 routes until the selected route returns here with changed state.
 
-1. **Independent initial review or re-review:** use the dedicated
+1. **Stable reusable candidates have complete disposition for every associated
+   actionable finding and successful proof for every required correction, but
+   lack complete curation:** use
+   [knowledge curation](procedures/curate-knowledge.md).
+2. **Independent initial review or re-review:** use the dedicated
    [review router](review/router.md).
-2. **A complete candidate is staged, a GitHub Actions run failed, a local
+3. **A complete candidate is staged, a GitHub Actions run failed, a local
    rehearsal is blocked, a Markdown-only exception is requested, or CI
    knowledge must be reconciled:** use the
    [CI router](ci/router.md).
-3. **An exact feature merge is proved and reusable non-CI process or review
+4. **An exact feature merge is proved and reusable non-CI process or review
    knowledge must be reconciled:** use
    [governance knowledge reconciliation](procedures/governance-reconcile.md).
-4. **State is dirty, stale, contradictory, unavailable, or outside the actor
+5. **State is dirty, stale, contradictory, unavailable, or outside the actor
    model:** use [live-state and discrepancy handling](references/live-state.md).
-5. **A development tool or runtime is missing or mismatched:** use
+6. **A development tool or runtime is missing or mismatched:** use
    [local tool authorization](references/local-tools.md).
-6. **No accepted focused scope or exact branch exists, or material scope has
+7. **No accepted focused scope or exact branch exists, or material scope has
    changed:** use [focus](procedures/focus.md).
-7. **An accepted focused Issue and exact branch exist, but implementation is
+8. **An accepted focused Issue and exact branch exist, but implementation is
    not a complete staged candidate:** use
    [implement and verify](procedures/implement.md).
-8. **The verified candidate is ready to commit, push, or publish as a Draft
+9. **The verified candidate is ready to commit, push, or publish as a Draft
    PR, including a follow-up push:** use [publish](procedures/publish.md).
-9. **An exact-head `Changes requested` verdict contains findings whose
+10. **An exact-head `Changes requested` verdict contains findings whose
    disposition is incomplete:** use
    [review finding adjudication](procedures/adjudicate.md).
-10. **Complete adjudication records one or more required corrections and no
+11. **Complete adjudication records one or more required corrections and no
     exact owner waiver accepts them:** use [correct](procedures/correct.md).
-11. **An independently approved exact head, a fully adjudicated exact head
+12. **An independently approved exact head, a fully adjudicated exact head
     with zero required corrections, or an exact reviewed head with a recorded
-    owner waiver has its required proof:** use
+    owner waiver has its required proof and complete candidate curation:** use
    [merge](procedures/merge.md).
-12. **The PR is merged and evidence or cleanup remains:** use
+13. **The PR is merged and evidence or cleanup remains:** use
    [reconcile](procedures/reconcile.md).
 
 If no condition matches, refresh bounded live state once and repeat the ordered

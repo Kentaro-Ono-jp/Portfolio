@@ -5,10 +5,10 @@
 
 ## Read when
 
-Read this selector only after governance reconciliation identifies one
-concrete reusable process or review signal. It is not an append-only incident
-ledger. Select one canonical target, return to the caller, and do not preload
-the other targets.
+Read this selector only after the Knowledge Curator identifies one atomic
+reusable process or review signal. It is not an append-only incident ledger.
+Select one canonical target, return to the caller, and do not preload the other
+targets.
 
 ## Select one target
 
@@ -27,6 +27,7 @@ atomic candidates before selection; never assign one candidate to two targets.
 | `implementation` | Implementation, verification, or staged-candidate preparation | [Implementation workflow](../procedures/implement.md) |
 | `publication` | Commit, push, Draft PR, or exact-head evidence publication | [Publication workflow](../procedures/publish.md) |
 | `adjudication` | Review-finding disposition, human-scale lenses, or adjudicated-RC routing | [Review adjudication](../procedures/adjudicate.md) |
+| `curation` | Reusable-candidate evidence threshold, disposition, promotion timing, or deferred recovery | [Knowledge curation](../procedures/curate-knowledge.md) |
 | `correction` | Actionable-review correction and re-review loop | [Correction workflow](../procedures/correct.md) |
 | `merge` | Ready or exact-head merge guard | [Merge workflow](../procedures/merge.md) |
 | `reconciliation` | Post-merge sequencing, main fast-forward, branch deletion, or task-owned cleanup | [Reconciliation workflow](../procedures/reconcile.md) |
@@ -46,12 +47,18 @@ it into a nearby target or add a duplicate general ledger.
 Compare the candidate with the selected canonical rule and its executable
 guards. Prefer a regression check over prose alone.
 
-A new reusable process rule requires an accepted focused governance Issue and
-an independently reviewed PR before guidance mutation. When the current
-focused governance PR already proves that exact accepted update, record it as
-satisfied without creating a recursive empty Issue.
+A bounded, causally related reusable process rule normally enters the current
+focused PR after a complete Knowledge Curator checkpoint. The changed exact
+head requires fresh proof and independent review before merge.
+
+A late, cross-boundary, or materially broader rule uses one accepted focused
+governance Issue and an independently reviewed follow-up PR. Material product,
+delivery, architecture, security, or actor-authority redefinition returns to
+owner-selected focus. When the current focused governance PR already proves
+the exact accepted update, record it as already represented without creating a
+recursive empty Issue.
 
 ## Return
 
 Return the selected target, classification, existing-rule comparison, and
-promotion outcome to governance reconciliation.
+promotion outcome to knowledge curation.

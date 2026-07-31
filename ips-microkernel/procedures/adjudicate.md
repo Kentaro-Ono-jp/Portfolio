@@ -67,6 +67,9 @@ disposition. It does not become the independent reviewer.
 8. If scope or accepted design must materially change, route to
    [focus](focus.md). Otherwise route by the recorded aggregate.
 
+Reusable governance candidates remain separate evidence. Do not classify or
+promote them while the Review Adjudicator role is active.
+
 ## Adjudication guards
 
 - An untrusted, moved, incomplete, or mismatched verdict returns through
@@ -88,8 +91,11 @@ disposition. It does not become the independent reviewer.
 
 - One or more `required-correction` dispositions and no exact owner waiver:
   open [correct](correct.md).
-- Complete adjudication with zero required corrections and required proof:
-  open [merge](merge.md).
+- Complete adjudication with zero required corrections, required proof, and one
+  or more uncurated reusable candidates: open
+  [knowledge curation](curate-knowledge.md).
+- Complete adjudication with zero required corrections, required proof, and no
+  pending candidate curation: open [merge](merge.md).
 - Exact owner waiver accepts every named required correction: open
   [merge](merge.md).
 - Material outcome, scope, non-target, or accepted-design change: open

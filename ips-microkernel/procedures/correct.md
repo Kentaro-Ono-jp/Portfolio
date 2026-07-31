@@ -31,7 +31,9 @@ them.
 6. After the corrected candidate is verified and staged, use
    [publish](publish.md) as a follow-up push.
 7. Require the new exact head to pass or satisfy a qualified Markdown-only
-   exception, then request re-review.
+   exception. When the correction chain proves one or more reusable candidates,
+   enter [knowledge curation](curate-knowledge.md) before re-review. Otherwise
+   request re-review.
 
 A verdict and its adjudication apply only to their exact reviewed head.
 
@@ -50,6 +52,8 @@ A verdict and its adjudication apply only to their exact reviewed head.
 
 - Correction required: loop to [implement and verify](implement.md).
 - Corrected push required: move to [publish](publish.md).
+- Proved correction with pending reusable candidates: move to
+  [knowledge curation](curate-knowledge.md).
 - New `Changes requested` verdict: enter
   [adjudication](adjudicate.md) before any further correction.
 - New Approved verdict: move the exact head to [merge](merge.md).

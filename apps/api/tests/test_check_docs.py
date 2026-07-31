@@ -141,6 +141,7 @@ def test_every_canonical_rule_has_one_declared_owner(
         "ips-microkernel/procedures/governance-reconcile.md"
     )
     assert owners["review-adjudication"] == Path("ips-microkernel/procedures/adjudicate.md")
+    assert owners["knowledge-curation"] == Path("ips-microkernel/procedures/curate-knowledge.md")
 
 
 def test_review_adjudication_contract_is_complete(
@@ -247,17 +248,322 @@ def test_review_adjudication_rejects_each_weakened_boundary(
     assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
 
 
+def test_knowledge_curation_contract_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    contract = documentation_checker.KNOWLEDGE_CURATION_FRAGMENTS
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    routes = documentation_checker.REQUIRED_ROUTE_LINKS
+    roles = documentation_checker.IPS_FILE_ROLES
+    curation = Path("ips-microkernel/procedures/curate-knowledge.md")
+
+    assert roles[curation] == "procedure"
+    assert documentation_checker.CANONICAL_RULE_OWNERS["knowledge-curation"] == curation
+    assert curation in routes[Path("ips-microkernel/work-router.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/publish.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/adjudicate.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/correct.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/merge.md")]
+    assert curation in routes[Path("ips-microkernel/procedures/governance-reconcile.md")]
+    assert Path("ips-microkernel/selectors/governance-knowledge.md") in routes[curation]
+    assert curation not in routes[Path("ips-microkernel/review/router.md")]
+    assert curation not in routes[Path("ips-microkernel/review/inspect.md")]
+    assert all(
+        path in required_text and all(fragment in required_text[path] for fragment in fragments)
+        for path, fragments in contract.items()
+    )
+    assert documentation_checker.KNOWLEDGE_CURATOR_ACTION_FRAGMENTS
+    assert documentation_checker.KNOWLEDGE_CURATOR_BOUNDARY_FRAGMENTS
+
+
+def test_knowledge_curator_actor_boundary_is_structurally_bound(
+    documentation_checker: ModuleType,
+) -> None:
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curator_actor_boundary(failures)
+
+    assert failures == []
+
+
+def test_knowledge_curator_actor_boundary_rejects_a_removed_actor_row(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATOR_AUTHORITY_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    actor_row = next(
+        line for line in source.splitlines() if line.startswith("| Knowledge Curator |")
+    )
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(source.replace(f"{actor_row}\n", ""), encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curator_actor_boundary(failures)
+
+    assert failures == [
+        "ips-microkernel/references/authority.md: Knowledge Curator actor row "
+        "expected exactly once, found 0"
+    ]
+
+
+def test_knowledge_curator_actor_boundary_rejects_a_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATOR_AUTHORITY_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    fragment = documentation_checker.KNOWLEDGE_CURATOR_BOUNDARY_FRAGMENTS[1]
+    assert fragment in source
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        source.replace(fragment, "may perform any lifecycle action"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curator_actor_boundary(failures)
+
+    actor_line = next(
+        line_number
+        for line_number, line in enumerate(source.splitlines(), start=1)
+        if line.startswith("| Knowledge Curator |")
+    )
+    assert failures == [
+        f"ips-microkernel/references/authority.md:{actor_line}: Knowledge Curator "
+        f"actor row missing boundary {fragment!r}"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "fragment"),
+    (
+        (
+            Path("ips-microkernel/work-router.md"),
+            "Stable reusable candidates have complete disposition for every associated "
+            "actionable finding and successful proof for every required correction",
+        ),
+        (
+            Path("ips-microkernel/references/authority.md"),
+            "without routine owner confirmation",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "Do not review, modify implementation or guidance",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "complete disposition for every associated actionable finding, if any",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "A candidate with no associated actionable finding or required correction "
+            "remains eligible",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "Critical or High product impact alone never forces promotion",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "before any promotion mutation",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "deterministic resurfacing trigger",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "invalidates older exact-head proof and verdicts",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "final changed head must pass required proof and independent exact-head review",
+        ),
+        (
+            Path("ips-microkernel/procedures/merge.md"),
+            "Every `promote-current-pr` checkpoint must be implemented",
+        ),
+        (
+            Path("ips-microkernel/procedures/governance-reconcile.md"),
+            "A post-merge candidate cannot use `promote-current-pr`",
+        ),
+    ),
+)
+def test_knowledge_curation_rejects_each_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    fragment: str,
+) -> None:
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+    assert fragment in normalized
+    weakened = normalized.replace(fragment, "removed knowledge curation boundary")
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(weakened, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_required_governance_text(
+        failures,
+        {relative_path: (fragment,)},
+    )
+
+    assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
+
+
+def test_knowledge_curation_dispositions_are_complete() -> None:
+    procedure = (
+        REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "curate-knowledge.md"
+    ).read_text(encoding="utf-8")
+    dispositions = (
+        "`discarded`",
+        "`already-represented`",
+        "`promote-current-pr`",
+        "`promote-follow-up`",
+        "`deferred`",
+        "`unclassified`",
+    )
+
+    disposition_block = procedure[
+        procedure.index("7. Assign exactly one disposition") : procedure.index(
+            "8. Before implementation"
+        )
+    ]
+    assert all(disposition in disposition_block for disposition in dispositions)
+
+
+@pytest.mark.parametrize(
+    (
+        "stable_evidence",
+        "associated_finding_disposition_complete",
+        "required_correction_proof_complete",
+        "expected",
+    ),
+    (
+        (True, None, None, True),
+        (True, True, None, True),
+        (True, True, True, True),
+        (False, None, None, False),
+        (True, False, None, False),
+        (True, None, False, False),
+    ),
+)
+def test_knowledge_curation_candidate_eligibility_is_conditional(
+    documentation_checker: ModuleType,
+    stable_evidence: bool,
+    associated_finding_disposition_complete: bool | None,
+    required_correction_proof_complete: bool | None,
+    expected: bool,
+) -> None:
+    assert (
+        documentation_checker._knowledge_curation_candidate_is_eligible(
+            stable_evidence=stable_evidence,
+            associated_finding_disposition_complete=(associated_finding_disposition_complete),
+            required_correction_proof_complete=required_correction_proof_complete,
+        )
+        is expected
+    )
+
+
+def test_knowledge_curation_disposition_semantics_are_structurally_bound(
+    documentation_checker: ModuleType,
+) -> None:
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curation_disposition_semantics(failures)
+
+    assert failures == []
+
+
+def test_knowledge_curation_dispositions_reject_collapsed_follow_up_semantics(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATION_DISPOSITION_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    follow_up = (
+        "`promote-follow-up`: the reusable rule is late, cross-boundary, or too\n"
+        "     broad for the current PR;"
+    )
+    collapsed = (
+        "`promote-follow-up`: one bounded causal rule can enter the unmerged\n"
+        "     current focused PR;"
+    )
+    assert follow_up in source
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(source.replace(follow_up, collapsed), encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curation_disposition_semantics(failures)
+
+    assert any(
+        "'promote-follow-up' disposition definition missing semantic" in failure
+        for failure in failures
+    )
+
+
+def test_knowledge_curation_dispositions_reject_swapped_deferred_semantics(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATION_DISPOSITION_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    deferred = "`deferred`: a named recurrence or additional-evidence trigger is required;"
+    unclassified = "`unclassified`: no honest canonical target or disposition is available."
+    assert deferred in source
+    assert unclassified in source
+    swapped = (
+        source.replace(deferred, "DEFERRED_DISPOSITION_SENTINEL")
+        .replace(unclassified, f"`unclassified`: {deferred.split(': ', 1)[1]}")
+        .replace(
+            "DEFERRED_DISPOSITION_SENTINEL",
+            f"`deferred`: {unclassified.split(': ', 1)[1]}",
+        )
+    )
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(swapped, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curation_disposition_semantics(failures)
+
+    assert any(
+        "'deferred' disposition definition missing semantic" in failure for failure in failures
+    )
+    assert any(
+        "'unclassified' disposition definition missing semantic" in failure for failure in failures
+    )
+
+
 def test_governance_knowledge_write_route_is_complete(
     documentation_checker: ModuleType,
 ) -> None:
     routes = documentation_checker.REQUIRED_ROUTE_LINKS
     required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
     reconciliation = Path("ips-microkernel/procedures/governance-reconcile.md")
+    curation = Path("ips-microkernel/procedures/curate-knowledge.md")
     selector = Path("ips-microkernel/selectors/governance-knowledge.md")
 
     assert reconciliation in routes[Path("ips-microkernel/work-router.md")]
     assert reconciliation in routes[Path("ips-microkernel/procedures/reconcile.md")]
-    assert selector in routes[reconciliation]
+    assert curation in routes[Path("ips-microkernel/work-router.md")]
+    assert curation in routes[reconciliation]
+    assert selector in routes[curation]
     assert set(routes[selector]) == {
         Path("ips-microkernel/references/authority.md"),
         Path("ips-microkernel/references/live-state.md"),
@@ -268,6 +574,7 @@ def test_governance_knowledge_write_route_is_complete(
         Path("ips-microkernel/procedures/implement.md"),
         Path("ips-microkernel/procedures/publish.md"),
         Path("ips-microkernel/procedures/adjudicate.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/correct.md"),
         Path("ips-microkernel/procedures/merge.md"),
         Path("ips-microkernel/procedures/reconcile.md"),
@@ -283,19 +590,23 @@ def test_governance_knowledge_write_route_is_complete(
     expected_write_guards = {
         reconciliation: (
             "Governance knowledge reconciliation: no new reusable finding",
-            "accepted focused governance Issue",
-            "independently reviewed update",
             "do not create a recursive empty Issue",
+            "every pre-merge atomic candidate",
+            "A post-merge candidate cannot use `promote-current-pr`",
+        ),
+        curation: (
             "ordered candidate queue",
             "For each queued candidate",
-            "return to step 4 for the next queued candidate",
+            "return to step 3 for the next queued candidate",
             "Only after the queue is exhausted",
+            "append one curation checkpoint to the focused Issue",
+            "final changed head must pass required proof and independent exact-head review",
         ),
         selector: (
             "not an append-only incident ledger",
             "Select one canonical target",
             "accepted focused governance Issue",
-            "independently reviewed PR",
+            "independently reviewed follow-up PR",
         ),
         Path("ips-microkernel/review/verdict.md"): (
             "Reusable governance candidate",
@@ -370,13 +681,13 @@ def test_governance_selector_rejects_ambiguous_evidence_wording(
 
 def test_governance_reconciliation_keeps_processing_multiple_candidates() -> None:
     procedure = (
-        REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "governance-reconcile.md"
+        REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "curate-knowledge.md"
     ).read_text(encoding="utf-8")
 
     assert (
         procedure.index("ordered candidate queue")
         < procedure.index("For each queued candidate")
-        < procedure.index("return to step 4 for the next queued candidate")
+        < procedure.index("return to step 3 for the next queued candidate")
         < procedure.index("Only after the queue is exhausted")
     )
 
@@ -401,7 +712,7 @@ def _write_review_candidate_capture_fixture(
     relative_paths = (
         Path("ips-microkernel/review/inspect.md"),
         Path("ips-microkernel/review/verdict.md"),
-        Path("ips-microkernel/procedures/governance-reconcile.md"),
+        Path("ips-microkernel/procedures/curate-knowledge.md"),
     )
     for relative_path in relative_paths:
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
@@ -436,13 +747,13 @@ def _write_review_candidate_capture_fixture(
             "`none` is permitted only when no reusable candidate was discovered",
         ),
         (
-            Path("ips-microkernel/procedures/governance-reconcile.md"),
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
             "Expand every numbered candidate item from every verdict",
             "Expand the first candidate item from every verdict",
             "Expand every numbered candidate item from every verdict",
         ),
         (
-            Path("ips-microkernel/procedures/governance-reconcile.md"),
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
             "Never stop ingestion after the first verdict item",
             "Stop ingestion after the first verdict item",
             "Never stop ingestion after the first verdict item",
