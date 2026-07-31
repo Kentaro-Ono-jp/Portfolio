@@ -272,6 +272,73 @@ def test_knowledge_curation_contract_is_complete(
         path in required_text and all(fragment in required_text[path] for fragment in fragments)
         for path, fragments in contract.items()
     )
+    assert documentation_checker.KNOWLEDGE_CURATOR_ACTION_FRAGMENTS
+    assert documentation_checker.KNOWLEDGE_CURATOR_BOUNDARY_FRAGMENTS
+
+
+def test_knowledge_curator_actor_boundary_is_structurally_bound(
+    documentation_checker: ModuleType,
+) -> None:
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curator_actor_boundary(failures)
+
+    assert failures == []
+
+
+def test_knowledge_curator_actor_boundary_rejects_a_removed_actor_row(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATOR_AUTHORITY_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    actor_row = next(
+        line for line in source.splitlines() if line.startswith("| Knowledge Curator |")
+    )
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(source.replace(f"{actor_row}\n", ""), encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curator_actor_boundary(failures)
+
+    assert failures == [
+        "ips-microkernel/references/authority.md: Knowledge Curator actor row "
+        "expected exactly once, found 0"
+    ]
+
+
+def test_knowledge_curator_actor_boundary_rejects_a_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = documentation_checker.KNOWLEDGE_CURATOR_AUTHORITY_PATH
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    fragment = documentation_checker.KNOWLEDGE_CURATOR_BOUNDARY_FRAGMENTS[1]
+    assert fragment in source
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        source.replace(fragment, "may perform any lifecycle action"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_knowledge_curator_actor_boundary(failures)
+
+    actor_line = next(
+        line_number
+        for line_number, line in enumerate(source.splitlines(), start=1)
+        if line.startswith("| Knowledge Curator |")
+    )
+    assert failures == [
+        f"ips-microkernel/references/authority.md:{actor_line}: Knowledge Curator "
+        f"actor row missing boundary {fragment!r}"
+    ]
 
 
 @pytest.mark.parametrize(

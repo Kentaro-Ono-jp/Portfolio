@@ -488,8 +488,6 @@ KNOWLEDGE_CURATION_FRAGMENTS = {
         "complete candidate curation",
     ),
     Path("ips-microkernel/references/authority.md"): (
-        "Knowledge Curator",
-        "distinct runtime role",
         "`promote-current-pr` rule",
         "without routine owner confirmation",
     ),
@@ -572,6 +570,17 @@ KNOWLEDGE_CURATION_FRAGMENTS = {
         "not permission for the reviewer to classify a disposition",
     ),
 }
+
+KNOWLEDGE_CURATOR_AUTHORITY_PATH = Path("ips-microkernel/references/authority.md")
+KNOWLEDGE_CURATOR_ACTION_FRAGMENTS = (
+    "Freezes proved reusable candidates",
+    "selects one canonical target",
+    "records one disposition per atomic candidate",
+)
+KNOWLEDGE_CURATOR_BOUNDARY_FRAGMENTS = (
+    "Is a distinct runtime role",
+    "does not review, implement, move the PR head, relabel a verdict, or merge while curating",
+)
 
 REQUIRED_GOVERNANCE_TEXT = {
     Path("GIT_AGENTS.md"): (
@@ -1514,6 +1523,54 @@ def _validate_owner_confirmation_boundary(
         )
 
 
+def _validate_knowledge_curator_actor_boundary(failures: list[str]) -> None:
+    relative_path = KNOWLEDGE_CURATOR_AUTHORITY_PATH
+    path = REPOSITORY_ROOT / relative_path
+    if not path.is_file():
+        return
+
+    actor_rows: list[tuple[int, list[str]]] = []
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if cells and cells[0] == "Knowledge Curator":
+            actor_rows.append((line_number, cells))
+
+    if len(actor_rows) != 1:
+        failures.append(
+            f"{relative_path.as_posix()}: Knowledge Curator actor row expected "
+            f"exactly once, found {len(actor_rows)}"
+        )
+        return
+
+    line_number, cells = actor_rows[0]
+    if len(cells) != 3:
+        failures.append(
+            f"{relative_path.as_posix()}:{line_number}: malformed Knowledge "
+            "Curator actor row"
+        )
+        return
+
+    actions = " ".join(cells[1].split())
+    boundary = " ".join(cells[2].split())
+    for fragment in KNOWLEDGE_CURATOR_ACTION_FRAGMENTS:
+        if fragment not in actions:
+            failures.append(
+                f"{relative_path.as_posix()}:{line_number}: Knowledge Curator "
+                f"actor row missing action {fragment!r}"
+            )
+    for fragment in KNOWLEDGE_CURATOR_BOUNDARY_FRAGMENTS:
+        if fragment not in boundary:
+            failures.append(
+                f"{relative_path.as_posix()}:{line_number}: Knowledge Curator "
+                f"actor row missing boundary {fragment!r}"
+            )
+
+
 def _validate_public_governance_surface(
     failures: list[str], governance_paths: list[Path]
 ) -> None:
@@ -1588,6 +1645,7 @@ def governance_failures() -> list[str]:
     _validate_routing_node_budgets(failures)
     _validate_ci_failure_knowledge(failures)
     _validate_owner_confirmation_boundary(failures, governance_paths)
+    _validate_knowledge_curator_actor_boundary(failures)
     _validate_public_governance_surface(failures, governance_paths)
 
     return failures
