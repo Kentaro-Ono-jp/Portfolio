@@ -18,6 +18,7 @@ import {
   auditHistory,
   canonicalProblem,
   completedStatus,
+  correctedReview,
   CORRELATION_ID,
   DOCUMENT_ID,
   REVIEW_ENTITY_TAG,
@@ -316,6 +317,88 @@ describe("upstream document proxy", () => {
       ),
     );
     expect(invalidAudit.status).toBe(502);
+  });
+
+  it("rejects each malformed review precondition before the upstream call", async () => {
+    const malformedPreconditions = [
+      {
+        "If-Match": "stale",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      {
+        "If-Match": REVIEW_ENTITY_TAG,
+        "Idempotency-Key": "not-a-uuid",
+      },
+    ];
+
+    for (const headers of malformedPreconditions) {
+      const fetchMock = vi.fn<typeof fetch>();
+      const response = await proxyDocumentReviewDecision(
+        new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({ finalClassification: "invoice" }),
+        }),
+        DOCUMENT_ID,
+        ACCESS_TOKEN,
+        overrides(fetchMock),
+      );
+
+      expect(response.status).toBe(422);
+      expect((await response.json()).code).toBe("WEB_INVALID_REVIEW_REQUEST");
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it("accepts every reachable review variant and rejects impossible unions", async () => {
+    const reachableReviews = [
+      unreviewedReview,
+      { ...unreviewedReview, machineClassification: "report" },
+      approvedReview,
+      {
+        ...approvedReview,
+        machineClassification: "report",
+        finalClassification: "report",
+      },
+      correctedReview,
+      {
+        ...correctedReview,
+        machineClassification: "report",
+        finalClassification: "invoice",
+      },
+    ];
+    for (const review of reachableReviews) {
+      const response = await proxyDocumentReview(
+        new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`),
+        DOCUMENT_ID,
+        ACCESS_TOKEN,
+        overrides(
+          vi.fn<typeof fetch>().mockResolvedValue(reviewUpstream(review)),
+        ),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(review);
+    }
+
+    const impossibleReviews = [
+      { ...unreviewedReview, finalClassification: "invoice" },
+      { ...approvedReview, finalClassification: "report" },
+      { ...correctedReview, finalClassification: "invoice" },
+    ];
+    for (const review of impossibleReviews) {
+      const response = await proxyDocumentReview(
+        new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`),
+        DOCUMENT_ID,
+        ACCESS_TOKEN,
+        overrides(
+          vi.fn<typeof fetch>().mockResolvedValue(reviewUpstream(review)),
+        ),
+      );
+      expect(response.status).toBe(502);
+      expect((await response.json()).code).toBe(
+        "WEB_INVALID_UPSTREAM_RESPONSE",
+      );
+    }
   });
 
   it("sanitizes configuration and network failures", async () => {
