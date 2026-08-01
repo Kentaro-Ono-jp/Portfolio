@@ -894,6 +894,10 @@ REQUIRED_GOVERNANCE_TEXT = {
         "run 30627309389",
         "run 30627826543",
     ),
+    Path("ips-microkernel/ci/knowledge/isolation.md"): (
+        "Preserve production failure precedence",
+        "same first failure as production",
+    ),
     Path("ips-microkernel/ci/knowledge/contracts.md"): (
         "Reject extras through the runtime boundary",
         "Prove reachable and unreachable union states",

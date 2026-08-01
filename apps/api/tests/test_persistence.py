@@ -599,6 +599,14 @@ def test_review_rejects_hidden_unavailable_terminal_and_stale_state(
         )
     assert captured.value.code is ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE
 
+    terminal_stale_session = FakeReviewSession(
+        scalar_values=[document, None, completed_job(), terminal]
+    )
+    terminal_stale_repository = review_repository_with_session(monkeypatch, terminal_stale_session)
+    with pytest.raises(ReviewOperationError) as captured:
+        terminal_stale_repository.submit_review(review_command(if_match=f'"{"0" * 64}"'))
+    assert captured.value.code is ReviewOperationFailureCode.PRECONDITION_FAILED
+
     stale_session = FakeReviewSession(scalar_values=[document, None, completed_job(), None])
     stale_repository = review_repository_with_session(monkeypatch, stale_session)
     with pytest.raises(ReviewOperationError) as captured:

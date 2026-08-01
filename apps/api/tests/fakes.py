@@ -162,10 +162,10 @@ class FakeRepository:
             if target != command.document_id or digest != command.request_digest:
                 raise ReviewOperationError(code=ReviewOperationFailureCode.IDEMPOTENCY_CONFLICT)
             return record
-        if current.status is not ReviewStatus.UNREVIEWED:
-            raise ReviewOperationError(code=ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE)
         if command.if_match != review_entity_tag(current):
             raise ReviewOperationError(code=ReviewOperationFailureCode.PRECONDITION_FAILED)
+        if current.status is not ReviewStatus.UNREVIEWED:
+            raise ReviewOperationError(code=ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE)
         review_status = (
             ReviewStatus.APPROVED
             if command.final_classification == current.machine_classification

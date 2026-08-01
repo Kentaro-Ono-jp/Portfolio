@@ -42,6 +42,8 @@ def make_client(
             UUID("99999999-9999-4999-8999-999999999999"),
             UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
             UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+            UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
         )
     )
     service = DocumentService(
@@ -276,6 +278,24 @@ def test_review_decision_etag_idempotency_and_audit_contract() -> None:
                 CORRELATION_HEADER: str(CORRELATION_ID),
             },
         )
+        terminal_stale = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        terminal_current = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": committed.headers["ETag"],
+                "Idempotency-Key": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
         audit = client.get(
             f"/api/v1/documents/{DOCUMENT_ID}/audit-events",
             headers={CORRELATION_HEADER: str(CORRELATION_ID)},
@@ -330,6 +350,20 @@ def test_review_decision_etag_idempotency_and_audit_contract() -> None:
         method="put",
     )
     assert conflict.json()["code"] == "IDEMPOTENCY_CONFLICT"
+    assert terminal_stale.status_code == 412
+    assert_openapi_response(
+        terminal_stale,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert terminal_stale.json()["code"] == "PRECONDITION_FAILED"
+    assert terminal_current.status_code == 409
+    assert_openapi_response(
+        terminal_current,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert terminal_current.json()["code"] == "REVIEW_NOT_AVAILABLE"
     assert len(repository.reviews) == 1
     assert len(repository.idempotency_records) == 1
     assert audit.status_code == 200
