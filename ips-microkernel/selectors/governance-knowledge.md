@@ -25,7 +25,6 @@ atomic candidates before selection; never assign one candidate to two targets.
 | `issue-evidence` | Checklist criterion mapping, completion-evidence content, or umbrella-gate proof | [Evidence reference](../references/evidence.md) |
 | `focus` | Focused-slice selection or material redefinition | [Focus workflow](../procedures/focus.md) |
 | `implementation` | Implementation, verification, or staged-candidate preparation | [Implementation workflow](../procedures/implement.md) |
-| `behavior-careless` | Admitted post-implementation Behavior mistake at `pre-CI` or `pre-review` | [Behavior careless-mistake guide](../knowledge/behavior.md) |
 | `publication` | Commit, push, Draft PR, or exact-head evidence publication | [Publication workflow](../procedures/publish.md) |
 | `adjudication` | Review-finding disposition, human-scale lenses, or adjudicated-RC routing | [Review adjudication](../procedures/adjudicate.md) |
 | `curation` | Reusable-candidate evidence threshold, disposition, promotion timing, or deferred recovery | [Knowledge curation](../procedures/curate-knowledge.md) |
@@ -42,6 +41,11 @@ atomic candidates before selection; never assign one candidate to two targets.
 
 If no row owns the signal, return it as an unclassified candidate. Do not force
 it into a nearby target or add a duplicate general ledger.
+
+Implementation Prune Stage A occurrences, Stage B operational rules, and CI
+Playbook correction records bypass this selector. They follow ADR-0019's
+correction-first operational routes and are not permanent-governance promotion
+candidates merely because they recur.
 
 ## Promotion contract
 

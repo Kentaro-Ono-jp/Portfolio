@@ -20,31 +20,50 @@ them.
    exact head and authorizes merge without correction, record the real verdict
    URL, adjudication checkpoint, accepted required corrections, exact head,
    required proof, and owner waiver in the PR checkpoint. Do not relabel the
-   verdict. Route that checkpoint to
-   [merge](merge.md).
+   verdict. Route that checkpoint to [merge](merge.md).
 4. Route a correction that materially changes scope or accepted design to
    [focus](focus.md) as a new slice decision.
-5. For a non-material in-scope correction, return to
-   [implement and verify](implement.md). Standing policy covers diagnosis,
-   correction, verification, commit, push, PR-evidence update, Actions
-   execution, and an unchanged-head rerun when appropriate.
-6. After the complete correction exists, classify every reusable
-   careless-mistake lesson. Write Behavior lessons directly to the
-   [Behavior guide](../knowledge/behavior.md) in the correct phase and Proof
-   lessons through the CI selector selected by publication's Gate A. Split
-   compound lessons. If none qualifies, record `Knowledge write-back: none`
-   with concrete rationale in PR correction evidence. Do not use a temporary
-   intake queue.
-7. After the corrected candidate and direct write-back are verified and staged,
-   use [publish](publish.md) as a follow-up commit, Gate A, and push.
-8. Require the new exact head to pass or satisfy a qualified Markdown-only
-   exception, then complete Gate B before re-review. When the correction chain
-   proves other reusable governance candidates outside this direct
-   Behavior/Proof careless-mistake route, enter
-   [knowledge curation](curate-knowledge.md) before re-review. Otherwise request
-   re-review.
+5. For a non-material in-scope repository correction, return to
+   [implement and verify](implement.md). Complete the concrete correction
+   before any operational write-back.
+6. Immediately after the implementation correction exists, open the
+   [Stage A ledger contract](../knowledge/correction-ledger.md), append the
+   current PR occurrence, and return here. Do not read sibling occurrence
+   files or wait for proof.
+7. After the adjudicated review correction exists, update the
+   [Stage B checklist](../knowledge/behavior.md) only when the finding yields a
+   cheap unambiguous machine-decidable pre-review check. Add detection, pass,
+   and concrete repair text after correction; reuse one canonical rule instead
+   of duplicating it. If no rule qualifies, write nothing and do not publish a
+   `none` placeholder.
+8. Verify and stage the complete correction plus its Stage A occurrence and
+   any Stage B rule change. Use [publish](publish.md) for the follow-up Gate A.
+   Gate A reads selected CI Playbook leaves and repairs test/proof scripts
+   before one ordinary remote push.
+9. Require the new exact head to pass or satisfy a qualified Markdown-only
+   exception, then execute Stage B before re-review. Operational Stage A and
+   Stage B write-back does not enter general Knowledge Curator curation.
+   When the correction chain proves a separately reusable governance candidate,
+   enter [knowledge curation](curate-knowledge.md) before re-review.
 
 A verdict and its adjudication apply only to their exact reviewed head.
+
+## HEAD-neutral correction
+
+When the selected correction changes only PR title/body, review endpoints, or
+another live surface that leaves the Git commit, branch ref, tree, and PR head
+SHA unchanged:
+
+1. correct the live surface first and read it back;
+2. treat the corrected problem as meeting the Stage B recording requirement;
+3. after correction, add or strengthen one deduplicated `neutral` Stage B rule
+   with mechanical detection, exact pass condition, and concrete repair; and
+4. rerun Stage B without requiring a push or CI run solely to certify the
+   rule.
+
+If repository persistence of that rule later moves `HEAD`, normal candidate
+Gate A, exact-head CI, and independent review apply to the changed repository
+candidate. They do not assign a proof status to the rule.
 
 ## Recovery
 

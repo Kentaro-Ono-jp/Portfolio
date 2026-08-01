@@ -13,9 +13,10 @@ complete intended Behavior and Proof implementation is not yet staged.
 1. Build Behavior implementation from accepted design: the behavior, boundary,
    state transition, or collaboration workflow selected by the focused Issue.
 2. Build Proof implementation from accepted design: tests, fixtures, runtime
-   probes, verifier routing, and CI evidence that prove that behavior.
-   Do not use past-mistake guides as templates before either first complete
-   implementation exists.
+   probes, verifier routing, and CI evidence that prove that behavior. Do not
+   read prior Implementation Prune Stage A occurrence files, the Stage B
+   checklist, or CI Playbook leaves while creating the first complete
+   Behavior and Proof implementation.
 3. Keep observable behavior aligned with accepted design and the focused
    Issue. Apply one completed `promote-current-pr` checkpoint only at its
    selected canonical target. Return to [focus](focus.md) before a material
@@ -35,6 +36,11 @@ complete intended Behavior and Proof implementation is not yet staged.
 10. Stage the exact complete first-pass candidate without committing.
 11. Reverify and restage every correction. The index must equal the verified
     working tree before publication.
+
+After the complete implementation exists, publication Gate A selects relevant
+CI Playbook leaves before remote push and uses their fallible correction
+records to repair test/proof scripts. That pre-push use does not turn the
+Playbook into first-pass design input.
 
 The first staging is a review snapshot. Later edits make that snapshot stale.
 

@@ -54,6 +54,7 @@ EXPECTED_IPS_TOP_LEVEL_ENTRIES = frozenset(
 IPS_ROLE_MARKER = re.compile(r"<!--\s*ips-role:\s*([a-z-]+)\s*-->")
 IPS_RUNTIME_MARKER = re.compile(r"<!--\s*ips-(?:role|rule):")
 LEGACY_ROLE_OR_RULE_MARKER = re.compile(r"<!--\s*(?:docforai|aios)-(?:role|rule):")
+STAGE_A_RECORD_PATH = re.compile(r"^knowledge/corrections/pr-\d{4}\.md$")
 
 IPS_FILE_ROLES = {
     Path("ips-microkernel/work-router.md"): "router",
@@ -73,6 +74,7 @@ IPS_FILE_ROLES = {
     Path("ips-microkernel/procedures/merge.md"): "procedure",
     Path("ips-microkernel/procedures/reconcile.md"): "procedure",
     Path("ips-microkernel/procedures/governance-reconcile.md"): "procedure",
+    Path("ips-microkernel/knowledge/correction-ledger.md"): "knowledge",
     Path("ips-microkernel/knowledge/behavior.md"): "knowledge",
     Path("ips-microkernel/review/setup.md"): "procedure",
     Path("ips-microkernel/review/inspect.md"): "procedure",
@@ -118,6 +120,9 @@ REQUIRED_GOVERNANCE_FILES = (
     Path(
         "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"
     ),
+    Path(
+        "ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"
+    ),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -132,7 +137,7 @@ ROUTING_NODE_LINE_BUDGETS = {
     Path("ips-microkernel/review/router.md"): 65,
     Path("ips-microkernel/selectors/governance-knowledge.md"): 75,
     Path("ips-microkernel/ci/router.md"): 45,
-    Path("ips-microkernel/ci/knowledge/selector.md"): 55,
+    Path("ips-microkernel/ci/knowledge/selector.md"): 65,
 }
 
 CANONICAL_RULE_OWNERS = {
@@ -157,7 +162,10 @@ CANONICAL_RULE_OWNERS = {
     "governance-knowledge-reconciliation": Path(
         "ips-microkernel/procedures/governance-reconcile.md"
     ),
-    "behavior-careless-mistake-guide": Path("ips-microkernel/knowledge/behavior.md"),
+    "implementation-correction-ledger": Path(
+        "ips-microkernel/knowledge/correction-ledger.md"
+    ),
+    "stage-b-pre-review-checklist": Path("ips-microkernel/knowledge/behavior.md"),
     "review-setup": Path("ips-microkernel/review/setup.md"),
     "review-inspection": Path("ips-microkernel/review/inspect.md"),
     "review-verdict": Path("ips-microkernel/review/verdict.md"),
@@ -260,6 +268,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/procedures/adjudicate.md"),
         Path("ips-microkernel/procedures/curate-knowledge.md"),
         Path("ips-microkernel/procedures/merge.md"),
+        Path("ips-microkernel/knowledge/correction-ledger.md"),
         Path("ips-microkernel/knowledge/behavior.md"),
     ),
     Path("ips-microkernel/procedures/merge.md"): (
@@ -302,7 +311,6 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/adr/index.md"),
         Path("ips-microkernel/delivery/index.md"),
-        Path("ips-microkernel/knowledge/behavior.md"),
     ),
     Path("ips-microkernel/review/setup.md"): (
         Path("ips-microkernel/references/local-tools.md"),
@@ -327,7 +335,6 @@ REQUIRED_ROUTE_LINKS = {
     ),
     Path("ips-microkernel/ci/procedures/preflight.md"): (
         Path("ips-microkernel/ci/knowledge/selector.md"),
-        Path("ips-microkernel/knowledge/behavior.md"),
         Path("ips-microkernel/ci/procedures/local-rehearsal.md"),
         Path("ips-microkernel/ci/procedures/failure-triage.md"),
     ),
@@ -337,11 +344,9 @@ REQUIRED_ROUTE_LINKS = {
     Path("ips-microkernel/ci/procedures/failure-triage.md"): (
         Path("ips-microkernel/ci/knowledge/selector.md"),
         Path("ips-microkernel/procedures/focus.md"),
-        Path("ips-microkernel/knowledge/behavior.md"),
+        Path("ips-microkernel/knowledge/correction-ledger.md"),
     ),
-    Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (
-        Path("ips-microkernel/ci/knowledge/selector.md"),
-    ),
+    Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (),
     Path("ips-microkernel/ci/knowledge/selector.md"): (
         Path("ips-microkernel/ci/knowledge/dependencies.md"),
         Path("ips-microkernel/ci/knowledge/invocation.md"),
@@ -365,7 +370,6 @@ GOVERNANCE_KNOWLEDGE_SIGNAL_TARGETS = {
     "issue-evidence": Path("ips-microkernel/references/evidence.md"),
     "focus": Path("ips-microkernel/procedures/focus.md"),
     "implementation": Path("ips-microkernel/procedures/implement.md"),
-    "behavior-careless": Path("ips-microkernel/knowledge/behavior.md"),
     "publication": Path("ips-microkernel/procedures/publish.md"),
     "adjudication": Path("ips-microkernel/procedures/adjudicate.md"),
     "curation": Path("ips-microkernel/procedures/curate-knowledge.md"),
@@ -683,10 +687,11 @@ REQUIRED_GOVERNANCE_TEXT = {
         "A checklist criterion changes state through proof or an explicit owner acceptance",
         "A remote branch is deleted only after",
         "Public participant",
-        "direct careless-mistake write-back",
-        "ADR-0018 narrow Behavior/Proof careless-mistake route",
-        "non-material admission guards",
-        "Knowledge write-back: none",
+        "ADR-0019 operational recording is separate",
+        "Stage A appends the current PR occurrence",
+        "Stage B adds or strengthens a deduplicated machine rule",
+        "CI Playbook appends a duplicate-allowed record",
+        "reads selected CI Playbook leaves, and repairs test/proof scripts before `git push`",
         "not permission to silently curate unrelated governance",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
@@ -717,22 +722,25 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path("ips-microkernel/procedures/implement.md"): (
         "Build Behavior implementation from accepted design",
         "Build Proof implementation from accepted design",
-        "Do not use past-mistake guides as templates",
+        "Do not read prior Implementation Prune Stage A occurrence files",
+        "publication Gate A selects relevant CI Playbook leaves before remote push",
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/implement.md")],
     ),
     Path("ips-microkernel/procedures/publish.md"): (
         "machine-qualified Markdown-only CI exception",
-        "Gate A pre-CI / pre-push",
-        "Complete Gate B",
+        "complete publication Gate A",
+        "before remote push",
+        "Complete publication Gate B",
         "expected full base SHA",
         "expected full head SHA",
         "remote branch tip and live PR head",
-        "Editing only PR title or body is head-neutral",
-        "repository-file change",
-        "Push the exact checked correction HEAD",
+        "Editing only live PR metadata preserves successful exact-head CI",
+        "Stage B finds a repository-file problem",
+        "Push the one exact checked correction head",
         "Immediately read the remote branch and live PR head back",
         "before waiting for CI",
         "Require GitHub Actions to succeed for the exact read-back head",
+        "without requiring a push or CI run solely to certify the rule",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/publish.md")],
     ),
@@ -743,17 +751,19 @@ REQUIRED_GOVERNANCE_TEXT = {
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/adjudicate.md")],
     ),
     Path("ips-microkernel/procedures/curate-knowledge.md"): (
-        "Do not enter this general curation role for an unresolved ADR-0018 direct",
-        "ADR-0018 direct",
-        "reusable Proof semantics, CI runner, and Actions signals",
+        "Do not enter this general curation role for Implementation Prune Stage A occurrences",
+        "ADR-0019 writes those after concrete corrections",
+        "Do not route CI Playbook correction records here merely because they recur",
         *KNOWLEDGE_CURATION_FRAGMENTS[
             Path("ips-microkernel/procedures/curate-knowledge.md")
         ],
     ),
     Path("ips-microkernel/procedures/correct.md"): (
-        "Knowledge write-back: none",
-        "Do not use a temporary intake queue",
-        "complete Gate B before re-review",
+        "Complete the concrete correction before any operational write-back",
+        "append the current PR occurrence",
+        "If no rule qualifies, write nothing",
+        "Gate A reads selected CI Playbook leaves",
+        "rerun Stage B without requiring a push or CI run solely to certify the rule",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/correct.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/correct.md")],
     ),
@@ -790,8 +800,9 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Rows are ordered precedence",
         "split it into atomic candidates",
         "never assign one candidate to two targets",
-        "| `behavior-careless` |",
-        "Behavior careless-mistake guide",
+        "Implementation Prune Stage A occurrences",
+        "bypass this selector",
+        "not permanent-governance promotion candidates merely because they recur",
         *REVIEW_ADJUDICATION_FRAGMENTS[
             Path("ips-microkernel/selectors/governance-knowledge.md")
         ],
@@ -823,18 +834,18 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path("ips-microkernel/ci/router.md"): (
         "thin router",
-        "what production-shaped proof must exercise",
-        "how CI executes that proof",
+        "fallible duplicate-preserving correction notebook",
+        "before remote push",
+        "no Stage A/B or proved/unproved classification",
         "Do not preload every procedure",
         "Select the first matching state",
     ),
     Path("ips-microkernel/ci/procedures/preflight.md"): (
-        "after first-pass Behavior and Proof implementation is complete",
-        "CI knowledge selector",
-        "Behavior careless-mistake guide",
-        "Knowledge write-back: none",
-        "There is no temporary intake or pending-candidate queue",
-        "ADR-0018's non-material admission guards",
+        "after the first complete Behavior and Proof implementation",
+        "CI Playbook selector",
+        "repair applicable test/proof scripts before remote push",
+        "Do not read prior Stage A occurrence files or the Stage B checklist",
+        "Never defer CI Playbook reading",
         "Whenever local `HEAD` changes",
         "keeps baseline and current-head trust separate",
         "Verification-Skip",
@@ -853,23 +864,23 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (
         "after every feature PR merge",
-        "no new reusable finding",
-        "Revise or add one knowledge leaf",
-        "focused playbook-update Issue",
-        "Reconciliation does not block the next feature increment",
-        "when it has not been owner-selected",
-        "Publish a knowledge change only through its focused Issue",
+        "checks correction-record completeness",
+        "does not prove, deduplicate, promote, or curate CI Playbook entries",
+        "CI correction reconciliation: complete",
+        "Duplicate entries are valid",
     ),
     Path("ips-microkernel/ci/procedures/failure-triage.md"): (
-        "Promote only a new reusable decision rule",
-        "Update one canonical knowledge leaf or add one routed leaf",
-        "Knowledge write-back: none",
-        "Do not create a pending intake",
-        "publication's Gate A before push",
+        "Do not preload CI Playbook history before the concrete correction",
+        "After the correction exists",
+        "Append Origin, Trigger, Mistake, and Correction without scanning",
+        "Duplicate records are allowed",
+        "Do not update Stage B for a CI failure",
+        "before one ordinary remote push",
     ),
     Path("ips-microkernel/knowledge/behavior.md"): (
-        "Do not read this guide before the first complete Behavior implementation",
-        "Phase, Trigger, Mistake, Check, Guard, and Evidence",
+        "Read this checklist only after exact-head GitHub Actions succeeds",
+        "immediately before initial review or re-review dispatch",
+        "Each rule contains exactly Trigger, HEAD effect, Problem, Detect, Pass, Repair, and Origins",
         "Authenticate before request validation",
         "Publish exact review endpoints",
         "Invalidate head-bound review evidence",
@@ -877,18 +888,29 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Enforce closed request contracts at runtime",
         "Serialize only reachable discriminated states",
         "Enforce constrained request parameters at runtime",
-        "Editing only the PR title or body does not change the Git commit",
-        "Knowledge write-back: none",
-        "There is no pending intake queue",
+        "automatically meets the Stage B recording requirement",
+        "concrete Repair text",
+        "Never publish a `Stage B record: none` placeholder",
+        "without requiring a push or CI run solely to prove that rule",
+    ),
+    Path("ips-microkernel/knowledge/correction-ledger.md"): (
+        "Do not enumerate or read earlier PR record files",
+        "PR, Mistake, Correction",
+        "Preserve repeated Mistake and Correction text as separate occurrences",
+        "Do not add `Evidence`, `Proof`, `Status`",
+        "Write the occurrence immediately after the correction exists",
+        "Never create a knowledge-only push or CI run to prove a Stage A occurrence",
     ),
     Path("ips-microkernel/ci/knowledge/selector.md"): (
-        "Identity proof knowledge",
-        "API contract proof knowledge",
-        "Framework runtime proof knowledge",
-        "proof semantics as well as runner mechanics",
+        "Read this selector in publication Gate A",
+        "before remote push",
+        "Do not read the CI Playbook after remote push",
+        "Duplicate entries, including identical Mistake and Correction text, are allowed",
+        "Do not scan, compare, reuse, strengthen, merge, or deduplicate earlier entries",
+        "Do not add Evidence, Proof, Status, proved/unproved, promotion, or permanence fields",
     ),
     Path("ips-microkernel/ci/knowledge/identity.md"): (
-        "Reject legacy ownership assumptions",
+        "Replace legacy ownership expectations",
         "Derive exact validated token identity",
         "Cross ownership hiding with replay classification",
         "run 30627309389",
@@ -900,12 +922,25 @@ REQUIRED_GOVERNANCE_TEXT = {
     ),
     Path("ips-microkernel/ci/knowledge/contracts.md"): (
         "Reject extras through the runtime boundary",
-        "Prove reachable and unreachable union states",
+        "Cover reachable and unreachable union states",
         "Match parameter constraints at the production boundary",
     ),
     Path("ips-microkernel/ci/knowledge/framework-runtime.md"): (
-        "Prove state across production bundle boundaries",
+        "Cross production bundle boundaries",
         "run 30628514591",
+    ),
+    Path(
+        "ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"
+    ): (
+        "Keep the names distinct",
+        "Make Implementation Prune Stage A an occurrence ledger",
+        "Keep Implementation Prune Stage B as a post-CI pre-review check",
+        "Stage B problem whose repair is HEAD-neutral",
+        "Make the CI Playbook a pre-push correction notebook",
+        "Do not scan existing entries for reuse or deduplication",
+        "Split CI Playbook entries into proved and unproved stores",
+        "Read the CI Playbook after push but before CI starts",
+        "Separate operational recording from candidate proof",
     ),
     Path(
         "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"
@@ -1424,7 +1459,12 @@ def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
                 path for path in runtime_directory.rglob("*") if path.is_file()
             )
     actual_files = frozenset(path.relative_to(ips_root) for path in runtime_paths)
-    for unexpected_path in sorted(actual_files - EXPECTED_IPS_RUNTIME_FILES):
+    stage_a_record_files = frozenset(
+        path for path in actual_files if STAGE_A_RECORD_PATH.fullmatch(path.as_posix())
+    )
+    for unexpected_path in sorted(
+        actual_files - EXPECTED_IPS_RUNTIME_FILES - stage_a_record_files
+    ):
         failures.append(
             "iPS Microkernel runtime contains unexpected file "
             f"{unexpected_path.as_posix()}"
@@ -1637,6 +1677,202 @@ def _validate_ci_failure_knowledge(failures: list[str]) -> None:
             failures.append(
                 f"CI failed run {run_id} must appear in exactly one knowledge "
                 f"leaf, found {counts[run_id]}"
+            )
+
+
+MARKDOWN_RECORD_FIELD = re.compile(r"(?m)^- \*\*([^*:\r\n]+):\*\*[ \t]*(.*)$")
+
+
+def _markdown_record_fields(block: str) -> list[tuple[str, str]]:
+    matches = list(MARKDOWN_RECORD_FIELD.finditer(block))
+    fields: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(block)
+        continuation = block[match.end() : end]
+        value = f"{match.group(2)}\n{continuation}".strip()
+        fields.append((match.group(1).strip(), value))
+    return fields
+
+
+def _validate_exact_record_fields(
+    *,
+    block: str,
+    expected_fields: list[str],
+    location: str,
+    schema: str,
+    failures: list[str],
+) -> None:
+    fields = _markdown_record_fields(block)
+    labels = [label for label, _value in fields]
+    if labels != expected_fields:
+        failures.append(f"{location} must contain exactly {schema} in order")
+
+    blank_fields = [
+        label
+        for label, value in fields
+        if label in expected_fields and not value.strip()
+    ]
+    if blank_fields:
+        failures.append(
+            f"{location} required fields must be non-empty: {blank_fields!r}"
+        )
+
+
+def _validate_stage_a_occurrence_records(failures: list[str]) -> None:
+    records_root = REPOSITORY_ROOT / "ips-microkernel" / "knowledge" / "corrections"
+    if not records_root.is_dir():
+        failures.append("missing Stage A correction-record directory")
+        return
+
+    record_paths = sorted(records_root.glob("pr-*.md"))
+    if not record_paths:
+        failures.append("Stage A correction-record directory has no PR records")
+        return
+
+    occurrence_heading = re.compile(r"(?m)^### Occurrence (\d+)\s*$")
+    expected_fields = ["PR", "Mistake", "Correction"]
+    for path in record_paths:
+        relative_path = path.relative_to(REPOSITORY_ROOT)
+        match = re.fullmatch(r"pr-(\d{4})\.md", path.name)
+        if match is None:
+            failures.append(
+                f"{relative_path.as_posix()}: invalid Stage A record filename"
+            )
+            continue
+        expected_pr = int(match.group(1))
+        content = path.read_text(encoding="utf-8")
+        if (
+            content.count("<!-- ips-data: implementation-correction-occurrences -->")
+            != 1
+        ):
+            failures.append(
+                f"{relative_path.as_posix()}: expected one Stage A data marker"
+            )
+
+        headings = list(occurrence_heading.finditer(content))
+        numbers = [int(item.group(1)) for item in headings]
+        if numbers != list(range(1, len(numbers) + 1)) or not numbers:
+            failures.append(
+                f"{relative_path.as_posix()}: Stage A occurrences must be non-empty "
+                "and sequential from 1"
+            )
+            continue
+
+        for index, heading in enumerate(headings):
+            end = (
+                headings[index + 1].start()
+                if index + 1 < len(headings)
+                else len(content)
+            )
+            block = content[heading.end() : end]
+            _validate_exact_record_fields(
+                block=block,
+                expected_fields=expected_fields,
+                location=(f"{relative_path.as_posix()}: occurrence {numbers[index]}"),
+                schema="PR, Mistake, Correction",
+                failures=failures,
+            )
+            pr_field = re.search(r"(?m)^- \*\*PR:\*\* PR #(\d+)\s*$", block)
+            if pr_field is None or int(pr_field.group(1)) != expected_pr:
+                failures.append(
+                    f"{relative_path.as_posix()}: occurrence {numbers[index]} PR "
+                    "must match its record filename"
+                )
+
+
+def _validate_stage_b_rules(failures: list[str]) -> None:
+    relative_path = Path("ips-microkernel/knowledge/behavior.md")
+    path = REPOSITORY_ROOT / relative_path
+    if not path.is_file():
+        return
+    content = path.read_text(encoding="utf-8")
+    if "## Rules" not in content or "## Execution and correction" not in content:
+        failures.append(f"{relative_path.as_posix()}: missing Stage B rule section")
+        return
+    rules = content.split("## Rules", maxsplit=1)[1].split(
+        "## Execution and correction", maxsplit=1
+    )[0]
+    heading_pattern = re.compile(r"(?m)^### (.+?)\s*$")
+    headings = list(heading_pattern.finditer(rules))
+    titles = [heading.group(1) for heading in headings]
+    duplicates = sorted(title for title, count in Counter(titles).items() if count > 1)
+    if duplicates:
+        failures.append(
+            f"{relative_path.as_posix()}: duplicate Stage B rule titles {duplicates!r}"
+        )
+    if not headings:
+        failures.append(f"{relative_path.as_posix()}: Stage B has no rules")
+        return
+    expected_fields = [
+        "Trigger",
+        "HEAD effect",
+        "Problem",
+        "Detect",
+        "Pass",
+        "Repair",
+        "Origins",
+    ]
+    for index, heading in enumerate(headings):
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(rules)
+        block = rules[heading.end() : end]
+        _validate_exact_record_fields(
+            block=block,
+            expected_fields=expected_fields,
+            location=(f"{relative_path.as_posix()}: Stage B rule {heading.group(1)!r}"),
+            schema="Trigger, HEAD effect, Problem, Detect, Pass, Repair, Origins",
+            failures=failures,
+        )
+        if not re.search(r"(?m)^- \*\*HEAD effect:\*\* `(neutral|moving)`\s*$", block):
+            failures.append(
+                f"{relative_path.as_posix()}: Stage B rule {heading.group(1)!r} "
+                "must declare HEAD effect as neutral or moving"
+            )
+
+
+def _validate_ci_playbook_records(failures: list[str]) -> None:
+    knowledge_root = REPOSITORY_ROOT / "ips-microkernel" / "ci" / "knowledge"
+    heading_pattern = re.compile(r"(?m)^### (.+?)\s*$")
+    expected_fields = ["Origin", "Trigger", "Mistake", "Correction"]
+    for path in sorted(knowledge_root.glob("*.md")):
+        if path.name == "selector.md":
+            continue
+        relative_path = path.relative_to(REPOSITORY_ROOT)
+        content = path.read_text(encoding="utf-8")
+        normalized = " ".join(content.split())
+        if "Before remote push" not in normalized:
+            failures.append(
+                f"{relative_path.as_posix()}: CI Playbook leaf must be read before remote push"
+            )
+        if "## Correction records" not in content or "## Return" not in content:
+            failures.append(
+                f"{relative_path.as_posix()}: missing CI Playbook correction section"
+            )
+            continue
+        records = content.split("## Correction records", maxsplit=1)[1].split(
+            "## Return", maxsplit=1
+        )[0]
+        headings = list(heading_pattern.finditer(records))
+        if not headings:
+            failures.append(
+                f"{relative_path.as_posix()}: CI Playbook leaf has no correction records"
+            )
+            continue
+        for index, heading in enumerate(headings):
+            end = (
+                headings[index + 1].start()
+                if index + 1 < len(headings)
+                else len(records)
+            )
+            block = records[heading.end() : end]
+            _validate_exact_record_fields(
+                block=block,
+                expected_fields=expected_fields,
+                location=(
+                    f"{relative_path.as_posix()}: CI Playbook record "
+                    f"{heading.group(1)!r}"
+                ),
+                schema="Origin, Trigger, Mistake, Correction",
+                failures=failures,
             )
 
 
@@ -1946,6 +2182,9 @@ def governance_failures() -> list[str]:
     _validate_shallow_review_diff_contract(failures)
     _validate_routing_node_budgets(failures)
     _validate_ci_failure_knowledge(failures)
+    _validate_stage_a_occurrence_records(failures)
+    _validate_stage_b_rules(failures)
+    _validate_ci_playbook_records(failures)
     _validate_owner_confirmation_boundary(failures, governance_paths)
     _validate_knowledge_curator_actor_boundary(failures)
     _validate_knowledge_curation_disposition_semantics(failures)

@@ -1,4 +1,4 @@
-# Post-merge CI knowledge reconciliation
+# Post-merge CI correction reconciliation
 
 <!-- ips-role: procedure -->
 <!-- ips-rule: ci-post-merge -->
@@ -6,41 +6,37 @@
 ## Read when
 
 Read this file after every feature PR merge, once the exact merge commit's
-automatic `push` workflow completes. Reconciliation does not block the next
-feature increment merely because prevention work was not selected.
+automatic `push` workflow completes. This route checks correction-record
+completeness; it does not prove, deduplicate, promote, or curate CI Playbook
+entries.
 
 ## Procedure
 
 1. Require the exact merge SHA and completed default-branch workflow.
-2. Audit only that PR's failed runs and corrective commits.
-3. Separate reusable runner knowledge from product defects and review-only
-   corrections.
-4. For each reusable signal, use the
-   [knowledge selector](../knowledge/selector.md), read one matching leaf, and return
-   here. Prefer an executable regression guard over prose.
-5. Revise or add one knowledge leaf only when the reusable decision rule is
-   new.
-6. Record the outcome in the merged feature's focused Issue:
-   - when the owner selects reusable prevention work, link a focused
-     playbook-update Issue and publish it on that Issue's own lifecycle
-   - when it has not been owner-selected, record the candidate as not selected;
-     do not create an Issue or block the current completion or next feature
-   - otherwise record `CI knowledge reconciliation: no new reusable finding`
-     and do not create an empty documentation change
+2. Audit only that PR's exact-head failed runs and corrective commits.
+3. For each concretely corrected CI failure, require that the correction commit
+   included one CI Playbook entry in the selector-owned leaf after correction.
+   Duplicate entries are valid and no Evidence or proof state is required.
+4. Require Stage A as well when the CI failure exposed an implementation
+   mistake. Do not read unrelated PR occurrence files.
+5. Record one bounded outcome in the focused Issue:
+   - `CI correction reconciliation: complete` with the PR's corrected-failure
+     count and record paths; or
+   - `CI correction reconciliation: no corrected CI failure` when none exists.
+6. A missing immediate record is a focused correction gap. Do not reconstruct
+   or deduplicate the Playbook from all repository history and do not create a
+   reusable-knowledge promotion candidate.
 
 ## Guard outcome
 
 - A failed or missing exact-merge workflow returns to CI triage and leaves
   affected completion evidence open.
-- An incomplete correction chain remains linked as an explicit evidence gap.
-- Reinspect an unclassified reusable signal against one knowledge leaf at a
-  time; if it is not reusable, record that outcome without a documentation
-  change.
-- Publish a knowledge change only through its focused Issue, exact proof, and
-  independent review.
-- A failed run or correction does not make recurrence prevention mandatory.
+- An incomplete correction chain remains an explicit evidence gap.
+- A duplicate or unproved Playbook entry is not a reconciliation failure.
+- A repository correction for a missing record uses its own ordinary focused
+  lifecycle; no push is created merely to certify an existing record.
 
 ## Return
 
-Return the reconciliation outcome to the post-merge workflow. Issue checklist
-updates and delivery evidence are handled separately.
+Return the bounded correction-record outcome to post-merge reconciliation.
+Issue checklist updates and delivery evidence are handled separately.

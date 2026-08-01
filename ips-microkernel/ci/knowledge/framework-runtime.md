@@ -1,32 +1,29 @@
-# Framework runtime proof knowledge
+# CI Playbook: framework runtime corrections
 
 <!-- ips-role: knowledge -->
 <!-- ips-rule: ci-knowledge-framework-runtime -->
 
 ## Read when
 
-Read this file after complete Proof implementation changes server-side state
-that must survive across framework pages, routes, handlers, workers, or other
-independently bundled entrypoints.
+Before remote push, read this leaf when the complete candidate changes
+server-side state that must survive across independently bundled pages, routes,
+handlers, workers, or entrypoints.
 
-## Entries
+## Correction records
 
-### Prove state across production bundle boundaries
+### Cross production bundle boundaries
 
-- **Phase:** `pre-CI`
-- **Trigger:** Server-side state is written in one framework entrypoint and
-  consumed by another entrypoint that production may bundle or load separately.
-- **Mistake:** Module-local proof passes in one imported module instance while
-  production splits the state across bundle or module instances.
-- **Check:** Does proof cross the real write/read entrypoint boundary with
-  production-shaped bundling or module reload behavior?
-- **Guard:** Exercise the producer and consumer through separate framework
+- **Origin:** PR #57
+  [run 30628514591](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30628514591)
+- **Trigger:** One framework entrypoint writes server-side state and another
+  independently bundled entrypoint consumes it.
+- **Mistake:** A module-local test passed in one imported module instance while
+  production split state across bundle or module instances.
+- **Correction:** Exercise producer and consumer through separate production
   entrypoints and require bounded state continuity after module reload or
   equivalent independent loading.
-- **Evidence:** PR #57
-  [run 30628514591](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30628514591).
 
 ## Return
 
-Return to the calling CI procedure after proving the triggered cross-entrypoint
-state boundary.
+Return to publication Gate A after repairing the triggered cross-entrypoint
+test/proof scripts.

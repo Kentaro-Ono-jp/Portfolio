@@ -142,150 +142,403 @@ def test_every_canonical_rule_has_one_declared_owner(
     )
     assert owners["review-adjudication"] == Path("ips-microkernel/procedures/adjudicate.md")
     assert owners["knowledge-curation"] == Path("ips-microkernel/procedures/curate-knowledge.md")
-    assert owners["behavior-careless-mistake-guide"] == Path(
-        "ips-microkernel/knowledge/behavior.md"
+    assert owners["implementation-correction-ledger"] == Path(
+        "ips-microkernel/knowledge/correction-ledger.md"
     )
+    assert owners["stage-b-pre-review-checklist"] == Path("ips-microkernel/knowledge/behavior.md")
     assert owners["ci-knowledge-identity"] == Path("ips-microkernel/ci/knowledge/identity.md")
     assert owners["ci-knowledge-framework-runtime"] == Path(
         "ips-microkernel/ci/knowledge/framework-runtime.md"
     )
 
 
-def test_careless_mistake_guides_are_post_implementation_and_routed(
+def test_stage_a_stage_b_and_ci_playbook_are_separately_routed(
     documentation_checker: ModuleType,
 ) -> None:
     routes = documentation_checker.REQUIRED_ROUTE_LINKS
     roles = documentation_checker.IPS_FILE_ROLES
-    behavior = Path("ips-microkernel/knowledge/behavior.md")
+    stage_a = Path("ips-microkernel/knowledge/correction-ledger.md")
+    stage_b = Path("ips-microkernel/knowledge/behavior.md")
     identity = Path("ips-microkernel/ci/knowledge/identity.md")
     framework_runtime = Path("ips-microkernel/ci/knowledge/framework-runtime.md")
     implement = Path("ips-microkernel/procedures/implement.md")
     publish = Path("ips-microkernel/procedures/publish.md")
     preflight = Path("ips-microkernel/ci/procedures/preflight.md")
     correction = Path("ips-microkernel/procedures/correct.md")
-    proof_selector = Path("ips-microkernel/ci/knowledge/selector.md")
+    playbook_selector = Path("ips-microkernel/ci/knowledge/selector.md")
+    failure_triage = Path("ips-microkernel/ci/procedures/failure-triage.md")
+    governance_selector = Path("ips-microkernel/selectors/governance-knowledge.md")
 
-    assert roles[behavior] == roles[identity] == roles[framework_runtime] == "knowledge"
-    assert behavior not in routes[implement]
-    assert behavior in routes[preflight]
-    assert behavior in routes[publish]
-    assert behavior in routes[correction]
-    assert identity in routes[proof_selector]
-    assert framework_runtime in routes[proof_selector]
+    assert roles[stage_a] == roles[stage_b] == roles[identity] == "knowledge"
+    assert roles[framework_runtime] == "knowledge"
+    assert stage_a not in routes[implement]
+    assert stage_a not in routes[preflight]
+    assert stage_a in routes[correction]
+    assert stage_a in routes[failure_triage]
+    assert stage_b not in routes[implement]
+    assert stage_b not in routes[preflight]
+    assert stage_b in routes[publish]
+    assert stage_b in routes[correction]
+    assert stage_a not in routes[governance_selector]
+    assert stage_b not in routes[governance_selector]
+    assert identity in routes[playbook_selector]
+    assert framework_runtime in routes[playbook_selector]
+    assert playbook_selector in routes[preflight]
+    assert playbook_selector in routes[failure_triage]
     assert Path("ips-microkernel/ci/router.md") in routes[publish]
 
 
-def test_careless_mistake_entries_have_one_atomic_contract_and_seeded_evidence() -> None:
-    field_labels = ("Phase", "Trigger", "Mistake", "Check", "Guard", "Evidence")
-    sources_and_entries = (
-        (
-            REPOSITORY_ROOT / "ips-microkernel" / "knowledge" / "behavior.md",
-            (
-                ("Authenticate before request validation", "`pre-CI`", "issuecomment-5142938286"),
-                ("Publish exact review endpoints", "`pre-review`", "issuecomment-5143276537"),
-                (
-                    "Invalidate head-bound review evidence",
-                    "`pre-review`",
-                    "issuecomment-5143423042",
-                ),
-            ),
-        ),
-        (
-            REPOSITORY_ROOT / "ips-microkernel" / "ci" / "knowledge" / "identity.md",
-            (
-                ("Reject legacy ownership assumptions", "`pre-CI`", "30627309389"),
-                ("Derive exact validated token identity", "`pre-CI`", "30627826543"),
-            ),
-        ),
-        (
-            REPOSITORY_ROOT / "ips-microkernel" / "ci" / "knowledge" / "framework-runtime.md",
-            (("Prove state across production bundle boundaries", "`pre-CI`", "30628514591"),),
-        ),
+def test_stage_a_occurrences_allow_duplicate_mistakes(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    record = tmp_path / "ips-microkernel" / "knowledge" / "corrections" / "pr-0064.md"
+    record.parent.mkdir(parents=True)
+    occurrence = """\
+- **PR:** PR #64
+- **Mistake:** The same implementation mistake.
+- **Correction:** The same concrete correction.
+"""
+    record.write_text(
+        "# PR #64 implementation-correction occurrences\n\n"
+        "<!-- ips-data: implementation-correction-occurrences -->\n\n"
+        f"### Occurrence 1\n\n{occurrence}\n"
+        f"### Occurrence 2\n\n{occurrence}",
+        encoding="utf-8",
     )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
 
-    for path, entries in sources_and_entries:
-        source = path.read_text(encoding="utf-8")
-        for heading, phase, evidence in entries:
-            block = source.split(f"### {heading}", 1)[1].split("\n### ", 1)[0]
-            assert all(block.count(f"**{label}:**") == 1 for label in field_labels)
-            assert f"**Phase:** {phase}" in block
-            assert evidence in block
+    documentation_checker._validate_stage_a_occurrence_records(failures)
+
+    assert failures == []
 
 
-def test_gate_a_and_gate_b_order_push_and_review_dispatch() -> None:
+def test_stage_a_occurrence_rejects_missing_required_field(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    record = tmp_path / "ips-microkernel" / "knowledge" / "corrections" / "pr-0064.md"
+    record.parent.mkdir(parents=True)
+    record.write_text(
+        "# PR #64 implementation-correction occurrences\n\n"
+        "<!-- ips-data: implementation-correction-occurrences -->\n\n"
+        "### Occurrence 1\n\n"
+        "- **PR:** PR #64\n"
+        "- **Mistake:** Missing correction.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_a_occurrence_records(failures)
+
+    assert any("exactly PR, Mistake, Correction" in failure for failure in failures)
+
+
+def test_stage_a_occurrence_rejects_an_unknown_field(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    record = tmp_path / "ips-microkernel" / "knowledge" / "corrections" / "pr-0064.md"
+    record.parent.mkdir(parents=True)
+    record.write_text(
+        "# PR #64 implementation-correction occurrences\n\n"
+        "<!-- ips-data: implementation-correction-occurrences -->\n\n"
+        "### Occurrence 1\n\n"
+        "- **PR:** PR #64\n"
+        "- **Mistake:** An observed mistake.\n"
+        "- **Correction:** A concrete correction.\n"
+        "- **Evidence:** Prohibited proof-style field.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_a_occurrence_records(failures)
+
+    assert any("exactly PR, Mistake, Correction" in failure for failure in failures)
+
+
+@pytest.mark.parametrize("blank_field", ("PR", "Mistake", "Correction"))
+def test_stage_a_occurrence_rejects_a_blank_required_value(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    blank_field: str,
+) -> None:
+    values = {
+        "PR": "PR #64",
+        "Mistake": "An observed mistake.",
+        "Correction": "A concrete correction.",
+    }
+    values[blank_field] = ""
+    record = tmp_path / "ips-microkernel" / "knowledge" / "corrections" / "pr-0064.md"
+    record.parent.mkdir(parents=True)
+    record.write_text(
+        "# PR #64 implementation-correction occurrences\n\n"
+        "<!-- ips-data: implementation-correction-occurrences -->\n\n"
+        "### Occurrence 1\n\n"
+        f"- **PR:** {values['PR']}\n"
+        f"- **Mistake:** {values['Mistake']}\n"
+        f"- **Correction:** {values['Correction']}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_a_occurrence_records(failures)
+
+    assert any("required fields must be non-empty" in failure for failure in failures)
+
+
+def test_stage_b_rules_have_machine_detection_and_repair(
+    documentation_checker: ModuleType,
+) -> None:
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_b_rules(failures)
+
+    assert failures == []
+
+
+def test_stage_b_rejects_a_duplicate_rule_title(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("ips-microkernel/knowledge/behavior.md")
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    duplicate = source.replace(
+        "### Invalidate head-bound review evidence",
+        "### Publish exact review endpoints",
+        1,
+    )
+    destination = tmp_path / relative_path
+    destination.parent.mkdir(parents=True)
+    destination.write_text(duplicate, encoding="utf-8")
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_b_rules(failures)
+
+    assert any("duplicate Stage B rule titles" in failure for failure in failures)
+
+
+def test_stage_b_rejects_an_unknown_field(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("ips-microkernel/knowledge/behavior.md")
+    destination = tmp_path / relative_path
+    destination.parent.mkdir(parents=True)
+    destination.write_text(
+        "# Stage B\n\n## Rules\n\n### Exact rule\n\n"
+        "- **Trigger:** Before review.\n"
+        "- **HEAD effect:** `neutral`\n"
+        "- **Problem:** Invalid records pass.\n"
+        "- **Detect:** Execute mutation probes.\n"
+        "- **Pass:** Every invalid mutation fails.\n"
+        "- **Repair:** Enforce the exact schema.\n"
+        "- **Evidence:** Prohibited proof-style field.\n"
+        "- **Origins:** PR #64.\n\n"
+        "## Execution and correction\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_b_rules(failures)
+
+    assert any("must contain exactly Trigger" in failure for failure in failures)
+
+
+@pytest.mark.parametrize(
+    "blank_field",
+    ("Trigger", "HEAD effect", "Problem", "Detect", "Pass", "Repair", "Origins"),
+)
+def test_stage_b_rejects_a_blank_required_value(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    blank_field: str,
+) -> None:
+    values = {
+        "Trigger": "Before review.",
+        "HEAD effect": "`neutral`",
+        "Problem": "Invalid records pass.",
+        "Detect": "Execute mutation probes.",
+        "Pass": "Every invalid mutation fails.",
+        "Repair": "Enforce the exact schema.",
+        "Origins": "PR #64.",
+    }
+    values[blank_field] = ""
+    relative_path = Path("ips-microkernel/knowledge/behavior.md")
+    destination = tmp_path / relative_path
+    destination.parent.mkdir(parents=True)
+    destination.write_text(
+        "# Stage B\n\n## Rules\n\n### Exact rule\n\n"
+        + "".join(f"- **{field}:** {value}\n" for field, value in values.items())
+        + "\n## Execution and correction\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_b_rules(failures)
+
+    assert any("required fields must be non-empty" in failure for failure in failures)
+
+
+def test_ci_playbook_allows_duplicate_correction_records(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    leaf = tmp_path / "ips-microkernel" / "ci" / "knowledge" / "sample.md"
+    leaf.parent.mkdir(parents=True)
+    record = """\
+### Repeated correction
+
+- **Origin:** PR #64
+- **Trigger:** Same trigger.
+- **Mistake:** Same mistake.
+- **Correction:** Same correction.
+"""
+    leaf.write_text(
+        "# CI Playbook: sample corrections\n\n"
+        "## Read when\n\nBefore remote push, read this leaf.\n\n"
+        f"## Correction records\n\n{record}\n{record}\n"
+        "## Return\n\nReturn to publication Gate A.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_ci_playbook_records(failures)
+
+    assert failures == []
+
+
+def test_ci_playbook_rejects_a_proof_style_field(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    leaf = tmp_path / "ips-microkernel" / "ci" / "knowledge" / "sample.md"
+    leaf.parent.mkdir(parents=True)
+    leaf.write_text(
+        "# CI Playbook: sample corrections\n\n"
+        "## Read when\n\nBefore remote push, read this leaf.\n\n"
+        "## Correction records\n\n### Broken record\n\n"
+        "- **Origin:** PR #64\n- **Trigger:** Trigger.\n"
+        "- **Mistake:** Mistake.\n- **Correction:** Correction.\n"
+        "- **Evidence:** Not allowed.\n\n"
+        "## Return\n\nReturn to publication Gate A.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_ci_playbook_records(failures)
+
+    assert any("exactly Origin, Trigger, Mistake, Correction" in failure for failure in failures)
+
+
+@pytest.mark.parametrize("blank_field", ("Origin", "Trigger", "Mistake", "Correction"))
+def test_ci_playbook_rejects_a_blank_required_value(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    blank_field: str,
+) -> None:
+    values = {
+        "Origin": "PR #64",
+        "Trigger": "A CI failure.",
+        "Mistake": "A concrete mistake.",
+        "Correction": "A concrete correction.",
+    }
+    values[blank_field] = ""
+    leaf = tmp_path / "ips-microkernel" / "ci" / "knowledge" / "sample.md"
+    leaf.parent.mkdir(parents=True)
+    fields = "".join(f"- **{field}:** {value}\n" for field, value in values.items())
+    leaf.write_text(
+        "# CI Playbook: sample corrections\n\n"
+        "## Read when\n\nBefore remote push, read this leaf.\n\n"
+        f"## Correction records\n\n### Broken record\n\n{fields}\n"
+        "## Return\n\nReturn to publication Gate A.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_ci_playbook_records(failures)
+
+    assert any("required fields must be non-empty" in failure for failure in failures)
+
+
+def test_gate_a_stage_b_push_and_review_order() -> None:
     publish = (REPOSITORY_ROOT / "ips-microkernel" / "procedures" / "publish.md").read_text(
         encoding="utf-8"
     )
     preflight = (
         REPOSITORY_ROOT / "ips-microkernel" / "ci" / "procedures" / "preflight.md"
     ).read_text(encoding="utf-8")
-    normalized_publish = " ".join(publish.split())
-
     assert (
         publish.index("Commit the complete verified candidate tersely without pushing")
-        < publish.index("complete Gate A pre-CI / pre-push")
-        < publish.index("Push only the exact checked HEAD")
-        < publish.index("Require the workflow result to target the exact pushed head")
-        < publish.index("Complete Gate B")
-        < publish.index("Dispatch only after Gate B passes")
+        < publish.index("complete publication Gate A")
+        < publish.index("Push only the exact Gate-A-checked `HEAD`")
+        < publish.index("Require GitHub Actions to target and succeed")
+        < publish.index("Complete publication Gate B")
+        < publish.index("Dispatch only after Stage B passes")
     )
     assert (
         preflight.index("complete local commit")
-        < preflight.index("CI knowledge selector")
-        < preflight.index("Behavior careless-mistake guide")
-        < preflight.index("direct knowledge")
+        < preflight.index("CI Playbook selector")
+        < preflight.index("repair applicable test/proof scripts before remote push")
         < preflight.index("Whenever local `HEAD` changes")
     )
-    assert "expected full base SHA" in normalized_publish
-    assert "expected full head SHA" in normalized_publish
-    assert "remote branch tip and live PR head" in normalized_publish
-    assert "Editing only PR title or body is head-neutral" in publish
-    assert "repository-file change" in publish
-    assert "push, and obtain new exact-head CI" in normalized_publish
+    assert "Never defer CI Playbook reading" in preflight
+    assert "Editing only live PR metadata preserves successful exact-head CI" in publish
+    assert "without requiring a push or CI run solely to certify" in publish
 
     follow_up = publish.split("## Follow-up push", 1)[1].split("## Conditional exception", 1)[0]
     assert (
-        follow_up.index("repeat Gate A before push")
-        < follow_up.index("Push the exact checked correction HEAD")
+        follow_up.index("Complete Gate A before remote push")
+        < follow_up.index("Push the one exact checked correction head")
         < follow_up.index("Immediately read the remote branch and live PR head back")
         < follow_up.index("Treat older CI, verdict, and endpoint evidence as stale")
         < follow_up.index("Require GitHub Actions to succeed for the exact read-back head")
-        < follow_up.index("Complete Gate B")
+        < follow_up.index("Execute Stage B")
     )
 
 
-def test_post_correction_writeback_has_an_accepted_narrowing_adr(
+def test_adr_0019_supersedes_0018_with_the_complete_operational_model(
     documentation_checker: ModuleType,
 ) -> None:
+    old_path = Path("ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md")
     relative_path = Path(
-        "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"
+        "ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"
     )
+    old_source = (REPOSITORY_ROOT / old_path).read_text(encoding="utf-8")
     source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
     normalized = " ".join(source.split())
 
     assert relative_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert "- Status: Superseded by ADR-0019" in old_source
     assert "- Status: Accepted" in source
-    assert "- Amends: ADR-0017 direct-implementer promotion boundary" in source
-    assert "After directly correcting a real independent-review finding" in normalized
-    assert "the lesson is non-material and has one canonical home" in normalized
-    assert "Keep general curation separate" in source
-    assert "ADR-0017 remains authoritative" in normalized
-
-
-def test_every_correction_requires_direct_writeback_or_explicit_none() -> None:
-    relative_paths = (
-        Path("ips-microkernel/ci/procedures/preflight.md"),
-        Path("ips-microkernel/ci/procedures/failure-triage.md"),
-        Path("ips-microkernel/procedures/correct.md"),
-    )
-
-    for relative_path in relative_paths:
-        source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
-        assert "Knowledge write-back: none" in " ".join(source.split())
-        assert "intake" in source
-    assert "There is no temporary intake or pending-candidate queue" in (
-        REPOSITORY_ROOT / relative_paths[0]
-    ).read_text(encoding="utf-8")
+    assert "Make Implementation Prune Stage A an occurrence ledger" in source
+    assert "Keep Implementation Prune Stage B as a post-CI pre-review check" in source
+    assert "Make the CI Playbook a pre-push correction notebook" in source
+    assert "has no Stage A/B or proved/unproved classification" in normalized
+    assert "before remote push" in normalized
+    assert "Duplicate Mistake and Correction text is deliberate" in normalized
+    assert "Stage B problem whose repair is HEAD-neutral" in source
+    assert "Separate operational recording from candidate proof" in source
 
 
 @pytest.mark.parametrize(
@@ -293,7 +546,7 @@ def test_every_correction_requires_direct_writeback_or_explicit_none() -> None:
     (
         (
             Path("ips-microkernel/procedures/implement.md"),
-            "Do not use past-mistake guides as templates",
+            "Do not read prior Implementation Prune Stage A occurrence files",
         ),
         (
             Path("ips-microkernel/ci/procedures/preflight.md"),
@@ -301,7 +554,7 @@ def test_every_correction_requires_direct_writeback_or_explicit_none() -> None:
         ),
         (
             Path("ips-microkernel/procedures/publish.md"),
-            "Editing only PR title or body is head-neutral",
+            "Editing only live PR metadata preserves successful exact-head CI",
         ),
         (
             Path("ips-microkernel/procedures/publish.md"),
@@ -309,19 +562,32 @@ def test_every_correction_requires_direct_writeback_or_explicit_none() -> None:
         ),
         (
             Path("ips-microkernel/knowledge/behavior.md"),
-            "Phase, Trigger, Mistake, Check, Guard, and Evidence",
+            "Each rule contains exactly Trigger, HEAD effect, Problem, Detect, "
+            "Pass, Repair, and Origins",
+        ),
+        (
+            Path("ips-microkernel/knowledge/behavior.md"),
+            "automatically meets the Stage B recording requirement",
+        ),
+        (
+            Path("ips-microkernel/knowledge/behavior.md"),
+            "without requiring a push or CI run solely to prove that rule",
         ),
         (
             Path("ips-microkernel/ci/router.md"),
-            "what production-shaped proof must exercise",
+            "fallible duplicate-preserving correction notebook",
         ),
         (
-            Path("ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"),
-            "the lesson is non-material and has one canonical home",
+            Path("ips-microkernel/ci/knowledge/selector.md"),
+            "Do not read the CI Playbook after remote push",
+        ),
+        (
+            Path("ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"),
+            "Do not scan existing entries for reuse or deduplication",
         ),
     ),
 )
-def test_careless_mistake_contract_rejects_a_weakened_boundary(
+def test_operational_record_contract_rejects_a_weakened_boundary(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -789,7 +1055,6 @@ def test_governance_knowledge_write_route_is_complete(
         Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/adr/index.md"),
         Path("ips-microkernel/delivery/index.md"),
-        Path("ips-microkernel/knowledge/behavior.md"),
     }
 
     expected_write_guards = {
@@ -818,13 +1083,12 @@ def test_governance_knowledge_write_route_is_complete(
             "not permission for the reviewer",
         ),
         Path("ips-microkernel/ci/procedures/failure-triage.md"): (
-            "Promote only a new reusable decision rule",
-            "Update one canonical knowledge leaf or add one routed leaf",
+            "Do not preload CI Playbook history before the concrete correction",
+            "Append Origin, Trigger, Mistake, and Correction without scanning",
         ),
         Path("ips-microkernel/ci/procedures/post-merge-reconcile.md"): (
-            "Revise or add one knowledge leaf",
-            "focused playbook-update Issue",
-            "Publish a knowledge change only through its focused Issue",
+            "checks correction-record completeness",
+            "does not prove, deduplicate, promote, or curate CI Playbook entries",
         ),
     }
     for path, fragments in expected_write_guards.items():

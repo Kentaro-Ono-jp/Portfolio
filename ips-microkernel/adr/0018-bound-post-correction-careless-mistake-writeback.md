@@ -1,6 +1,6 @@
 # ADR-0018: Bound post-correction careless-mistake write-back
 
-- Status: Accepted
+- Status: Superseded by ADR-0019
 - Date: 2026-08-01
 - Deciders: ReactorFront
 - Amends: ADR-0017 direct-implementer promotion boundary

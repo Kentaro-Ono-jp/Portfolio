@@ -1,146 +1,203 @@
-# Behavior implementation careless-mistake guide
+# Implementation Prune Stage B checklist
 
 <!-- ips-role: knowledge -->
-<!-- ips-rule: behavior-careless-mistake-guide -->
+<!-- ips-rule: stage-b-pre-review-checklist -->
 
 ## Read when
 
-Do not read this guide before the first complete Behavior implementation. Read
-only the applicable phase: `pre-CI` in Gate A after the complete local behavior
-delta is committed, or `pre-review` in Gate B after exact-head CI succeeds.
+Read this checklist only after exact-head GitHub Actions succeeds and
+immediately before initial review or re-review dispatch. This execution point
+is Implementation Prune Stage B inside publication Gate B.
 
-## Entry contract
+Do not read it during first-pass implementation, publication Gate A,
+pre-push hardening, CI Playbook selection, or Stage A recording.
 
-Add a reusable entry only when stable real review or CI evidence exists,
-recurrence is plausible, the check has a clear actionable answer, the check is
-cheap compared with another dispatch cycle, and the lesson changes future
-Behavior implementation. Each entry contains exactly Phase, Trigger, Mistake,
-Check, Guard, and Evidence. Do not store material design decisions, one-off
-product bugs, speculation, secrets, private payloads, or an incident ledger.
+## Rule contract
 
-## Entries
+Each rule contains exactly Trigger, HEAD effect, Problem, Detect, Pass, Repair,
+and Origins.
+
+- `HEAD effect` is `neutral` when repairing the detected live problem does not
+  change the Git commit, branch ref, tree, or PR head SHA; otherwise it is
+  `moving`.
+- `Detect` is a mechanically decidable procedure.
+- `Pass` states the exact acceptable result.
+- `Repair` gives the concrete correction procedure.
+- `Origins` records provenance, not proof.
+
+Rule titles are unique. Reuse or strengthen one canonical rule for a repeated
+signal; never add a duplicate. Stage B rules have no Evidence, Proof, Status,
+proved/unproved classification, or permanence claim.
+
+## Rules
 
 ### Authenticate before request validation
 
-- **Phase:** `pre-CI`
 - **Trigger:** A protected request boundary adds or changes path, header, body,
   or multipart validation.
-- **Mistake:** Anonymous malformed input reaches validation before the
+- **HEAD effect:** `moving`
+- **Problem:** Anonymous malformed input reaches validation before the
   capability-specific authentication boundary.
-- **Check:** Does authentication fail closed before every affected validation
-  path, including malformed unauthenticated input?
-- **Guard:** Exercise anonymous and authenticated malformed requests; require
-  canonical authentication failure before validation and zero protected service
-  calls for the anonymous cases.
-- **Evidence:** PR #57
+- **Detect:** Execute anonymous and authenticated malformed requests through
+  every affected production request boundary and capture response class plus
+  protected service-call count.
+- **Pass:** Every anonymous case returns canonical authentication failure
+  before validation with zero protected service calls; authenticated malformed
+  cases reach canonical validation.
+- **Repair:** Move the authentication dependency ahead of request validation
+  on each affected route and add boundary tests for both actor states.
+- **Origins:** PR #57
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5142938286).
 
 ### Publish exact review endpoints
 
-- **Phase:** `pre-review`
 - **Trigger:** Initial review or re-review is ready to dispatch.
-- **Mistake:** The PR description names a branch or head but omits the exact
-  full live base and head SHAs.
-- **Check:** Do the current-review base and head in the live PR description
-  equal the live PR endpoints exactly?
-- **Guard:** Read live base/head, update both full SHAs in the PR body and review
-  prompt, then read the body back before dispatch.
-- **Evidence:** PR #57
-  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143276537).
+- **HEAD effect:** `neutral`
+- **Problem:** The PR description or review prompt omits or misstates the live
+  full base and head SHAs, or the description's selected, executed, carried,
+  and skipped inventory differs from the exact-head Actions output.
+- **Detect:** Read the live PR base and head full SHAs and the exact-head
+  Actions plan, then parse both declared endpoints plus selected, executed,
+  carried, and skipped groups from the live PR description and copyable review
+  prompt.
+- **Pass:** Both declared base values equal the live base, both declared head
+  values equal the live head, the PR evidence inventory equals the exact-head
+  Actions inventory, and the PR head is unchanged by metadata repair.
+- **Repair:** Replace every declared endpoint with the live full SHA, publish
+  the exact-head selected, executed, carried, and skipped inventory, update the
+  prompt, save the PR description, and read the live metadata back before
+  dispatch.
+- **Origins:** PR #57
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143276537),
+  PR #64
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/64#issuecomment-5150763750).
+
+### Enforce exact operational record schemas
+
+- **Trigger:** A Stage A, Stage B, or CI Playbook record contract or validator
+  is added or changed.
+- **HEAD effect:** `moving`
+- **Problem:** Documentation verification filters for allowed labels and lets
+  an unknown field heading or blank required value pass.
+- **Detect:** For every affected record type, run a complete valid fixture,
+  then mutate it once with an unknown field and once per blank required field.
+- **Pass:** The valid fixture passes, duplicate policy remains intact, and
+  every unknown-field or blank-value mutation fails.
+- **Repair:** Parse every field heading instead of filtering allowed labels,
+  require the exact ordered schema and non-empty values, and retain the full
+  focused mutation matrix.
+- **Origins:** PR #64
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/64#issuecomment-5150763750).
 
 ### Invalidate head-bound review evidence
 
-- **Phase:** `pre-review`
 - **Trigger:** A correction push moved the PR head before re-review.
-- **Mistake:** The PR description or prompt presents old endpoints, CI, or a
-  previous verdict as current-head evidence.
-- **Check:** Are current and preceding evidence classified against the live
-  head, with every correction and lifecycle link present?
-- **Guard:** Require live pushed-head equality, exact-head successful CI, and a
-  metadata read-back before reviewer dispatch.
-- **Evidence:** PR #57
+- **HEAD effect:** `neutral`
+- **Problem:** PR metadata presents old endpoints, CI, or a prior verdict as
+  current-head evidence.
+- **Detect:** Compare every current/preceding evidence label, workflow head,
+  correction link, and review endpoint in the live PR description with the
+  live PR head.
+- **Pass:** Only successful evidence for the live head is current, all older
+  evidence is preceding or superseded, every correction is linked, and the
+  metadata read-back leaves the PR head unchanged.
+- **Repair:** Relabel stale evidence, publish the live full base/head, attach
+  the current exact-head workflow and correction chain, then read back the
+  description before dispatch.
+- **Origins:** PR #57
   [approved correction](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143423042).
 
 ### Authorize a target before idempotency classification
 
-- **Phase:** `pre-CI`
 - **Trigger:** A protected resource mutation combines ownership hiding with an
-  idempotency key or other request-scoped replay record.
-- **Mistake:** A reused key is classified before the target is authorized, so
-  a hidden target returns a conflict that a fresh key would not reveal.
-- **Check:** Is target authorization resolved before every target-bound replay
-  or conflict decision while authorized replay still works?
-- **Guard:** Cross hidden and owned targets with reused and fresh keys; require
-  identical not-found responses and zero mutation for hidden targets, then
-  preserve exact replay and conflict behavior for owned targets.
-- **Evidence:** PR #61
+  idempotency key or other target-bound replay record.
+- **HEAD effect:** `moving`
+- **Problem:** A reused key is classified before target authorization, so a
+  hidden target returns a distinguishable conflict.
+- **Detect:** Cross hidden and owned targets with reused and fresh keys through
+  every affected adapter and inspect response plus mutation counts.
+- **Pass:** Hidden targets always return the same not-found result with zero
+  mutation, while owned-target replay and conflict behavior remains intact.
+- **Repair:** Resolve target authorization before replay/conflict
+  classification and add the complete hidden/owned by reused/fresh matrix to
+  the affected adapter proof.
+- **Origins:** PR #61
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
 
 ### Enforce closed request contracts at runtime
 
-- **Phase:** `pre-CI`
 - **Trigger:** An OpenAPI request object uses `additionalProperties: false` or
   otherwise reserves server-derived fields.
-- **Mistake:** The runtime model silently drops an extra actor-looking field
-  and accepts a body that the published contract rejects.
-- **Check:** Does the runtime request model reject every property outside the
-  closed contract, including a valid body plus one reserved-looking field?
-- **Guard:** Send a contract-valid body with one extra property through the
-  real request-validation boundary; require the canonical validation response
-  and zero protected service calls.
-- **Evidence:** PR #61
+- **HEAD effect:** `moving`
+- **Problem:** The runtime model silently drops an extra property accepted by
+  transport even though the published contract rejects it.
+- **Detect:** Send a contract-valid authenticated request plus one
+  reserved-looking extra property through the production request boundary and
+  count protected service calls.
+- **Pass:** Runtime returns canonical validation failure and makes zero
+  protected service calls.
+- **Repair:** Configure the runtime request model to forbid extras and add a
+  real-boundary regression test using a valid body plus one extra property.
+- **Origins:** PR #61
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
 
 ### Serialize only reachable discriminated states
 
-- **Phase:** `pre-CI`
 - **Trigger:** A response union represents domain states whose discriminator
   constrains relationships among other fields.
-- **Mistake:** The contract or serializer accepts a discriminator-and-field
-  combination that persistence rejects as impossible.
-- **Check:** Do the response variants encode the same relational invariants as
-  the domain and persistence boundary?
-- **Guard:** Exercise every reachable variant and at least one impossible field
-  combination per discriminator through both contract validation and runtime
-  serialization.
-- **Evidence:** PR #61
+- **HEAD effect:** `moving`
+- **Problem:** Contract validation or runtime serialization accepts an
+  impossible discriminator-and-field combination.
+- **Detect:** Validate and serialize every reachable variant plus at least one
+  impossible field combination per discriminator.
+- **Pass:** Every reachable variant succeeds and every relationally impossible
+  variant fails at both canonical schema and runtime serializer boundaries.
+- **Repair:** Encode the relational invariant in the discriminated variants,
+  regenerate types, and add positive and inverse-negative fixtures.
+- **Origins:** PR #61
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
 
 ### Enforce constrained request parameters at runtime
 
-- **Phase:** `pre-CI`
 - **Trigger:** OpenAPI adds or changes a pattern, range, format, or enum for a
   path, query, header, or cookie parameter.
-- **Mistake:** The runtime accepts malformed transport syntax and lets domain
-  logic reclassify it as a different failure than the published validation
-  response.
-- **Check:** Does the production request boundary enforce the exact canonical
-  parameter constraint before the protected service is called?
-- **Guard:** Send an otherwise-valid authenticated request with one malformed
-  constrained parameter; require canonical validation failure and zero service
-  or state mutation.
-- **Evidence:** PR #61
+- **HEAD effect:** `moving`
+- **Problem:** Runtime transport accepts malformed syntax and lets domain logic
+  reclassify it as a different failure.
+- **Detect:** Send an otherwise-valid authenticated request with one malformed
+  constrained parameter and capture response plus service/state mutation.
+- **Pass:** The production request boundary returns canonical validation
+  failure before service invocation with zero state mutation.
+- **Repair:** Apply the exact canonical constraint at the runtime parameter
+  parser and add a production-boundary regression test.
+- **Origins:** PR #61
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
 
-## Phase boundary
+## Execution and correction
 
-A failed `pre-CI` entry blocks push. A failed `pre-review` entry blocks reviewer
-dispatch. Editing only the PR title or body does not change the Git commit,
-branch ref, tree, or PR head SHA, so successful exact-head CI remains valid.
-Any repository-file correction, including this guide, moves HEAD after commit
-and returns through Gate A, push read-back, and new exact-head CI.
+A failed triggered rule blocks reviewer dispatch.
 
-## Direct write-back
+For a `moving` repair, correct the repository, append Stage A when applicable,
+then return through publication Gate A: read selected CI Playbook leaves before
+remote push, repair test/proof scripts, push one complete candidate, obtain new
+exact-head CI, and run Stage B again. Do not duplicate the rule that found the
+problem.
 
-After a review or CI correction, classify every reusable careless-mistake
-lesson before the next push. Strengthen an existing atomic entry when it owns
-the lesson; otherwise add one entry in the correct phase. Split compound
-Behavior and Proof lessons and write the Proof part through the CI knowledge
-selector. If no lesson meets the entry contract, publish `Knowledge
-write-back: none` with a concrete rationale in the PR correction evidence.
-There is no pending intake queue.
+For a `neutral` repair, correct the live PR surface first and read it back. A
+HEAD-neutral problem automatically meets the Stage B recording requirement.
+After the repair, add or strengthen one deduplicated `neutral` rule with
+mechanical Detect, exact Pass, and concrete Repair text. Then run Stage B again
+without requiring a push or CI run solely to prove that rule. Successful
+exact-head CI remains valid because the live product head did not move.
+
+If repository persistence of a rule later moves `HEAD`, ordinary candidate CI
+applies to the changed repository head; it does not certify the Stage B rule.
+
+After an adjudicated review correction, update this checklist only after the
+correction and only when it yields a cheap unambiguous machine check. If it
+does not, write nothing. Never publish a `Stage B record: none` placeholder.
 
 ## Return
 
-Return to the calling Gate A or Gate B workflow after checking only the current
-phase and triggered entries.
+Return to publication after every triggered rule passes against the live
+review candidate and metadata.
