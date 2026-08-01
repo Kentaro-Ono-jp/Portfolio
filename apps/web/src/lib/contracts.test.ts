@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  auditHistorySchema,
   documentAcceptedSchema,
   documentStatusSchema,
   isTerminalStatus,
@@ -9,6 +10,7 @@ import {
 import {
   acceptedDocument,
   acceptedStatus,
+  auditHistoryWithTimestamps,
   canonicalProblem,
   STARTED_AT,
   completedStatus,
@@ -65,6 +67,42 @@ describe("generated contract runtime schemas", () => {
     ).toBe(false);
     expect(
       problemSchema.safeParse({ ...canonicalProblem, status: 200 }).success,
+    ).toBe(false);
+  });
+
+  it("orders offset audit timestamps by instant and event identity", () => {
+    const chronological = auditHistoryWithTimestamps(
+      "2026-01-01T00:00:00Z",
+      "2025-12-31T19:00:00.100000-05:00",
+      "2026-01-01T01:00:01+01:00",
+    );
+    expect(auditHistorySchema.safeParse(chronological).success).toBe(true);
+    expect(
+      auditHistorySchema.safeParse({
+        ...chronological,
+        events: [
+          chronological.events[1]!,
+          chronological.events[0]!,
+          chronological.events[2]!,
+        ],
+      }).success,
+    ).toBe(false);
+
+    const tiedInstants = auditHistoryWithTimestamps(
+      "2026-01-01T00:00:00Z",
+      "2025-12-31T19:00:00.000000-05:00",
+      "2026-01-01T00:00:01Z",
+    );
+    expect(auditHistorySchema.safeParse(tiedInstants).success).toBe(true);
+    expect(
+      auditHistorySchema.safeParse({
+        ...tiedInstants,
+        events: [
+          tiedInstants.events[1]!,
+          tiedInstants.events[0]!,
+          tiedInstants.events[2]!,
+        ],
+      }).success,
     ).toBe(false);
   });
 

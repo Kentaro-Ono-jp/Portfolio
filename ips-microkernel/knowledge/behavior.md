@@ -173,6 +173,28 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #61
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
 
+### Normalize semantic timestamps before ordering
+
+- **Trigger:** A request, response, or event sequence orders accepted RFC 3339
+  timestamps and uses another field as a deterministic tie-break.
+- **HEAD effect:** `moving`
+- **Problem:** Raw timestamp text order differs from chronological order when
+  valid offsets or variable fractional precision represent the instants.
+- **Detect:** At the canonical schema, submit a real-time ascending sequence
+  whose timestamp strings cross offsets and fractional widths, its real-time
+  descending inverse, and two equivalent instants whose canonical tie-break
+  fields are ascending then descending. Replay the ascending sequence and its
+  inverse through every affected production boundary.
+- **Pass:** The ascending sequence succeeds, the descending inverse fails, and
+  equivalent instants are accepted only in deterministic canonical tie-break
+  order without truncating accepted fractional precision.
+- **Repair:** Parse the accepted timestamp into an offset-adjusted UTC whole
+  second plus a precision-preserved fractional value, compare the normalized
+  instant first, canonicalize the tie-break field, and retain positive plus
+  inverse-negative fixtures at schema and production boundaries.
+- **Origins:** PR #68
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152827215).
+
 ### Exclude private browser content from failure artifacts
 
 - **Trigger:** A browser or runtime verifier can retain submitted source,

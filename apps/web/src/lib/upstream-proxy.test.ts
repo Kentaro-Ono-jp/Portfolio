@@ -16,6 +16,7 @@ import {
   acceptedDocument,
   approvedReview,
   auditHistory,
+  auditHistoryWithTimestamps,
   canonicalProblem,
   completedStatus,
   correctedReview,
@@ -314,6 +315,45 @@ describe("upstream document proxy", () => {
         vi
           .fn<typeof fetch>()
           .mockResolvedValue(upstreamJson(reversedAudit, 200)),
+      ),
+    );
+    expect(invalidAudit.status).toBe(502);
+  });
+
+  it("normalizes offset audit chronology at the upstream boundary", async () => {
+    const chronological = auditHistoryWithTimestamps(
+      "2026-01-01T00:00:00Z",
+      "2025-12-31T19:00:00.100000-05:00",
+      "2026-01-01T01:00:01+01:00",
+    );
+    const validAudit = await proxyDocumentAuditHistory(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/audit-events`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(upstreamJson(chronological, 200)),
+      ),
+    );
+    expect(validAudit.status).toBe(200);
+
+    const reversedChronology = {
+      ...chronological,
+      events: [
+        chronological.events[1]!,
+        chronological.events[0]!,
+        chronological.events[2]!,
+      ],
+    };
+    const invalidAudit = await proxyDocumentAuditHistory(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/audit-events`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(upstreamJson(reversedChronology, 200)),
       ),
     );
     expect(invalidAudit.status).toBe(502);

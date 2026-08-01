@@ -14,6 +14,7 @@ import {
   acceptedDocument,
   approvedReview,
   auditHistory,
+  auditHistoryWithTimestamps,
   canonicalProblem,
   completedStatus,
   CORRELATION_ID,
@@ -139,6 +140,39 @@ describe("browser API client", () => {
         jsonResponse({
           ...auditHistory,
           events: [...auditHistory.events].reverse(),
+        }),
+      ),
+    );
+    await expect(getDocumentAuditHistory(DOCUMENT_ID)).rejects.toMatchObject({
+      problem: { code: "WEB_INVALID_RESPONSE" },
+    });
+  });
+
+  it("normalizes offset audit chronology at the browser boundary", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => CORRELATION_ID });
+    const chronological = auditHistoryWithTimestamps(
+      "2026-01-01T00:00:00Z",
+      "2025-12-31T19:00:00.100000-05:00",
+      "2026-01-01T01:00:01+01:00",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(chronological)),
+    );
+    await expect(getDocumentAuditHistory(DOCUMENT_ID)).resolves.toEqual(
+      chronological,
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          ...chronological,
+          events: [
+            chronological.events[1]!,
+            chronological.events[0]!,
+            chronological.events[2]!,
+          ],
         }),
       ),
     );

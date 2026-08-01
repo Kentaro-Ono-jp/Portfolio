@@ -143,3 +143,17 @@ export const auditHistory: AuditHistory = {
     },
   ],
 };
+
+export function auditHistoryWithTimestamps(
+  first: string,
+  second: string,
+  third: string,
+): AuditHistory {
+  return {
+    ...auditHistory,
+    events: auditHistory.events.map((event, index) => ({
+      ...event,
+      occurredAt: [first, second, third][index]!,
+    })),
+  };
+}
