@@ -201,6 +201,12 @@ def cleanup(database_url: str) -> None:
         engine.dispose()
 
 
+def restore_head_and_cleanup(database_url: str, config: Config) -> None:
+    if current_revision(database_url) != HEAD_REVISION:
+        command.upgrade(config, HEAD_REVISION)
+    cleanup(database_url)
+
+
 def main() -> int:
     settings = Settings()
     config = alembic_config(settings.database_url)
@@ -212,14 +218,27 @@ def main() -> int:
     elif revision != BASE_REVISION:
         raise RuntimeError(f"Unexpected migration starting revision: {revision}")
 
-    prepare_foundation_fixture(settings.database_url)
-    command.upgrade(config, HEAD_REVISION)
-    verify_preserved_fixture(settings.database_url, expect_review_tables=True)
-    command.downgrade(config, BASE_REVISION)
-    verify_preserved_fixture(settings.database_url, expect_review_tables=False)
-    command.upgrade(config, HEAD_REVISION)
-    verify_preserved_fixture(settings.database_url, expect_review_tables=True)
-    cleanup(settings.database_url)
+    primary_error: BaseException | None = None
+    try:
+        prepare_foundation_fixture(settings.database_url)
+        command.upgrade(config, HEAD_REVISION)
+        verify_preserved_fixture(settings.database_url, expect_review_tables=True)
+        command.downgrade(config, BASE_REVISION)
+        verify_preserved_fixture(settings.database_url, expect_review_tables=False)
+        command.upgrade(config, HEAD_REVISION)
+        verify_preserved_fixture(settings.database_url, expect_review_tables=True)
+    except BaseException as error:
+        primary_error = error
+        raise
+    finally:
+        try:
+            restore_head_and_cleanup(settings.database_url, config)
+        except Exception as cleanup_error:
+            if primary_error is None:
+                raise
+            primary_error.add_note(
+                f"Runtime restoration also failed: {cleanup_error!r}"
+            )
 
     evidence = {
         "fromRevision": BASE_REVISION,
