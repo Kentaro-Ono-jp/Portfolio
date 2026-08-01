@@ -362,11 +362,46 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
             "/api/v1/documents/not-a-uuid",
             headers={CORRELATION_HEADER: str(CORRELATION_ID)},
         )
+        invalid_review_path = client.put(
+            "/api/v1/documents/not-a-uuid/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": f'"{"0" * 64}"',
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        invalid_review_body = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"unexpected": True},
+            headers={
+                "If-Match": f'"{"0" * 64}"',
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        invalid_idempotency_key = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": f'"{"0" * 64}"',
+                "Idempotency-Key": "not-a-uuid",
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        invalid_audit_path = client.get(
+            "/api/v1/documents/not-a-uuid/audit-events",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
 
     contracts = [
         (missing_file, "/api/v1/documents", "post"),
         (invalid_header, "/api/v1/documents", "post"),
         (invalid_path, "/api/v1/documents/{documentId}", "get"),
+        (invalid_review_path, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_review_body, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_idempotency_key, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_audit_path, "/api/v1/documents/{documentId}/audit-events", "get"),
     ]
     for response, path, method in contracts:
         assert response.status_code == 422
@@ -385,6 +420,9 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
     assert invalid_header.headers[CORRELATION_HEADER] != "not-a-uuid"
     assert invalid_path.headers[CORRELATION_HEADER] == str(CORRELATION_ID)
     assert not repository.submissions
+    assert not repository.reviews
+    assert not repository.idempotency_records
+    assert not repository.audit_events
     assert not storage.objects
 
 
