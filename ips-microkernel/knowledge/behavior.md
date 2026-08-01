@@ -173,6 +173,31 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #61
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
 
+### Exclude private browser content from failure artifacts
+
+- **Trigger:** A browser or runtime verifier can retain submitted source,
+  submitted private data, private profile claims, screenshots, video, trace
+  resources, or HTML reports for failure diagnosis.
+- **HEAD effect:** `moving`
+- **Problem:** A credential-only pattern scan can approve a public failure
+  artifact that still contains opaque private content or a rendered browser
+  container.
+- **Detect:** Register one opaque canary for each accepted private-content
+  category, place raw and encoded forms in an ordinary file and ZIP member,
+  place trace and rendered-media containers under the public artifact root,
+  then execute sanitization and the post-sanitization scan.
+- **Pass:** Every registered raw or encoded canary is absent after sanitization,
+  canary values are absent from the report, browser trace/rendered containers
+  are outside the public upload root, and any such container left in that root
+  fails the upload gate.
+- **Repair:** Move browser-owned binary and report containers to a non-uploaded
+  root, register exact submitted/profile canaries before browser navigation,
+  redact their raw and encoded forms from public ordinary files and ZIP
+  members, re-scan with the same in-memory canaries, and block upload on any
+  remaining private container or value.
+- **Origins:** PR #68
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152433244).
+
 ## Execution and correction
 
 A failed triggered rule blocks reviewer dispatch.

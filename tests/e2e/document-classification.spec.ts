@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { expect, test, type Page, type Response } from "@playwright/test";
@@ -13,6 +13,45 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ENTITY_TAG_PATTERN = /^"[a-f0-9]{64}"$/u;
 const ARTIFACT_ROOT = path.resolve("artifacts/verification");
+const PRIVATE_ARTIFACT_ROOT = path.resolve("artifacts/private-verification");
+const SENSITIVE_CANARY_MANIFEST = path.join(
+  ARTIFACT_ROOT,
+  ".artifact-sensitive-canaries.json",
+);
+
+interface SensitiveCanary {
+  category:
+    | "private profile claim"
+    | "submitted private data"
+    | "submitted source text";
+  encoding: "base64" | "utf8";
+  value: string;
+}
+
+function sensitiveCanary(
+  category: SensitiveCanary["category"],
+  value: Buffer | string,
+): SensitiveCanary {
+  return typeof value === "string"
+    ? { category, encoding: "utf8", value }
+    : { category, encoding: "base64", value: value.toString("base64") };
+}
+
+function sourceTextCanaries(file: string): SensitiveCanary[] {
+  return readFileSync(file, "utf8")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => sensitiveCanary("submitted source text", line));
+}
+
+function writeSensitiveCanaryManifest(canaries: SensitiveCanary[]): void {
+  writeFileSync(
+    SENSITIVE_CANARY_MANIFEST,
+    `${JSON.stringify({ version: 1, canaries }, null, 2)}\n`,
+    "utf8",
+  );
+}
 
 interface AcceptedPayload {
   documentId: string;
@@ -293,6 +332,23 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
 }) => {
   test.slow();
   mkdirSync(ARTIFACT_ROOT, { recursive: true });
+  mkdirSync(PRIVATE_ARTIFACT_ROOT, { recursive: true });
+  const invoiceSource = canonicalInvoicePdf();
+  const correctionSource = syntheticCorrectionReportPdf();
+  const invalidPdfSource = Buffer.from("%PDF-1.7\ninvalid", "ascii");
+  const invalidLocalSource = Buffer.from("not a pdf", "utf8");
+  const sensitiveCanaries = [
+    sensitiveCanary("private profile claim", "reviewer@synthetic.invalid"),
+    sensitiveCanary("private profile claim", "synthetic-reviewer"),
+    sensitiveCanary("private profile claim", "reactorfront-reviewers"),
+    sensitiveCanary("submitted private data", invoiceSource),
+    sensitiveCanary("submitted private data", correctionSource),
+    sensitiveCanary("submitted private data", invalidPdfSource),
+    sensitiveCanary("submitted private data", invalidLocalSource),
+    ...sourceTextCanaries("tests/fixtures/canonical_invoice.txt"),
+    ...sourceTextCanaries("tests/fixtures/synthetic_correction_report.txt"),
+  ];
+  writeSensitiveCanaryManifest(sensitiveCanaries);
   let uploadRequests = 0;
   page.on("request", (request) => {
     if (
@@ -336,7 +392,6 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     })),
   ).toEqual({ local: [], session: [] });
 
-  const invoiceSource = canonicalInvoicePdf();
   const approvalResponses = await upload(
     page,
     {
@@ -432,6 +487,12 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     reviewVersion: 1,
   });
   expect(approved.reviewerPrincipalId).toMatch(UUID_PATTERN);
+  if (approved.reviewerPrincipalId !== undefined) {
+    sensitiveCanaries.push(
+      sensitiveCanary("private profile claim", approved.reviewerPrincipalId),
+    );
+    writeSensitiveCanaryManifest(sensitiveCanaries);
+  }
   await expect(
     page.getByText("review.approved", { exact: true }),
   ).toBeVisible();
@@ -488,14 +549,13 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
   expect(staleDecision.status).toBe(412);
   expect(staleDecision.body?.code).toBe("PRECONDITION_FAILED");
   await page.screenshot({
-    path: path.join(ARTIFACT_ROOT, "e2e-approved-review.png"),
+    path: path.join(PRIVATE_ARTIFACT_ROOT, "e2e-approved-review.png"),
     fullPage: true,
   });
 
   await page
     .getByRole("button", { name: "Classify another PDF", exact: true })
     .click();
-  const correctionSource = syntheticCorrectionReportPdf();
   const correctionResponses = await upload(
     page,
     {
@@ -565,7 +625,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
   });
   expect(correctionAuditEvents.at(-1)?.reviewId).toMatch(UUID_PATTERN);
   await page.screenshot({
-    path: path.join(ARTIFACT_ROOT, "e2e-corrected-review.png"),
+    path: path.join(PRIVATE_ARTIFACT_ROOT, "e2e-corrected-review.png"),
     fullPage: true,
   });
 
@@ -577,7 +637,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     {
       name: "invalid-structure.pdf",
       mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.7\ninvalid", "ascii"),
+      buffer: invalidPdfSource,
     },
     "failed",
   );
@@ -600,7 +660,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
   await sourcePdfInput(page).setInputFiles({
     name: "not-a-pdf.txt",
     mimeType: "text/plain",
-    buffer: Buffer.from("not a pdf", "utf8"),
+    buffer: invalidLocalSource,
   });
   await page
     .getByRole("button", { name: "Start classification", exact: true })

@@ -146,7 +146,7 @@ jobs:
           overwrite: true
           retention-days: 1
 
-      - name: Scan verification artifacts for credential leakage
+      - name: Scan verification artifacts for private-content leakage
         id: artifact_safety
         if: always()
         run: python scripts/sanitize_verification_artifacts.py

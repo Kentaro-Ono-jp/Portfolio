@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import os
 import re
@@ -9,11 +11,18 @@ import zipfile
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote_from_bytes
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT_ROOT = REPOSITORY_ROOT / "artifacts" / "verification"
 REPORT_NAME = "artifact-leak-scan.json"
+CANARY_MANIFEST_NAME = ".artifact-sensitive-canaries.json"
+CANARY_CATEGORIES = frozenset(
+    {"private profile claim", "submitted private data", "submitted source text"}
+)
+PRIVATE_BROWSER_DIRECTORIES = frozenset({"playwright", "playwright-report"})
+PRIVATE_BROWSER_SUFFIXES = frozenset({".jpeg", ".jpg", ".mp4", ".pdf", ".png", ".webm"})
 Replacement = bytes | Callable[[re.Match[bytes]], bytes]
 
 
@@ -22,6 +31,17 @@ class SecretPattern:
     label: str
     expression: re.Pattern[bytes]
     replacement: Replacement
+
+
+@dataclass(frozen=True, slots=True)
+class SensitiveCanary:
+    category: str
+    value: bytes
+
+    @property
+    def replacement(self) -> bytes:
+        slug = self.category.replace(" ", "-").encode("ascii")
+        return b"[redacted-" + slug + b"]"
 
 
 def redact_after_prefix(match: re.Match[bytes]) -> bytes:
@@ -90,6 +110,88 @@ FORBIDDEN_PATTERNS: tuple[SecretPattern, ...] = (
 )
 
 
+def load_sensitive_canaries(root: Path) -> tuple[SensitiveCanary, ...]:
+    manifest = root / CANARY_MANIFEST_NAME
+    if not manifest.is_file():
+        return ()
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(
+            "The artifact sensitive-canary manifest is invalid."
+        ) from error
+    if not isinstance(payload, dict) or set(payload) != {"version", "canaries"}:
+        raise ValueError("The artifact sensitive-canary manifest shape is invalid.")
+    if payload["version"] != 1 or not isinstance(payload["canaries"], list):
+        raise ValueError("The artifact sensitive-canary manifest version is invalid.")
+
+    canaries: list[SensitiveCanary] = []
+    seen: set[tuple[str, bytes]] = set()
+    for item in payload["canaries"]:
+        if not isinstance(item, dict) or set(item) != {
+            "category",
+            "encoding",
+            "value",
+        }:
+            raise ValueError("A sensitive-canary entry shape is invalid.")
+        category = item["category"]
+        encoding = item["encoding"]
+        encoded_value = item["value"]
+        if (
+            category not in CANARY_CATEGORIES
+            or encoding not in {"base64", "utf8"}
+            or not isinstance(encoded_value, str)
+        ):
+            raise ValueError("A sensitive-canary entry is invalid.")
+        try:
+            value = (
+                base64.b64decode(encoded_value, validate=True)
+                if encoding == "base64"
+                else encoded_value.encode("utf-8")
+            )
+        except (UnicodeEncodeError, binascii.Error) as error:
+            raise ValueError("A sensitive-canary value is invalid.") from error
+        if len(value) < 8:
+            raise ValueError("Sensitive-canary values must contain at least 8 bytes.")
+        identity = (category, value)
+        if identity not in seen:
+            seen.add(identity)
+            canaries.append(SensitiveCanary(category=category, value=value))
+    if not canaries:
+        raise ValueError("The artifact sensitive-canary manifest is empty.")
+    return tuple(canaries)
+
+
+def canary_variants(value: bytes) -> tuple[bytes, ...]:
+    variants = {
+        value,
+        base64.b64encode(value),
+        base64.urlsafe_b64encode(value),
+        base64.urlsafe_b64encode(value).rstrip(b"="),
+        quote_from_bytes(value).encode("ascii"),
+    }
+    return tuple(
+        sorted((item for item in variants if len(item) >= 8), key=len, reverse=True)
+    )
+
+
+def private_browser_container(root: Path, path: Path) -> bool:
+    relative = path.relative_to(root)
+    private_directory = bool(
+        PRIVATE_BROWSER_DIRECTORIES.intersection(
+            part.casefold() for part in relative.parts
+        )
+    )
+    return (
+        private_directory
+        or (
+            relative.parent == Path(".")
+            and path.suffix.casefold() in PRIVATE_BROWSER_SUFFIXES
+        )
+        or path.name.casefold() == "trace.zip"
+    )
+
+
 def payloads(path: Path) -> Iterable[tuple[str, bytes]]:
     location = path.as_posix()
     if zipfile.is_zipfile(path):
@@ -110,7 +212,11 @@ def scannable_content(location: str, content: bytes) -> bytes:
     return content
 
 
-def sanitize_content(location: str, content: bytes) -> tuple[bytes, list[str]]:
+def sanitize_content(
+    location: str,
+    content: bytes,
+    canaries: Iterable[SensitiveCanary] = (),
+) -> tuple[bytes, list[str]]:
     protected_tags: list[bytes] = []
 
     def protect_testcase(match: re.Match[bytes]) -> bytes:
@@ -128,15 +234,29 @@ def sanitize_content(location: str, content: bytes) -> tuple[bytes, list[str]]:
     for index, tag in enumerate(protected_tags):
         placeholder = f"__REACTORFRONT_TESTCASE_{index:08d}__".encode()
         content = content.replace(placeholder, tag)
+    for canary in canaries:
+        found = False
+        for variant in canary_variants(canary.value):
+            if variant in content:
+                found = True
+                content = content.replace(variant, canary.replacement)
+        if found:
+            labels.append(canary.category)
     return content, list(dict.fromkeys(labels))
 
 
-def sanitize_artifacts(root: Path) -> dict[str, list[str]]:
+def sanitize_artifacts(
+    root: Path,
+    canaries: Iterable[SensitiveCanary] | None = None,
+) -> dict[str, list[str]]:
     sanitized: dict[str, list[str]] = {}
     if not root.exists():
         return sanitized
+    resolved_canaries = (
+        load_sensitive_canaries(root) if canaries is None else tuple(canaries)
+    )
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.name == REPORT_NAME:
+        if not path.is_file() or path.name in {CANARY_MANIFEST_NAME, REPORT_NAME}:
             continue
         if zipfile.is_zipfile(path):
             changed = False
@@ -156,7 +276,9 @@ def sanitize_artifacts(root: Path) -> dict[str, list[str]]:
                     for member in source.infolist():
                         content = source.read(member) if not member.is_dir() else b""
                         location = f"{path.as_posix()}!{member.filename}"
-                        cleaned, labels = sanitize_content(location, content)
+                        cleaned, labels = sanitize_content(
+                            location, content, resolved_canaries
+                        )
                         if labels:
                             changed = True
                             member_labels[location] = labels
@@ -171,37 +293,59 @@ def sanitize_artifacts(root: Path) -> dict[str, list[str]]:
                 raise
             continue
         content = path.read_bytes()
-        cleaned, labels = sanitize_content(path.as_posix(), content)
+        cleaned, labels = sanitize_content(path.as_posix(), content, resolved_canaries)
         if labels:
             path.write_bytes(cleaned)
             sanitized[path.as_posix()] = labels
     return sanitized
 
 
-def scan_artifacts(root: Path) -> dict[str, list[str]]:
+def scan_artifacts(
+    root: Path,
+    canaries: Iterable[SensitiveCanary] | None = None,
+) -> dict[str, list[str]]:
     findings: dict[str, list[str]] = {}
     if not root.exists():
         return findings
+    resolved_canaries = (
+        load_sensitive_canaries(root) if canaries is None else tuple(canaries)
+    )
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.name == REPORT_NAME:
+        if not path.is_file() or path.name in {CANARY_MANIFEST_NAME, REPORT_NAME}:
+            continue
+        if private_browser_container(root, path):
+            findings[path.as_posix()] = ["private browser artifact container"]
             continue
         for location, content in payloads(path):
-            content = scannable_content(location, content)
+            scannable = scannable_content(location, content)
             labels = [
                 secret.label
                 for secret in FORBIDDEN_PATTERNS
-                if secret.expression.search(content)
+                if secret.expression.search(scannable)
             ]
+            labels.extend(
+                canary.category
+                for canary in resolved_canaries
+                if any(variant in content for variant in canary_variants(canary.value))
+            )
             if labels:
                 findings[location] = list(dict.fromkeys(labels))
     return findings
 
 
 def write_report(
-    root: Path, scanned_files: int, sanitized: dict[str, list[str]]
+    root: Path,
+    scanned_files: int,
+    sanitized: dict[str, list[str]],
+    canaries: Iterable[SensitiveCanary] = (),
 ) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    labels = list(dict.fromkeys(secret.label for secret in FORBIDDEN_PATTERNS))
+    resolved_canaries = tuple(canaries)
+    labels = list(
+        dict.fromkeys(
+            [secret.label for secret in FORBIDDEN_PATTERNS] + sorted(CANARY_CATEGORIES)
+        )
+    )
     (root / REPORT_NAME).write_text(
         json.dumps(
             {
@@ -213,6 +357,10 @@ def write_report(
                     for label in labels
                 },
                 "forbiddenPatterns": labels,
+                "registeredCanaryCategories": sorted(
+                    {canary.category for canary in resolved_canaries}
+                ),
+                "privateBrowserArtifacts": "excluded from public artifact root",
             },
             indent=2,
             sort_keys=True,
@@ -224,7 +372,10 @@ def write_report(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Sanitize and reject credential material in verification artifacts."
+        description=(
+            "Sanitize and reject credentials and registered private content in "
+            "verification artifacts."
+        )
     )
     parser.add_argument("--artifacts", type=Path, default=DEFAULT_ARTIFACT_ROOT)
     return parser.parse_args()
@@ -233,8 +384,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     root = args.artifacts.resolve()
-    sanitized = sanitize_artifacts(root)
-    findings = scan_artifacts(root)
+    canaries = load_sensitive_canaries(root)
+    sanitized = sanitize_artifacts(root, canaries)
+    (root / CANARY_MANIFEST_NAME).unlink(missing_ok=True)
+    findings = scan_artifacts(root, canaries)
     if findings:
         print("Verification artifact leakage scan failed:")
         for location, found in sorted(findings.items()):
@@ -248,7 +401,7 @@ def main() -> int:
         if root.exists()
         else 0
     )
-    write_report(root, scanned_files, sanitized)
+    write_report(root, scanned_files, sanitized, canaries)
     print(
         "Verification artifact leakage scan passed for "
         f"{scanned_files} files; sanitized {len(sanitized)} payloads."
