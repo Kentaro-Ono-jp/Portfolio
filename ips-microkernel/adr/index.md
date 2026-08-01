@@ -29,6 +29,7 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0016: Adjudicate review findings before correction](0016-adjudicate-review-findings-before-correction.md)
 - [ADR-0017: Delegate evidence-bound knowledge curation](0017-delegate-evidence-bound-knowledge-curation.md)
 - [ADR-0019: Separate correction records, Stage B checks, and the pre-push CI Playbook](0019-separate-correction-records-from-pre-review-checks.md)
+- [ADR-0020: Authorize an owner-controlled focus scratchpad](0020-authorize-owner-controlled-focus-scratchpad.md)
 
 ## Superseded records
 

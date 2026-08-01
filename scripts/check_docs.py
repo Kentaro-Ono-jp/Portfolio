@@ -61,6 +61,7 @@ IPS_FILE_ROLES = {
     Path("ips-microkernel/review/router.md"): "router",
     Path("ips-microkernel/selectors/governance-knowledge.md"): "selector",
     Path("ips-microkernel/references/authority.md"): "reference",
+    Path("ips-microkernel/references/focus-scratchpad.md"): "reference",
     Path("ips-microkernel/references/live-state.md"): "reference",
     Path("ips-microkernel/references/public-safety.md"): "reference",
     Path("ips-microkernel/references/evidence.md"): "reference",
@@ -123,6 +124,7 @@ REQUIRED_GOVERNANCE_FILES = (
     Path(
         "ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"
     ),
+    Path("ips-microkernel/adr/0020-authorize-owner-controlled-focus-scratchpad.md"),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -147,6 +149,7 @@ CANONICAL_RULE_OWNERS = {
         "ips-microkernel/selectors/governance-knowledge.md"
     ),
     "actor-authority": Path("ips-microkernel/references/authority.md"),
+    "focus-scratchpad": Path("ips-microkernel/references/focus-scratchpad.md"),
     "bounded-live-state": Path("ips-microkernel/references/live-state.md"),
     "public-safety": Path("ips-microkernel/references/public-safety.md"),
     "issue-evidence": Path("ips-microkernel/references/evidence.md"),
@@ -204,6 +207,7 @@ REQUIRED_ROUTE_LINKS = {
     Path("ips-microkernel/work-router.md"): (
         Path("ips-microkernel/review/router.md"),
         Path("ips-microkernel/references/authority.md"),
+        Path("ips-microkernel/references/focus-scratchpad.md"),
         Path("ips-microkernel/references/live-state.md"),
         Path("ips-microkernel/references/local-tools.md"),
         Path("ips-microkernel/procedures/focus.md"),
@@ -218,6 +222,9 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/ci/router.md"),
         Path("ips-microkernel/delivery/index.md"),
         Path("ips-microkernel/adr/index.md"),
+    ),
+    Path("ips-microkernel/references/authority.md"): (
+        Path("ips-microkernel/references/focus-scratchpad.md"),
     ),
     Path("ips-microkernel/review/router.md"): (
         Path("ips-microkernel/review/setup.md"),
@@ -659,6 +666,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "GIT_AGENTS.md",
         "not a second source of rules",
     ),
+    Path(".gitignore"): (".noel-focus/",),
     Path("ips-microkernel/work-router.md"): (
         "progressive disclosure",
         "Select the first matching state",
@@ -667,6 +675,8 @@ REQUIRED_GOVERNANCE_TEXT = {
         "The only required owner-confirmation STOP",
         "An exact-head owner waiver is optional and owner-initiated",
         "reusable non-CI process or review knowledge",
+        "Open that reference only after deciding to use it",
+        "use or non-use creates no record",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/work-router.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/work-router.md")],
     ),
@@ -693,8 +703,21 @@ REQUIRED_GOVERNANCE_TEXT = {
         "CI Playbook appends a duplicate-allowed record",
         "reads selected CI Playbook leaves, and repairs test/proof scripts before `git push`",
         "not permission to silently curate unrelated governance",
+        "delegates the local `.noel-focus/` workspace",
+        "effects outside the delegated directory retain their ordinary authority",
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/references/authority.md")],
+    ),
+    Path("ips-microkernel/references/focus-scratchpad.md"): (
+        "only after the implementation agent decides to use",
+        "requires no trigger, justification, or record",
+        "delegates full discretion over `.noel-focus/`",
+        "create, read, update, execute, reorganize, retain, or delete",
+        "no required structure, template, size, retention period",
+        "No summary, deletion, or reconciliation is required",
+        "repository owner accepts responsibility",
+        "Their existence alone does not make them repository evidence",
+        "Any effect outside `.noel-focus/` remains governed",
     ),
     Path("ips-microkernel/references/live-state.md"): (
         "Do not enumerate every branch",
@@ -941,6 +964,16 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Split CI Playbook entries into proved and unproved stores",
         "Read the CI Playbook after push but before CI starts",
         "Separate operational recording from candidate proof",
+    ),
+    Path("ips-microkernel/adr/0020-authorize-owner-controlled-focus-scratchpad.md"): (
+        "owner-controlled, Git-ignored local workspace",
+        "full discretion over everything beneath that directory",
+        "has no required trigger, layout, template, naming scheme, size",
+        "owner accepts responsibility for contents, storage, retention",
+        "read only after the implementation agent decides to use the scratchpad",
+        "No tracked template, bootstrap file, or executable is provided",
+        "Effects outside `.noel-focus/` continue through the ordinary",
+        "Require focus-end cleanup or reconciliation",
     ),
     Path(
         "ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md"

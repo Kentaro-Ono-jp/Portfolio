@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
@@ -113,6 +114,10 @@ def test_progressive_routing_covers_the_complete_guidance_surface(
         Path("ips-microkernel/procedures/merge.md")
         in routes[Path("ips-microkernel/procedures/correct.md")]
     )
+    scratchpad = Path("ips-microkernel/references/focus-scratchpad.md")
+    assert scratchpad in routes[Path("ips-microkernel/work-router.md")]
+    assert scratchpad in routes[Path("ips-microkernel/references/authority.md")]
+    assert roles[scratchpad] == "reference"
     assert set(roles.values()) == {
         "router",
         "selector",
@@ -131,6 +136,7 @@ def test_every_canonical_rule_has_one_declared_owner(
     assert len(owners) == len(set(owners))
     assert len(owners.values()) == len(set(owners.values()))
     assert owners["actor-authority"] == Path("ips-microkernel/references/authority.md")
+    assert owners["focus-scratchpad"] == Path("ips-microkernel/references/focus-scratchpad.md")
     assert owners["ci-markdown-only-exception"] == Path(
         "ips-microkernel/ci/exceptions/markdown-only.md"
     )
@@ -150,6 +156,98 @@ def test_every_canonical_rule_has_one_declared_owner(
     assert owners["ci-knowledge-framework-runtime"] == Path(
         "ips-microkernel/ci/knowledge/framework-runtime.md"
     )
+
+
+def test_owner_authorized_focus_scratchpad_contract_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    scratchpad = Path("ips-microkernel/references/focus-scratchpad.md")
+    adr = Path("ips-microkernel/adr/0020-authorize-owner-controlled-focus-scratchpad.md")
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    source = (REPOSITORY_ROOT / scratchpad).read_text(encoding="utf-8")
+    ignore = (REPOSITORY_ROOT / ".gitignore").read_text(encoding="utf-8")
+    tracked_scratch = subprocess.run(
+        ["git", "ls-files", "--", ".noel-focus"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+
+    assert scratchpad in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert adr in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert ".noel-focus/" in ignore.splitlines()
+    assert tracked_scratch == []
+    assert "requires no trigger, justification, or record" in " ".join(source.split())
+    assert "create, read, update, execute, reorganize, retain, or delete" in " ".join(
+        source.split()
+    )
+    assert "No summary, deletion, or reconciliation is required" in " ".join(source.split())
+    assert all(
+        fragment in required_text[scratchpad]
+        for fragment in (
+            "delegates full discretion over `.noel-focus/`",
+            "repository owner accepts responsibility",
+            "Any effect outside `.noel-focus/` remains governed",
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "fragment"),
+    (
+        (
+            Path("ips-microkernel/work-router.md"),
+            "Open that reference only after deciding to use it",
+        ),
+        (
+            Path("ips-microkernel/references/authority.md"),
+            "effects outside the delegated directory retain their ordinary authority",
+        ),
+        (
+            Path("ips-microkernel/references/focus-scratchpad.md"),
+            "requires no trigger, justification, or record",
+        ),
+        (
+            Path("ips-microkernel/references/focus-scratchpad.md"),
+            "No summary, deletion, or reconciliation is required",
+        ),
+        (
+            Path("ips-microkernel/references/focus-scratchpad.md"),
+            "Their existence alone does not make them repository evidence",
+        ),
+        (
+            Path("ips-microkernel/adr/0020-authorize-owner-controlled-focus-scratchpad.md"),
+            "has no required trigger, layout, template, naming scheme, size",
+        ),
+        (Path(".gitignore"), ".noel-focus/"),
+    ),
+)
+def test_focus_scratchpad_contract_rejects_a_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+    fragment: str,
+) -> None:
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+    assert fragment in normalized
+    destination = tmp_path / relative_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        normalized.replace(fragment, "weakened scratchpad boundary"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_required_governance_text(
+        failures,
+        {relative_path: (fragment,)},
+    )
+
+    assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
 
 
 def test_stage_a_stage_b_and_ci_playbook_are_separately_routed(
@@ -539,6 +637,22 @@ def test_adr_0019_supersedes_0018_with_the_complete_operational_model(
     assert "Duplicate Mistake and Correction text is deliberate" in normalized
     assert "Stage B problem whose repair is HEAD-neutral" in source
     assert "Separate operational recording from candidate proof" in source
+
+
+def test_adr_0020_authorizes_an_unrestricted_local_focus_scratchpad(
+    documentation_checker: ModuleType,
+) -> None:
+    relative_path = Path("ips-microkernel/adr/0020-authorize-owner-controlled-focus-scratchpad.md")
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+
+    assert relative_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert "- Status: Accepted" in source
+    assert "owner-controlled, Git-ignored local workspace" in normalized
+    assert "full discretion over everything beneath that directory" in normalized
+    assert "has no required trigger, layout, template, naming scheme, size" in normalized
+    assert "No tracked template, bootstrap file, or executable is provided" in normalized
+    assert "Require focus-end cleanup or reconciliation" in source
 
 
 @pytest.mark.parametrize(
