@@ -30,14 +30,14 @@ routes until the selected route returns here with changed state.
 
 1. **Stable reusable candidates have complete disposition for every associated
    actionable finding and successful proof for every required correction, but
-   lack complete curation and are not an unresolved direct Behavior/Proof
-   correction write-back:** use
+   lack complete curation:** use
    [knowledge curation](procedures/curate-knowledge.md).
 2. **Independent initial review or re-review:** use the dedicated
    [review router](review/router.md).
-3. **A complete candidate is locally committed for pre-push hardening, a GitHub Actions run failed, a local
-   rehearsal is blocked, a Markdown-only exception is requested, or CI
-   knowledge must be reconciled:** use the
+3. **A complete candidate is locally committed for pre-push hardening, a
+   GitHub Actions run failed, a local rehearsal is blocked, a Markdown-only
+   exception is requested, or the current PR's CI correction records must be
+   reconciled:** use the
    [CI router](ci/router.md).
 4. **An exact feature merge is proved and reusable non-CI process or review
    knowledge must be reconciled:** use

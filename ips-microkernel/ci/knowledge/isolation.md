@@ -1,48 +1,40 @@
-# Runtime isolation knowledge
+# CI Playbook: runtime isolation corrections
 
 <!-- ips-role: knowledge -->
 <!-- ips-rule: ci-knowledge-isolation -->
 
 ## Read when
 
-Read this file when a verifier uses runtime fixtures, fault records, shared
-queues, or state that may survive or race another actor.
+Before remote push, read this leaf when a verifier uses runtime fixtures,
+fault records, shared queues, or state that may survive or race another actor.
 
-## Durable rule
+## Correction records
 
-Select records by deterministic identities owned by the check, not a global
-row that merely matches. Quiesce competing consumers before purging or
-asserting queue ownership. Clean owned data before the check and again in
-`finally`.
+### Own and clean runtime records deterministically
 
-## Stateful test doubles
+- **Origin:** PR #6
+  [run 29666718552](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29666718552)
+- **Trigger:** Runtime proof creates fault records, leases, or queue state that
+  another actor or earlier run may also own.
+- **Mistake:** A check selected a global matching row and shared stale database
+  state, preventing deterministic fault setup.
+- **Correction:** Select records by identities owned by the check, quiesce
+  competing consumers, clean owned data before execution and again in
+  `finally`, and avoid global-row assertions.
 
-### Preserve production failure precedence
+### Preserve production failure precedence in doubles
 
-- **Phase:** `pre-CI`
-- **Trigger:** A stateful test double represents a production repository or
-  adapter with more than one failure condition for the same operation.
-- **Mistake:** The double checks the right failures in a different order, so
-  API tests publish a failure model the production adapter does not preserve.
-- **Check:** Does the double return the same first failure as production for
-  every overlapping condition exercised by the feature?
-- **Guard:** Use one request that triggers two conditions against both the
-  double-backed boundary and production repository; require identical failure
-  precedence, then prove each later condition with the earlier one satisfied.
-- **Evidence:** PR #61
-  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
-
-## Historical evidence
-
-PR #6 [run 29666718552](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29666718552)
-could not create a simulated crashed-dispatcher lease because runtime proof
-shared stale database state. Fix
-[`58be144`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/58be144ae074da5616f6907c563a2007793aaba6)
-and [run 29666913637](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/29666913637)
-established deterministic ownership and cleanup. Guards remain in
-[`test_integration.py`](../../../apps/api/tests/test_integration.py) and
-[`verify_outbox_runtime.py`](../../../scripts/verify_outbox_runtime.py).
+- **Origin:** PR #61
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462)
+- **Trigger:** A stateful test double represents a production adapter with more
+  than one failure condition for the same operation.
+- **Mistake:** The double checked correct failures in a different order and
+  published a different first failure from production.
+- **Correction:** Trigger overlapping conditions against both double and
+  production adapter, require the same first failure as production, then cover
+  each later condition with the earlier one satisfied.
 
 ## Return
 
-Return to the calling CI procedure after proving owned state and isolation.
+Return to publication Gate A after repairing only the triggered isolation
+test/proof scripts.

@@ -6,7 +6,7 @@
 ## Read when
 
 Read this file after every focused PR merge, once exact merged-main proof and
-CI knowledge reconciliation are complete, or when a proved merge still has an
+CI correction reconciliation are complete, or when a proved merge still has an
 uncurated recovery, evidence, or cleanup candidate.
 
 ## Procedure
@@ -27,7 +27,9 @@ uncurated recovery, evidence, or cleanup candidate.
    [knowledge curation](curate-knowledge.md) and return here with every outcome.
    A post-merge candidate cannot use `promote-current-pr`.
 6. Return CI runner or Actions signals to the
-   [CI router](../ci/router.md). Return material product, delivery,
+   [CI router](../ci/router.md). Stage A occurrences, Stage B rules, and CI
+   Playbook records do not enter this governance candidate queue. Return
+   material product, delivery,
    architecture, security, or actor-authority signals to
    [focus](focus.md).
 7. Verify every `promote-follow-up` outcome links one bounded accepted focused

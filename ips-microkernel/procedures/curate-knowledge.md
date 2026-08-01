@@ -11,10 +11,11 @@ adjudication, and every required correction, if any, has successful exact-head
 proof or a qualified exception. Also read it for an uncurated late candidate
 during post-merge reconciliation.
 
-Do not enter this general curation role for an unresolved ADR-0018 direct
-Behavior/Proof careless-mistake write-back after a review or CI correction.
-That narrow non-material route is completed in Gate A first; any other reusable
-governance candidate returns here afterward.
+Do not enter this general curation role for Implementation Prune Stage A
+occurrences, Stage B operational rules, or CI Playbook correction records.
+ADR-0019 writes those after concrete corrections without Evidence admission,
+proof status, promotion, or curation. A separately identified reusable
+governance candidate may return here on its own evidence-bound route.
 
 ## Required inputs
 
@@ -51,8 +52,8 @@ deferred or follow-up Issue required by its disposition.
    every required correction, if any. A candidate with no associated
    actionable finding or required correction remains eligible; an unproved or
    stale candidate is not eligible for curation.
-4. Separate reusable Proof semantics, CI runner, and Actions signals to the
-   [CI router](../ci/router.md).
+4. Separate CI runner and Actions signals to the [CI router](../ci/router.md).
+   Do not route CI Playbook correction records here merely because they recur.
    Return material product, delivery, architecture, security, or actor-authority
    redefinition to [focus](focus.md). Continue here only for bounded reusable
    collaboration knowledge.
