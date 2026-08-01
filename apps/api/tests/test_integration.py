@@ -1022,6 +1022,29 @@ def test_review_concurrency_idempotency_and_audit_history_use_one_winner(
         repository.submit_review(conflicting_replay)
     assert captured.value.code is ReviewOperationFailureCode.IDEMPOTENCY_CONFLICT
 
+    hidden_document_id = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    with Session(engine) as session, session.begin():
+        session.add(
+            DocumentRow(
+                id=hidden_document_id,
+                submitted_by_principal_id=API_SYSTEM_PRINCIPAL_ID,
+                original_filename="hidden.pdf",
+                object_key=f"documents/{hidden_document_id}/source.pdf",
+                sha256="a" * 64,
+                content_type="application/pdf",
+                size_bytes=1,
+                created_at=NOW,
+            )
+        )
+    hidden_target_reuse = replace(
+        winning_command,
+        document_id=hidden_document_id,
+        decision_id=UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab"),
+    )
+    with pytest.raises(ReviewOperationError) as captured:
+        repository.submit_review(hidden_target_reuse)
+    assert captured.value.code is ReviewOperationFailureCode.DOCUMENT_NOT_FOUND
+
     assert table_count(engine, "review_decisions") == 1
     assert table_count(engine, "idempotency_records") == 1
     assert table_count(engine, "audit_events") == 3

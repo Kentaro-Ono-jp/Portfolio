@@ -344,6 +344,84 @@ def test_review_decision_etag_idempotency_and_audit_contract() -> None:
     ]
 
 
+def test_review_hides_cross_owner_target_before_idempotency_conflict() -> None:
+    client, repository, _storage = make_client()
+    hidden_document_id = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+    hidden_job_id = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+    hidden_owner_id = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+    fresh_key = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
+
+    with client:
+        accepted = client.post(
+            "/api/v1/documents",
+            files={"file": ("invoice.pdf", b"%PDF-1.7\ntest", "application/pdf")},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        assert accepted.status_code == 202
+        repository.records[DOCUMENT_ID] = DocumentStatusRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ProcessingStatus.COMPLETED,
+            created_at=NOW,
+            started_at=NOW,
+            completed_at=NOW,
+            predicted_class="invoice",
+            confidence=0.9876,
+            model_version="document-type-v1",
+        )
+        current = client.get(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        committed = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        assert committed.status_code == 200
+
+        repository.owners[hidden_document_id] = hidden_owner_id
+        repository.records[hidden_document_id] = DocumentStatusRecord(
+            document_id=hidden_document_id,
+            job_id=hidden_job_id,
+            status=ProcessingStatus.COMPLETED,
+            created_at=NOW,
+            started_at=NOW,
+            completed_at=NOW,
+            predicted_class="report",
+            confidence=0.9,
+            model_version="document-type-v1",
+        )
+        reused_key = client.put(
+            f"/api/v1/documents/{hidden_document_id}/review",
+            json={"finalClassification": "report"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        unused_key = client.put(
+            f"/api/v1/documents/{hidden_document_id}/review",
+            json={"finalClassification": "report"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(fresh_key),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+
+    assert reused_key.status_code == 404
+    assert reused_key.json() == unused_key.json()
+    assert reused_key.json()["code"] == "DOCUMENT_NOT_FOUND"
+    assert len(repository.reviews) == 1
+    assert len(repository.idempotency_records) == 1
+
+
 def test_request_validation_problems_match_contract_and_skip_service() -> None:
     client, repository, storage = make_client()
 
@@ -373,7 +451,10 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
         )
         invalid_review_body = client.put(
             f"/api/v1/documents/{DOCUMENT_ID}/review",
-            json={"unexpected": True},
+            json={
+                "finalClassification": "invoice",
+                "reviewerPrincipalId": str(PRINCIPAL_ID),
+            },
             headers={
                 "If-Match": f'"{"0" * 64}"',
                 "Idempotency-Key": str(IDEMPOTENCY_KEY),

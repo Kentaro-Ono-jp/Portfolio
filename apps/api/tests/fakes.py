@@ -152,6 +152,9 @@ class FakeRepository:
         )
 
     def submit_review(self, command: ReviewCommand) -> ReviewRecord:
+        current = self.get_review(command.document_id, command.principal_id)
+        if current is None:
+            raise ReviewOperationError(code=ReviewOperationFailureCode.DOCUMENT_NOT_FOUND)
         key = (command.principal_id, command.idempotency_key)
         existing_receipt = self.idempotency_records.get(key)
         if existing_receipt is not None:
@@ -159,9 +162,6 @@ class FakeRepository:
             if target != command.document_id or digest != command.request_digest:
                 raise ReviewOperationError(code=ReviewOperationFailureCode.IDEMPOTENCY_CONFLICT)
             return record
-        current = self.get_review(command.document_id, command.principal_id)
-        if current is None:
-            raise ReviewOperationError(code=ReviewOperationFailureCode.DOCUMENT_NOT_FOUND)
         if current.status is not ReviewStatus.UNREVIEWED:
             raise ReviewOperationError(code=ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE)
         if command.if_match != review_entity_tag(current):

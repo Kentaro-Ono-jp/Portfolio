@@ -220,6 +220,21 @@ def test_review_serializer_and_entity_tag_preserve_machine_evidence() -> None:
     assert serialize_review(terminal).status == "corrected"
     assert review_entity_tag(terminal) != first_tag
 
+    approved = ReviewRecord(
+        document_id=DOCUMENT_ID,
+        job_id=JOB_ID,
+        status=ReviewStatus.APPROVED,
+        machine_classification="report",
+        machine_confidence=Decimal("0.9876"),
+        model_version="document-type-v1",
+        review_version=1,
+        review_id=UUID("66666666-6666-4666-8666-666666666666"),
+        final_classification="report",
+        reviewer_principal_id=UUID("55555555-5555-4555-8555-555555555555"),
+        decided_at=NOW,
+    )
+    assert serialize_review(approved).status == "approved"
+
 
 @pytest.mark.parametrize(
     "record",
@@ -241,6 +256,32 @@ def test_review_serializer_and_entity_tag_preserve_machine_evidence() -> None:
             machine_confidence=Decimal("0.5"),
             model_version="v1",
             review_version=0,
+        ),
+        ReviewRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ReviewStatus.APPROVED,
+            machine_classification="invoice",
+            machine_confidence=Decimal("0.5"),
+            model_version="v1",
+            review_version=1,
+            review_id=UUID("44444444-4444-4444-8444-444444444444"),
+            final_classification="report",
+            reviewer_principal_id=UUID("55555555-5555-4555-8555-555555555555"),
+            decided_at=NOW,
+        ),
+        ReviewRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ReviewStatus.CORRECTED,
+            machine_classification="invoice",
+            machine_confidence=Decimal("0.5"),
+            model_version="v1",
+            review_version=1,
+            review_id=UUID("44444444-4444-4444-8444-444444444444"),
+            final_classification="invoice",
+            reviewer_principal_id=UUID("55555555-5555-4555-8555-555555555555"),
+            decided_at=NOW,
         ),
     ],
 )

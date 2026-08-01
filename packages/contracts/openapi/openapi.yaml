@@ -660,13 +660,14 @@ components:
     Review:
       oneOf:
         - $ref: "#/components/schemas/UnreviewedReview"
-        - $ref: "#/components/schemas/TerminalReview"
+        - $ref: "#/components/schemas/ApprovedReview"
+        - $ref: "#/components/schemas/CorrectedReview"
       discriminator:
         propertyName: status
         mapping:
           unreviewed: "#/components/schemas/UnreviewedReview"
-          approved: "#/components/schemas/TerminalReview"
-          corrected: "#/components/schemas/TerminalReview"
+          approved: "#/components/schemas/ApprovedReview"
+          corrected: "#/components/schemas/CorrectedReview"
     UnreviewedReview:
       type: object
       additionalProperties: false
@@ -702,6 +703,15 @@ components:
           type: integer
           const: 0
     TerminalReview:
+      oneOf:
+        - $ref: "#/components/schemas/ApprovedReview"
+        - $ref: "#/components/schemas/CorrectedReview"
+      discriminator:
+        propertyName: status
+        mapping:
+          approved: "#/components/schemas/ApprovedReview"
+          corrected: "#/components/schemas/CorrectedReview"
+    ApprovedReview:
       type: object
       additionalProperties: false
       required:
@@ -724,9 +734,7 @@ components:
           format: uuid
         status:
           type: string
-          enum:
-            - approved
-            - corrected
+          const: approved
         machineClassification:
           $ref: "#/components/schemas/Classification"
         machineConfidence:
@@ -748,6 +756,85 @@ components:
         decidedAt:
           type: string
           format: date-time
+      oneOf:
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: invoice
+            finalClassification:
+              const: invoice
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: report
+            finalClassification:
+              const: report
+    CorrectedReview:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - machineClassification
+        - machineConfidence
+        - modelVersion
+        - reviewVersion
+        - finalClassification
+        - reviewerPrincipalId
+        - decidedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: corrected
+        machineClassification:
+          $ref: "#/components/schemas/Classification"
+        machineConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reviewVersion:
+          type: integer
+          const: 1
+        finalClassification:
+          $ref: "#/components/schemas/Classification"
+        reviewerPrincipalId:
+          type: string
+          format: uuid
+        decidedAt:
+          type: string
+          format: date-time
+      oneOf:
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: invoice
+            finalClassification:
+              const: report
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: report
+            finalClassification:
+              const: invoice
     AuditHistory:
       type: object
       additionalProperties: false

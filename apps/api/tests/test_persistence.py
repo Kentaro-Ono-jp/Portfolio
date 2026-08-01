@@ -480,7 +480,7 @@ def test_review_read_write_replay_and_audit_are_one_terminal_state(
         review_version=0,
     )
 
-    write_session = FakeReviewSession(scalar_values=[None, document, job, None])
+    write_session = FakeReviewSession(scalar_values=[document, None, job, None])
     repository = review_repository_with_session(monkeypatch, write_session)
     command = review_command(if_match=review_entity_tag(current))
     committed = repository.submit_review(command)
@@ -506,7 +506,7 @@ def test_review_read_write_replay_and_audit_are_one_terminal_state(
     assert isinstance(decision, ReviewDecisionRow)
     assert isinstance(receipt, IdempotencyRecordRow)
     replay_session = FakeReviewSession(
-        scalar_values=[receipt],
+        scalar_values=[document, receipt],
         get_rows={
             (ReviewDecisionRow, REVIEW_ID): decision,
             (ProcessingJobRow, JOB_ID): job,
@@ -521,7 +521,7 @@ def test_review_read_write_replay_and_audit_are_one_terminal_state(
         final_classification="report",
         if_match=review_entity_tag(current),
     )
-    conflict_session = FakeReviewSession(scalar_values=[receipt])
+    conflict_session = FakeReviewSession(scalar_values=[document, receipt])
     repository = review_repository_with_session(monkeypatch, conflict_session)
     with pytest.raises(ReviewOperationError) as captured:
         repository.submit_review(conflict)
@@ -551,13 +551,13 @@ def test_review_rejects_hidden_unavailable_terminal_and_stale_state(
         review_version=0,
     )
 
-    hidden = review_repository_with_session(
-        monkeypatch,
-        FakeReviewSession(scalar_values=[None, None]),
-    )
+    unreachable_receipt = object()
+    hidden_session = FakeReviewSession(scalar_values=[None, unreachable_receipt])
+    hidden = review_repository_with_session(monkeypatch, hidden_session)
     with pytest.raises(ReviewOperationError) as captured:
         hidden.submit_review(review_command(if_match=review_entity_tag(current)))
     assert captured.value.code is ReviewOperationFailureCode.DOCUMENT_NOT_FOUND
+    assert hidden_session.scalar_values == [unreachable_receipt]
 
     unavailable = review_repository_with_session(
         monkeypatch,
@@ -578,7 +578,7 @@ def test_review_rejects_hidden_unavailable_terminal_and_stale_state(
         review_version=1,
         decided_at=NOW,
     )
-    terminal_session = FakeReviewSession(scalar_values=[None, document, completed_job(), terminal])
+    terminal_session = FakeReviewSession(scalar_values=[document, None, completed_job(), terminal])
     terminal_repository = review_repository_with_session(monkeypatch, terminal_session)
     terminal_record = ReviewRecord(
         document_id=DOCUMENT_ID,
@@ -599,7 +599,7 @@ def test_review_rejects_hidden_unavailable_terminal_and_stale_state(
         )
     assert captured.value.code is ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE
 
-    stale_session = FakeReviewSession(scalar_values=[None, document, completed_job(), None])
+    stale_session = FakeReviewSession(scalar_values=[document, None, completed_job(), None])
     stale_repository = review_repository_with_session(monkeypatch, stale_session)
     with pytest.raises(ReviewOperationError) as captured:
         stale_repository.submit_review(review_command(if_match='"stale"'))

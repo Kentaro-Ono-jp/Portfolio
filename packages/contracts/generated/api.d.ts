@@ -222,7 +222,7 @@ export interface components {
         ReviewDecisionRequest: {
             finalClassification: components["schemas"]["Classification"];
         };
-        Review: components["schemas"]["UnreviewedReview"] | components["schemas"]["TerminalReview"];
+        Review: components["schemas"]["UnreviewedReview"] | components["schemas"]["ApprovedReview"] | components["schemas"]["CorrectedReview"];
         UnreviewedReview: {
             /** Format: uuid */
             documentId: string;
@@ -239,7 +239,8 @@ export interface components {
             /** @constant */
             reviewVersion: 0;
         };
-        TerminalReview: {
+        TerminalReview: components["schemas"]["ApprovedReview"] | components["schemas"]["CorrectedReview"];
+        ApprovedReview: {
             /** Format: uuid */
             documentId: string;
             /** Format: uuid */
@@ -248,7 +249,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            status: "approved" | "corrected";
+            status: "approved";
             machineClassification: components["schemas"]["Classification"];
             machineConfidence: number;
             modelVersion: string;
@@ -259,7 +260,48 @@ export interface components {
             reviewerPrincipalId: string;
             /** Format: date-time */
             decidedAt: string;
-        };
+        } & ({
+            /** @constant */
+            machineClassification: "invoice";
+            /** @constant */
+            finalClassification: "invoice";
+        } | {
+            /** @constant */
+            machineClassification: "report";
+            /** @constant */
+            finalClassification: "report";
+        });
+        CorrectedReview: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "corrected";
+            machineClassification: components["schemas"]["Classification"];
+            machineConfidence: number;
+            modelVersion: string;
+            /** @constant */
+            reviewVersion: 1;
+            finalClassification: components["schemas"]["Classification"];
+            /** Format: uuid */
+            reviewerPrincipalId: string;
+            /** Format: date-time */
+            decidedAt: string;
+        } & ({
+            /** @constant */
+            machineClassification: "invoice";
+            /** @constant */
+            finalClassification: "report";
+        } | {
+            /** @constant */
+            machineClassification: "report";
+            /** @constant */
+            finalClassification: "invoice";
+        });
         AuditHistory: {
             /** Format: uuid */
             documentId: string;

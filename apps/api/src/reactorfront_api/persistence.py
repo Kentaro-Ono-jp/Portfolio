@@ -592,6 +592,16 @@ class SqlAlchemySubmissionRepository:
                     )
                 )
             )
+            document = session.scalar(
+                select(DocumentRow)
+                .where(
+                    DocumentRow.id == command.document_id,
+                    DocumentRow.submitted_by_principal_id == command.principal_id,
+                )
+                .with_for_update()
+            )
+            if document is None:
+                raise ReviewOperationError(code=ReviewOperationFailureCode.DOCUMENT_NOT_FOUND)
             existing_receipt = session.scalar(
                 select(IdempotencyRecordRow).where(
                     IdempotencyRecordRow.principal_id == command.principal_id,
@@ -615,17 +625,6 @@ class SqlAlchemySubmissionRepository:
                 if job is None:
                     raise RuntimeError("Committed review decision has no processing job")
                 return self._review_record(job=job, decision=decision)
-
-            document = session.scalar(
-                select(DocumentRow)
-                .where(
-                    DocumentRow.id == command.document_id,
-                    DocumentRow.submitted_by_principal_id == command.principal_id,
-                )
-                .with_for_update()
-            )
-            if document is None:
-                raise ReviewOperationError(code=ReviewOperationFailureCode.DOCUMENT_NOT_FOUND)
             job = session.scalar(
                 select(ProcessingJobRow)
                 .where(ProcessingJobRow.document_id == document.id)

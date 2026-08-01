@@ -37,9 +37,11 @@ from reactorfront_api.schemas import (
     ProblemResponse,
     ReviewDecisionRequest,
     ReviewResponse,
+    TerminalReviewResponse,
     serialize_audit_history,
     serialize_document_status,
     serialize_review,
+    serialize_terminal_review,
 )
 from reactorfront_api.service import MAX_DOCUMENT_BYTES, DocumentService
 from reactorfront_api.settings import Settings, get_settings
@@ -358,7 +360,7 @@ def create_app(
 
     @app.put(
         "/api/v1/documents/{document_id}/review",
-        response_model=ReviewResponse,
+        response_model=TerminalReviewResponse,
         response_model_exclude_none=True,
         responses={
             401: {"model": ProblemResponse},
@@ -379,7 +381,7 @@ def create_app(
         idempotency_key: IdempotencyKeyHeader,
         if_match: IfMatchHeader = None,
         correlation_id: CorrelationIdHeader = None,
-    ) -> ReviewResponse:
+    ) -> TerminalReviewResponse:
         principal, request_correlation_id = authorized_document_context(request)
         record = get_document_service(app).submit_review(
             document_id=document_id,
@@ -391,7 +393,7 @@ def create_app(
         )
         response.headers[CORRELATION_HEADER] = str(request_correlation_id)
         response.headers["ETag"] = review_entity_tag(record)
-        return serialize_review(record)
+        return serialize_terminal_review(record)
 
     @app.get(
         "/api/v1/documents/{document_id}/audit-events",
