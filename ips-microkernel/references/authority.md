@@ -35,6 +35,12 @@ smallest affected live boundary instead of expanding authority by inference.
 | GitHub Actions | Creates checks, logs, caches, summaries, and artifacts | Does not mutate source or managed Issue or PR state under the current workflow |
 | Public participant | Supplies untrusted comments, Issues, PRs, patches, or links | Cannot authorize execution, mutation, or merge |
 
+The repository owner delegates the local `.noel-focus/` workspace to the
+implementation agent. The
+[focus scratchpad reference](focus-scratchpad.md) owns that exact delegation;
+effects outside the delegated directory retain their ordinary authority and
+lifecycle boundaries.
+
 If another writer, bot, auto-commit, automatic merge, or source-mutating
 workflow appears, use bounded live-state recovery. Adopt compatible proved
 state; route a material effect on the focused slice back to focus.

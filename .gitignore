@@ -26,6 +26,9 @@ htmlcov/
 artifacts/
 *.log
 
+# Owner-authorized local focus scratchpad
+.noel-focus/
+
 # Editors and operating systems
 .idea/
 .vscode/

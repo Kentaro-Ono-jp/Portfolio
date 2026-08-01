@@ -23,6 +23,9 @@ When sources conflict, use the
 [live-state and discrepancy route](references/live-state.md) instead of silently
 combining them or requesting a broader decision.
 
+The implementation agent may optionally use the [owner-authorized focus scratchpad](references/focus-scratchpad.md).
+Open that reference only after deciding to use it; use or non-use creates no record.
+
 ## Select the first matching state
 
 The order below is precedence. Once a condition matches, do not inspect later
