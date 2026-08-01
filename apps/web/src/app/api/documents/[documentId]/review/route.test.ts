@@ -81,19 +81,26 @@ describe("/api/documents/[documentId]/review", () => {
 
   it("sanitizes authentication, CSRF, and unexpected failures", async () => {
     const request = new Request(
-      `http://web.test/api/documents/${DOCUMENT_ID}/review`,
-      { method: "PUT" },
+      "http://web.test/api/documents/not-a-uuid/review",
+      {
+        method: "PUT",
+        body: JSON.stringify({ finalClassification: "unknown" }),
+      },
     );
-    const context = { params: Promise.resolve({ documentId: DOCUMENT_ID }) };
+    const context = { params: Promise.resolve({ documentId: "not-a-uuid" }) };
     vi.mocked(requireWebSession).mockRejectedValueOnce(
       new WebAuthenticationError(401, "WEB_SESSION_REQUIRED", "Required"),
     );
     expect((await PUT(request, context)).status).toBe(401);
+    expect(requireCsrf).not.toHaveBeenCalled();
+    expect(proxyDocumentReviewDecision).not.toHaveBeenCalled();
     vi.mocked(requireCsrf).mockImplementationOnce(() => {
       throw new WebAuthenticationError(403, "WEB_CSRF_INVALID", "Invalid");
     });
     expect((await PUT(request, context)).status).toBe(403);
+    expect(proxyDocumentReviewDecision).not.toHaveBeenCalled();
     vi.mocked(requireWebSession).mockRejectedValueOnce(new Error("private"));
     expect((await GET(request, context)).status).toBe(503);
+    expect(proxyDocumentReview).not.toHaveBeenCalled();
   });
 });

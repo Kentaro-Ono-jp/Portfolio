@@ -55,14 +55,16 @@ describe("GET /api/documents/[documentId]/audit-events", () => {
 
   it("sanitizes session and unexpected failures", async () => {
     const request = new Request(
-      `http://web.test/api/documents/${DOCUMENT_ID}/audit-events`,
+      "http://web.test/api/documents/not-a-uuid/audit-events",
     );
-    const context = { params: Promise.resolve({ documentId: DOCUMENT_ID }) };
+    const context = { params: Promise.resolve({ documentId: "not-a-uuid" }) };
     vi.mocked(requireWebSession).mockRejectedValueOnce(
       new WebAuthenticationError(401, "WEB_SESSION_REQUIRED", "Required"),
     );
     expect((await GET(request, context)).status).toBe(401);
+    expect(proxyDocumentAuditHistory).not.toHaveBeenCalled();
     vi.mocked(requireWebSession).mockRejectedValueOnce(new Error("private"));
     expect((await GET(request, context)).status).toBe(503);
+    expect(proxyDocumentAuditHistory).not.toHaveBeenCalled();
   });
 });
