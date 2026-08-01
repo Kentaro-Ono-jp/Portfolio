@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import cast
 from uuid import UUID
@@ -9,9 +10,15 @@ import pytest
 import yaml
 from jsonschema import ValidationError
 
-from reactorfront_api.domain import DocumentStatusRecord, ProcessingStatus
+from reactorfront_api.domain import (
+    DocumentStatusRecord,
+    ProcessingStatus,
+    ReviewRecord,
+    ReviewStatus,
+    review_entity_tag,
+)
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
-from reactorfront_api.schemas import serialize_document_status
+from reactorfront_api.schemas import serialize_document_status, serialize_review
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_DIRECTORY = REPOSITORY_ROOT / "packages" / "contracts" / "events"
@@ -45,6 +52,9 @@ def test_document_contract_requires_bearer_authentication_and_source_ownership()
         paths["/api/v1/documents"]["post"],
         paths["/api/v1/documents/{documentId}"]["get"],
         paths["/api/v1/documents/{documentId}/source"]["get"],
+        paths["/api/v1/documents/{documentId}/review"]["get"],
+        paths["/api/v1/documents/{documentId}/review"]["put"],
+        paths["/api/v1/documents/{documentId}/audit-events"]["get"],
     ]
     assert all("security" not in operation for operation in protected_operations)
     assert paths["/health"]["get"]["security"] == []
@@ -67,7 +77,21 @@ def test_document_contract_requires_bearer_authentication_and_source_ownership()
         "AuthenticationRequired",
         "InsufficientCapability",
         "SourceAccessUnavailable",
+        "ReviewNotAvailable",
+        "ReviewWriteConflict",
+        "PreconditionFailed",
+        "PreconditionRequired",
     } <= components["responses"].keys()
+
+    review_put = paths["/api/v1/documents/{documentId}/review"]["put"]
+    parameters = [
+        cast(dict[str, str], parameter)["$ref"]
+        for parameter in cast(list[object], review_put["parameters"])
+    ]
+    assert parameters[-2:] == [
+        "#/components/parameters/IfMatch",
+        "#/components/parameters/IdempotencyKey",
+    ]
 
 
 def test_event_validator_uses_repository_contracts() -> None:
@@ -150,3 +174,117 @@ def test_serializer_supports_queued_and_processing_states() -> None:
     assert processing.model_dump(by_alias=True, mode="json")["startedAt"] == (
         "2026-07-18T09:00:00Z"
     )
+
+
+def test_review_serializer_and_entity_tag_preserve_machine_evidence() -> None:
+    unreviewed = ReviewRecord(
+        document_id=DOCUMENT_ID,
+        job_id=JOB_ID,
+        status=ReviewStatus.UNREVIEWED,
+        machine_classification="invoice",
+        machine_confidence=Decimal("0.9876"),
+        model_version="document-type-v1",
+        review_version=0,
+    )
+    serialized = serialize_review(unreviewed).model_dump(
+        by_alias=True,
+        mode="json",
+        exclude_none=True,
+    )
+    assert serialized == {
+        "documentId": str(DOCUMENT_ID),
+        "jobId": str(JOB_ID),
+        "status": "unreviewed",
+        "machineClassification": "invoice",
+        "machineConfidence": 0.9876,
+        "modelVersion": "document-type-v1",
+        "reviewVersion": 0,
+    }
+    first_tag = review_entity_tag(unreviewed)
+    assert first_tag == review_entity_tag(unreviewed)
+    assert first_tag.startswith('"') and first_tag.endswith('"')
+
+    terminal = ReviewRecord(
+        document_id=DOCUMENT_ID,
+        job_id=JOB_ID,
+        status=ReviewStatus.CORRECTED,
+        machine_classification="invoice",
+        machine_confidence=Decimal("0.9876"),
+        model_version="document-type-v1",
+        review_version=1,
+        review_id=UUID("44444444-4444-4444-8444-444444444444"),
+        final_classification="report",
+        reviewer_principal_id=UUID("55555555-5555-4555-8555-555555555555"),
+        decided_at=NOW,
+    )
+    assert serialize_review(terminal).status == "corrected"
+    assert review_entity_tag(terminal) != first_tag
+
+    approved = ReviewRecord(
+        document_id=DOCUMENT_ID,
+        job_id=JOB_ID,
+        status=ReviewStatus.APPROVED,
+        machine_classification="report",
+        machine_confidence=Decimal("0.9876"),
+        model_version="document-type-v1",
+        review_version=1,
+        review_id=UUID("66666666-6666-4666-8666-666666666666"),
+        final_classification="report",
+        reviewer_principal_id=UUID("55555555-5555-4555-8555-555555555555"),
+        decided_at=NOW,
+    )
+    assert serialize_review(approved).status == "approved"
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        ReviewRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ReviewStatus.UNREVIEWED,
+            machine_classification="memo",
+            machine_confidence=Decimal("0.5"),
+            model_version="v1",
+            review_version=0,
+        ),
+        ReviewRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ReviewStatus.APPROVED,
+            machine_classification="invoice",
+            machine_confidence=Decimal("0.5"),
+            model_version="v1",
+            review_version=0,
+        ),
+        ReviewRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ReviewStatus.APPROVED,
+            machine_classification="invoice",
+            machine_confidence=Decimal("0.5"),
+            model_version="v1",
+            review_version=1,
+            review_id=UUID("44444444-4444-4444-8444-444444444444"),
+            final_classification="report",
+            reviewer_principal_id=UUID("55555555-5555-4555-8555-555555555555"),
+            decided_at=NOW,
+        ),
+        ReviewRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ReviewStatus.CORRECTED,
+            machine_classification="invoice",
+            machine_confidence=Decimal("0.5"),
+            model_version="v1",
+            review_version=1,
+            review_id=UUID("44444444-4444-4444-8444-444444444444"),
+            final_classification="invoice",
+            reviewer_principal_id=UUID("55555555-5555-4555-8555-555555555555"),
+            decided_at=NOW,
+        ),
+    ],
+)
+def test_review_serializer_refuses_impossible_shapes(record: ReviewRecord) -> None:
+    with pytest.raises(ValueError):
+        serialize_review(record)

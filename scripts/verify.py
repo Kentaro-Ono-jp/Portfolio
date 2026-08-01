@@ -243,6 +243,7 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
         "scripts/prepare_integration.py",
         "scripts/verify_identity_runtime.py",
         "scripts/verify_principal_migration.py",
+        "scripts/verify_review_migration.py",
         "scripts/verify_outbox_runtime.py",
         "scripts/verify_result_consumer_runtime.py",
     }
@@ -626,6 +627,7 @@ def static_checks(
                 "scripts/prepare_integration.py",
                 "scripts/verify_identity_runtime.py",
                 "scripts/verify_principal_migration.py",
+                "scripts/verify_review_migration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
@@ -651,6 +653,7 @@ def static_checks(
                 "scripts/prepare_integration.py",
                 "scripts/verify_identity_runtime.py",
                 "scripts/verify_principal_migration.py",
+                "scripts/verify_review_migration.py",
                 "scripts/verify_outbox_runtime.py",
                 "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
@@ -980,6 +983,17 @@ def run_runtime_checks(
             "apps/api",
             "python",
             "scripts/verify_principal_migration.py",
+        ],
+    )
+    run(
+        "Prove review and audit migration preserves populated API state",
+        [
+            uv,
+            "run",
+            "--project",
+            "apps/api",
+            "python",
+            "scripts/verify_review_migration.py",
         ],
     )
     run(

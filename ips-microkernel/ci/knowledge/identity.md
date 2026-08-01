@@ -38,6 +38,23 @@ identity, token claims, ownership expectations, or synthetic-provider fixtures.
 - **Evidence:** PR #57
   [run 30627826543](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30627826543).
 
+### Cross ownership hiding with replay classification
+
+- **Phase:** `pre-CI`
+- **Trigger:** An authenticated mutation combines resource ownership hiding
+  with idempotency or another request-scoped replay mechanism.
+- **Mistake:** Ownership and replay are proved independently, leaving an
+  untested precedence path that leaks a different failure for hidden targets.
+- **Check:** Does the ownership result dominate replay and conflict
+  classification for every hidden-target key state?
+- **Guard:** In every applicable adapter proof, including the authoritative
+  production-shaped integration, execute the same hidden target with both a
+  reused key bound to another target and a fresh key; require the same
+  not-found result, no decision, receipt, or audit mutation, and retain
+  owned-target replay coverage.
+- **Evidence:** PR #61
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
+
 ## Return
 
 Return to the calling CI procedure after applying only the triggered entries.

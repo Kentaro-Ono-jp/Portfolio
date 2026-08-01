@@ -2,20 +2,30 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID
+from decimal import Decimal
+from uuid import UUID, uuid5
 
 from reactorfront_api.authentication import Capability, authentication_problem
 from reactorfront_api.domain import (
+    AuditAction,
+    AuditEventRecord,
+    AuditHistory,
     DocumentSourceRecord,
     DocumentStatusRecord,
     DocumentSubmission,
     PrincipalKind,
     PrincipalRecord,
     ProcessingStatus,
+    ReviewCommand,
+    ReviewOperationError,
+    ReviewOperationFailureCode,
+    ReviewRecord,
+    ReviewStatus,
     StoredObject,
     SubmissionCommitObservation,
     SubmissionCommitOutcome,
     SubmissionPersistenceError,
+    review_entity_tag,
 )
 
 
@@ -38,6 +48,11 @@ class FakeRepository:
     records: dict[UUID, DocumentStatusRecord] = field(default_factory=dict)
     owners: dict[UUID, UUID] = field(default_factory=dict)
     sources: dict[UUID, DocumentSourceRecord] = field(default_factory=dict)
+    reviews: dict[UUID, ReviewRecord] = field(default_factory=dict)
+    audit_events: dict[UUID, list[AuditEventRecord]] = field(default_factory=dict)
+    idempotency_records: dict[tuple[UUID, UUID], tuple[UUID, str, ReviewRecord]] = field(
+        default_factory=dict
+    )
     ready: bool = True
     save_error: Exception | None = None
     commit_acknowledgement_error: Exception | None = None
@@ -67,6 +82,19 @@ class FakeRepository:
             content_type=submission.content_type,
             size_bytes=submission.size_bytes,
         )
+        self.audit_events[submission.document_id] = [
+            AuditEventRecord(
+                event_id=uuid5(submission.event_id, AuditAction.DOCUMENT_SUBMITTED.value),
+                action=AuditAction.DOCUMENT_SUBMITTED,
+                occurred_at=submission.occurred_at,
+                actor_principal_id=submission.submitted_by_principal_id,
+                document_id=submission.document_id,
+                job_id=submission.job_id,
+                correlation_id=submission.correlation_id,
+                details_version=1,
+                details={},
+            )
+        ]
         if self.commit_acknowledgement_error is not None:
             raise SubmissionPersistenceError(
                 commit_outcome=SubmissionCommitOutcome.UNKNOWN
@@ -96,6 +124,111 @@ class FakeRepository:
         if self.owners.get(document_id) != principal_id:
             return None
         return self.sources.get(document_id)
+
+    def get_review(self, document_id: UUID, principal_id: UUID) -> ReviewRecord | None:
+        if self.get_error is not None:
+            raise self.get_error
+        if self.owners.get(document_id) != principal_id:
+            return None
+        if document_id in self.reviews:
+            return self.reviews[document_id]
+        status = self.records.get(document_id)
+        if (
+            status is None
+            or status.status is not ProcessingStatus.COMPLETED
+            or status.predicted_class not in {"invoice", "report"}
+            or status.confidence is None
+            or status.model_version is None
+        ):
+            raise ReviewOperationError(code=ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE)
+        return ReviewRecord(
+            document_id=document_id,
+            job_id=status.job_id,
+            status=ReviewStatus.UNREVIEWED,
+            machine_classification=status.predicted_class,
+            machine_confidence=Decimal(str(status.confidence)),
+            model_version=status.model_version,
+            review_version=0,
+        )
+
+    def submit_review(self, command: ReviewCommand) -> ReviewRecord:
+        current = self.get_review(command.document_id, command.principal_id)
+        if current is None:
+            raise ReviewOperationError(code=ReviewOperationFailureCode.DOCUMENT_NOT_FOUND)
+        key = (command.principal_id, command.idempotency_key)
+        existing_receipt = self.idempotency_records.get(key)
+        if existing_receipt is not None:
+            target, digest, record = existing_receipt
+            if target != command.document_id or digest != command.request_digest:
+                raise ReviewOperationError(code=ReviewOperationFailureCode.IDEMPOTENCY_CONFLICT)
+            return record
+        if command.if_match != review_entity_tag(current):
+            raise ReviewOperationError(code=ReviewOperationFailureCode.PRECONDITION_FAILED)
+        if current.status is not ReviewStatus.UNREVIEWED:
+            raise ReviewOperationError(code=ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE)
+        review_status = (
+            ReviewStatus.APPROVED
+            if command.final_classification == current.machine_classification
+            else ReviewStatus.CORRECTED
+        )
+        record = ReviewRecord(
+            document_id=current.document_id,
+            job_id=current.job_id,
+            status=review_status,
+            machine_classification=current.machine_classification,
+            machine_confidence=current.machine_confidence,
+            model_version=current.model_version,
+            review_version=1,
+            review_id=command.decision_id,
+            final_classification=command.final_classification,
+            reviewer_principal_id=command.principal_id,
+            decided_at=command.decided_at,
+        )
+        self.reviews[command.document_id] = record
+        self.idempotency_records[key] = (
+            command.document_id,
+            command.request_digest,
+            record,
+        )
+        action = (
+            AuditAction.REVIEW_APPROVED
+            if review_status is ReviewStatus.APPROVED
+            else AuditAction.REVIEW_CORRECTED
+        )
+        self.audit_events.setdefault(command.document_id, []).append(
+            AuditEventRecord(
+                event_id=uuid5(command.decision_id, action.value),
+                action=action,
+                occurred_at=command.decided_at,
+                actor_principal_id=command.principal_id,
+                document_id=command.document_id,
+                job_id=current.job_id,
+                review_id=command.decision_id,
+                correlation_id=command.correlation_id,
+                details_version=1,
+                details={},
+            )
+        )
+        return record
+
+    def get_audit_history(
+        self,
+        document_id: UUID,
+        principal_id: UUID,
+    ) -> AuditHistory | None:
+        if self.get_error is not None:
+            raise self.get_error
+        if self.owners.get(document_id) != principal_id:
+            return None
+        return AuditHistory(
+            document_id=document_id,
+            events=tuple(
+                sorted(
+                    self.audit_events.get(document_id, []),
+                    key=lambda event: (event.occurred_at, event.event_id),
+                )
+            ),
+        )
 
     def is_ready(self) -> bool:
         return self.ready

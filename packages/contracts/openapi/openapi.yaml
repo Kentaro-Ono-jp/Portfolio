@@ -16,6 +16,10 @@ security:
 tags:
   - name: Documents
     description: Document submission and processing status.
+  - name: Reviews
+    description: Immutable terminal human classification review.
+  - name: Audit
+    description: Append-only sanitized product audit history.
   - name: Operations
     description: Process health and dependency readiness.
 paths:
@@ -147,6 +151,112 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "503":
           $ref: "#/components/responses/SourceAccessUnavailable"
+  /api/v1/documents/{documentId}/review:
+    get:
+      tags:
+        - Reviews
+      summary: Get the current review representation
+      operationId: getDocumentReview
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Current immutable machine evidence and human-review state.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+            ETag:
+              $ref: "#/components/headers/ReviewEntityTag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/InsufficientCapability"
+        "404":
+          $ref: "#/components/responses/DocumentNotFound"
+        "409":
+          $ref: "#/components/responses/ReviewNotAvailable"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/DependencyUnavailable"
+    put:
+      tags:
+        - Reviews
+      summary: Commit one terminal approval or correction
+      operationId: putDocumentReview
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewDecisionRequest"
+      responses:
+        "200":
+          description: The committed terminal decision or its identical replay.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+            ETag:
+              $ref: "#/components/headers/ReviewEntityTag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerminalReview"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/InsufficientCapability"
+        "404":
+          $ref: "#/components/responses/DocumentNotFound"
+        "409":
+          $ref: "#/components/responses/ReviewWriteConflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "503":
+          $ref: "#/components/responses/DependencyUnavailable"
+  /api/v1/documents/{documentId}/audit-events:
+    get:
+      tags:
+        - Audit
+      summary: Get the owned document's sanitized audit history
+      operationId: getDocumentAuditEvents
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Deterministically ordered append-only product audit events.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditHistory"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/InsufficientCapability"
+        "404":
+          $ref: "#/components/responses/DocumentNotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/DependencyUnavailable"
   /health:
     get:
       security: []
@@ -203,6 +313,22 @@ components:
       schema:
         type: string
         format: uuid
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: Latest strong review entity tag; omission returns 428.
+      schema:
+        type: string
+        pattern: '^"[a-f0-9]{64}"$'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID scoped to the authenticated principal and review operation.
+      schema:
+        type: string
+        format: uuid
   headers:
     CorrelationId:
       description: Correlation identifier assigned to this request flow.
@@ -214,6 +340,11 @@ components:
       schema:
         type: string
         pattern: '^Bearer realm="reactorfront-api"$'
+    ReviewEntityTag:
+      description: Opaque strong entity tag for the returned review version.
+      schema:
+        type: string
+        pattern: '^"[a-f0-9]{64}"$'
   responses:
     AuthenticationRequired:
       description: A missing or invalid bearer access token.
@@ -300,6 +431,44 @@ components:
             oneOf:
               - $ref: "#/components/schemas/SourceUnavailableProblem"
               - $ref: "#/components/schemas/DependencyUnavailableProblem"
+    ReviewNotAvailable:
+      description: The document has no completed machine result available for review.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ReviewNotAvailableProblem"
+    ReviewWriteConflict:
+      description: The review is terminal or the idempotency key conflicts.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/ReviewNotAvailableProblem"
+              - $ref: "#/components/schemas/IdempotencyConflictProblem"
+    PreconditionFailed:
+      description: The supplied review entity tag is stale or does not match.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/PreconditionFailedProblem"
+    PreconditionRequired:
+      description: The required review If-Match header is absent.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/PreconditionRequiredProblem"
   schemas:
     Classification:
       type: string
@@ -480,6 +649,255 @@ components:
         completedAt:
           type: string
           format: date-time
+    ReviewDecisionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - finalClassification
+      properties:
+        finalClassification:
+          $ref: "#/components/schemas/Classification"
+    Review:
+      oneOf:
+        - $ref: "#/components/schemas/UnreviewedReview"
+        - $ref: "#/components/schemas/ApprovedReview"
+        - $ref: "#/components/schemas/CorrectedReview"
+      discriminator:
+        propertyName: status
+        mapping:
+          unreviewed: "#/components/schemas/UnreviewedReview"
+          approved: "#/components/schemas/ApprovedReview"
+          corrected: "#/components/schemas/CorrectedReview"
+    UnreviewedReview:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - machineClassification
+        - machineConfidence
+        - modelVersion
+        - reviewVersion
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: unreviewed
+        machineClassification:
+          $ref: "#/components/schemas/Classification"
+        machineConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reviewVersion:
+          type: integer
+          const: 0
+    TerminalReview:
+      oneOf:
+        - $ref: "#/components/schemas/ApprovedReview"
+        - $ref: "#/components/schemas/CorrectedReview"
+      discriminator:
+        propertyName: status
+        mapping:
+          approved: "#/components/schemas/ApprovedReview"
+          corrected: "#/components/schemas/CorrectedReview"
+    ApprovedReview:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - machineClassification
+        - machineConfidence
+        - modelVersion
+        - reviewVersion
+        - finalClassification
+        - reviewerPrincipalId
+        - decidedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: approved
+        machineClassification:
+          $ref: "#/components/schemas/Classification"
+        machineConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reviewVersion:
+          type: integer
+          const: 1
+        finalClassification:
+          $ref: "#/components/schemas/Classification"
+        reviewerPrincipalId:
+          type: string
+          format: uuid
+        decidedAt:
+          type: string
+          format: date-time
+      oneOf:
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: invoice
+            finalClassification:
+              const: invoice
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: report
+            finalClassification:
+              const: report
+    CorrectedReview:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - jobId
+        - status
+        - machineClassification
+        - machineConfidence
+        - modelVersion
+        - reviewVersion
+        - finalClassification
+        - reviewerPrincipalId
+        - decidedAt
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: corrected
+        machineClassification:
+          $ref: "#/components/schemas/Classification"
+        machineConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reviewVersion:
+          type: integer
+          const: 1
+        finalClassification:
+          $ref: "#/components/schemas/Classification"
+        reviewerPrincipalId:
+          type: string
+          format: uuid
+        decidedAt:
+          type: string
+          format: date-time
+      oneOf:
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: invoice
+            finalClassification:
+              const: report
+        - required:
+            - machineClassification
+            - finalClassification
+          properties:
+            machineClassification:
+              const: report
+            finalClassification:
+              const: invoice
+    AuditHistory:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - events
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - action
+        - occurredAt
+        - actorPrincipalId
+        - documentId
+        - jobId
+        - correlationId
+        - detailsVersion
+        - details
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum:
+            - document.submitted
+            - processing.completed
+            - processing.failed
+            - review.approved
+            - review.corrected
+        occurredAt:
+          type: string
+          format: date-time
+        actorPrincipalId:
+          type: string
+          format: uuid
+        documentId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        reviewId:
+          type: string
+          format: uuid
+        correlationId:
+          type: string
+          format: uuid
+        detailsVersion:
+          type: integer
+          const: 1
+        details:
+          type: object
+          additionalProperties: false
     Health:
       type: object
       additionalProperties: false
@@ -658,4 +1076,68 @@ components:
             code:
               type: string
               const: SOURCE_UNAVAILABLE
+      unevaluatedProperties: false
+    ReviewNotAvailableProblem:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 409
+            code:
+              type: string
+              const: REVIEW_NOT_AVAILABLE
+      unevaluatedProperties: false
+    IdempotencyConflictProblem:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 409
+            code:
+              type: string
+              const: IDEMPOTENCY_CONFLICT
+      unevaluatedProperties: false
+    PreconditionFailedProblem:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 412
+            code:
+              type: string
+              const: PRECONDITION_FAILED
+      unevaluatedProperties: false
+    PreconditionRequiredProblem:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required:
+            - status
+            - code
+          properties:
+            status:
+              type: integer
+              const: 428
+            code:
+              type: string
+              const: PRECONDITION_REQUIRED
       unevaluatedProperties: false

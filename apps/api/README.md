@@ -33,6 +33,12 @@ API image roles.
 - S3-compatible source-object storage through boto3
 - authenticated source retrieval that checks persisted and object metadata,
   bounded size, and SHA-256 before returning a PDF
+- owner-filtered review reads and one immutable approval or correction guarded
+  by a strong entity tag and UUID idempotency key
+- PostgreSQL-serialized review writes that atomically commit the terminal
+  decision, idempotency receipt, and sanitized review audit event
+- append-only submission, terminal-processing, and review audit history with
+  deterministic ordering and duplicate-event suppression
 - canonical JSON Schema validation before outbox persistence
 - safe PostgreSQL outbox leasing with process-unique ownership, attempt fencing,
   and expired-lease recovery
@@ -157,9 +163,22 @@ exercises the real HTTP, database, object-storage, publisher-confirm, result
 persistence, duplicate-delivery, ordering-race, poison-input, restart-recovery,
 stale-attempt fencing, and confirmation-deadline boundaries.
 
+The populated-schema proof also migrates the principal foundation into the
+review, idempotency, and audit schema in both directions. It preserves existing
+documents, jobs, outbox events, principals, ownership, and result receipts and
+does not fabricate historical review or audit records.
+
 All document operations require a validated bearer token and the mapped
 `documents:submit` or `documents:read` capability. Submission persists the
 resolved stable principal as owner. Status and source reads filter by that same
 principal, so cross-owner probes do not reveal document existence. The Next.js
 boundary owns the browser session and forwards access tokens only on the
 server; health and readiness probes remain intentionally anonymous.
+
+Review reads require `documents:read`, review writes require `reviews:write`,
+and audit reads require `audit:read`; ownership remains mandatory for all
+three. A completed machine result initially exposes an `unreviewed` entity tag.
+The first successful write produces an immutable `approved` or `corrected`
+decision. An identical idempotent replay returns that result, while conflicting
+key reuse, stale evidence, cross-owner access, and a second terminal decision
+cannot mutate it.

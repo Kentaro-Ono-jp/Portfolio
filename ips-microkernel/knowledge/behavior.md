@@ -61,6 +61,67 @@ product bugs, speculation, secrets, private payloads, or an incident ledger.
 - **Evidence:** PR #57
   [approved correction](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143423042).
 
+### Authorize a target before idempotency classification
+
+- **Phase:** `pre-CI`
+- **Trigger:** A protected resource mutation combines ownership hiding with an
+  idempotency key or other request-scoped replay record.
+- **Mistake:** A reused key is classified before the target is authorized, so
+  a hidden target returns a conflict that a fresh key would not reveal.
+- **Check:** Is target authorization resolved before every target-bound replay
+  or conflict decision while authorized replay still works?
+- **Guard:** Cross hidden and owned targets with reused and fresh keys; require
+  identical not-found responses and zero mutation for hidden targets, then
+  preserve exact replay and conflict behavior for owned targets.
+- **Evidence:** PR #61
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
+
+### Enforce closed request contracts at runtime
+
+- **Phase:** `pre-CI`
+- **Trigger:** An OpenAPI request object uses `additionalProperties: false` or
+  otherwise reserves server-derived fields.
+- **Mistake:** The runtime model silently drops an extra actor-looking field
+  and accepts a body that the published contract rejects.
+- **Check:** Does the runtime request model reject every property outside the
+  closed contract, including a valid body plus one reserved-looking field?
+- **Guard:** Send a contract-valid body with one extra property through the
+  real request-validation boundary; require the canonical validation response
+  and zero protected service calls.
+- **Evidence:** PR #61
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
+
+### Serialize only reachable discriminated states
+
+- **Phase:** `pre-CI`
+- **Trigger:** A response union represents domain states whose discriminator
+  constrains relationships among other fields.
+- **Mistake:** The contract or serializer accepts a discriminator-and-field
+  combination that persistence rejects as impossible.
+- **Check:** Do the response variants encode the same relational invariants as
+  the domain and persistence boundary?
+- **Guard:** Exercise every reachable variant and at least one impossible field
+  combination per discriminator through both contract validation and runtime
+  serialization.
+- **Evidence:** PR #61
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
+
+### Enforce constrained request parameters at runtime
+
+- **Phase:** `pre-CI`
+- **Trigger:** OpenAPI adds or changes a pattern, range, format, or enum for a
+  path, query, header, or cookie parameter.
+- **Mistake:** The runtime accepts malformed transport syntax and lets domain
+  logic reclassify it as a different failure than the published validation
+  response.
+- **Check:** Does the production request boundary enforce the exact canonical
+  parameter constraint before the protected service is called?
+- **Guard:** Send an otherwise-valid authenticated request with one malformed
+  constrained parameter; require canonical validation failure and zero service
+  or state mutation.
+- **Evidence:** PR #61
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
+
 ## Phase boundary
 
 A failed `pre-CI` entry blocks push. A failed `pre-review` entry blocks reviewer

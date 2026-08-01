@@ -15,6 +15,7 @@ Select one matching leaf at a time; do not preload the knowledge directory.
 | Changed boundary or signal | Read only |
 |---|---|
 | Authenticated principal ownership, token `iss/sub`, synthetic identity-provider fixtures | [Identity proof knowledge](identity.md) |
+| Closed request objects, discriminated response unions, generated API types | [API contract proof knowledge](contracts.md) |
 | Server-side state crossing independently bundled framework entrypoints | [Framework runtime proof knowledge](framework-runtime.md) |
 | Python runtime imports, dependency groups, exact JavaScript framework pins, lockfile advisories | [Dependency knowledge](dependencies.md) |
 | Direct execution, working directory, import path, documented command | [Invocation knowledge](invocation.md) |

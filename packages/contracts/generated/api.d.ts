@@ -56,6 +56,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{documentId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the current review representation */
+        get: operations["getDocumentReview"];
+        /** Commit one terminal approval or correction */
+        put: operations["putDocumentReview"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{documentId}/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the owned document's sanitized audit history */
+        get: operations["getDocumentAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -184,6 +219,115 @@ export interface components {
             /** Format: date-time */
             completedAt: string;
         };
+        ReviewDecisionRequest: {
+            finalClassification: components["schemas"]["Classification"];
+        };
+        Review: components["schemas"]["UnreviewedReview"] | components["schemas"]["ApprovedReview"] | components["schemas"]["CorrectedReview"];
+        UnreviewedReview: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "unreviewed";
+            machineClassification: components["schemas"]["Classification"];
+            machineConfidence: number;
+            modelVersion: string;
+            /** @constant */
+            reviewVersion: 0;
+        };
+        TerminalReview: components["schemas"]["ApprovedReview"] | components["schemas"]["CorrectedReview"];
+        ApprovedReview: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "approved";
+            machineClassification: components["schemas"]["Classification"];
+            machineConfidence: number;
+            modelVersion: string;
+            /** @constant */
+            reviewVersion: 1;
+            finalClassification: components["schemas"]["Classification"];
+            /** Format: uuid */
+            reviewerPrincipalId: string;
+            /** Format: date-time */
+            decidedAt: string;
+        } & ({
+            /** @constant */
+            machineClassification: "invoice";
+            /** @constant */
+            finalClassification: "invoice";
+        } | {
+            /** @constant */
+            machineClassification: "report";
+            /** @constant */
+            finalClassification: "report";
+        });
+        CorrectedReview: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "corrected";
+            machineClassification: components["schemas"]["Classification"];
+            machineConfidence: number;
+            modelVersion: string;
+            /** @constant */
+            reviewVersion: 1;
+            finalClassification: components["schemas"]["Classification"];
+            /** Format: uuid */
+            reviewerPrincipalId: string;
+            /** Format: date-time */
+            decidedAt: string;
+        } & ({
+            /** @constant */
+            machineClassification: "invoice";
+            /** @constant */
+            finalClassification: "report";
+        } | {
+            /** @constant */
+            machineClassification: "report";
+            /** @constant */
+            finalClassification: "invoice";
+        });
+        AuditHistory: {
+            /** Format: uuid */
+            documentId: string;
+            events: components["schemas"]["AuditEvent"][];
+        };
+        AuditEvent: {
+            /** Format: uuid */
+            eventId: string;
+            /** @enum {string} */
+            action: "document.submitted" | "processing.completed" | "processing.failed" | "review.approved" | "review.corrected";
+            /** Format: date-time */
+            occurredAt: string;
+            /** Format: uuid */
+            actorPrincipalId: string;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            jobId: string;
+            /** Format: uuid */
+            reviewId?: string;
+            /** Format: uuid */
+            correlationId: string;
+            /** @constant */
+            detailsVersion: 1;
+            details: Record<string, never>;
+        };
         Health: {
             /** @constant */
             status: "ok";
@@ -251,6 +395,30 @@ export interface components {
             status: 503;
             /** @constant */
             code: "SOURCE_UNAVAILABLE";
+        };
+        ReviewNotAvailableProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 409;
+            /** @constant */
+            code: "REVIEW_NOT_AVAILABLE";
+        };
+        IdempotencyConflictProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 409;
+            /** @constant */
+            code: "IDEMPOTENCY_CONFLICT";
+        };
+        PreconditionFailedProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 412;
+            /** @constant */
+            code: "PRECONDITION_FAILED";
+        };
+        PreconditionRequiredProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            status: 428;
+            /** @constant */
+            code: "PRECONDITION_REQUIRED";
         };
     };
     responses: {
@@ -345,12 +513,56 @@ export interface components {
                 "application/problem+json": components["schemas"]["SourceUnavailableProblem"] | components["schemas"]["DependencyUnavailableProblem"];
             };
         };
+        /** @description The document has no completed machine result available for review. */
+        ReviewNotAvailable: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ReviewNotAvailableProblem"];
+            };
+        };
+        /** @description The review is terminal or the idempotency key conflicts. */
+        ReviewWriteConflict: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ReviewNotAvailableProblem"] | components["schemas"]["IdempotencyConflictProblem"];
+            };
+        };
+        /** @description The supplied review entity tag is stale or does not match. */
+        PreconditionFailed: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["PreconditionFailedProblem"];
+            };
+        };
+        /** @description The required review If-Match header is absent. */
+        PreconditionRequired: {
+            headers: {
+                "X-Correlation-ID": components["headers"]["CorrelationId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["PreconditionRequiredProblem"];
+            };
+        };
     };
     parameters: {
         /** @description Server-generated document identifier. */
         DocumentId: string;
         /** @description Optional caller-provided identifier used for traceability. */
         CorrelationId: string;
+        /** @description Latest strong review entity tag; omission returns 428. */
+        IfMatch: string;
+        /** @description UUID scoped to the authenticated principal and review operation. */
+        IdempotencyKey: string;
     };
     requestBodies: never;
     headers: {
@@ -358,6 +570,8 @@ export interface components {
         CorrelationId: string;
         /** @description Sanitized OAuth bearer-token challenge. */
         BearerChallenge: string;
+        /** @description Opaque strong entity tag for the returned review version. */
+        ReviewEntityTag: string;
     };
     pathItems: never;
 }
@@ -471,6 +685,116 @@ export interface operations {
             404: components["responses"]["DocumentNotFound"];
             422: components["responses"]["InvalidRequest"];
             503: components["responses"]["SourceAccessUnavailable"];
+        };
+    };
+    getDocumentReview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional caller-provided identifier used for traceability. */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                /** @description Server-generated document identifier. */
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current immutable machine evidence and human-review state. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    ETag: components["headers"]["ReviewEntityTag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Review"];
+                };
+            };
+            401: components["responses"]["AuthenticationRequired"];
+            403: components["responses"]["InsufficientCapability"];
+            404: components["responses"]["DocumentNotFound"];
+            409: components["responses"]["ReviewNotAvailable"];
+            422: components["responses"]["InvalidRequest"];
+            503: components["responses"]["DependencyUnavailable"];
+        };
+    };
+    putDocumentReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Optional caller-provided identifier used for traceability. */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                /** @description Latest strong review entity tag; omission returns 428. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+                /** @description UUID scoped to the authenticated principal and review operation. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Server-generated document identifier. */
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description The committed terminal decision or its identical replay. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    ETag: components["headers"]["ReviewEntityTag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalReview"];
+                };
+            };
+            401: components["responses"]["AuthenticationRequired"];
+            403: components["responses"]["InsufficientCapability"];
+            404: components["responses"]["DocumentNotFound"];
+            409: components["responses"]["ReviewWriteConflict"];
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["InvalidRequest"];
+            428: components["responses"]["PreconditionRequired"];
+            503: components["responses"]["DependencyUnavailable"];
+        };
+    };
+    getDocumentAuditEvents: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional caller-provided identifier used for traceability. */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                /** @description Server-generated document identifier. */
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deterministically ordered append-only product audit events. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditHistory"];
+                };
+            };
+            401: components["responses"]["AuthenticationRequired"];
+            403: components["responses"]["InsufficientCapability"];
+            404: components["responses"]["DocumentNotFound"];
+            422: components["responses"]["InvalidRequest"];
+            503: components["responses"]["DependencyUnavailable"];
         };
     };
     getHealth: {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -28,6 +29,9 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from reactorfront_api.domain import (
+    AuditAction,
+    AuditEventRecord,
+    AuditHistory,
     DocumentSourceRecord,
     DocumentStatusRecord,
     DocumentSubmission,
@@ -43,13 +47,22 @@ from reactorfront_api.domain import (
     ResultEventFailureCode,
     ResultEventInvariantError,
     ResultEventType,
+    ReviewCommand,
+    ReviewOperationError,
+    ReviewOperationFailureCode,
+    ReviewRecord,
+    ReviewStatus,
     SubmissionCommitObservation,
     SubmissionCommitOutcome,
     SubmissionPersistenceError,
+    review_entity_tag,
 )
 
 LEGACY_SYSTEM_PRINCIPAL_ID = UUID("00000000-0000-4000-8000-000000000001")
 LEGACY_SYSTEM_PRINCIPAL_KEY = "legacy-first-slice"
+API_SYSTEM_PRINCIPAL_ID = UUID("00000000-0000-4000-8000-000000000002")
+API_SYSTEM_PRINCIPAL_KEY = "api-processing"
+REVIEW_OPERATION = "document.review.put"
 
 
 class Base(DeclarativeBase):
@@ -214,6 +227,131 @@ class ResultEventReceiptRow(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class ReviewDecisionRow(Base):
+    __tablename__ = "review_decisions"
+    __table_args__ = (
+        UniqueConstraint("job_id", name="uq_review_decisions_job_id"),
+        CheckConstraint(
+            "machine_classification IN ('invoice', 'report')",
+            name="ck_review_decisions_machine_classification",
+        ),
+        CheckConstraint(
+            "final_classification IN ('invoice', 'report')",
+            name="ck_review_decisions_final_classification",
+        ),
+        CheckConstraint(
+            "status IN ('approved', 'corrected')",
+            name="ck_review_decisions_status",
+        ),
+        CheckConstraint("review_version = 1", name="ck_review_decisions_version"),
+        CheckConstraint(
+            "(status = 'approved' AND machine_classification = final_classification) OR "
+            "(status = 'corrected' AND machine_classification <> final_classification)",
+            name="ck_review_decisions_status_matches_classification",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    document_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    job_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("processing_jobs.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    reviewer_principal_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    machine_classification: Mapped[str] = mapped_column(String(32))
+    final_classification: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16))
+    review_version: Mapped[int] = mapped_column(Integer)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class IdempotencyRecordRow(Base):
+    __tablename__ = "idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "principal_id",
+            "operation",
+            "idempotency_key",
+            name="uq_idempotency_records_namespace",
+        ),
+        CheckConstraint(
+            "request_digest ~ '^[a-f0-9]{64}$'",
+            name="ck_idempotency_records_request_digest",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    principal_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    operation: Mapped[str] = mapped_column(String(128))
+    idempotency_key: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True))
+    target_document_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    request_digest: Mapped[str] = mapped_column(String(64))
+    review_decision_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("review_decisions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AuditEventRow(Base):
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('document.submitted', 'processing.completed', "
+            "'processing.failed', 'review.approved', 'review.corrected')",
+            name="ck_audit_events_action",
+        ),
+        CheckConstraint("details_version = 1", name="ck_audit_events_details_version"),
+        UniqueConstraint("action", "causation_id", name="uq_audit_events_causation"),
+        Index("ix_audit_events_document_order", "document_id", "occurred_at", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    action: Mapped[str] = mapped_column(String(64))
+    actor_principal_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("principals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    job_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("processing_jobs.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    review_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("review_decisions.id", ondelete="RESTRICT"),
+    )
+    correlation_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True))
+    causation_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    details_version: Mapped[int] = mapped_column(Integer)
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
 def create_database_engine(database_url: str) -> Engine:
     return create_engine(database_url, pool_pre_ping=True)
 
@@ -308,6 +446,25 @@ class SqlAlchemySubmissionRepository:
                 )
                 session.add(outbox_event)
                 session.flush()
+
+                audit_event = AuditEventRow(
+                    id=uuid5(
+                        submission.event_id,
+                        AuditAction.DOCUMENT_SUBMITTED.value,
+                    ),
+                    action=AuditAction.DOCUMENT_SUBMITTED.value,
+                    actor_principal_id=submission.submitted_by_principal_id,
+                    document_id=submission.document_id,
+                    job_id=submission.job_id,
+                    review_id=None,
+                    correlation_id=submission.correlation_id,
+                    causation_id=submission.event_id,
+                    occurred_at=submission.occurred_at,
+                    details_version=1,
+                    details={},
+                )
+                session.add(audit_event)
+                session.flush()
             except Exception as error:
                 transaction.rollback()
                 raise SubmissionPersistenceError(
@@ -328,10 +485,14 @@ class SqlAlchemySubmissionRepository:
             document = session.get(DocumentRow, submission.document_id)
             job = session.get(ProcessingJobRow, submission.job_id)
             outbox_event = session.get(OutboxEventRow, submission.event_id)
+            audit_event = session.get(
+                AuditEventRow,
+                uuid5(submission.event_id, AuditAction.DOCUMENT_SUBMITTED.value),
+            )
 
-        if document is None and job is None and outbox_event is None:
+        if document is None and job is None and outbox_event is None and audit_event is None:
             return SubmissionCommitObservation.ABSENT
-        if document is None or job is None or outbox_event is None:
+        if document is None or job is None or outbox_event is None or audit_event is None:
             return SubmissionCommitObservation.INCONSISTENT
 
         matches_submission = (
@@ -344,6 +505,14 @@ class SqlAlchemySubmissionRepository:
             and outbox_event.aggregate_id == submission.job_id
             and outbox_event.event_type == submission.event_payload["eventType"]
             and outbox_event.payload == submission.event_payload
+            and audit_event.action == AuditAction.DOCUMENT_SUBMITTED.value
+            and audit_event.actor_principal_id == submission.submitted_by_principal_id
+            and audit_event.document_id == submission.document_id
+            and audit_event.job_id == submission.job_id
+            and audit_event.correlation_id == submission.correlation_id
+            and audit_event.causation_id == submission.event_id
+            and audit_event.details_version == 1
+            and audit_event.details == {}
         )
         if matches_submission:
             return SubmissionCommitObservation.COMMITTED
@@ -393,6 +562,226 @@ class SqlAlchemySubmissionRepository:
                 content_type=document.content_type,
                 size_bytes=document.size_bytes,
             )
+
+    def get_review(self, document_id: UUID, principal_id: UUID) -> ReviewRecord | None:
+        statement = (
+            select(DocumentRow, ProcessingJobRow, ReviewDecisionRow)
+            .join(ProcessingJobRow, ProcessingJobRow.document_id == DocumentRow.id)
+            .outerjoin(ReviewDecisionRow, ReviewDecisionRow.job_id == ProcessingJobRow.id)
+            .where(
+                DocumentRow.id == document_id,
+                DocumentRow.submitted_by_principal_id == principal_id,
+            )
+        )
+        with Session(self._engine) as session:
+            result = session.execute(statement).one_or_none()
+            if result is None:
+                return None
+            _document, job, decision = result._tuple()
+            return self._review_record(job=job, decision=decision)
+
+    def submit_review(self, command: ReviewCommand) -> ReviewRecord:
+        with Session(self._engine) as session, session.begin():
+            session.execute(
+                select(
+                    func.pg_advisory_xact_lock(
+                        self._idempotency_lock_key(
+                            command.principal_id,
+                            command.idempotency_key,
+                        )
+                    )
+                )
+            )
+            document = session.scalar(
+                select(DocumentRow)
+                .where(
+                    DocumentRow.id == command.document_id,
+                    DocumentRow.submitted_by_principal_id == command.principal_id,
+                )
+                .with_for_update()
+            )
+            if document is None:
+                raise ReviewOperationError(code=ReviewOperationFailureCode.DOCUMENT_NOT_FOUND)
+            existing_receipt = session.scalar(
+                select(IdempotencyRecordRow).where(
+                    IdempotencyRecordRow.principal_id == command.principal_id,
+                    IdempotencyRecordRow.operation == REVIEW_OPERATION,
+                    IdempotencyRecordRow.idempotency_key == command.idempotency_key,
+                )
+            )
+            if existing_receipt is not None:
+                if (
+                    existing_receipt.target_document_id != command.document_id
+                    or existing_receipt.request_digest != command.request_digest
+                ):
+                    raise ReviewOperationError(code=ReviewOperationFailureCode.IDEMPOTENCY_CONFLICT)
+                decision = session.get(
+                    ReviewDecisionRow,
+                    existing_receipt.review_decision_id,
+                )
+                if decision is None:
+                    raise RuntimeError("Committed idempotency receipt has no review decision")
+                job = session.get(ProcessingJobRow, decision.job_id)
+                if job is None:
+                    raise RuntimeError("Committed review decision has no processing job")
+                return self._review_record(job=job, decision=decision)
+            job = session.scalar(
+                select(ProcessingJobRow)
+                .where(ProcessingJobRow.document_id == document.id)
+                .with_for_update()
+            )
+            if job is None:
+                raise RuntimeError("Owned document has no processing job")
+            existing_decision = session.scalar(
+                select(ReviewDecisionRow).where(ReviewDecisionRow.job_id == job.id)
+            )
+            current = self._review_record(job=job, decision=existing_decision)
+            if command.if_match != review_entity_tag(current):
+                raise ReviewOperationError(code=ReviewOperationFailureCode.PRECONDITION_FAILED)
+            if existing_decision is not None:
+                raise ReviewOperationError(code=ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE)
+
+            review_status = (
+                ReviewStatus.APPROVED
+                if command.final_classification == current.machine_classification
+                else ReviewStatus.CORRECTED
+            )
+            decision = ReviewDecisionRow(
+                id=command.decision_id,
+                document_id=document.id,
+                job_id=job.id,
+                reviewer_principal_id=command.principal_id,
+                machine_classification=current.machine_classification,
+                final_classification=command.final_classification,
+                status=review_status.value,
+                review_version=1,
+                decided_at=command.decided_at,
+            )
+            session.add(decision)
+            session.flush()
+
+            receipt = IdempotencyRecordRow(
+                id=uuid5(
+                    command.principal_id,
+                    f"{REVIEW_OPERATION}:{command.idempotency_key}",
+                ),
+                principal_id=command.principal_id,
+                operation=REVIEW_OPERATION,
+                idempotency_key=command.idempotency_key,
+                target_document_id=document.id,
+                request_digest=command.request_digest,
+                review_decision_id=decision.id,
+                created_at=command.decided_at,
+            )
+            session.add(receipt)
+            session.flush()
+
+            audit_action = (
+                AuditAction.REVIEW_APPROVED
+                if review_status is ReviewStatus.APPROVED
+                else AuditAction.REVIEW_CORRECTED
+            )
+            session.add(
+                AuditEventRow(
+                    id=uuid5(decision.id, audit_action.value),
+                    action=audit_action.value,
+                    actor_principal_id=command.principal_id,
+                    document_id=document.id,
+                    job_id=job.id,
+                    review_id=decision.id,
+                    correlation_id=command.correlation_id,
+                    causation_id=decision.id,
+                    occurred_at=command.decided_at,
+                    details_version=1,
+                    details={},
+                )
+            )
+            session.flush()
+            return self._review_record(job=job, decision=decision)
+
+    def get_audit_history(
+        self,
+        document_id: UUID,
+        principal_id: UUID,
+    ) -> AuditHistory | None:
+        owned_document = select(DocumentRow.id).where(
+            DocumentRow.id == document_id,
+            DocumentRow.submitted_by_principal_id == principal_id,
+        )
+        events = (
+            select(AuditEventRow)
+            .where(AuditEventRow.document_id == document_id)
+            .order_by(AuditEventRow.occurred_at, AuditEventRow.id)
+        )
+        with Session(self._engine) as session:
+            if session.scalar(owned_document) is None:
+                return None
+            rows = session.scalars(events).all()
+            return AuditHistory(
+                document_id=document_id,
+                events=tuple(
+                    AuditEventRecord(
+                        event_id=row.id,
+                        action=AuditAction(row.action),
+                        occurred_at=row.occurred_at,
+                        actor_principal_id=row.actor_principal_id,
+                        document_id=row.document_id,
+                        job_id=row.job_id,
+                        review_id=row.review_id,
+                        correlation_id=row.correlation_id,
+                        details_version=row.details_version,
+                        details=dict(row.details),
+                    )
+                    for row in rows
+                ),
+            )
+
+    @staticmethod
+    def _idempotency_lock_key(principal_id: UUID, idempotency_key: UUID) -> int:
+        digest = hashlib.sha256(principal_id.bytes + idempotency_key.bytes).digest()
+        return int.from_bytes(digest[:8], byteorder="big", signed=True)
+
+    @staticmethod
+    def _review_record(
+        *,
+        job: ProcessingJobRow,
+        decision: ReviewDecisionRow | None,
+    ) -> ReviewRecord:
+        if (
+            job.status != ProcessingStatus.COMPLETED.value
+            or job.predicted_class not in {"invoice", "report"}
+            or job.confidence is None
+            or job.model_version is None
+        ):
+            raise ReviewOperationError(code=ReviewOperationFailureCode.REVIEW_NOT_AVAILABLE)
+        if decision is None:
+            return ReviewRecord(
+                document_id=job.document_id,
+                job_id=job.id,
+                status=ReviewStatus.UNREVIEWED,
+                machine_classification=job.predicted_class,
+                machine_confidence=job.confidence,
+                model_version=job.model_version,
+                review_version=0,
+            )
+        if (
+            decision.document_id != job.document_id
+            or decision.machine_classification != job.predicted_class
+        ):
+            raise RuntimeError("Review decision does not match immutable machine state")
+        return ReviewRecord(
+            document_id=job.document_id,
+            job_id=job.id,
+            status=ReviewStatus(decision.status),
+            machine_classification=job.predicted_class,
+            machine_confidence=job.confidence,
+            model_version=job.model_version,
+            review_version=decision.review_version,
+            review_id=decision.id,
+            final_classification=decision.final_classification,
+            reviewer_principal_id=decision.reviewer_principal_id,
+            decided_at=decision.decided_at,
+        )
 
     def is_ready(self) -> bool:
         with self._engine.connect() as connection:
@@ -600,6 +989,27 @@ class SqlAlchemyResultEventRepository:
                 return self._duplicate_outcome(receipt=concurrent_receipt, event=event)
 
             self._apply_transition(event=event, job=job)
+            if event.event_type in {ResultEventType.COMPLETED, ResultEventType.FAILED}:
+                audit_action = (
+                    AuditAction.PROCESSING_COMPLETED
+                    if event.event_type is ResultEventType.COMPLETED
+                    else AuditAction.PROCESSING_FAILED
+                )
+                session.add(
+                    AuditEventRow(
+                        id=uuid5(event.event_id, audit_action.value),
+                        action=audit_action.value,
+                        actor_principal_id=API_SYSTEM_PRINCIPAL_ID,
+                        document_id=event.document_id,
+                        job_id=event.job_id,
+                        review_id=None,
+                        correlation_id=event.correlation_id,
+                        causation_id=event.event_id,
+                        occurred_at=event.occurred_at,
+                        details_version=1,
+                        details={},
+                    )
+                )
             session.flush()
             return ResultApplyOutcome.APPLIED
 

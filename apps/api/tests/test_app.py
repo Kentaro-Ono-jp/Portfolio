@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from itertools import count
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 
-from reactorfront_api.app import CORRELATION_HEADER, create_app
+from reactorfront_api.app import CORRELATION_HEADER, create_app, document_capability
+from reactorfront_api.authentication import Capability
 from reactorfront_api.domain import DocumentStatusRecord, ProcessingStatus
 from reactorfront_api.request_limits import MULTIPART_ENVELOPE_BYTES
 from reactorfront_api.service import MAX_DOCUMENT_BYTES, DocumentService
@@ -17,6 +20,8 @@ DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
 JOB_ID = UUID("33333333-3333-4333-8333-333333333333")
 EVENT_ID = UUID("44444444-4444-4444-8444-444444444444")
 PRINCIPAL_ID = UUID("55555555-5555-4555-8555-555555555555")
+REVIEW_ID = UUID("77777777-7777-4777-8777-777777777777")
+IDEMPOTENCY_KEY = UUID("88888888-8888-4888-8888-888888888888")
 NOW = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
 
 
@@ -27,13 +32,26 @@ def make_client(
 ) -> tuple[TestClient, FakeRepository, FakeStorage]:
     selected_repository = repository or FakeRepository()
     selected_storage = storage or FakeStorage()
-    ids = iter((DOCUMENT_ID, JOB_ID, EVENT_ID))
+    clock_ticks = count()
+    ids = iter(
+        (
+            DOCUMENT_ID,
+            JOB_ID,
+            EVENT_ID,
+            REVIEW_ID,
+            UUID("99999999-9999-4999-8999-999999999999"),
+            UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+            UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+            UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+        )
+    )
     service = DocumentService(
         repository=selected_repository,
         object_storage=selected_storage,
         event_validator=FakeValidator(),
         id_factory=lambda: next(ids),
-        clock=lambda: NOW,
+        clock=lambda: NOW + timedelta(seconds=next(clock_ticks)),
     )
     authorizer = FakeRequestAuthorizer(principal_id=PRINCIPAL_ID)
     return (
@@ -44,6 +62,22 @@ def make_client(
         selected_repository,
         selected_storage,
     )
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "expected"),
+    [
+        ("GET", f"/api/v1/documents/{DOCUMENT_ID}/review", Capability.DOCUMENTS_READ),
+        ("PUT", f"/api/v1/documents/{DOCUMENT_ID}/review", Capability.REVIEWS_WRITE),
+        ("GET", f"/api/v1/documents/{DOCUMENT_ID}/audit-events", Capability.AUDIT_READ),
+    ],
+)
+def test_review_and_audit_routes_select_exact_capabilities(
+    method: str,
+    path: str,
+    expected: Capability,
+) -> None:
+    assert document_capability(method, path) is expected
 
 
 def test_document_submission_and_lookup_preserve_correlation_id() -> None:
@@ -175,6 +209,253 @@ def test_private_source_is_verified_and_other_owner_matches_unknown_document() -
     assert hidden_source.json()["code"] == unknown_source.json()["code"]
 
 
+def test_review_decision_etag_idempotency_and_audit_contract() -> None:
+    client, repository, _storage = make_client()
+    with client:
+        accepted = client.post(
+            "/api/v1/documents",
+            files={"file": ("invoice.pdf", b"%PDF-1.7\ntest", "application/pdf")},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        assert accepted.status_code == 202
+        repository.records[DOCUMENT_ID] = DocumentStatusRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ProcessingStatus.COMPLETED,
+            created_at=NOW,
+            started_at=NOW,
+            completed_at=NOW,
+            predicted_class="invoice",
+            confidence=0.9876,
+            model_version="document-type-v1",
+        )
+        current = client.get(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+
+        missing_precondition = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        stale = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": f'"{"0" * 64}"',
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        committed = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        replay = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        conflict = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "report"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        terminal_stale = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        terminal_current = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": committed.headers["ETag"],
+                "Idempotency-Key": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        audit = client.get(
+            f"/api/v1/documents/{DOCUMENT_ID}/audit-events",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+
+    assert current.status_code == 200
+    assert_openapi_response(
+        current,
+        path="/api/v1/documents/{documentId}/review",
+        method="get",
+    )
+    assert current.json() == {
+        "documentId": str(DOCUMENT_ID),
+        "jobId": str(JOB_ID),
+        "status": "unreviewed",
+        "machineClassification": "invoice",
+        "machineConfidence": 0.9876,
+        "modelVersion": "document-type-v1",
+        "reviewVersion": 0,
+    }
+    assert missing_precondition.status_code == 428
+    assert_openapi_response(
+        missing_precondition,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert missing_precondition.json()["code"] == "PRECONDITION_REQUIRED"
+    assert stale.status_code == 412
+    assert_openapi_response(
+        stale,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert stale.json()["code"] == "PRECONDITION_FAILED"
+    assert committed.status_code == 200
+    assert_openapi_response(
+        committed,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert committed.json()["status"] == "approved"
+    assert committed.json()["finalClassification"] == "invoice"
+    assert committed.json()["reviewerPrincipalId"] == str(PRINCIPAL_ID)
+    assert committed.headers["ETag"] != current.headers["ETag"]
+    assert replay.status_code == 200
+    assert replay.json() == committed.json()
+    assert replay.headers["ETag"] == committed.headers["ETag"]
+    assert conflict.status_code == 409
+    assert_openapi_response(
+        conflict,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert conflict.json()["code"] == "IDEMPOTENCY_CONFLICT"
+    assert terminal_stale.status_code == 412
+    assert_openapi_response(
+        terminal_stale,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert terminal_stale.json()["code"] == "PRECONDITION_FAILED"
+    assert terminal_current.status_code == 409
+    assert_openapi_response(
+        terminal_current,
+        path="/api/v1/documents/{documentId}/review",
+        method="put",
+    )
+    assert terminal_current.json()["code"] == "REVIEW_NOT_AVAILABLE"
+    assert len(repository.reviews) == 1
+    assert len(repository.idempotency_records) == 1
+    assert audit.status_code == 200
+    assert_openapi_response(
+        audit,
+        path="/api/v1/documents/{documentId}/audit-events",
+        method="get",
+    )
+    assert [event["action"] for event in audit.json()["events"]] == [
+        "document.submitted",
+        "review.approved",
+    ]
+
+
+def test_review_hides_cross_owner_target_before_idempotency_conflict() -> None:
+    client, repository, _storage = make_client()
+    hidden_document_id = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+    hidden_job_id = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+    hidden_owner_id = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+    fresh_key = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
+
+    with client:
+        accepted = client.post(
+            "/api/v1/documents",
+            files={"file": ("invoice.pdf", b"%PDF-1.7\ntest", "application/pdf")},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        assert accepted.status_code == 202
+        repository.records[DOCUMENT_ID] = DocumentStatusRecord(
+            document_id=DOCUMENT_ID,
+            job_id=JOB_ID,
+            status=ProcessingStatus.COMPLETED,
+            created_at=NOW,
+            started_at=NOW,
+            completed_at=NOW,
+            predicted_class="invoice",
+            confidence=0.9876,
+            model_version="document-type-v1",
+        )
+        current = client.get(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        committed = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        assert committed.status_code == 200
+
+        repository.owners[hidden_document_id] = hidden_owner_id
+        repository.records[hidden_document_id] = DocumentStatusRecord(
+            document_id=hidden_document_id,
+            job_id=hidden_job_id,
+            status=ProcessingStatus.COMPLETED,
+            created_at=NOW,
+            started_at=NOW,
+            completed_at=NOW,
+            predicted_class="report",
+            confidence=0.9,
+            model_version="document-type-v1",
+        )
+        reused_key = client.put(
+            f"/api/v1/documents/{hidden_document_id}/review",
+            json={"finalClassification": "report"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        unused_key = client.put(
+            f"/api/v1/documents/{hidden_document_id}/review",
+            json={"finalClassification": "report"},
+            headers={
+                "If-Match": current.headers["ETag"],
+                "Idempotency-Key": str(fresh_key),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+
+    assert reused_key.status_code == 404
+    assert reused_key.json() == unused_key.json()
+    assert reused_key.json()["code"] == "DOCUMENT_NOT_FOUND"
+    assert len(repository.reviews) == 1
+    assert len(repository.idempotency_records) == 1
+
+
 def test_request_validation_problems_match_contract_and_skip_service() -> None:
     client, repository, storage = make_client()
 
@@ -193,11 +474,59 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
             "/api/v1/documents/not-a-uuid",
             headers={CORRELATION_HEADER: str(CORRELATION_ID)},
         )
+        invalid_review_path = client.put(
+            "/api/v1/documents/not-a-uuid/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": f'"{"0" * 64}"',
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        invalid_review_body = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={
+                "finalClassification": "invoice",
+                "reviewerPrincipalId": str(PRINCIPAL_ID),
+            },
+            headers={
+                "If-Match": f'"{"0" * 64}"',
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        invalid_idempotency_key = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": f'"{"0" * 64}"',
+                "Idempotency-Key": "not-a-uuid",
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        invalid_if_match = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": "not-an-entity-tag",
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
+        invalid_audit_path = client.get(
+            "/api/v1/documents/not-a-uuid/audit-events",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
 
     contracts = [
         (missing_file, "/api/v1/documents", "post"),
         (invalid_header, "/api/v1/documents", "post"),
         (invalid_path, "/api/v1/documents/{documentId}", "get"),
+        (invalid_review_path, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_review_body, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_idempotency_key, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_if_match, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_audit_path, "/api/v1/documents/{documentId}/audit-events", "get"),
     ]
     for response, path, method in contracts:
         assert response.status_code == 422
@@ -216,6 +545,9 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
     assert invalid_header.headers[CORRELATION_HEADER] != "not-a-uuid"
     assert invalid_path.headers[CORRELATION_HEADER] == str(CORRELATION_ID)
     assert not repository.submissions
+    assert not repository.reviews
+    assert not repository.idempotency_records
+    assert not repository.audit_events
     assert not storage.objects
 
 
@@ -237,11 +569,22 @@ def test_anonymous_malformed_document_requests_authenticate_before_validation() 
             "/api/v1/documents/not-a-uuid/source",
             headers={CORRELATION_HEADER: str(CORRELATION_ID)},
         )
+        invalid_review = client.put(
+            "/api/v1/documents/not-a-uuid/review",
+            json={"unexpected": True},
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
+        invalid_audit_path = client.get(
+            "/api/v1/documents/not-a-uuid/audit-events",
+            headers={CORRELATION_HEADER: str(CORRELATION_ID)},
+        )
 
     contracts = [
         (missing_file, "/api/v1/documents", "post"),
         (invalid_path, "/api/v1/documents/{documentId}", "get"),
         (invalid_source_path, "/api/v1/documents/{documentId}/source", "get"),
+        (invalid_review, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_audit_path, "/api/v1/documents/{documentId}/audit-events", "get"),
     ]
     for response, path, method in contracts:
         assert response.status_code == 401

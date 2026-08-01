@@ -36,6 +36,9 @@ def assert_token_absent_from_persistence(database_url: str, access_token: str) -
                 "processing_jobs",
                 "outbox_events",
                 "result_event_receipts",
+                "review_decisions",
+                "idempotency_records",
+                "audit_events",
             ):
                 found = connection.execute(
                     text(

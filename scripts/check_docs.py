@@ -94,6 +94,7 @@ IPS_FILE_ROLES = {
     Path("ips-microkernel/ci/knowledge/recovery.md"): "knowledge",
     Path("ips-microkernel/ci/knowledge/evidence.md"): "knowledge",
     Path("ips-microkernel/ci/knowledge/identity.md"): "knowledge",
+    Path("ips-microkernel/ci/knowledge/contracts.md"): "knowledge",
     Path("ips-microkernel/ci/knowledge/framework-runtime.md"): "knowledge",
 }
 ENTRYPOINT_FILE_ROLES = {
@@ -179,6 +180,7 @@ CANONICAL_RULE_OWNERS = {
     "ci-knowledge-recovery": Path("ips-microkernel/ci/knowledge/recovery.md"),
     "ci-knowledge-evidence": Path("ips-microkernel/ci/knowledge/evidence.md"),
     "ci-knowledge-identity": Path("ips-microkernel/ci/knowledge/identity.md"),
+    "ci-knowledge-contracts": Path("ips-microkernel/ci/knowledge/contracts.md"),
     "ci-knowledge-framework-runtime": Path(
         "ips-microkernel/ci/knowledge/framework-runtime.md"
     ),
@@ -350,6 +352,7 @@ REQUIRED_ROUTE_LINKS = {
         Path("ips-microkernel/ci/knowledge/recovery.md"),
         Path("ips-microkernel/ci/knowledge/evidence.md"),
         Path("ips-microkernel/ci/knowledge/identity.md"),
+        Path("ips-microkernel/ci/knowledge/contracts.md"),
         Path("ips-microkernel/ci/knowledge/framework-runtime.md"),
     ),
 }
@@ -870,20 +873,35 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Authenticate before request validation",
         "Publish exact review endpoints",
         "Invalidate head-bound review evidence",
+        "Authorize a target before idempotency classification",
+        "Enforce closed request contracts at runtime",
+        "Serialize only reachable discriminated states",
+        "Enforce constrained request parameters at runtime",
         "Editing only the PR title or body does not change the Git commit",
         "Knowledge write-back: none",
         "There is no pending intake queue",
     ),
     Path("ips-microkernel/ci/knowledge/selector.md"): (
         "Identity proof knowledge",
+        "API contract proof knowledge",
         "Framework runtime proof knowledge",
         "proof semantics as well as runner mechanics",
     ),
     Path("ips-microkernel/ci/knowledge/identity.md"): (
         "Reject legacy ownership assumptions",
         "Derive exact validated token identity",
+        "Cross ownership hiding with replay classification",
         "run 30627309389",
         "run 30627826543",
+    ),
+    Path("ips-microkernel/ci/knowledge/isolation.md"): (
+        "Preserve production failure precedence",
+        "same first failure as production",
+    ),
+    Path("ips-microkernel/ci/knowledge/contracts.md"): (
+        "Reject extras through the runtime boundary",
+        "Prove reachable and unreachable union states",
+        "Match parameter constraints at the production boundary",
     ),
     Path("ips-microkernel/ci/knowledge/framework-runtime.md"): (
         "Prove state across production bundle boundaries",

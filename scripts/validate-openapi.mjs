@@ -6,7 +6,10 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { parse } from "yaml";
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const openapiPath = path.join(
   repositoryRoot,
   "packages",
@@ -14,7 +17,8 @@ const openapiPath = path.join(
   "openapi",
   "openapi.yaml",
 );
-const documentSchemaId = "https://portfolio.reactorfront.dev/contracts/openapi-document";
+const documentSchemaId =
+  "https://portfolio.reactorfront.dev/contracts/openapi-document";
 const openapi = parse(await readFile(openapiPath, "utf8"));
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
@@ -39,7 +43,11 @@ function resolveLocalReference(value) {
   return value.$ref
     .slice(2)
     .split("/")
-    .reduce((current, segment) => current[segment.replaceAll("~1", "/").replaceAll("~0", "~")], openapi);
+    .reduce(
+      (current, segment) =>
+        current[segment.replaceAll("~1", "/").replaceAll("~0", "~")],
+      openapi,
+    );
 }
 
 function responseValidator(pathName, method, httpStatus) {
@@ -58,7 +66,9 @@ function componentResponseValidator(responseName) {
 
 function expectValid(validate, value, name) {
   if (!validate(value)) {
-    throw new Error(`${name} should be valid: ${formatErrors(validate.errors)}`);
+    throw new Error(
+      `${name} should be valid: ${formatErrors(validate.errors)}`,
+    );
   }
 }
 
@@ -131,6 +141,87 @@ const invalidDocumentStatuses = [
 
 for (const invalidCase of invalidDocumentStatuses) {
   expectInvalid(documentStatus, invalidCase.value, invalidCase.name);
+}
+
+const reviewDecisionRequest = compileReference(
+  "#/components/schemas/ReviewDecisionRequest",
+);
+expectValid(
+  reviewDecisionRequest,
+  { finalClassification: "invoice" },
+  "review decision request",
+);
+expectInvalid(
+  reviewDecisionRequest,
+  {
+    finalClassification: "invoice",
+    reviewerPrincipalId: "55555555-5555-4555-8555-555555555555",
+  },
+  "review decision request with actor override",
+);
+
+const review = compileReference("#/components/schemas/Review");
+const terminalReview = compileReference("#/components/schemas/TerminalReview");
+const reviewIdentity = {
+  documentId: "22222222-2222-4222-8222-222222222222",
+  jobId: "33333333-3333-4333-8333-333333333333",
+  machineClassification: "invoice",
+  machineConfidence: 0.98,
+  modelVersion: "document-type-v1",
+};
+const terminalIdentity = {
+  ...reviewIdentity,
+  reviewVersion: 1,
+  reviewerPrincipalId: "55555555-5555-4555-8555-555555555555",
+  decidedAt: "2026-08-01T00:00:00Z",
+};
+const validReviews = [
+  { ...reviewIdentity, status: "unreviewed", reviewVersion: 0 },
+  {
+    ...terminalIdentity,
+    status: "approved",
+    finalClassification: "invoice",
+  },
+  {
+    ...terminalIdentity,
+    status: "corrected",
+    finalClassification: "report",
+  },
+];
+
+for (const reviewState of validReviews) {
+  expectValid(review, reviewState, `review state ${reviewState.status}`);
+  if (reviewState.status !== "unreviewed") {
+    expectValid(
+      terminalReview,
+      reviewState,
+      `terminal review state ${reviewState.status}`,
+    );
+  }
+}
+
+const invalidReviewStates = [
+  {
+    name: "approved review with changed classification",
+    value: {
+      ...terminalIdentity,
+      status: "approved",
+      finalClassification: "report",
+    },
+  },
+  {
+    name: "corrected review with unchanged classification",
+    value: {
+      ...terminalIdentity,
+      status: "corrected",
+      finalClassification: "invoice",
+    },
+  },
+];
+
+for (const invalidCase of invalidReviewStates) {
+  expectInvalid(review, invalidCase.value, invalidCase.name);
+  expectInvalid(terminalReview, invalidCase.value, invalidCase.name);
 }
 
 const correlationId = "11111111-1111-4111-8111-111111111111";
@@ -234,7 +325,11 @@ for (const contract of problemContracts) {
     correlationId,
   };
 
-  expectValid(validate, validProblem, `${contract.httpStatus} ${contract.code}`);
+  expectValid(
+    validate,
+    validProblem,
+    `${contract.httpStatus} ${contract.code}`,
+  );
   expectInvalid(
     validate,
     { ...validProblem, status: contract.httpStatus === 503 ? 400 : 503 },
@@ -250,6 +345,8 @@ for (const contract of problemContracts) {
 console.log(
   `Validated ${validDocumentStatuses.length} document states, ` +
     `${invalidDocumentStatuses.length} invalid state cases, and ` +
+    `${validReviews.length} review states with ` +
+    `${invalidReviewStates.length} invalid review states, and ` +
     `${problemContracts.length * 2 + authenticationContracts.length} ` +
     `invalid problem cases.`,
 );
