@@ -183,17 +183,25 @@ proved/unproved classification, or permanence claim.
   artifact that still contains opaque private content or a rendered browser
   container.
 - **Detect:** Register one opaque canary for each accepted private-content
-  category, place raw and encoded forms in an ordinary file and ZIP member,
-  place trace and rendered-media containers under the public artifact root,
-  then execute sanitization and the post-sanitization scan.
-- **Pass:** Every registered raw or encoded canary is absent after sanitization,
-  canary values are absent from the report, browser trace/rendered containers
-  are outside the public upload root, and any such container left in that root
+  category and every profile identifier when first observed, before any
+  assertion or reporter can serialize it. With encoders independent of the
+  sanitizer, place raw, standard-base64, URL-safe padded and unpadded, strict
+  percent, and lowercase-percent forms in both an ordinary file and ZIP
+  member; place an unexpected observed profile value in failure JUnit; place
+  trace and rendered-media containers under the public artifact root; then
+  execute sanitization and the post-sanitization scan.
+- **Pass:** Every statically or dynamically registered canary and every
+  independently generated form is absent after sanitization, canary values are
+  absent from the report, unexpected observed profile values cannot enter
+  public failure text unregistered, browser trace/rendered containers are
+  outside the public upload root, and any such container left in that root
   fails the upload gate.
 - **Repair:** Move browser-owned binary and report containers to a non-uploaded
-  root, register exact submitted/profile canaries before browser navigation,
-  redact their raw and encoded forms from public ordinary files and ZIP
-  members, re-scan with the same in-memory canaries, and block upload on any
+  root; register exact submitted canaries before browser navigation and every
+  received reviewer/actor value before assertions; redact raw, standard-base64,
+  URL-safe padded and unpadded, strict-percent, and lowercase-percent forms
+  from public ordinary files and ZIP members; prove the matrix with independent
+  encoders; re-scan with the same in-memory canaries; and block upload on any
   remaining private container or value.
 - **Origins:** PR #68
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152433244).

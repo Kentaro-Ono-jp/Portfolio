@@ -5,11 +5,34 @@ import json
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import quote_from_bytes
 
 import pytest
 from scripts import sanitize_verification_artifacts as sanitizer
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+
+def independently_encoded_variants(value: bytes) -> tuple[bytes, ...]:
+    strict_percent = quote_from_bytes(value, safe="").encode("ascii")
+    lowercase_percent = bytearray()
+    index = 0
+    while index < len(strict_percent):
+        if strict_percent[index : index + 1] == b"%":
+            lowercase_percent.extend(b"%")
+            lowercase_percent.extend(strict_percent[index + 1 : index + 3].lower())
+            index += 3
+        else:
+            lowercase_percent.append(strict_percent[index])
+            index += 1
+    return (
+        value,
+        base64.b64encode(value),
+        base64.urlsafe_b64encode(value),
+        base64.urlsafe_b64encode(value).rstrip(b"="),
+        strict_percent,
+        bytes(lowercase_percent),
+    )
 
 
 def test_artifact_scan_accepts_sanitized_evidence(tmp_path: Path) -> None:
@@ -153,6 +176,105 @@ def test_artifact_scan_uses_registered_private_content_canaries(
     assert report["registeredCanaryCategories"] == sorted(sanitizer.CANARY_CATEGORIES)
 
 
+def test_artifact_scan_covers_independently_encoded_canary_matrix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    submitted_pdf = b"%PDF-1.7\n/Type /Catalog /Pages private-body\xfb\xff"
+    variants = independently_encoded_variants(submitted_pdf)
+    assert quote_from_bytes(submitted_pdf, safe="").encode("ascii") in variants
+    assert b"%2FType" in variants[-2]
+    assert b"%2fType" in variants[-1]
+    (tmp_path / sanitizer.CANARY_MANIFEST_NAME).write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "canaries": [
+                    {
+                        "category": "submitted private data",
+                        "encoding": "base64",
+                        "value": base64.b64encode(submitted_pdf).decode("ascii"),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    separator = b"\n--independent-variant--\n"
+    (tmp_path / "ordinary.bin").write_bytes(separator.join(variants))
+    with zipfile.ZipFile(tmp_path / "diagnostics.zip", "w") as archive:
+        archive.writestr("resource.body", separator.join(reversed(variants)))
+
+    canaries = sanitizer.load_sensitive_canaries(tmp_path)
+    findings = sanitizer.scan_artifacts(tmp_path, canaries)
+    assert findings[(tmp_path / "ordinary.bin").as_posix()] == ["submitted private data"]
+    assert findings[f"{(tmp_path / 'diagnostics.zip').as_posix()}!resource.body"] == [
+        "submitted private data"
+    ]
+
+    monkeypatch.setattr(
+        sanitizer,
+        "parse_args",
+        lambda: SimpleNamespace(artifacts=tmp_path),
+    )
+    assert sanitizer.main() == 0
+    assert sanitizer.scan_artifacts(tmp_path, canaries) == {}
+    ordinary = (tmp_path / "ordinary.bin").read_bytes()
+    with zipfile.ZipFile(tmp_path / "diagnostics.zip") as archive:
+        zipped = archive.read("resource.body")
+    for variant in variants:
+        assert variant not in ordinary
+        assert variant not in zipped
+
+
+def test_unexpected_runtime_profile_canary_is_redacted_from_junit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_actor = "11111111-1111-4111-8111-111111111111"
+    unexpected_actor = "22222222-2222-4222-8222-222222222222"
+    (tmp_path / sanitizer.CANARY_MANIFEST_NAME).write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "canaries": [
+                    {
+                        "category": "private profile claim",
+                        "encoding": "utf8",
+                        "value": expected_actor,
+                    },
+                    {
+                        "category": "private profile claim",
+                        "encoding": "utf8",
+                        "value": unexpected_actor,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    junit = tmp_path / "playwright-junit.xml"
+    junit.write_text(
+        f"<failure>expected {expected_actor}, received {unexpected_actor}</failure>",
+        encoding="utf-8",
+    )
+
+    canaries = sanitizer.load_sensitive_canaries(tmp_path)
+    assert sanitizer.scan_artifacts(tmp_path, canaries) == {
+        junit.as_posix(): ["private profile claim"]
+    }
+    monkeypatch.setattr(
+        sanitizer,
+        "parse_args",
+        lambda: SimpleNamespace(artifacts=tmp_path),
+    )
+    assert sanitizer.main() == 0
+    sanitized_junit = junit.read_text(encoding="utf-8")
+    assert expected_actor not in sanitized_junit
+    assert unexpected_actor not in sanitized_junit
+    assert sanitizer.scan_artifacts(tmp_path, canaries) == {}
+
+
 def test_public_artifact_root_rejects_private_browser_containers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -194,5 +316,19 @@ def test_workflow_sanitizes_before_failure_upload_and_always_tears_down() -> Non
     assert "outputFolder: path.join(privateArtifactRoot" in playwright_config
     assert "outputFile: path.join(publicArtifactRoot" in playwright_config
     assert "writeSensitiveCanaryManifest(sensitiveCanaries)" in browser_proof
+    register_profile = browser_proof.index("function registerObservedPrivateProfileCanaries(")
+    register_audit_profiles = browser_proof.index("...events.map((event) =>", register_profile)
+    validate_audit_events = browser_proof.index("return events.map((event) => {")
+    register_approved_profile = browser_proof.index(
+        "approved.reviewerPrincipalId,", validate_audit_events
+    )
+    validate_approved = browser_proof.index("expect(approved).toMatchObject({")
+    register_corrected_profile = browser_proof.index(
+        "corrected.reviewerPrincipalId,", validate_approved
+    )
+    validate_corrected = browser_proof.index("expect(corrected).toMatchObject({")
+    assert register_audit_profiles < validate_audit_events
+    assert register_approved_profile < validate_approved
+    assert register_corrected_profile < validate_corrected
     assert 'path.join(PRIVATE_ARTIFACT_ROOT, "e2e-approved-review.png")' in browser_proof
     assert 'path.join(PRIVATE_ARTIFACT_ROOT, "e2e-corrected-review.png")' in browser_proof

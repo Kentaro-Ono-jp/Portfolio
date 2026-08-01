@@ -53,6 +53,31 @@ function writeSensitiveCanaryManifest(canaries: SensitiveCanary[]): void {
   );
 }
 
+function registerObservedPrivateProfileCanaries(
+  canaries: SensitiveCanary[],
+  ...values: unknown[]
+): void {
+  let changed = false;
+  for (const value of values) {
+    if (typeof value !== "string" || Buffer.byteLength(value, "utf8") < 8) {
+      continue;
+    }
+    const duplicate = canaries.some(
+      (canary) =>
+        canary.category === "private profile claim" &&
+        canary.encoding === "utf8" &&
+        canary.value === value,
+    );
+    if (!duplicate) {
+      canaries.push(sensitiveCanary("private profile claim", value));
+      changed = true;
+    }
+  }
+  if (changed) {
+    writeSensitiveCanaryManifest(canaries);
+  }
+}
+
 interface AcceptedPayload {
   documentId: string;
   jobId: string;
@@ -244,11 +269,22 @@ async function browserJsonRequest(
   );
 }
 
-function auditEvents(result: BrowserFetchResult): AuditEventEvidence[] {
+function auditEvents(
+  result: BrowserFetchResult,
+  sensitiveCanaries: SensitiveCanary[],
+): AuditEventEvidence[] {
   const events = result.body?.events;
   if (!Array.isArray(events)) {
     throw new Error("Audit history did not contain an event array.");
   }
+  registerObservedPrivateProfileCanaries(
+    sensitiveCanaries,
+    ...events.map((event) =>
+      typeof event === "object" && event !== null
+        ? (event as Record<string, unknown>).actorPrincipalId
+        : undefined,
+    ),
+  );
   return events.map((event) => {
     if (typeof event !== "object" || event === null) {
       throw new Error("Audit history contained an invalid event.");
@@ -469,6 +505,10 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     .click();
   const approvalDecision = await approvalDecisionResponse;
   const approved = await responseJson<ReviewPayload>(approvalDecision);
+  registerObservedPrivateProfileCanaries(
+    sensitiveCanaries,
+    approved.reviewerPrincipalId,
+  );
   const approvalDecisionCorrelation = await correlationPair(approvalDecision);
   const approvalRequestHeaders = {
     csrf: await approvalDecision.request().headerValue("X-CSRF-Token"),
@@ -487,12 +527,6 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     reviewVersion: 1,
   });
   expect(approved.reviewerPrincipalId).toMatch(UUID_PATTERN);
-  if (approved.reviewerPrincipalId !== undefined) {
-    sensitiveCanaries.push(
-      sensitiveCanary("private profile claim", approved.reviewerPrincipalId),
-    );
-    writeSensitiveCanaryManifest(sensitiveCanaries);
-  }
   await expect(
     page.getByText("review.approved", { exact: true }),
   ).toBeVisible();
@@ -500,7 +534,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     page,
     `/api/documents/${approvalAccepted.documentId}/audit-events`,
   );
-  const approvalAuditEvents = auditEvents(approvalAudit);
+  const approvalAuditEvents = auditEvents(approvalAudit, sensitiveCanaries);
   const approvalAuditActions = approvalAuditEvents.map((event) => event.action);
   expect(approvalAuditActions).toEqual([
     "document.submitted",
@@ -594,6 +628,10 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     .click();
   const correctionDecision = await correctionDecisionResponse;
   const corrected = await responseJson<ReviewPayload>(correctionDecision);
+  registerObservedPrivateProfileCanaries(
+    sensitiveCanaries,
+    corrected.reviewerPrincipalId,
+  );
   const correctionDecisionCorrelation =
     await correlationPair(correctionDecision);
   expect(corrected).toMatchObject({
@@ -610,7 +648,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     page,
     `/api/documents/${correctionAccepted.documentId}/audit-events`,
   );
-  const correctionAuditEvents = auditEvents(correctionAudit);
+  const correctionAuditEvents = auditEvents(correctionAudit, sensitiveCanaries);
   const correctionAuditActions = correctionAuditEvents.map(
     (event) => event.action,
   );

@@ -113,8 +113,10 @@ Supporting scripts are implementation details of that entrypoint:
 - `sanitize_verification_artifacts.py` redacts then re-scans ordinary evidence
   and ZIP members for private-key, JWT, Web-session-cookie, CSRF-token,
   authorization-code, and bearer material. The browser proof also registers
-  submitted-source, submitted-private-data, and private-profile canaries before
-  navigation; raw, base64, URL-safe, and percent-encoded forms are removed and
+  submitted-source, submitted-private-data, and static private-profile canaries
+  before navigation, then registers received reviewer and audit-actor values
+  before assertions can report them. Raw, standard-base64, URL-safe padded and
+  unpadded, strict-percent, and lowercase-percent forms are removed and
   re-scanned without writing canary values to the report. Private browser
   containers in the public root close the upload gate. GitHub Actions uploads
   failure evidence only after this proof succeeds; failure cannot suppress

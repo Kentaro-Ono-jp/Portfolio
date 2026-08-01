@@ -163,12 +163,17 @@ def load_sensitive_canaries(root: Path) -> tuple[SensitiveCanary, ...]:
 
 
 def canary_variants(value: bytes) -> tuple[bytes, ...]:
+    strict_percent_encoded = quote_from_bytes(value, safe="").encode("ascii")
+    lowercase_percent_encoded = re.sub(
+        rb"%[0-9A-F]{2}", lambda match: match.group(0).lower(), strict_percent_encoded
+    )
     variants = {
         value,
         base64.b64encode(value),
         base64.urlsafe_b64encode(value),
         base64.urlsafe_b64encode(value).rstrip(b"="),
-        quote_from_bytes(value).encode("ascii"),
+        strict_percent_encoded,
+        lowercase_percent_encoded,
     }
     return tuple(
         sorted((item for item in variants if len(item) >= 8), key=len, reverse=True)
