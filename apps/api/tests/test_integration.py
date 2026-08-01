@@ -35,6 +35,12 @@ from reactorfront_api.domain import (
     ResultEventFailureCode,
     ResultEventInvariantError,
     ResultEventType,
+    ReviewCommand,
+    ReviewOperationError,
+    ReviewOperationFailureCode,
+    ReviewRecord,
+    ReviewStatus,
+    review_entity_tag,
 )
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
 from reactorfront_api.outbox import (
@@ -43,6 +49,7 @@ from reactorfront_api.outbox import (
     OutboxDispatcher,
 )
 from reactorfront_api.persistence import (
+    API_SYSTEM_PRINCIPAL_ID,
     LEGACY_SYSTEM_PRINCIPAL_ID,
     DocumentRow,
     OutboxEventRow,
@@ -138,6 +145,9 @@ def table_count(engine: Engine, table_name: str) -> int:
         "outbox_events",
         "result_event_receipts",
         "principals",
+        "review_decisions",
+        "idempotency_records",
+        "audit_events",
     }
     if table_name not in allowed_tables:
         raise ValueError(f"Unexpected table name: {table_name}")
@@ -161,13 +171,17 @@ def test_oidc_principal_resolution_is_stable_and_distinct_from_legacy(
 
     assert first.principal_id == repeated.principal_id
     assert first.principal_id != LEGACY_SYSTEM_PRINCIPAL_ID
-    assert table_count(engine, "principals") == 2
+    assert table_count(engine, "principals") == 3
     with Session(engine) as session:
         legacy = session.get(PrincipalRow, LEGACY_SYSTEM_PRINCIPAL_ID)
         assert legacy is not None
         assert legacy.kind == "system"
         assert legacy.issuer is None
         assert legacy.subject is None
+        api_system = session.get(PrincipalRow, API_SYSTEM_PRINCIPAL_ID)
+        assert api_system is not None
+        assert api_system.kind == "system"
+        assert api_system.system_key == "api-processing"
 
 
 def test_submission_crosses_real_http_postgres_and_s3_boundaries(
@@ -911,3 +925,176 @@ def test_result_event_transaction_rolls_back_receipt_and_invalid_result(
     assert status.status is ProcessingStatus.PROCESSING
     assert status.predicted_class is None
     assert table_count(engine, "result_event_receipts") == 1
+
+
+def test_review_concurrency_idempotency_and_audit_history_use_one_winner(
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+) -> None:
+    seed_queued_integration_job(settings=settings, engine=engine, s3=s3)
+    result_repository = SqlAlchemyResultEventRepository(engine=engine)
+    assert (
+        result_repository.apply(integration_result_event(ResultEventType.STARTED, occurred_at=NOW))
+        is ResultApplyOutcome.APPLIED
+    )
+    assert (
+        result_repository.apply(
+            integration_result_event(
+                ResultEventType.COMPLETED,
+                occurred_at=NOW + timedelta(seconds=1),
+            )
+        )
+        is ResultApplyOutcome.APPLIED
+    )
+
+    repository = SqlAlchemySubmissionRepository(engine=engine)
+    current = repository.get_review(DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID)
+    assert current is not None
+    assert current.status is ReviewStatus.UNREVIEWED
+    current_tag = review_entity_tag(current)
+    commands = [
+        ReviewCommand(
+            document_id=DOCUMENT_ID,
+            principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+            correlation_id=CORRELATION_ID,
+            final_classification=final_classification,
+            if_match=current_tag,
+            idempotency_key=idempotency_key,
+            request_digest=hashlib.sha256(
+                json.dumps(
+                    {"finalClassification": final_classification},
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode()
+            ).hexdigest(),
+            decision_id=decision_id,
+            decided_at=NOW + timedelta(seconds=2),
+        )
+        for final_classification, idempotency_key, decision_id in (
+            (
+                "invoice",
+                UUID("55555555-5555-4555-8555-555555555555"),
+                UUID("66666666-6666-4666-8666-666666666666"),
+            ),
+            (
+                "report",
+                UUID("77777777-7777-4777-8777-777777777777"),
+                UUID("88888888-8888-4888-8888-888888888888"),
+            ),
+        )
+    ]
+
+    def commit_review(
+        command: ReviewCommand,
+    ) -> tuple[ReviewCommand, object]:
+        try:
+            return command, repository.submit_review(command)
+        except ReviewOperationError as error:
+            return command, error.code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(commit_review, commands))
+
+    winners = [
+        (command, outcome)
+        for command, outcome in outcomes
+        if not isinstance(outcome, ReviewOperationFailureCode)
+    ]
+    losers = [
+        outcome for _command, outcome in outcomes if isinstance(outcome, ReviewOperationFailureCode)
+    ]
+    assert len(winners) == 1
+    assert losers == [ReviewOperationFailureCode.PRECONDITION_FAILED]
+    winning_command, winning_record = winners[0]
+    assert isinstance(winning_record, ReviewRecord)
+    assert repository.submit_review(winning_command) == winning_record
+
+    conflicting_replay = replace(
+        winning_command,
+        final_classification=(
+            "report" if winning_command.final_classification == "invoice" else "invoice"
+        ),
+        request_digest="f" * 64,
+        decision_id=UUID("99999999-9999-4999-8999-999999999999"),
+    )
+    with pytest.raises(ReviewOperationError) as captured:
+        repository.submit_review(conflicting_replay)
+    assert captured.value.code is ReviewOperationFailureCode.IDEMPOTENCY_CONFLICT
+
+    assert table_count(engine, "review_decisions") == 1
+    assert table_count(engine, "idempotency_records") == 1
+    assert table_count(engine, "audit_events") == 3
+    history = repository.get_audit_history(DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID)
+    assert history is not None
+    assert [event.action.value for event in history.events] == [
+        "document.submitted",
+        "processing.completed",
+        f"review.{winning_record.status.value}",
+    ]
+
+    machine = repository.get_status(DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID)
+    assert machine is not None
+    assert machine.predicted_class == "invoice"
+    assert machine.confidence == pytest.approx(0.9876)
+    assert machine.model_version == "document-type-v1"
+
+
+def test_review_audit_insert_failure_rolls_back_decision_and_receipt(
+    settings: Settings,
+    engine: Engine,
+    s3: S3Client,
+) -> None:
+    seed_queued_integration_job(settings=settings, engine=engine, s3=s3)
+    result_repository = SqlAlchemyResultEventRepository(engine=engine)
+    assert (
+        result_repository.apply(integration_result_event(ResultEventType.STARTED, occurred_at=NOW))
+        is ResultApplyOutcome.APPLIED
+    )
+    assert (
+        result_repository.apply(
+            integration_result_event(
+                ResultEventType.COMPLETED,
+                occurred_at=NOW + timedelta(seconds=1),
+            )
+        )
+        is ResultApplyOutcome.APPLIED
+    )
+    repository = SqlAlchemySubmissionRepository(engine=engine)
+    current = repository.get_review(DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID)
+    assert current is not None
+    command = ReviewCommand(
+        document_id=DOCUMENT_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+        correlation_id=CORRELATION_ID,
+        final_classification="invoice",
+        if_match=review_entity_tag(current),
+        idempotency_key=UUID("55555555-5555-4555-8555-555555555555"),
+        request_digest="a" * 64,
+        decision_id=UUID("66666666-6666-4666-8666-666666666666"),
+        decided_at=NOW + timedelta(seconds=2),
+    )
+    audit_count_before = table_count(engine, "audit_events")
+
+    def reject_review_audit(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        if statement.startswith("INSERT INTO audit_events"):
+            raise RuntimeError("simulated audit persistence failure")
+
+    event.listen(engine, "before_cursor_execute", reject_review_audit)
+    try:
+        with pytest.raises(RuntimeError, match="simulated audit persistence failure"):
+            repository.submit_review(command)
+    finally:
+        event.remove(engine, "before_cursor_execute", reject_review_audit)
+
+    assert table_count(engine, "review_decisions") == 0
+    assert table_count(engine, "idempotency_records") == 0
+    assert table_count(engine, "audit_events") == audit_count_before
+    assert repository.get_review(DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID) == current

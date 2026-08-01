@@ -21,8 +21,14 @@ boundaries:
 ## Accepted initial direction
 
 - OpenAPI 3.1 is canonical for synchronous API contracts.
-- The reusable OAuth bearer scheme and canonical `401`/`403` problems are
-  defined before operation-level security is activated with the Web session.
+- The reusable OAuth bearer scheme and canonical `401`/`403` problems protect
+  every document, review, and audit operation while health probes remain public.
+- Review contracts expose the completed machine basis separately from one
+  terminal human approval or correction and carry an opaque strong entity tag.
+- Review mutation requires `If-Match` and a UUID `Idempotency-Key`, with
+  canonical `409`, `412`, and `428` failure representations.
+- Audit history exposes only the API-owned actor and aggregate references,
+  controlled action, correlation, timestamp, and versioned sanitized details.
 - JSON Schema is canonical for asynchronous event payloads.
 - Requested, started, completed, and failed processing events are versioned and
   carry event, correlation, document, and job identifiers.

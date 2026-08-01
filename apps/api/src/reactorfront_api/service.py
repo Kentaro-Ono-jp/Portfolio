@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -8,6 +9,7 @@ from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
 from reactorfront_api.domain import (
+    AuditHistory,
     BinaryDocument,
     DocumentSource,
     DocumentStatusRecord,
@@ -18,6 +20,10 @@ from reactorfront_api.domain import (
     ProcessingStatus,
     PublicProblem,
     ReadinessProbe,
+    ReviewCommand,
+    ReviewOperationError,
+    ReviewOperationFailureCode,
+    ReviewRecord,
     SubmissionCommitObservation,
     SubmissionCommitOutcome,
     SubmissionPersistenceError,
@@ -268,6 +274,92 @@ class DocumentService:
             sha256=record.sha256,
         )
 
+    def get_review(
+        self,
+        *,
+        document_id: UUID,
+        principal_id: UUID,
+        correlation_id: UUID,
+    ) -> ReviewRecord:
+        try:
+            record = self._repository.get_review(document_id, principal_id)
+        except ReviewOperationError as error:
+            raise self._review_problem(error.code, correlation_id) from error
+        except Exception as error:
+            LOGGER.exception(
+                "Document review lookup failed",
+                extra={"correlation_id": str(correlation_id), "document_id": str(document_id)},
+            )
+            raise self._dependency_problem(correlation_id) from error
+        if record is None:
+            raise self._document_not_found_problem(correlation_id)
+        return record
+
+    def submit_review(
+        self,
+        *,
+        document_id: UUID,
+        principal_id: UUID,
+        correlation_id: UUID,
+        final_classification: str,
+        if_match: str | None,
+        idempotency_key: UUID,
+    ) -> ReviewRecord:
+        if if_match is None:
+            raise PublicProblem(
+                status=428,
+                code=ProblemCode.PRECONDITION_REQUIRED,
+                title="Precondition required",
+                detail="The latest review entity tag is required.",
+                correlation_id=correlation_id,
+            )
+        canonical_request = json.dumps(
+            {"finalClassification": final_classification},
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        command = ReviewCommand(
+            document_id=document_id,
+            principal_id=principal_id,
+            correlation_id=correlation_id,
+            final_classification=final_classification,
+            if_match=if_match,
+            idempotency_key=idempotency_key,
+            request_digest=hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
+            decision_id=self._id_factory(),
+            decided_at=self._clock().astimezone(UTC),
+        )
+        try:
+            return self._repository.submit_review(command)
+        except ReviewOperationError as error:
+            raise self._review_problem(error.code, correlation_id) from error
+        except Exception as error:
+            LOGGER.exception(
+                "Document review transaction failed",
+                extra={"correlation_id": str(correlation_id), "document_id": str(document_id)},
+            )
+            raise self._dependency_problem(correlation_id) from error
+
+    def get_audit_history(
+        self,
+        *,
+        document_id: UUID,
+        principal_id: UUID,
+        correlation_id: UUID,
+    ) -> AuditHistory:
+        try:
+            history = self._repository.get_audit_history(document_id, principal_id)
+        except Exception as error:
+            LOGGER.exception(
+                "Document audit lookup failed",
+                extra={"correlation_id": str(correlation_id), "document_id": str(document_id)},
+            )
+            raise self._dependency_problem(correlation_id) from error
+        if history is None:
+            raise self._document_not_found_problem(correlation_id)
+        return history
+
     def is_ready(self) -> bool:
         try:
             dependencies_ready = self._repository.is_ready() and self._object_storage.is_ready()
@@ -351,5 +443,47 @@ class DocumentService:
             code=ProblemCode.SOURCE_UNAVAILABLE,
             title="Source unavailable",
             detail="The document source is temporarily unavailable.",
+            correlation_id=correlation_id,
+        )
+
+    @staticmethod
+    def _document_not_found_problem(correlation_id: UUID) -> PublicProblem:
+        return PublicProblem(
+            status=404,
+            code=ProblemCode.DOCUMENT_NOT_FOUND,
+            title="Document not found",
+            detail="No document exists for the supplied identifier.",
+            correlation_id=correlation_id,
+        )
+
+    @classmethod
+    def _review_problem(
+        cls,
+        code: ReviewOperationFailureCode,
+        correlation_id: UUID,
+    ) -> PublicProblem:
+        if code is ReviewOperationFailureCode.DOCUMENT_NOT_FOUND:
+            return cls._document_not_found_problem(correlation_id)
+        if code is ReviewOperationFailureCode.IDEMPOTENCY_CONFLICT:
+            return PublicProblem(
+                status=409,
+                code=ProblemCode.IDEMPOTENCY_CONFLICT,
+                title="Idempotency conflict",
+                detail="The idempotency key is already bound to another review request.",
+                correlation_id=correlation_id,
+            )
+        if code is ReviewOperationFailureCode.PRECONDITION_FAILED:
+            return PublicProblem(
+                status=412,
+                code=ProblemCode.PRECONDITION_FAILED,
+                title="Precondition failed",
+                detail="The supplied review entity tag is not current.",
+                correlation_id=correlation_id,
+            )
+        return PublicProblem(
+            status=409,
+            code=ProblemCode.REVIEW_NOT_AVAILABLE,
+            title="Review not available",
+            detail="The document cannot accept a review decision.",
             correlation_id=correlation_id,
         )

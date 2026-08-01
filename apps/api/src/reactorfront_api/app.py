@@ -20,6 +20,7 @@ from reactorfront_api.domain import (
     ProblemCode,
     ProcessingStatus,
     PublicProblem,
+    review_entity_tag,
 )
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
 from reactorfront_api.persistence import SqlAlchemySubmissionRepository, create_database_engine
@@ -29,11 +30,16 @@ from reactorfront_api.request_limits import (
     UploadRequestBodyLimitMiddleware,
 )
 from reactorfront_api.schemas import (
+    AuditHistoryResponse,
     DocumentAcceptedResponse,
     DocumentStatusResponse,
     HealthResponse,
     ProblemResponse,
+    ReviewDecisionRequest,
+    ReviewResponse,
+    serialize_audit_history,
     serialize_document_status,
+    serialize_review,
 )
 from reactorfront_api.service import MAX_DOCUMENT_BYTES, DocumentService
 from reactorfront_api.settings import Settings, get_settings
@@ -43,6 +49,8 @@ CORRELATION_HEADER = "X-Correlation-ID"
 DOCUMENT_UPLOAD_PATH = "/api/v1/documents"
 PdfUpload = Annotated[UploadFile, File()]
 CorrelationIdHeader = Annotated[UUID | None, Header(alias=CORRELATION_HEADER)]
+IfMatchHeader = Annotated[str | None, Header(alias="If-Match")]
+IdempotencyKeyHeader = Annotated[UUID, Header(alias="Idempotency-Key")]
 DOCUMENT_PRINCIPAL_STATE = "document_principal"
 DOCUMENT_CORRELATION_STATE = "document_correlation_id"
 
@@ -117,15 +125,19 @@ def document_capability(method: str, path: str) -> Capability | None:
     normalized_path = path[:-1] if path.endswith("/") else path
     if method == "POST" and normalized_path == DOCUMENT_UPLOAD_PATH:
         return Capability.DOCUMENTS_SUBMIT
-    if method != "GET":
-        return None
     segments = normalized_path.split("/")
     if segments[:4] != ["", "api", "v1", "documents"]:
         return None
+    if method == "PUT" and len(segments) == 6 and segments[4] and segments[5] == "review":
+        return Capability.REVIEWS_WRITE
+    if method != "GET":
+        return None
     if len(segments) == 5 and segments[4]:
         return Capability.DOCUMENTS_READ
-    if len(segments) == 6 and segments[4] and segments[5] == "source":
+    if len(segments) == 6 and segments[4] and segments[5] in {"source", "review"}:
         return Capability.DOCUMENTS_READ
+    if len(segments) == 6 and segments[4] and segments[5] == "audit-events":
+        return Capability.AUDIT_READ
     return None
 
 
@@ -314,6 +326,99 @@ def create_app(
                 "X-Content-Type-Options": "nosniff",
             },
         )
+
+    @app.get(
+        "/api/v1/documents/{document_id}/review",
+        response_model=ReviewResponse,
+        response_model_exclude_none=True,
+        responses={
+            401: {"model": ProblemResponse},
+            403: {"model": ProblemResponse},
+            404: {"model": ProblemResponse},
+            409: {"model": ProblemResponse},
+            422: {"model": ProblemResponse},
+            503: {"model": ProblemResponse},
+        },
+    )
+    def get_document_review(
+        request: Request,
+        document_id: UUID,
+        response: Response,
+        correlation_id: CorrelationIdHeader = None,
+    ) -> ReviewResponse:
+        principal, request_correlation_id = authorized_document_context(request)
+        record = get_document_service(app).get_review(
+            document_id=document_id,
+            principal_id=principal.principal_id,
+            correlation_id=request_correlation_id,
+        )
+        response.headers[CORRELATION_HEADER] = str(request_correlation_id)
+        response.headers["ETag"] = review_entity_tag(record)
+        return serialize_review(record)
+
+    @app.put(
+        "/api/v1/documents/{document_id}/review",
+        response_model=ReviewResponse,
+        response_model_exclude_none=True,
+        responses={
+            401: {"model": ProblemResponse},
+            403: {"model": ProblemResponse},
+            404: {"model": ProblemResponse},
+            409: {"model": ProblemResponse},
+            412: {"model": ProblemResponse},
+            422: {"model": ProblemResponse},
+            428: {"model": ProblemResponse},
+            503: {"model": ProblemResponse},
+        },
+    )
+    def put_document_review(
+        request: Request,
+        document_id: UUID,
+        decision: ReviewDecisionRequest,
+        response: Response,
+        idempotency_key: IdempotencyKeyHeader,
+        if_match: IfMatchHeader = None,
+        correlation_id: CorrelationIdHeader = None,
+    ) -> ReviewResponse:
+        principal, request_correlation_id = authorized_document_context(request)
+        record = get_document_service(app).submit_review(
+            document_id=document_id,
+            principal_id=principal.principal_id,
+            correlation_id=request_correlation_id,
+            final_classification=decision.final_classification,
+            if_match=if_match,
+            idempotency_key=idempotency_key,
+        )
+        response.headers[CORRELATION_HEADER] = str(request_correlation_id)
+        response.headers["ETag"] = review_entity_tag(record)
+        return serialize_review(record)
+
+    @app.get(
+        "/api/v1/documents/{document_id}/audit-events",
+        response_model=AuditHistoryResponse,
+        response_model_exclude_none=True,
+        responses={
+            401: {"model": ProblemResponse},
+            403: {"model": ProblemResponse},
+            404: {"model": ProblemResponse},
+            422: {"model": ProblemResponse},
+            503: {"model": ProblemResponse},
+        },
+    )
+    def get_document_audit_events(
+        request: Request,
+        document_id: UUID,
+        response: Response,
+        correlation_id: CorrelationIdHeader = None,
+    ) -> AuditHistoryResponse:
+        principal, request_correlation_id = authorized_document_context(request)
+        history = get_document_service(app).get_audit_history(
+            document_id=document_id,
+            principal_id=principal.principal_id,
+            correlation_id=request_correlation_id,
+        )
+        response.headers[CORRELATION_HEADER] = str(request_correlation_id)
+        return serialize_audit_history(history)
 
     @app.get("/health", response_model=HealthResponse)
     def get_health() -> HealthResponse:

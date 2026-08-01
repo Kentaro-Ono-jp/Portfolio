@@ -6,7 +6,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from reactorfront_api.domain import DocumentStatusRecord, ProcessingStatus
+from reactorfront_api.domain import (
+    AuditHistory,
+    DocumentStatusRecord,
+    ProcessingStatus,
+    ReviewRecord,
+    ReviewStatus,
+)
 
 
 class ApiModel(BaseModel):
@@ -62,6 +68,50 @@ DocumentStatusResponse = Annotated[
     | FailedDocumentStatusResponse,
     Field(discriminator="status"),
 ]
+
+
+class ReviewDecisionRequest(ApiModel):
+    final_classification: Literal["invoice", "report"] = Field(alias="finalClassification")
+
+
+class ReviewResponse(ApiModel):
+    document_id: UUID = Field(alias="documentId")
+    job_id: UUID = Field(alias="jobId")
+    status: Literal["unreviewed", "approved", "corrected"]
+    machine_classification: Literal["invoice", "report"] = Field(alias="machineClassification")
+    machine_confidence: float = Field(alias="machineConfidence", ge=0, le=1)
+    model_version: str = Field(alias="modelVersion", min_length=1, max_length=128)
+    review_version: int = Field(alias="reviewVersion", ge=0)
+    final_classification: Literal["invoice", "report"] | None = Field(
+        default=None,
+        alias="finalClassification",
+    )
+    reviewer_principal_id: UUID | None = Field(default=None, alias="reviewerPrincipalId")
+    decided_at: datetime | None = Field(default=None, alias="decidedAt")
+
+
+class AuditEventResponse(ApiModel):
+    event_id: UUID = Field(alias="eventId")
+    action: Literal[
+        "document.submitted",
+        "processing.completed",
+        "processing.failed",
+        "review.approved",
+        "review.corrected",
+    ]
+    occurred_at: datetime = Field(alias="occurredAt")
+    actor_principal_id: UUID = Field(alias="actorPrincipalId")
+    document_id: UUID = Field(alias="documentId")
+    job_id: UUID = Field(alias="jobId")
+    review_id: UUID | None = Field(default=None, alias="reviewId")
+    correlation_id: UUID = Field(alias="correlationId")
+    details_version: Literal[1] = Field(alias="detailsVersion")
+    details: dict[str, object]
+
+
+class AuditHistoryResponse(ApiModel):
+    document_id: UUID = Field(alias="documentId")
+    events: list[AuditEventResponse]
 
 
 class HealthResponse(ApiModel):
@@ -137,3 +187,76 @@ def serialize_document_status(record: DocumentStatusRecord) -> DocumentStatusRes
                 started_at=record.started_at,
                 completed_at=record.completed_at,
             )
+
+
+def serialize_review(record: ReviewRecord) -> ReviewResponse:
+    if record.machine_classification not in {"invoice", "report"}:
+        raise ValueError("A review must have a supported machine classification")
+    machine_classification = cast(
+        Literal["invoice", "report"],
+        record.machine_classification,
+    )
+    if record.status is ReviewStatus.UNREVIEWED:
+        if (
+            record.review_version != 0
+            or record.review_id is not None
+            or record.final_classification is not None
+            or record.reviewer_principal_id is not None
+            or record.decided_at is not None
+        ):
+            raise ValueError("An unreviewed representation cannot contain a decision")
+        return ReviewResponse(
+            document_id=record.document_id,
+            job_id=record.job_id,
+            status=ReviewStatus.UNREVIEWED,
+            machine_classification=machine_classification,
+            machine_confidence=float(record.machine_confidence),
+            model_version=record.model_version,
+            review_version=0,
+        )
+
+    if (
+        record.review_version < 1
+        or record.review_id is None
+        or record.final_classification not in {"invoice", "report"}
+        or record.reviewer_principal_id is None
+        or record.decided_at is None
+    ):
+        raise ValueError("A terminal review must have complete decision evidence")
+    final_classification = cast(
+        Literal["invoice", "report"],
+        record.final_classification,
+    )
+    return ReviewResponse(
+        document_id=record.document_id,
+        job_id=record.job_id,
+        status=record.status,
+        machine_classification=machine_classification,
+        machine_confidence=float(record.machine_confidence),
+        model_version=record.model_version,
+        review_version=record.review_version,
+        final_classification=final_classification,
+        reviewer_principal_id=record.reviewer_principal_id,
+        decided_at=record.decided_at,
+    )
+
+
+def serialize_audit_history(history: AuditHistory) -> AuditHistoryResponse:
+    return AuditHistoryResponse(
+        document_id=history.document_id,
+        events=[
+            AuditEventResponse(
+                event_id=event.event_id,
+                action=event.action,
+                occurred_at=event.occurred_at,
+                actor_principal_id=event.actor_principal_id,
+                document_id=event.document_id,
+                job_id=event.job_id,
+                review_id=event.review_id,
+                correlation_id=event.correlation_id,
+                details_version=1,
+                details=event.details,
+            )
+            for event in history.events
+        ],
+    )

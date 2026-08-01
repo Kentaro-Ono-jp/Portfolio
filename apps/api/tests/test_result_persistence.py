@@ -9,6 +9,7 @@ import pytest
 
 import reactorfront_api.persistence as persistence
 from reactorfront_api.domain import (
+    AuditAction,
     ProcessingStatus,
     ResultApplyOutcome,
     ResultEvent,
@@ -17,7 +18,9 @@ from reactorfront_api.domain import (
     ResultEventType,
 )
 from reactorfront_api.persistence import (
+    API_SYSTEM_PRINCIPAL_ID,
     LEGACY_SYSTEM_PRINCIPAL_ID,
+    AuditEventRow,
     DocumentRow,
     OutboxEventRow,
     ProcessingJobRow,
@@ -38,6 +41,7 @@ SOURCE_SHA256 = "a" * 64
 class FakeResultSession:
     scalar_values: list[object | None]
     rows: dict[type[object], object | None] = field(default_factory=dict)
+    added: list[object] = field(default_factory=list)
     flushes: int = 0
 
     def __enter__(self) -> FakeResultSession:
@@ -59,6 +63,9 @@ class FakeResultSession:
 
     def get(self, model: type[object], _identity: UUID) -> object | None:
         return self.rows.get(model)
+
+    def add(self, value: object) -> None:
+        self.added.append(value)
 
     def flush(self) -> None:
         self.flushes += 1
@@ -190,6 +197,22 @@ def test_apply_commits_receipt_and_expected_transition(
         assert processing_job.failure_code == "SOURCE_DIGEST_MISMATCH"
         assert processing_job.predicted_class is None
         assert processing_job.confidence is None
+
+    if event_type is ResultEventType.STARTED:
+        assert session.added == []
+    else:
+        assert len(session.added) == 1
+        audit = session.added[0]
+        assert isinstance(audit, AuditEventRow)
+        assert audit.actor_principal_id == API_SYSTEM_PRINCIPAL_ID
+        assert audit.causation_id == candidate.event_id
+        assert (
+            audit.action
+            == {
+                ResultEventType.COMPLETED: AuditAction.PROCESSING_COMPLETED.value,
+                ResultEventType.FAILED: AuditAction.PROCESSING_FAILED.value,
+            }[event_type]
+        )
 
 
 def test_apply_treats_matching_receipt_as_duplicate(

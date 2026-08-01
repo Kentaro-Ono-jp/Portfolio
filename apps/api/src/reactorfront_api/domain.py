@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
 from typing import BinaryIO, Protocol
 from uuid import UUID
@@ -19,6 +21,27 @@ class ProcessingStatus(StrEnum):
 class PrincipalKind(StrEnum):
     OIDC = "oidc"
     SYSTEM = "system"
+
+
+class ReviewStatus(StrEnum):
+    UNREVIEWED = "unreviewed"
+    APPROVED = "approved"
+    CORRECTED = "corrected"
+
+
+class AuditAction(StrEnum):
+    DOCUMENT_SUBMITTED = "document.submitted"
+    PROCESSING_COMPLETED = "processing.completed"
+    PROCESSING_FAILED = "processing.failed"
+    REVIEW_APPROVED = "review.approved"
+    REVIEW_CORRECTED = "review.corrected"
+
+
+class ReviewOperationFailureCode(StrEnum):
+    DOCUMENT_NOT_FOUND = "DOCUMENT_NOT_FOUND"
+    IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
+    PRECONDITION_FAILED = "PRECONDITION_FAILED"
+    REVIEW_NOT_AVAILABLE = "REVIEW_NOT_AVAILABLE"
 
 
 class SubmissionCommitOutcome(StrEnum):
@@ -94,6 +117,12 @@ class SubmissionPersistenceError(Exception):
         self.commit_outcome = commit_outcome
 
 
+class ReviewOperationError(Exception):
+    def __init__(self, *, code: ReviewOperationFailureCode) -> None:
+        super().__init__(code.value)
+        self.code = code
+
+
 class ProblemCode(StrEnum):
     AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED"
     INSUFFICIENT_CAPABILITY = "INSUFFICIENT_CAPABILITY"
@@ -102,6 +131,10 @@ class ProblemCode(StrEnum):
     DOCUMENT_TOO_LARGE = "DOCUMENT_TOO_LARGE"
     UNSUPPORTED_MEDIA_TYPE = "UNSUPPORTED_MEDIA_TYPE"
     DOCUMENT_NOT_FOUND = "DOCUMENT_NOT_FOUND"
+    IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
+    PRECONDITION_FAILED = "PRECONDITION_FAILED"
+    PRECONDITION_REQUIRED = "PRECONDITION_REQUIRED"
+    REVIEW_NOT_AVAILABLE = "REVIEW_NOT_AVAILABLE"
     SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
     DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
 
@@ -207,6 +240,73 @@ class PrincipalRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ReviewRecord:
+    document_id: UUID
+    job_id: UUID
+    status: ReviewStatus
+    machine_classification: str
+    machine_confidence: Decimal
+    model_version: str
+    review_version: int
+    review_id: UUID | None = None
+    final_classification: str | None = None
+    reviewer_principal_id: UUID | None = None
+    decided_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewCommand:
+    document_id: UUID
+    principal_id: UUID
+    correlation_id: UUID
+    final_classification: str
+    if_match: str
+    idempotency_key: UUID
+    request_digest: str
+    decision_id: UUID
+    decided_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AuditEventRecord:
+    event_id: UUID
+    action: AuditAction
+    occurred_at: datetime
+    actor_principal_id: UUID
+    document_id: UUID
+    job_id: UUID
+    correlation_id: UUID
+    details_version: int
+    details: dict[str, object]
+    review_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AuditHistory:
+    document_id: UUID
+    events: tuple[AuditEventRecord, ...]
+
+
+def review_entity_tag(record: ReviewRecord) -> str:
+    confidence = format(record.machine_confidence.normalize(), "f")
+    identity = "\x1f".join(
+        (
+            str(record.document_id),
+            str(record.job_id),
+            record.status.value,
+            record.machine_classification,
+            confidence,
+            record.model_version,
+            str(record.review_version),
+            str(record.review_id or ""),
+            record.final_classification or "",
+            str(record.reviewer_principal_id or ""),
+        )
+    )
+    return f'"{hashlib.sha256(identity.encode("utf-8")).hexdigest()}"'
+
+
+@dataclass(frozen=True, slots=True)
 class OutboxLease:
     event_id: UUID
     event_type: str
@@ -266,6 +366,12 @@ class SubmissionRepository(Protocol):
     def get_status(self, document_id: UUID, principal_id: UUID) -> DocumentStatusRecord | None: ...
 
     def get_source(self, document_id: UUID, principal_id: UUID) -> DocumentSourceRecord | None: ...
+
+    def get_review(self, document_id: UUID, principal_id: UUID) -> ReviewRecord | None: ...
+
+    def submit_review(self, command: ReviewCommand) -> ReviewRecord: ...
+
+    def get_audit_history(self, document_id: UUID, principal_id: UUID) -> AuditHistory | None: ...
 
     def is_ready(self) -> bool: ...
 
