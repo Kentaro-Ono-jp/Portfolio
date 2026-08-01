@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 
 import {
+  proxyDocumentAuditHistory,
+  proxyDocumentReview,
+  proxyDocumentReviewDecision,
   proxyDocumentStatus,
   proxyDocumentSource,
   proxyDocumentUpload,
@@ -11,10 +14,15 @@ import {
 } from "@/lib/upstream-proxy";
 import {
   acceptedDocument,
+  approvedReview,
+  auditHistory,
   canonicalProblem,
   completedStatus,
   CORRELATION_ID,
   DOCUMENT_ID,
+  REVIEW_ENTITY_TAG,
+  REVIEWER_PRINCIPAL_ID,
+  unreviewedReview,
 } from "@/test/fixtures";
 
 const ACCESS_TOKEN = "synthetic-access-token";
@@ -50,6 +58,19 @@ function upstreamJson(
     headers: {
       "Content-Type": problem ? "application/problem+json" : "application/json",
       "X-Correlation-ID": correlationId,
+    },
+  });
+}
+
+function reviewUpstream(
+  body: unknown,
+  entityTag = REVIEW_ENTITY_TAG,
+): Response {
+  return Response.json(body, {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Correlation-ID": CORRELATION_ID,
+      ETag: entityTag,
     },
   });
 }
@@ -106,6 +127,7 @@ describe("upstream document proxy", () => {
     expect(response.headers.get("Content-Type")).toContain(
       "application/problem+json",
     );
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(await response.json()).toEqual(canonicalProblem);
   });
 
@@ -162,6 +184,138 @@ describe("upstream document proxy", () => {
     expect(invalid.status).toBe(400);
     expect((await invalid.json()).code).toBe("WEB_INVALID_DOCUMENT_ID");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves review preconditions, idempotency, entity tags, and audit order", async () => {
+    const reviewRead = await proxyDocumentReview(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(reviewUpstream(unreviewedReview)),
+      ),
+    );
+    expect(reviewRead.status).toBe(200);
+    expect(reviewRead.headers.get("ETag")).toBe(REVIEW_ENTITY_TAG);
+    expect(reviewRead.headers.get("Cache-Control")).toBe("private, no-store");
+
+    const idempotencyKey = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const putFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(reviewUpstream(approvedReview));
+    const decision = await proxyDocumentReviewDecision(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "If-Match": REVIEW_ENTITY_TAG,
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({ finalClassification: "invoice" }),
+      }),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(putFetch),
+    );
+    expect(decision.status).toBe(200);
+    expect(decision.headers.get("ETag")).toBe(REVIEW_ENTITY_TAG);
+    const [putUrl, putInit] = putFetch.mock.calls[0]!;
+    expect(putUrl.toString()).toBe(
+      `http://api:8000/api/v1/documents/${DOCUMENT_ID}/review`,
+    );
+    const putHeaders = new Headers(putInit?.headers);
+    expect(putHeaders.get("If-Match")).toBe(REVIEW_ENTITY_TAG);
+    expect(putHeaders.get("Idempotency-Key")).toBe(idempotencyKey);
+    expect(putHeaders.get("Authorization")).toBe(`Bearer ${ACCESS_TOKEN}`);
+
+    const audit = await proxyDocumentAuditHistory(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/audit-events`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(upstreamJson(auditHistory, 200)),
+      ),
+    );
+    expect(audit.status).toBe(200);
+    expect(audit.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await audit.json()).toEqual(auditHistory);
+  });
+
+  it("rejects malformed review mutations and unverified review evidence", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const invalid = await proxyDocumentReviewDecision(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`, {
+        method: "PUT",
+        headers: {
+          "If-Match": "stale",
+          "Idempotency-Key": "not-a-uuid",
+        },
+        body: JSON.stringify({ finalClassification: "unknown" }),
+      }),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(fetchMock),
+    );
+    expect(invalid.status).toBe(422);
+    expect((await invalid.json()).code).toBe("WEB_INVALID_REVIEW_REQUEST");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const actorLookingExtra = await proxyDocumentReviewDecision(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`, {
+        method: "PUT",
+        headers: {
+          "If-Match": REVIEW_ENTITY_TAG,
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          finalClassification: "invoice",
+          reviewerPrincipalId: REVIEWER_PRINCIPAL_ID,
+        }),
+      }),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(fetchMock),
+    );
+    expect(actorLookingExtra.status).toBe(422);
+    expect((await actorLookingExtra.json()).code).toBe(
+      "WEB_INVALID_REVIEW_REQUEST",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const missingEntityTag = await proxyDocumentReview(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/review`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(upstreamJson(unreviewedReview, 200)),
+      ),
+    );
+    expect(missingEntityTag.status).toBe(502);
+    expect((await missingEntityTag.json()).code).toBe(
+      "WEB_INVALID_UPSTREAM_RESPONSE",
+    );
+
+    const reversedAudit = {
+      ...auditHistory,
+      events: [...auditHistory.events].reverse(),
+    };
+    const invalidAudit = await proxyDocumentAuditHistory(
+      new Request(`http://web.test/api/documents/${DOCUMENT_ID}/audit-events`),
+      DOCUMENT_ID,
+      ACCESS_TOKEN,
+      overrides(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(upstreamJson(reversedAudit, 200)),
+      ),
+    );
+    expect(invalidAudit.status).toBe(502);
   });
 
   it("sanitizes configuration and network failures", async () => {

@@ -102,10 +102,16 @@ Supporting scripts are implementation details of that entrypoint:
   expired-lease recovery, dispatcher restart, RabbitMQ restart, persistent
   delivery, and the queued-state transition.
 - `tests/e2e/document-classification.spec.ts` proves browser-visible OIDC
-  sign-in without browser token storage, completed and failed workflows,
-  correlation propagation, and non-PDF rejection while Playwright retains
-  failure traces, screenshots, video, and JUnit/HTML reports under
-  `artifacts/verification/`.
+  sign-in without browser token storage, private-source integrity, approval,
+  synthetic correction, audit order, idempotent replay, stale/CSRF rejection,
+  sign-out denial, failed processing, correlation propagation, and non-PDF
+  rejection while Playwright retains failure traces, screenshots, video, and
+  JUnit/HTML reports under `artifacts/verification/`.
+- `sanitize_verification_artifacts.py` redacts then re-scans ordinary evidence
+  and ZIP members for private-key, JWT, Web-session-cookie, CSRF-token,
+  authorization-code, and bearer material. GitHub Actions uploads failure
+  evidence only after this proof succeeds; failure cannot suppress
+  project-scoped teardown.
 - `validate-openapi.mjs` proves valid state variants and rejects impossible
   document states or unstable problem-response combinations.
 - `validate-events.mjs` validates canonical event examples and representative

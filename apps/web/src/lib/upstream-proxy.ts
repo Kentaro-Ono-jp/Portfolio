@@ -1,11 +1,16 @@
 import type { z } from "zod";
 
 import {
+  auditHistorySchema,
   correlationIdSchema,
   documentAcceptedSchema,
   documentIdSchema,
   documentStatusSchema,
   problemSchema,
+  reviewDecisionRequestSchema,
+  reviewEntityTagSchema,
+  reviewSchema,
+  terminalReviewSchema,
   type Problem,
 } from "@/lib/contracts";
 import { readServerConfig } from "@/lib/server-config";
@@ -56,6 +61,7 @@ function problemResponse(problem: Problem, correlationId: string): Response {
     headers: {
       "Content-Type": PROBLEM_MEDIA_TYPE,
       "X-Correlation-ID": correlationId,
+      "Cache-Control": "private, no-store",
     },
   });
 }
@@ -97,6 +103,7 @@ async function validatedUpstreamResponse<T>(
   expectedCorrelationId: string,
   successStatus: number,
   successSchema: z.ZodType<T>,
+  successHeaders?: (response: Response) => HeadersInit,
 ): Promise<Response> {
   const upstreamCorrelation = correlationIdSchema.safeParse(
     response.headers.get("X-Correlation-ID"),
@@ -116,9 +123,13 @@ async function validatedUpstreamResponse<T>(
     if (!parsed.success) {
       throw new InvalidUpstreamResponseError();
     }
+    const forwardedHeaders = successHeaders?.(response);
     return Response.json(parsed.data, {
       status: response.status,
-      headers: { "X-Correlation-ID": upstreamCorrelation.data },
+      headers: {
+        "X-Correlation-ID": upstreamCorrelation.data,
+        ...forwardedHeaders,
+      },
     });
   }
 
@@ -150,6 +161,7 @@ async function callUpstream<T>(
   successStatus: number,
   successSchema: z.ZodType<T>,
   overrides: ProxyDependencyOverrides,
+  successHeaders?: (response: Response) => HeadersInit,
 ): Promise<Response> {
   const resolved = dependencies(overrides);
   const correlationId = requestCorrelationId(
@@ -176,6 +188,7 @@ async function callUpstream<T>(
       correlationId,
       successStatus,
       successSchema,
+      successHeaders,
     );
   } catch (error) {
     if (error instanceof InvalidUpstreamResponseError) {
@@ -195,6 +208,30 @@ async function callUpstream<T>(
       correlationId,
     );
   }
+}
+
+function validatedReviewHeaders(response: Response): HeadersInit {
+  const entityTag = reviewEntityTagSchema.safeParse(
+    response.headers.get("ETag"),
+  );
+  if (!entityTag.success) {
+    throw new InvalidUpstreamResponseError();
+  }
+  return { ETag: entityTag.data, "Cache-Control": "private, no-store" };
+}
+
+function privateNoStoreHeaders(): HeadersInit {
+  return { "Cache-Control": "private, no-store" };
+}
+
+function invalidDocumentId(correlationId: string): Response {
+  return webProblem(
+    400,
+    "WEB_INVALID_DOCUMENT_ID",
+    "The document identifier is invalid.",
+    "Start a new submission from the upload form.",
+    correlationId,
+  );
 }
 
 export async function proxyDocumentUpload(
@@ -257,13 +294,7 @@ export async function proxyDocumentStatus(
   );
   const parsedDocumentId = documentIdSchema.safeParse(documentId);
   if (!parsedDocumentId.success) {
-    return webProblem(
-      400,
-      "WEB_INVALID_DOCUMENT_ID",
-      "The document identifier is invalid.",
-      "Start a new submission from the upload form.",
-      correlationId,
-    );
+    return invalidDocumentId(correlationId);
   }
 
   return callUpstream(
@@ -274,6 +305,119 @@ export async function proxyDocumentStatus(
     200,
     documentStatusSchema,
     overrides,
+  );
+}
+
+export async function proxyDocumentReview(
+  request: Request,
+  documentId: string,
+  accessToken: string,
+  overrides: ProxyDependencyOverrides = {},
+): Promise<Response> {
+  const resolved = dependencies(overrides);
+  const correlationId = requestCorrelationId(
+    request,
+    resolved.createCorrelationId,
+  );
+  const parsedDocumentId = documentIdSchema.safeParse(documentId);
+  if (!parsedDocumentId.success) {
+    return invalidDocumentId(correlationId);
+  }
+  return callUpstream(
+    request,
+    accessToken,
+    `/api/v1/documents/${parsedDocumentId.data}/review`,
+    { method: "GET" },
+    200,
+    reviewSchema,
+    overrides,
+    validatedReviewHeaders,
+  );
+}
+
+export async function proxyDocumentReviewDecision(
+  request: Request,
+  documentId: string,
+  accessToken: string,
+  overrides: ProxyDependencyOverrides = {},
+): Promise<Response> {
+  const resolved = dependencies(overrides);
+  const correlationId = requestCorrelationId(
+    request,
+    resolved.createCorrelationId,
+  );
+  const parsedDocumentId = documentIdSchema.safeParse(documentId);
+  const entityTag = reviewEntityTagSchema.safeParse(
+    request.headers.get("If-Match"),
+  );
+  const idempotencyKey = documentIdSchema.safeParse(
+    request.headers.get("Idempotency-Key"),
+  );
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    body = null;
+  }
+  const decision = reviewDecisionRequestSchema.safeParse(body);
+  if (
+    !parsedDocumentId.success ||
+    !entityTag.success ||
+    !idempotencyKey.success ||
+    !decision.success
+  ) {
+    return webProblem(
+      422,
+      "WEB_INVALID_REVIEW_REQUEST",
+      "The review request is invalid.",
+      "Refresh the review and submit one supported final classification.",
+      correlationId,
+    );
+  }
+  return callUpstream(
+    request,
+    accessToken,
+    `/api/v1/documents/${parsedDocumentId.data}/review`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": JSON_MEDIA_TYPE,
+        "If-Match": entityTag.data,
+        "Idempotency-Key": idempotencyKey.data,
+      },
+      body: JSON.stringify(decision.data),
+    },
+    200,
+    terminalReviewSchema,
+    overrides,
+    validatedReviewHeaders,
+  );
+}
+
+export async function proxyDocumentAuditHistory(
+  request: Request,
+  documentId: string,
+  accessToken: string,
+  overrides: ProxyDependencyOverrides = {},
+): Promise<Response> {
+  const resolved = dependencies(overrides);
+  const correlationId = requestCorrelationId(
+    request,
+    resolved.createCorrelationId,
+  );
+  const parsedDocumentId = documentIdSchema.safeParse(documentId);
+  if (!parsedDocumentId.success) {
+    return invalidDocumentId(correlationId);
+  }
+  return callUpstream(
+    request,
+    accessToken,
+    `/api/v1/documents/${parsedDocumentId.data}/audit-events`,
+    { method: "GET" },
+    200,
+    auditHistorySchema,
+    overrides,
+    privateNoStoreHeaders,
   );
 }
 
@@ -327,13 +471,7 @@ export async function proxyDocumentSource(
   );
   const parsedDocumentId = documentIdSchema.safeParse(documentId);
   if (!parsedDocumentId.success) {
-    return webProblem(
-      400,
-      "WEB_INVALID_DOCUMENT_ID",
-      "The document identifier is invalid.",
-      "Start a new submission from the upload form.",
-      correlationId,
-    );
+    return invalidDocumentId(correlationId);
   }
 
   try {

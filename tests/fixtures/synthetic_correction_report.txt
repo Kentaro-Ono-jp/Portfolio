@@ -1,0 +1,9 @@
+REACTORFRONT SYNTHETIC CORRECTION FIXTURE
+Human Ground Truth: report
+This deliberately limited example is a report about invoice operations.
+Invoice Number Review
+Bill To reconciliation findings
+Subtotal and tax controls
+Total amount due analysis
+Payment terms recommendations
+The human-reviewed document type is report, not invoice.

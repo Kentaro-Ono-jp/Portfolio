@@ -3,6 +3,11 @@ import { z } from "zod";
 
 export type DocumentAccepted = components["schemas"]["DocumentAccepted"];
 export type DocumentStatus = components["schemas"]["DocumentStatus"];
+export type ReviewDecisionRequest =
+  components["schemas"]["ReviewDecisionRequest"];
+export type Review = components["schemas"]["Review"];
+export type TerminalReview = components["schemas"]["TerminalReview"];
+export type AuditHistory = components["schemas"]["AuditHistory"];
 export type Problem = components["schemas"]["Problem"];
 
 const identifierSchema = z.string().uuid();
@@ -10,6 +15,7 @@ const timestampSchema = z.string().datetime({ offset: true });
 
 export const documentIdSchema = identifierSchema;
 export const correlationIdSchema = identifierSchema;
+export const reviewEntityTagSchema = z.string().regex(/^"[a-f0-9]{64}"$/);
 
 export const documentAcceptedSchema: z.ZodType<DocumentAccepted> =
   z.strictObject({
@@ -76,6 +82,136 @@ export const documentStatusSchema: z.ZodType<DocumentStatus> = z.union([
   completedStatusSchema,
   failedStatusSchema,
 ]);
+
+const classificationSchema = z.enum(["invoice", "report"]);
+const reviewMachineFields = {
+  documentId: identifierSchema,
+  jobId: identifierSchema,
+  machineConfidence: z.number().min(0).max(1),
+  modelVersion: z.string().min(1).max(128),
+};
+
+const unreviewedReviewSchema = z.strictObject({
+  ...reviewMachineFields,
+  status: z.literal("unreviewed"),
+  machineClassification: classificationSchema,
+  reviewVersion: z.literal(0),
+});
+
+const approvedReviewSchema = z.union([
+  z.strictObject({
+    ...reviewMachineFields,
+    status: z.literal("approved"),
+    machineClassification: z.literal("invoice"),
+    reviewVersion: z.literal(1),
+    finalClassification: z.literal("invoice"),
+    reviewerPrincipalId: identifierSchema,
+    decidedAt: timestampSchema,
+  }),
+  z.strictObject({
+    ...reviewMachineFields,
+    status: z.literal("approved"),
+    machineClassification: z.literal("report"),
+    reviewVersion: z.literal(1),
+    finalClassification: z.literal("report"),
+    reviewerPrincipalId: identifierSchema,
+    decidedAt: timestampSchema,
+  }),
+]);
+
+const correctedReviewSchema = z.union([
+  z.strictObject({
+    ...reviewMachineFields,
+    status: z.literal("corrected"),
+    machineClassification: z.literal("invoice"),
+    reviewVersion: z.literal(1),
+    finalClassification: z.literal("report"),
+    reviewerPrincipalId: identifierSchema,
+    decidedAt: timestampSchema,
+  }),
+  z.strictObject({
+    ...reviewMachineFields,
+    status: z.literal("corrected"),
+    machineClassification: z.literal("report"),
+    reviewVersion: z.literal(1),
+    finalClassification: z.literal("invoice"),
+    reviewerPrincipalId: identifierSchema,
+    decidedAt: timestampSchema,
+  }),
+]);
+
+export const reviewDecisionRequestSchema: z.ZodType<ReviewDecisionRequest> =
+  z.strictObject({ finalClassification: classificationSchema });
+
+export const reviewSchema: z.ZodType<Review> = z.union([
+  unreviewedReviewSchema,
+  approvedReviewSchema,
+  correctedReviewSchema,
+]);
+
+export const terminalReviewSchema: z.ZodType<TerminalReview> = z.union([
+  approvedReviewSchema,
+  correctedReviewSchema,
+]);
+
+const auditEventFields = {
+  eventId: identifierSchema,
+  action: z.enum([
+    "document.submitted",
+    "processing.completed",
+    "processing.failed",
+    "review.approved",
+    "review.corrected",
+  ]),
+  occurredAt: timestampSchema,
+  actorPrincipalId: identifierSchema,
+  documentId: identifierSchema,
+  jobId: identifierSchema,
+  correlationId: identifierSchema,
+  detailsVersion: z.literal(1),
+  details: z.strictObject({}),
+};
+
+const auditEventSchema = z.union([
+  z.strictObject(auditEventFields),
+  z.strictObject({ ...auditEventFields, reviewId: identifierSchema }),
+]);
+
+export const auditHistorySchema: z.ZodType<AuditHistory> = z
+  .strictObject({
+    documentId: identifierSchema,
+    events: z.array(auditEventSchema),
+  })
+  .superRefine((history, context) => {
+    let previous: string | null = null;
+    const eventIds = new Set<string>();
+    history.events.forEach((event, index) => {
+      if (event.documentId !== history.documentId) {
+        context.addIssue({
+          code: "custom",
+          message: "Audit event document identity does not match its history.",
+          path: ["events", index, "documentId"],
+        });
+      }
+      const orderKey = `${event.occurredAt}\u0000${event.eventId}`;
+      if (previous !== null && orderKey <= previous) {
+        context.addIssue({
+          code: "custom",
+          message: "Audit events are not in deterministic append order.",
+          path: ["events", index],
+        });
+      }
+      if (eventIds.has(event.eventId)) {
+        context.addIssue({
+          code: "custom",
+          message: "Audit event identity is duplicated.",
+          path: ["events", index, "eventId"],
+        });
+      }
+      previous = orderKey;
+      eventIds.add(event.eventId);
+    });
+  });
 
 const problemFields = {
   type: z.string().min(1),

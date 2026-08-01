@@ -1,13 +1,20 @@
 import type { z } from "zod";
 
 import {
+  auditHistorySchema,
   correlationIdSchema,
   documentAcceptedSchema,
   documentStatusSchema,
   problemSchema,
+  reviewEntityTagSchema,
+  reviewSchema,
+  terminalReviewSchema,
+  type AuditHistory,
   type DocumentAccepted,
   type DocumentStatus,
   type Problem,
+  type Review,
+  type TerminalReview,
 } from "@/lib/contracts";
 
 const JSON_MEDIA_TYPE = "application/json";
@@ -45,12 +52,17 @@ function clientProblem(
   });
 }
 
-async function requestJson<T>(
+interface ValidatedJsonResponse<T> {
+  data: T;
+  response: Response;
+}
+
+async function requestJsonResponse<T>(
   input: RequestInfo | URL,
   init: RequestInit,
   successStatus: number,
   schema: z.ZodType<T>,
-): Promise<T> {
+): Promise<ValidatedJsonResponse<T>> {
   let response: Response;
   try {
     response = await fetch(input, init);
@@ -121,7 +133,16 @@ async function requestJson<T>(
       response,
     );
   }
-  return parsed.data;
+  return { data: parsed.data, response };
+}
+
+async function requestJson<T>(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  successStatus: number,
+  schema: z.ZodType<T>,
+): Promise<T> {
+  return (await requestJsonResponse(input, init, successStatus, schema)).data;
 }
 
 export async function createDocument(
@@ -156,6 +177,93 @@ export async function getDocument(documentId: string): Promise<DocumentStatus> {
     },
     200,
     documentStatusSchema,
+  );
+}
+
+export interface ReviewRepresentation {
+  review: Review;
+  entityTag: string;
+}
+
+export interface TerminalReviewRepresentation {
+  review: TerminalReview;
+  entityTag: string;
+}
+
+function reviewRepresentation<T extends Review>(
+  result: ValidatedJsonResponse<T>,
+): { review: T; entityTag: string } {
+  const entityTag = reviewEntityTagSchema.safeParse(
+    result.response.headers.get("ETag"),
+  );
+  if (!entityTag.success) {
+    throw clientProblem(
+      "WEB_INVALID_RESPONSE",
+      "The Web service returned an invalid response.",
+      "Please retry the request.",
+      result.response,
+    );
+  }
+  return { review: result.data, entityTag: entityTag.data };
+}
+
+export async function getDocumentReview(
+  documentId: string,
+): Promise<ReviewRepresentation> {
+  return reviewRepresentation(
+    await requestJsonResponse(
+      `/api/documents/${encodeURIComponent(documentId)}/review`,
+      {
+        method: "GET",
+        headers: { "X-Correlation-ID": crypto.randomUUID() },
+        credentials: "same-origin",
+      },
+      200,
+      reviewSchema,
+    ),
+  );
+}
+
+export async function submitDocumentReview(
+  documentId: string,
+  finalClassification: "invoice" | "report",
+  entityTag: string,
+  idempotencyKey: string,
+  csrfToken: string,
+): Promise<TerminalReviewRepresentation> {
+  return reviewRepresentation(
+    await requestJsonResponse(
+      `/api/documents/${encodeURIComponent(documentId)}/review`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": JSON_MEDIA_TYPE,
+          "X-Correlation-ID": crypto.randomUUID(),
+          "X-CSRF-Token": csrfToken,
+          "If-Match": entityTag,
+          "Idempotency-Key": idempotencyKey,
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ finalClassification }),
+      },
+      200,
+      terminalReviewSchema,
+    ),
+  );
+}
+
+export async function getDocumentAuditHistory(
+  documentId: string,
+): Promise<AuditHistory> {
+  return requestJson(
+    `/api/documents/${encodeURIComponent(documentId)}/audit-events`,
+    {
+      method: "GET",
+      headers: { "X-Correlation-ID": crypto.randomUUID() },
+      credentials: "same-origin",
+    },
+    200,
+    auditHistorySchema,
   );
 }
 

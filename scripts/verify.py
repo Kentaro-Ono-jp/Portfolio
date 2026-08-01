@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -902,15 +903,126 @@ def _e2e_upload_correlation(payload: object, phase: str) -> str:
     return request_id
 
 
+def _e2e_mapping(value: object, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise RuntimeError(f"Browser E2E evidence is missing {label}.")
+    return value
+
+
+def _e2e_uuid(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _e2e_correlation_pair(value: object, label: str) -> bool:
+    pair = _e2e_mapping(value, label)
+    return pair.get("request") == pair.get("response") and _e2e_uuid(
+        pair.get("request")
+    )
+
+
+def prove_e2e_review_evidence(payload: dict[str, object]) -> None:
+    completed = _e2e_mapping(payload.get("completed"), "completed review proof")
+    correction = _e2e_mapping(payload.get("correction"), "correction proof")
+    failed = _e2e_mapping(payload.get("failed"), "failed processing proof")
+    invalid_file = _e2e_mapping(payload.get("invalidFile"), "invalid-file proof")
+    security = _e2e_mapping(payload.get("security"), "security proof")
+    completed_decision = _e2e_mapping(
+        completed.get("decision"), "approved decision proof"
+    )
+    correction_decision = _e2e_mapping(
+        correction.get("decision"), "corrected decision proof"
+    )
+    csrf = _e2e_mapping(completed.get("csrfRejection"), "CSRF rejection proof")
+    stale = _e2e_mapping(completed.get("staleDecision"), "stale decision proof")
+    completed_id = completed.get("documentId")
+    correction_id = correction.get("documentId")
+
+    expected = {
+        "completed-machine": completed.get("classification") == "invoice",
+        "distinct-owned-documents": _e2e_uuid(completed_id)
+        and _e2e_uuid(correction_id)
+        and completed_id != correction_id,
+        "approved-decision": completed_decision.get("status") == "approved"
+        and completed_decision.get("finalClassification") == "invoice"
+        and completed_decision.get("reviewVersion") == 1,
+        "approved-audit": completed.get("auditActions")
+        == ["document.submitted", "processing.completed", "review.approved"],
+        "identical-replay": completed.get("identicalReplayStatus") == 200,
+        "stale-rejected": stale == {"status": 412, "code": "PRECONDITION_FAILED"},
+        "csrf-rejected": csrf.get("status") == 403
+        and isinstance(csrf.get("code"), str)
+        and str(csrf["code"]).startswith("WEB_CSRF_"),
+        "correction-machine": correction.get("classification") == "invoice",
+        "synthetic-ground-truth": correction.get("humanGroundTruth") == "report"
+        and correction.get("fixturePurpose")
+        == "synthetic correction proof, not model quality",
+        "corrected-decision": correction_decision.get("status") == "corrected"
+        and correction_decision.get("finalClassification") == "report"
+        and correction_decision.get("reviewVersion") == 1,
+        "corrected-audit": correction.get("auditActions")
+        == ["document.submitted", "processing.completed", "review.corrected"],
+        "failed-terminal": failed.get("status") == "failed"
+        and failed.get("failureCode") == "INVALID_PDF",
+        "local-invalid-file": invalid_file.get("apiRequestCreated") is False,
+        "anonymous-denied": security.get("anonymousReviewStatus") == 401,
+        "signed-out-denied": security.get("postSignOutStatuses") == [401, 401, 401],
+        "browser-token-storage-empty": security.get("browserTokenStorage") is False,
+        "stable-reviewer-principal": _e2e_uuid(
+            completed_decision.get("reviewerPrincipalId")
+        )
+        and completed_decision.get("reviewerPrincipalId")
+        == correction_decision.get("reviewerPrincipalId"),
+        "approved-decision-correlation": _e2e_correlation_pair(
+            completed_decision.get("correlation"), "approved decision correlation"
+        ),
+        "corrected-decision-correlation": _e2e_correlation_pair(
+            correction_decision.get("correlation"), "corrected decision correlation"
+        ),
+    }
+    for phase in (completed, correction):
+        source = _e2e_mapping(phase.get("source"), "private-source proof")
+        sha256 = source.get("sha256")
+        source_ok = (
+            source.get("status") == 200
+            and source.get("contentType") == "application/pdf"
+            and source.get("pdfMagic") is True
+            and isinstance(source.get("length"), int)
+            and int(source["length"]) > 0
+            and isinstance(sha256, str)
+            and re.fullmatch(r"[a-f0-9]{64}", sha256) is not None
+            and source.get("entityTag") == f'"{sha256}"'
+        )
+        expected[f"{phase.get('documentId', 'unknown')}-private-source"] = source_ok
+    failed_checks = [label for label, passed in expected.items() if not passed]
+    if failed_checks:
+        raise RuntimeError(
+            "Browser E2E review evidence failed: " + ", ".join(failed_checks)
+        )
+    (ARTIFACT_DIRECTORY / "e2e-review-proof.json").write_text(
+        json.dumps(expected, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print("Browser approval, correction, audit, source, and negative proof passed.")
+
+
 def prove_e2e_correlation(docker: str) -> None:
     evidence_path = ARTIFACT_DIRECTORY / "e2e-result.json"
     try:
         payload = json.loads(evidence_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise RuntimeError("Browser E2E result evidence is unavailable.") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("Browser E2E result evidence is not a JSON object.")
+    prove_e2e_review_evidence(payload)
     correlations = {
         phase: _e2e_upload_correlation(payload, phase)
-        for phase in ("completed", "failed")
+        for phase in ("completed", "correction", "failed")
     }
     proof: dict[str, dict[str, bool]] = {}
     for service in ("api-outbox", "ml-worker", "api-events"):

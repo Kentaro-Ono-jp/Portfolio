@@ -86,3 +86,9 @@ export function canonicalInvoicePdf(): Buffer<ArrayBufferLike> {
     readFileSync("tests/fixtures/canonical_invoice.txt", "utf8"),
   );
 }
+
+export function syntheticCorrectionReportPdf(): Buffer<ArrayBufferLike> {
+  return buildSinglePageTextPdf(
+    readFileSync("tests/fixtures/synthetic_correction_report.txt", "utf8"),
+  );
+}

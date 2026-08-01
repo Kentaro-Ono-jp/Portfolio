@@ -5,7 +5,9 @@
 This Next.js application owns the authenticated browser experience: completing
 the OIDC Authorization Code flow with PKCE, selecting a supported document,
 submitting it, following API-owned processing state, retrieving the verified
-source, and presenting the completed or failed terminal result.
+source, presenting the completed or failed terminal result, committing one
+ETag- and idempotency-guarded human decision, and displaying ordered audit
+history.
 
 The browser calls only same-origin route handlers under `/api/documents`. Those
 server-only handlers require an opaque Web session, forward its access token to
@@ -30,6 +32,10 @@ the client bundle.
   for the explicit loopback Compose profile.
 - Stream a source PDF to the browser only after the API verifies its owner,
   metadata, size, and SHA-256 digest.
+- Preserve the API review entity tag and require CSRF, `If-Match`, and an
+  idempotency key for the one terminal review mutation.
+- Validate immutable machine evidence, terminal human-review state, and
+  deterministically ordered audit events before rendering them.
 
 ## Implementation
 

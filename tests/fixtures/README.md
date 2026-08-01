@@ -6,3 +6,8 @@ the ReactorFront Portfolio. They contain no client, employer, or private data.
 `scripts/pdf_fixture.py` converts the text to a deterministic, single-page PDF
 using only built-in Type 1 Helvetica and repository-owned text. The generated
 PDF is a test artifact and is not committed as a model or external dataset.
+
+`synthetic_correction_report.txt` is deliberately adversarial: its documented
+human ground truth is `report`, while its invoice-heavy vocabulary exposes the
+bounded classifier's expected `invoice` result. It proves correction behavior,
+not production model quality.

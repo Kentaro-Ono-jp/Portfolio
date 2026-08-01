@@ -3,24 +3,40 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createDocument,
   DocumentRequestError,
+  getDocumentAuditHistory,
+  getDocumentReview,
   getDocument,
+  submitDocumentReview,
 } from "@/lib/browser-api";
 import { DocumentWorkflow } from "@/components/document-workflow";
 import { MAX_PDF_BYTES } from "@/lib/file-validation";
 import {
   acceptedDocument,
+  approvedReview,
+  auditHistory,
   canonicalProblem,
   completedStatus,
+  correctedReview,
   failedStatus,
   processingStatus,
   queuedStatus,
+  REVIEW_ENTITY_TAG,
+  REVIEWER_PRINCIPAL_ID,
+  unreviewedReview,
 } from "@/test/fixtures";
 
 vi.mock("@/lib/browser-api", async (importOriginal) => {
@@ -28,7 +44,10 @@ vi.mock("@/lib/browser-api", async (importOriginal) => {
   return {
     ...actual,
     createDocument: vi.fn(),
+    getDocumentAuditHistory: vi.fn(),
+    getDocumentReview: vi.fn(),
     getDocument: vi.fn(),
+    submitDocumentReview: vi.fn(),
   };
 });
 
@@ -62,7 +81,19 @@ async function submit(file = pdf()) {
 beforeEach(() => {
   onlineManager.setOnline(true);
   vi.mocked(createDocument).mockReset();
+  vi.mocked(getDocumentAuditHistory).mockReset();
+  vi.mocked(getDocumentReview).mockReset();
   vi.mocked(getDocument).mockReset();
+  vi.mocked(submitDocumentReview).mockReset();
+  vi.mocked(getDocumentReview).mockResolvedValue({
+    review: approvedReview,
+    entityTag: REVIEW_ENTITY_TAG,
+  });
+  vi.mocked(getDocumentAuditHistory).mockResolvedValue(auditHistory);
+  vi.mocked(submitDocumentReview).mockResolvedValue({
+    review: approvedReview,
+    entityTag: REVIEW_ENTITY_TAG,
+  });
 });
 
 afterEach(() => {
@@ -139,9 +170,19 @@ describe("DocumentWorkflow", () => {
     renderWorkflow();
     const user = await submit();
 
-    expect(await screen.findByText("invoice")).toBeInTheDocument();
+    expect(
+      await within(screen.getByLabelText("Machine result")).findByText(
+        "invoice",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("98.7%")).toBeInTheDocument();
     expect(screen.getByText("document-type-v1")).toBeInTheDocument();
+    expect(await screen.findByText("Human decision")).toBeInTheDocument();
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+    expect(screen.getByText("review.approved")).toBeInTheDocument();
+    expect(screen.getAllByText(REVIEWER_PRINCIPAL_ID).length).toBeGreaterThan(
+      1,
+    );
     expect(
       screen.queryByLabelText("Polling for status"),
     ).not.toBeInTheDocument();
@@ -154,6 +195,48 @@ describe("DocumentWorkflow", () => {
     ).toBeEnabled();
     expect(screen.queryByText("invoice")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Source PDF")).toHaveFocus();
+  });
+
+  it("commits a correction and reuses its idempotency key after uncertainty", async () => {
+    vi.mocked(createDocument).mockResolvedValue(acceptedDocument);
+    vi.mocked(getDocument).mockResolvedValue(completedStatus);
+    vi.mocked(getDocumentReview).mockResolvedValue({
+      review: unreviewedReview,
+      entityTag: REVIEW_ENTITY_TAG,
+    });
+    vi.mocked(submitDocumentReview)
+      .mockRejectedValueOnce(new DocumentRequestError(canonicalProblem))
+      .mockResolvedValueOnce({
+        review: correctedReview,
+        entityTag: `"${"b".repeat(64)}"`,
+      });
+    renderWorkflow();
+    const user = await submit();
+
+    await user.click(await screen.findByRole("radio", { name: "report" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Correct classification to report",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "application/pdf",
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Correct classification to report",
+      }),
+    );
+    expect(await screen.findByText("Corrected")).toBeInTheDocument();
+    expect(screen.getByText("Final decision")).toBeInTheDocument();
+    expect(submitDocumentReview).toHaveBeenCalledTimes(2);
+    const firstKey = vi.mocked(submitDocumentReview).mock.calls[0]![3];
+    expect(vi.mocked(submitDocumentReview).mock.calls[1]![3]).toBe(firstKey);
+    expect(vi.mocked(submitDocumentReview).mock.calls[0]!.slice(0, 3)).toEqual([
+      acceptedDocument.documentId,
+      "report",
+      REVIEW_ENTITY_TAG,
+    ]);
   });
 
   it("renders a sanitized failed terminal result", async () => {
@@ -182,7 +265,15 @@ describe("DocumentWorkflow", () => {
       renderWorkflow();
       await submit();
 
-      expect(await screen.findByText(label)).toBeInTheDocument();
+      if (label === "invoice") {
+        expect(
+          await within(screen.getByLabelText("Machine result")).findByText(
+            label,
+          ),
+        ).toBeInTheDocument();
+      } else {
+        expect(await screen.findByText(label)).toBeInTheDocument();
+      }
       expect(getDocument).toHaveBeenCalledTimes(1);
 
       await act(async () => {
@@ -193,7 +284,13 @@ describe("DocumentWorkflow", () => {
       });
 
       expect(getDocument).toHaveBeenCalledTimes(1);
-      expect(screen.getByText(label)).toBeInTheDocument();
+      if (label === "invoice") {
+        expect(
+          within(screen.getByLabelText("Machine result")).getByText(label),
+        ).toBeInTheDocument();
+      } else {
+        expect(screen.getByText(label)).toBeInTheDocument();
+      }
     },
   );
 
@@ -224,7 +321,11 @@ describe("DocumentWorkflow", () => {
       screen.queryByLabelText("Polling for status"),
     ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Retry status" }));
-    expect(await screen.findByText("invoice")).toBeInTheDocument();
+    expect(
+      await within(screen.getByLabelText("Machine result")).findByText(
+        "invoice",
+      ),
+    ).toBeInTheDocument();
     await waitFor(() => expect(getDocument).toHaveBeenCalledTimes(2));
   });
 });
