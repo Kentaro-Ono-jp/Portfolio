@@ -3,16 +3,24 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDocument,
   DocumentRequestError,
+  getDocumentAuditHistory,
+  getDocumentReview,
   getDocument,
   problemGuidance,
+  submitDocumentReview,
   terminalFailureGuidance,
 } from "@/lib/browser-api";
 import {
   acceptedDocument,
+  approvedReview,
+  auditHistory,
+  auditHistoryWithTimestamps,
   canonicalProblem,
   completedStatus,
   CORRELATION_ID,
   DOCUMENT_ID,
+  REVIEW_ENTITY_TAG,
+  unreviewedReview,
 } from "@/test/fixtures";
 
 function jsonResponse(body: unknown, status = 200, problem = false): Response {
@@ -23,6 +31,15 @@ function jsonResponse(body: unknown, status = 200, problem = false): Response {
       "X-Correlation-ID": CORRELATION_ID,
     },
   });
+}
+
+function reviewResponse(
+  body: unknown,
+  entityTag = REVIEW_ENTITY_TAG,
+): Response {
+  const response = jsonResponse(body);
+  response.headers.set("ETag", entityTag);
+  return response;
 }
 
 afterEach(() => {
@@ -65,6 +82,103 @@ describe("browser API client", () => {
       `/api/documents/${DOCUMENT_ID}`,
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("retrieves review/audit evidence and submits a guarded decision", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(reviewResponse(unreviewedReview))
+      .mockResolvedValueOnce(reviewResponse(approvedReview))
+      .mockResolvedValueOnce(jsonResponse(auditHistory));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("crypto", { randomUUID: () => CORRELATION_ID });
+
+    await expect(getDocumentReview(DOCUMENT_ID)).resolves.toEqual({
+      review: unreviewedReview,
+      entityTag: REVIEW_ENTITY_TAG,
+    });
+    const idempotencyKey = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    await expect(
+      submitDocumentReview(
+        DOCUMENT_ID,
+        "invoice",
+        REVIEW_ENTITY_TAG,
+        idempotencyKey,
+        "csrf-proof",
+      ),
+    ).resolves.toEqual({
+      review: approvedReview,
+      entityTag: REVIEW_ENTITY_TAG,
+    });
+    const decisionInit = fetchMock.mock.calls[1]![1];
+    const decisionHeaders = new Headers(decisionInit?.headers);
+    expect(decisionInit?.method).toBe("PUT");
+    expect(decisionHeaders.get("If-Match")).toBe(REVIEW_ENTITY_TAG);
+    expect(decisionHeaders.get("Idempotency-Key")).toBe(idempotencyKey);
+    expect(decisionHeaders.get("X-CSRF-Token")).toBe("csrf-proof");
+    expect(decisionInit?.body).toBe(
+      JSON.stringify({ finalClassification: "invoice" }),
+    );
+    await expect(getDocumentAuditHistory(DOCUMENT_ID)).resolves.toEqual(
+      auditHistory,
+    );
+  });
+
+  it("rejects missing review entity tags and malformed audit ordering", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => CORRELATION_ID });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(unreviewedReview)),
+    );
+    await expect(getDocumentReview(DOCUMENT_ID)).rejects.toMatchObject({
+      problem: { code: "WEB_INVALID_RESPONSE" },
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          ...auditHistory,
+          events: [...auditHistory.events].reverse(),
+        }),
+      ),
+    );
+    await expect(getDocumentAuditHistory(DOCUMENT_ID)).rejects.toMatchObject({
+      problem: { code: "WEB_INVALID_RESPONSE" },
+    });
+  });
+
+  it("normalizes offset audit chronology at the browser boundary", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => CORRELATION_ID });
+    const chronological = auditHistoryWithTimestamps(
+      "2026-01-01T00:00:00Z",
+      "2025-12-31T19:00:00.100000-05:00",
+      "2026-01-01T01:00:01+01:00",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(chronological)),
+    );
+    await expect(getDocumentAuditHistory(DOCUMENT_ID)).resolves.toEqual(
+      chronological,
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          ...chronological,
+          events: [
+            chronological.events[1]!,
+            chronological.events[0]!,
+            chronological.events[2]!,
+          ],
+        }),
+      ),
+    );
+    await expect(getDocumentAuditHistory(DOCUMENT_ID)).rejects.toMatchObject({
+      problem: { code: "WEB_INVALID_RESPONSE" },
+    });
   });
 
   it("throws a validated canonical problem", async () => {

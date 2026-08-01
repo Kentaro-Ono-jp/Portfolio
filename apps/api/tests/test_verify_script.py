@@ -476,10 +476,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 45
-    assert len(verifier.selected_test_files(plan.groups)) == 15
+    assert len(inventory) == 48
+    assert len(verifier.selected_test_files(plan.groups)) == 17
     assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 15/45 selected" in verifier.plan_lines(plan)
+    assert "Test files: 17/48 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(
@@ -864,25 +864,89 @@ def test_complete_compose_readiness_requires_exactly_nine_running_services(
     assert observed_diagnostics
 
 
-def test_e2e_correlation_proof_requires_both_paths_in_every_service(
+def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
     verifier: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     completed_correlation = "11111111-1111-4111-8111-111111111111"
-    failed_correlation = "22222222-2222-4222-8222-222222222222"
+    correction_correlation = "22222222-2222-4222-8222-222222222222"
+    failed_correlation = "33333333-3333-4333-8333-333333333333"
+    source = {
+        "status": 200,
+        "contentType": "application/pdf",
+        "entityTag": f'"{"a" * 64}"',
+        "length": 42,
+        "sha256": "a" * 64,
+        "pdfMagic": True,
+    }
     evidence = {
         "completed": {
+            "documentId": "44444444-4444-4444-8444-444444444444",
+            "classification": "invoice",
+            "source": source,
+            "decision": {
+                "status": "approved",
+                "finalClassification": "invoice",
+                "reviewVersion": 1,
+                "reviewerPrincipalId": "66666666-6666-4666-8666-666666666666",
+                "correlation": {
+                    "request": "77777777-7777-4777-8777-777777777777",
+                    "response": "77777777-7777-4777-8777-777777777777",
+                },
+            },
+            "auditActions": [
+                "document.submitted",
+                "processing.completed",
+                "review.approved",
+            ],
+            "identicalReplayStatus": 200,
+            "staleDecision": {"status": 412, "code": "PRECONDITION_FAILED"},
+            "csrfRejection": {"status": 403, "code": "WEB_CSRF_INVALID"},
             "uploadCorrelation": {
                 "request": completed_correlation,
                 "response": completed_correlation,
-            }
+            },
+        },
+        "correction": {
+            "documentId": "55555555-5555-4555-8555-555555555555",
+            "classification": "invoice",
+            "humanGroundTruth": "report",
+            "fixturePurpose": "synthetic correction proof, not model quality",
+            "source": source,
+            "decision": {
+                "status": "corrected",
+                "finalClassification": "report",
+                "reviewVersion": 1,
+                "reviewerPrincipalId": "66666666-6666-4666-8666-666666666666",
+                "correlation": {
+                    "request": "88888888-8888-4888-8888-888888888888",
+                    "response": "88888888-8888-4888-8888-888888888888",
+                },
+            },
+            "auditActions": [
+                "document.submitted",
+                "processing.completed",
+                "review.corrected",
+            ],
+            "uploadCorrelation": {
+                "request": correction_correlation,
+                "response": correction_correlation,
+            },
         },
         "failed": {
+            "status": "failed",
+            "failureCode": "INVALID_PDF",
             "uploadCorrelation": {
                 "request": failed_correlation,
                 "response": failed_correlation,
-            }
+            },
+        },
+        "invalidFile": {"apiRequestCreated": False},
+        "security": {
+            "anonymousReviewStatus": 401,
+            "postSignOutStatuses": [401, 401, 401],
+            "browserTokenStorage": False,
         },
     }
     (tmp_path / "e2e-result.json").write_text(json.dumps(evidence), encoding="utf-8")
@@ -891,7 +955,9 @@ def test_e2e_correlation_proof_requires_both_paths_in_every_service(
         return subprocess.CompletedProcess(
             args=["docker"],
             returncode=0,
-            stdout=f"{completed_correlation}\n{failed_correlation}\n".encode(),
+            stdout=(
+                f"{completed_correlation}\n{correction_correlation}\n{failed_correlation}\n"
+            ).encode(),
         )
 
     monkeypatch.setattr(verifier, "ARTIFACT_DIRECTORY", tmp_path)

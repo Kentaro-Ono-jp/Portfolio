@@ -44,8 +44,10 @@ project-scoped teardown step as a final safety net.
 On runtime failure, the verifier writes sanitized Compose state, timestamped
 service logs, Web, ML, and API event-consumer readiness output, JUnit output,
 model/runtime proof, result-persistence proof, and branch-aware coverage XML
-under `artifacts/verification/`. GitHub Actions uploads that directory before its
-unconditional teardown step.
+under `artifacts/verification/`. Browser trace, video, screenshot, and HTML
+containers stay in the non-uploaded `artifacts/private-verification/` boundary.
+GitHub Actions uploads only the public directory before its unconditional
+teardown step.
 
 Use the non-container path when Docker is intentionally unavailable:
 
@@ -102,10 +104,23 @@ Supporting scripts are implementation details of that entrypoint:
   expired-lease recovery, dispatcher restart, RabbitMQ restart, persistent
   delivery, and the queued-state transition.
 - `tests/e2e/document-classification.spec.ts` proves browser-visible OIDC
-  sign-in without browser token storage, completed and failed workflows,
-  correlation propagation, and non-PDF rejection while Playwright retains
-  failure traces, screenshots, video, and JUnit/HTML reports under
-  `artifacts/verification/`.
+  sign-in without browser token storage, private-source integrity, approval,
+  synthetic correction, audit order, idempotent replay, stale/CSRF rejection,
+  sign-out denial, failed processing, correlation propagation, and non-PDF
+  rejection while Playwright retains trace, screenshot, video, and HTML output
+  only under `artifacts/private-verification/`; sanitized JUnit and structured
+  proof remain in `artifacts/verification/`.
+- `sanitize_verification_artifacts.py` redacts then re-scans ordinary evidence
+  and ZIP members for private-key, JWT, Web-session-cookie, CSRF-token,
+  authorization-code, and bearer material. The browser proof also registers
+  submitted-source, submitted-private-data, and static private-profile canaries
+  before navigation, then registers received reviewer and audit-actor values
+  before assertions can report them. Raw, standard-base64, URL-safe padded and
+  unpadded, strict-percent, and lowercase-percent forms are removed and
+  re-scanned without writing canary values to the report. Private browser
+  containers in the public root close the upload gate. GitHub Actions uploads
+  failure evidence only after this proof succeeds; failure cannot suppress
+  project-scoped teardown.
 - `validate-openapi.mjs` proves valid state variants and rejects impossible
   document states or unstable problem-response combinations.
 - `validate-events.mjs` validates canonical event examples and representative

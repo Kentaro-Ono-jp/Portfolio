@@ -309,6 +309,7 @@ describe("Web authentication boundary", () => {
       new WebAuthenticationError(503, "WEB_PRIVATE", "Unavailable"),
     );
     expect(problem.status).toBe(503);
+    expect(problem.headers.get("Cache-Control")).toBe("private, no-store");
     expect(await problem.text()).not.toContain("private-access-token");
     expect(
       await sanitizedAuthProblem(

@@ -173,6 +173,61 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #61
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
 
+### Normalize semantic timestamps before ordering
+
+- **Trigger:** A request, response, or event sequence orders accepted RFC 3339
+  timestamps and uses another field as a deterministic tie-break.
+- **HEAD effect:** `moving`
+- **Problem:** Raw timestamp text order differs from chronological order when
+  valid offsets or variable fractional precision represent the instants.
+- **Detect:** At the canonical schema, submit a real-time ascending sequence
+  whose timestamp strings cross offsets and fractional widths, its real-time
+  descending inverse, and two equivalent instants whose canonical tie-break
+  fields are ascending then descending. Replay the ascending sequence and its
+  inverse through every affected production boundary.
+- **Pass:** The ascending sequence succeeds, the descending inverse fails, and
+  equivalent instants are accepted only in deterministic canonical tie-break
+  order without truncating accepted fractional precision.
+- **Repair:** Parse the accepted timestamp into an offset-adjusted UTC whole
+  second plus a precision-preserved fractional value, compare the normalized
+  instant first, canonicalize the tie-break field, and retain positive plus
+  inverse-negative fixtures at schema and production boundaries.
+- **Origins:** PR #68
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152827215).
+
+### Exclude private browser content from failure artifacts
+
+- **Trigger:** A browser or runtime verifier can retain submitted source,
+  submitted private data, private profile claims, screenshots, video, trace
+  resources, or HTML reports for failure diagnosis.
+- **HEAD effect:** `moving`
+- **Problem:** A credential-only pattern scan can approve a public failure
+  artifact that still contains opaque private content or a rendered browser
+  container.
+- **Detect:** Register one opaque canary for each accepted private-content
+  category and every profile identifier when first observed, before any
+  assertion or reporter can serialize it. With encoders independent of the
+  sanitizer, place raw, standard-base64, URL-safe padded and unpadded, strict
+  percent, and lowercase-percent forms in both an ordinary file and ZIP
+  member; place an unexpected observed profile value in failure JUnit; place
+  trace and rendered-media containers under the public artifact root; then
+  execute sanitization and the post-sanitization scan.
+- **Pass:** Every statically or dynamically registered canary and every
+  independently generated form is absent after sanitization, canary values are
+  absent from the report, unexpected observed profile values cannot enter
+  public failure text unregistered, browser trace/rendered containers are
+  outside the public upload root, and any such container left in that root
+  fails the upload gate.
+- **Repair:** Move browser-owned binary and report containers to a non-uploaded
+  root; register exact submitted canaries before browser navigation and every
+  received reviewer/actor value before assertions; redact raw, standard-base64,
+  URL-safe padded and unpadded, strict-percent, and lowercase-percent forms
+  from public ordinary files and ZIP members; prove the matrix with independent
+  encoders; re-scan with the same in-memory canaries; and block upload on any
+  remaining private container or value.
+- **Origins:** PR #68
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152433244).
+
 ## Execution and correction
 
 A failed triggered rule blocks reviewer dispatch.

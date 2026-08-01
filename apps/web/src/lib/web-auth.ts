@@ -153,6 +153,7 @@ export function sanitizedAuthProblem(error: WebAuthenticationError): Response {
       headers: {
         "Content-Type": "application/problem+json",
         "X-Correlation-ID": correlationId,
+        "Cache-Control": "private, no-store",
       },
     },
   );

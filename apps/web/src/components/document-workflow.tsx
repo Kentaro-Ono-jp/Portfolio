@@ -6,8 +6,11 @@ import { useRef, useState, type FormEvent } from "react";
 import {
   createDocument,
   DocumentRequestError,
+  getDocumentAuditHistory,
+  getDocumentReview,
   getDocument,
   problemGuidance,
+  submitDocumentReview,
   terminalFailureGuidance,
 } from "@/lib/browser-api";
 import {
@@ -25,9 +28,14 @@ const PROGRESS_STATES = [
   "completed",
 ] as const;
 
-function statusLabel(
-  status: DocumentAccepted["status"] | DocumentStatus["status"],
-): string {
+type Classification = "invoice" | "report";
+
+interface PendingDecision {
+  finalClassification: Classification;
+  idempotencyKey: string;
+}
+
+function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -46,6 +54,10 @@ export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<DocumentAccepted | null>(null);
+  const [selectedFinalClassification, setSelectedFinalClassification] =
+    useState<Classification | null>(null);
+  const [pendingDecision, setPendingDecision] =
+    useState<PendingDecision | null>(null);
 
   const submission = useMutation({
     mutationFn: (selectedFile: File) => createDocument(selectedFile, csrfToken),
@@ -66,6 +78,42 @@ export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
       false,
   });
 
+  const completedDocument: Extract<
+    DocumentStatus,
+    { status: "completed" }
+  > | null = statusQuery.data?.status === "completed" ? statusQuery.data : null;
+  const reviewQuery = useQuery({
+    queryKey: ["document-review", accepted?.documentId],
+    queryFn: () => getDocumentReview(accepted!.documentId),
+    enabled: completedDocument !== null,
+  });
+  const auditQuery = useQuery({
+    queryKey: ["document-audit", accepted?.documentId],
+    queryFn: () => getDocumentAuditHistory(accepted!.documentId),
+    enabled: completedDocument !== null,
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (decision: PendingDecision) =>
+      submitDocumentReview(
+        accepted!.documentId,
+        decision.finalClassification,
+        reviewQuery.data!.entityTag,
+        decision.idempotencyKey,
+        csrfToken,
+      ),
+    onSuccess: (result) => {
+      queryClient.setQueryData(
+        ["document-review", accepted?.documentId],
+        result,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["document-audit", accepted?.documentId],
+      });
+      setPendingDecision(null);
+    },
+  });
+
   const currentStatus = statusQuery.data?.status ?? accepted?.status;
   const terminal =
     statusQuery.data !== undefined && isTerminalStatus(statusQuery.data);
@@ -74,7 +122,13 @@ export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
       ? submission.error
       : statusQuery.error instanceof DocumentRequestError
         ? statusQuery.error
-        : null;
+        : reviewQuery.error instanceof DocumentRequestError
+          ? reviewQuery.error
+          : auditQuery.error instanceof DocumentRequestError
+            ? auditQuery.error
+            : reviewMutation.error instanceof DocumentRequestError
+              ? reviewMutation.error
+              : null;
   const isLocked = submission.isPending || accepted !== null;
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -96,16 +150,46 @@ export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
       queryClient.removeQueries({
         queryKey: ["document-status", accepted.documentId],
       });
+      queryClient.removeQueries({
+        queryKey: ["document-review", accepted.documentId],
+      });
+      queryClient.removeQueries({
+        queryKey: ["document-audit", accepted.documentId],
+      });
     }
     submission.reset();
+    reviewMutation.reset();
     setAccepted(null);
     setFile(null);
     setLocalError(null);
+    setSelectedFinalClassification(null);
+    setPendingDecision(null);
     if (inputRef.current !== null) {
       inputRef.current.value = "";
       queueMicrotask(() => inputRef.current?.focus());
     }
   }
+
+  function commitReview(): void {
+    const review = reviewQuery.data?.review;
+    if (review === undefined || review.status !== "unreviewed") {
+      return;
+    }
+    const finalClassification =
+      selectedFinalClassification ?? review.machineClassification;
+    const decision =
+      pendingDecision?.finalClassification === finalClassification
+        ? pendingDecision
+        : { finalClassification, idempotencyKey: crypto.randomUUID() };
+    setPendingDecision(decision);
+    reviewMutation.mutate(decision);
+  }
+
+  const review = reviewQuery.data?.review;
+  const selectedClassification =
+    selectedFinalClassification ?? review?.machineClassification;
+  const reviewIsTerminal =
+    review?.status === "approved" || review?.status === "corrected";
 
   return (
     <section className="workflow-shell" aria-labelledby="workflow-title">
@@ -248,31 +332,231 @@ export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
               </a>
             ) : null}
 
-            {statusQuery.data?.status === "completed" ? (
-              <div className="result-card mt-7">
+            {completedDocument !== null ? (
+              <div className="result-card mt-7" aria-label="Machine result">
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-teal-800">
-                    Classification
+                    Machine classification
                   </p>
                   <p className="mt-2 text-4xl font-semibold capitalize tracking-tight text-slate-950">
-                    {statusQuery.data.classification}
+                    {completedDocument.classification}
                   </p>
                 </div>
                 <dl className="grid grid-cols-2 gap-4 border-t border-teal-200/70 pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
                   <div>
                     <dt className="text-xs text-slate-500">Confidence</dt>
                     <dd className="mt-1 font-mono text-lg font-semibold text-slate-900">
-                      {(statusQuery.data.confidence * 100).toFixed(1)}%
+                      {(completedDocument.confidence * 100).toFixed(1)}%
                     </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-slate-500">Model</dt>
                     <dd className="mt-1 break-all font-mono text-sm font-semibold text-slate-900">
-                      {statusQuery.data.modelVersion}
+                      {completedDocument.modelVersion}
                     </dd>
                   </div>
                 </dl>
               </div>
+            ) : null}
+
+            {completedDocument !== null ? (
+              <section
+                className="mt-7 rounded-2xl border border-slate-200 bg-white p-5"
+                aria-labelledby="review-title"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                      Human decision
+                    </p>
+                    <h3
+                      id="review-title"
+                      className="mt-1 text-xl font-semibold text-slate-950"
+                    >
+                      Review classification
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 font-mono text-xs text-slate-700">
+                    Review v{review?.reviewVersion ?? 0}
+                  </span>
+                </div>
+
+                {reviewQuery.isPending ? (
+                  <p className="mt-4 text-sm text-slate-600">
+                    Loading review state…
+                  </p>
+                ) : null}
+
+                {review?.status === "unreviewed" ? (
+                  <div className="mt-5">
+                    <fieldset disabled={reviewMutation.isPending}>
+                      <legend className="text-sm font-semibold text-slate-900">
+                        Final classification
+                      </legend>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        {(["invoice", "report"] as const).map(
+                          (classification) => (
+                            <label
+                              key={classification}
+                              className={`cursor-pointer rounded-xl border p-4 text-sm font-semibold capitalize transition ${selectedClassification === classification ? "border-teal-600 bg-teal-50 text-teal-900" : "border-slate-200 text-slate-700 hover:border-slate-400"}`}
+                            >
+                              <input
+                                className="mr-2 accent-teal-700"
+                                type="radio"
+                                name="final-classification"
+                                value={classification}
+                                checked={
+                                  selectedClassification === classification
+                                }
+                                onChange={() => {
+                                  setSelectedFinalClassification(
+                                    classification,
+                                  );
+                                  setPendingDecision(null);
+                                  reviewMutation.reset();
+                                }}
+                              />
+                              {classification}
+                            </label>
+                          ),
+                        )}
+                      </div>
+                    </fieldset>
+                    <button
+                      type="button"
+                      disabled={
+                        reviewMutation.isPending ||
+                        selectedClassification === undefined
+                      }
+                      className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-slate-300"
+                      onClick={commitReview}
+                    >
+                      {reviewMutation.isPending
+                        ? "Committing immutable decision…"
+                        : selectedClassification ===
+                            review.machineClassification
+                          ? `Approve ${review.machineClassification} classification`
+                          : `Correct classification to ${selectedClassification}`}
+                    </button>
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                      One terminal decision is committed with an entity-tag
+                      precondition and an idempotency key. It cannot be edited.
+                    </p>
+                  </div>
+                ) : null}
+
+                {review !== undefined && review.status !== "unreviewed" ? (
+                  <div className="mt-5">
+                    <p className="text-lg font-semibold capitalize text-slate-950">
+                      {statusLabel(review.status)}
+                    </p>
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-slate-500">Machine result</dt>
+                        <dd className="mt-1 font-semibold capitalize text-slate-900">
+                          {review.machineClassification}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">Final decision</dt>
+                        <dd className="mt-1 font-semibold capitalize text-slate-900">
+                          {review.finalClassification}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-slate-500">Reviewer principal</dt>
+                        <dd className="mt-1 break-all font-mono text-xs text-slate-900">
+                          {review.reviewerPrincipalId}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-slate-500">Decided at</dt>
+                        <dd className="mt-1 font-mono text-xs text-slate-900">
+                          <time dateTime={review.decidedAt}>
+                            {review.decidedAt}
+                          </time>
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                ) : null}
+
+                {reviewQuery.isError ? (
+                  <button
+                    type="button"
+                    className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800"
+                    onClick={() => void reviewQuery.refetch()}
+                  >
+                    Retry review state
+                  </button>
+                ) : null}
+              </section>
+            ) : null}
+
+            {completedDocument !== null ? (
+              <section
+                className="mt-7 rounded-2xl bg-slate-950 p-5 text-slate-100"
+                aria-labelledby="audit-title"
+              >
+                <p className="text-xs uppercase tracking-[0.16em] text-teal-300">
+                  API-owned evidence
+                </p>
+                <h3 id="audit-title" className="mt-1 text-xl font-semibold">
+                  Audit history
+                </h3>
+                {auditQuery.isPending ? (
+                  <p className="mt-4 text-sm text-slate-300">
+                    Loading ordered events…
+                  </p>
+                ) : null}
+                {auditQuery.data !== undefined ? (
+                  <ol className="mt-5 space-y-3">
+                    {auditQuery.data.events.map((event, index) => (
+                      <li
+                        key={event.eventId}
+                        className="grid grid-cols-[2rem_1fr] gap-3 border-t border-slate-700 pt-3"
+                      >
+                        <span className="font-mono text-xs text-teal-300">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <div>
+                          <p className="font-mono text-sm font-semibold">
+                            {event.action}
+                          </p>
+                          <p className="mt-1 font-mono text-[0.68rem] text-slate-400">
+                            {event.occurredAt}
+                          </p>
+                          <dl className="mt-2 grid gap-1 font-mono text-[0.65rem] text-slate-400">
+                            <div>
+                              <dt className="inline text-slate-500">Actor </dt>
+                              <dd className="inline break-all">
+                                {event.actorPrincipalId}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="inline text-slate-500">
+                                Correlation{" "}
+                              </dt>
+                              <dd className="inline break-all">
+                                {event.correlationId}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
+                {auditQuery.isError ? (
+                  <button
+                    type="button"
+                    className="mt-4 rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold"
+                    onClick={() => void auditQuery.refetch()}
+                  >
+                    Retry audit history
+                  </button>
+                ) : null}
+              </section>
             ) : null}
 
             {statusQuery.data?.status === "failed" ? (
@@ -291,7 +575,9 @@ export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
               </button>
             ) : null}
 
-            {terminal || statusQuery.isError ? (
+            {statusQuery.data?.status === "failed" ||
+            reviewIsTerminal ||
+            statusQuery.isError ? (
               <button
                 type="button"
                 className="mt-5 ml-3 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
