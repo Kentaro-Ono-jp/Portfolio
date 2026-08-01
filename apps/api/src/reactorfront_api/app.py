@@ -51,7 +51,10 @@ CORRELATION_HEADER = "X-Correlation-ID"
 DOCUMENT_UPLOAD_PATH = "/api/v1/documents"
 PdfUpload = Annotated[UploadFile, File()]
 CorrelationIdHeader = Annotated[UUID | None, Header(alias=CORRELATION_HEADER)]
-IfMatchHeader = Annotated[str | None, Header(alias="If-Match")]
+IfMatchHeader = Annotated[
+    str | None,
+    Header(alias="If-Match", pattern=r'^"[a-f0-9]{64}"$'),
+]
 IdempotencyKeyHeader = Annotated[UUID, Header(alias="Idempotency-Key")]
 DOCUMENT_PRINCIPAL_STATE = "document_principal"
 DOCUMENT_CORRELATION_STATE = "document_correlation_id"

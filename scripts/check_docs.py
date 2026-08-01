@@ -876,6 +876,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Authorize a target before idempotency classification",
         "Enforce closed request contracts at runtime",
         "Serialize only reachable discriminated states",
+        "Enforce constrained request parameters at runtime",
         "Editing only the PR title or body does not change the Git commit",
         "Knowledge write-back: none",
         "There is no pending intake queue",
@@ -896,6 +897,7 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path("ips-microkernel/ci/knowledge/contracts.md"): (
         "Reject extras through the runtime boundary",
         "Prove reachable and unreachable union states",
+        "Match parameter constraints at the production boundary",
     ),
     Path("ips-microkernel/ci/knowledge/framework-runtime.md"): (
         "Prove state across production bundle boundaries",

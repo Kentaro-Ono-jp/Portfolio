@@ -1041,9 +1041,20 @@ def test_review_concurrency_idempotency_and_audit_history_use_one_winner(
         document_id=hidden_document_id,
         decision_id=UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab"),
     )
-    with pytest.raises(ReviewOperationError) as captured:
-        repository.submit_review(hidden_target_reuse)
-    assert captured.value.code is ReviewOperationFailureCode.DOCUMENT_NOT_FOUND
+    hidden_target_fresh = replace(
+        hidden_target_reuse,
+        idempotency_key=UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac"),
+        decision_id=UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaad"),
+    )
+    hidden_results: list[ReviewOperationFailureCode] = []
+    for hidden_command in (hidden_target_reuse, hidden_target_fresh):
+        with pytest.raises(ReviewOperationError) as captured:
+            repository.submit_review(hidden_command)
+        hidden_results.append(captured.value.code)
+    assert hidden_results == [
+        ReviewOperationFailureCode.DOCUMENT_NOT_FOUND,
+        ReviewOperationFailureCode.DOCUMENT_NOT_FOUND,
+    ]
 
     assert table_count(engine, "review_decisions") == 1
     assert table_count(engine, "idempotency_records") == 1

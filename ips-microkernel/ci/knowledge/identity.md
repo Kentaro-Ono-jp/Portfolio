@@ -47,9 +47,11 @@ identity, token claims, ownership expectations, or synthetic-provider fixtures.
   untested precedence path that leaks a different failure for hidden targets.
 - **Check:** Does the ownership result dominate replay and conflict
   classification for every hidden-target key state?
-- **Guard:** Use the same hidden target with both a reused key bound to another
-  target and a fresh key; require the same not-found result, no decision,
-  receipt, or audit mutation, and retain owned-target replay coverage.
+- **Guard:** In every applicable adapter proof, including the authoritative
+  production-shaped integration, execute the same hidden target with both a
+  reused key bound to another target and a fresh key; require the same
+  not-found result, no decision, receipt, or audit mutation, and retain
+  owned-target replay coverage.
 - **Evidence:** PR #61
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
 

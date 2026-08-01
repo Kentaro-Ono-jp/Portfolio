@@ -470,6 +470,15 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
                 CORRELATION_HEADER: str(CORRELATION_ID),
             },
         )
+        invalid_if_match = client.put(
+            f"/api/v1/documents/{DOCUMENT_ID}/review",
+            json={"finalClassification": "invoice"},
+            headers={
+                "If-Match": "not-an-entity-tag",
+                "Idempotency-Key": str(IDEMPOTENCY_KEY),
+                CORRELATION_HEADER: str(CORRELATION_ID),
+            },
+        )
         invalid_audit_path = client.get(
             "/api/v1/documents/not-a-uuid/audit-events",
             headers={CORRELATION_HEADER: str(CORRELATION_ID)},
@@ -482,6 +491,7 @@ def test_request_validation_problems_match_contract_and_skip_service() -> None:
         (invalid_review_path, "/api/v1/documents/{documentId}/review", "put"),
         (invalid_review_body, "/api/v1/documents/{documentId}/review", "put"),
         (invalid_idempotency_key, "/api/v1/documents/{documentId}/review", "put"),
+        (invalid_if_match, "/api/v1/documents/{documentId}/review", "put"),
         (invalid_audit_path, "/api/v1/documents/{documentId}/audit-events", "get"),
     ]
     for response, path, method in contracts:

@@ -106,6 +106,22 @@ product bugs, speculation, secrets, private payloads, or an incident ledger.
 - **Evidence:** PR #61
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
 
+### Enforce constrained request parameters at runtime
+
+- **Phase:** `pre-CI`
+- **Trigger:** OpenAPI adds or changes a pattern, range, format, or enum for a
+  path, query, header, or cookie parameter.
+- **Mistake:** The runtime accepts malformed transport syntax and lets domain
+  logic reclassify it as a different failure than the published validation
+  response.
+- **Check:** Does the production request boundary enforce the exact canonical
+  parameter constraint before the protected service is called?
+- **Guard:** Send an otherwise-valid authenticated request with one malformed
+  constrained parameter; require canonical validation failure and zero service
+  or state mutation.
+- **Evidence:** PR #61
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
+
 ## Phase boundary
 
 A failed `pre-CI` entry blocks push. A failed `pre-review` entry blocks reviewer

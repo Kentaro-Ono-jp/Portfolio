@@ -38,6 +38,21 @@ objects, discriminated response unions, or generated API types.
 - **Evidence:** PR #61
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
 
+### Match parameter constraints at the production boundary
+
+- **Phase:** `pre-CI`
+- **Trigger:** A canonical path, query, header, or cookie parameter declares a
+  pattern, range, format, or enum constraint.
+- **Mistake:** Schema lint proves the constraint while the runtime annotation
+  accepts a broader value and routes it into domain failure handling.
+- **Check:** Is the same constraint applied by the production request parser
+  before service invocation?
+- **Guard:** Exercise a contract-invalid parameter on an otherwise-valid
+  request; require canonical validation failure, zero protected calls, and no
+  state mutation.
+- **Evidence:** PR #61
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
+
 ## Return
 
 Return to the calling CI procedure after applying only the triggered entries.
