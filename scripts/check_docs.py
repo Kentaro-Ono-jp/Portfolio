@@ -1680,6 +1680,44 @@ def _validate_ci_failure_knowledge(failures: list[str]) -> None:
             )
 
 
+MARKDOWN_RECORD_FIELD = re.compile(r"(?m)^- \*\*([^*:\r\n]+):\*\*[ \t]*(.*)$")
+
+
+def _markdown_record_fields(block: str) -> list[tuple[str, str]]:
+    matches = list(MARKDOWN_RECORD_FIELD.finditer(block))
+    fields: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(block)
+        continuation = block[match.end() : end]
+        value = f"{match.group(2)}\n{continuation}".strip()
+        fields.append((match.group(1).strip(), value))
+    return fields
+
+
+def _validate_exact_record_fields(
+    *,
+    block: str,
+    expected_fields: list[str],
+    location: str,
+    schema: str,
+    failures: list[str],
+) -> None:
+    fields = _markdown_record_fields(block)
+    labels = [label for label, _value in fields]
+    if labels != expected_fields:
+        failures.append(f"{location} must contain exactly {schema} in order")
+
+    blank_fields = [
+        label
+        for label, value in fields
+        if label in expected_fields and not value.strip()
+    ]
+    if blank_fields:
+        failures.append(
+            f"{location} required fields must be non-empty: {blank_fields!r}"
+        )
+
+
 def _validate_stage_a_occurrence_records(failures: list[str]) -> None:
     records_root = REPOSITORY_ROOT / "ips-microkernel" / "knowledge" / "corrections"
     if not records_root.is_dir():
@@ -1692,7 +1730,7 @@ def _validate_stage_a_occurrence_records(failures: list[str]) -> None:
         return
 
     occurrence_heading = re.compile(r"(?m)^### Occurrence (\d+)\s*$")
-    field_heading = re.compile(r"(?m)^- \*\*(PR|Mistake|Correction):\*\*")
+    expected_fields = ["PR", "Mistake", "Correction"]
     for path in record_paths:
         relative_path = path.relative_to(REPOSITORY_ROOT)
         match = re.fullmatch(r"pr-(\d{4})\.md", path.name)
@@ -1727,12 +1765,13 @@ def _validate_stage_a_occurrence_records(failures: list[str]) -> None:
                 else len(content)
             )
             block = content[heading.end() : end]
-            fields = field_heading.findall(block)
-            if fields != ["PR", "Mistake", "Correction"]:
-                failures.append(
-                    f"{relative_path.as_posix()}: occurrence {numbers[index]} must "
-                    "contain exactly PR, Mistake, Correction in order"
-                )
+            _validate_exact_record_fields(
+                block=block,
+                expected_fields=expected_fields,
+                location=(f"{relative_path.as_posix()}: occurrence {numbers[index]}"),
+                schema="PR, Mistake, Correction",
+                failures=failures,
+            )
             pr_field = re.search(r"(?m)^- \*\*PR:\*\* PR #(\d+)\s*$", block)
             if pr_field is None or int(pr_field.group(1)) != expected_pr:
                 failures.append(
@@ -1754,9 +1793,6 @@ def _validate_stage_b_rules(failures: list[str]) -> None:
         "## Execution and correction", maxsplit=1
     )[0]
     heading_pattern = re.compile(r"(?m)^### (.+?)\s*$")
-    field_pattern = re.compile(
-        r"(?m)^- \*\*(Trigger|HEAD effect|Problem|Detect|Pass|Repair|Origins):\*\*"
-    )
     headings = list(heading_pattern.finditer(rules))
     titles = [heading.group(1) for heading in headings]
     duplicates = sorted(title for title, count in Counter(titles).items() if count > 1)
@@ -1779,13 +1815,13 @@ def _validate_stage_b_rules(failures: list[str]) -> None:
     for index, heading in enumerate(headings):
         end = headings[index + 1].start() if index + 1 < len(headings) else len(rules)
         block = rules[heading.end() : end]
-        fields = field_pattern.findall(block)
-        if fields != expected_fields:
-            failures.append(
-                f"{relative_path.as_posix()}: Stage B rule {heading.group(1)!r} "
-                "must contain exactly Trigger, HEAD effect, Problem, Detect, "
-                "Pass, Repair, Origins in order"
-            )
+        _validate_exact_record_fields(
+            block=block,
+            expected_fields=expected_fields,
+            location=(f"{relative_path.as_posix()}: Stage B rule {heading.group(1)!r}"),
+            schema="Trigger, HEAD effect, Problem, Detect, Pass, Repair, Origins",
+            failures=failures,
+        )
         if not re.search(r"(?m)^- \*\*HEAD effect:\*\* `(neutral|moving)`\s*$", block):
             failures.append(
                 f"{relative_path.as_posix()}: Stage B rule {heading.group(1)!r} "
@@ -1796,7 +1832,6 @@ def _validate_stage_b_rules(failures: list[str]) -> None:
 def _validate_ci_playbook_records(failures: list[str]) -> None:
     knowledge_root = REPOSITORY_ROOT / "ips-microkernel" / "ci" / "knowledge"
     heading_pattern = re.compile(r"(?m)^### (.+?)\s*$")
-    field_pattern = re.compile(r"(?m)^- \*\*(Origin|Trigger|Mistake|Correction):\*\*")
     expected_fields = ["Origin", "Trigger", "Mistake", "Correction"]
     for path in sorted(knowledge_root.glob("*.md")):
         if path.name == "selector.md":
@@ -1829,13 +1864,16 @@ def _validate_ci_playbook_records(failures: list[str]) -> None:
                 else len(records)
             )
             block = records[heading.end() : end]
-            fields = field_pattern.findall(block)
-            if fields != expected_fields:
-                failures.append(
+            _validate_exact_record_fields(
+                block=block,
+                expected_fields=expected_fields,
+                location=(
                     f"{relative_path.as_posix()}: CI Playbook record "
-                    f"{heading.group(1)!r} must contain exactly Origin, Trigger, "
-                    "Mistake, Correction in order"
-                )
+                    f"{heading.group(1)!r}"
+                ),
+                schema="Origin, Trigger, Mistake, Correction",
+                failures=failures,
+            )
 
 
 def _validate_owner_confirmation_boundary(

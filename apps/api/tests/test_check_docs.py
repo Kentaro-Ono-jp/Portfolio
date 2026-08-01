@@ -238,6 +238,63 @@ def test_stage_a_occurrence_rejects_missing_required_field(
     assert any("exactly PR, Mistake, Correction" in failure for failure in failures)
 
 
+def test_stage_a_occurrence_rejects_an_unknown_field(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    record = tmp_path / "ips-microkernel" / "knowledge" / "corrections" / "pr-0064.md"
+    record.parent.mkdir(parents=True)
+    record.write_text(
+        "# PR #64 implementation-correction occurrences\n\n"
+        "<!-- ips-data: implementation-correction-occurrences -->\n\n"
+        "### Occurrence 1\n\n"
+        "- **PR:** PR #64\n"
+        "- **Mistake:** An observed mistake.\n"
+        "- **Correction:** A concrete correction.\n"
+        "- **Evidence:** Prohibited proof-style field.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_a_occurrence_records(failures)
+
+    assert any("exactly PR, Mistake, Correction" in failure for failure in failures)
+
+
+@pytest.mark.parametrize("blank_field", ("PR", "Mistake", "Correction"))
+def test_stage_a_occurrence_rejects_a_blank_required_value(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    blank_field: str,
+) -> None:
+    values = {
+        "PR": "PR #64",
+        "Mistake": "An observed mistake.",
+        "Correction": "A concrete correction.",
+    }
+    values[blank_field] = ""
+    record = tmp_path / "ips-microkernel" / "knowledge" / "corrections" / "pr-0064.md"
+    record.parent.mkdir(parents=True)
+    record.write_text(
+        "# PR #64 implementation-correction occurrences\n\n"
+        "<!-- ips-data: implementation-correction-occurrences -->\n\n"
+        "### Occurrence 1\n\n"
+        f"- **PR:** {values['PR']}\n"
+        f"- **Mistake:** {values['Mistake']}\n"
+        f"- **Correction:** {values['Correction']}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_a_occurrence_records(failures)
+
+    assert any("required fields must be non-empty" in failure for failure in failures)
+
+
 def test_stage_b_rules_have_machine_detection_and_repair(
     documentation_checker: ModuleType,
 ) -> None:
@@ -271,6 +328,72 @@ def test_stage_b_rejects_a_duplicate_rule_title(
     assert any("duplicate Stage B rule titles" in failure for failure in failures)
 
 
+def test_stage_b_rejects_an_unknown_field(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("ips-microkernel/knowledge/behavior.md")
+    destination = tmp_path / relative_path
+    destination.parent.mkdir(parents=True)
+    destination.write_text(
+        "# Stage B\n\n## Rules\n\n### Exact rule\n\n"
+        "- **Trigger:** Before review.\n"
+        "- **HEAD effect:** `neutral`\n"
+        "- **Problem:** Invalid records pass.\n"
+        "- **Detect:** Execute mutation probes.\n"
+        "- **Pass:** Every invalid mutation fails.\n"
+        "- **Repair:** Enforce the exact schema.\n"
+        "- **Evidence:** Prohibited proof-style field.\n"
+        "- **Origins:** PR #64.\n\n"
+        "## Execution and correction\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_b_rules(failures)
+
+    assert any("must contain exactly Trigger" in failure for failure in failures)
+
+
+@pytest.mark.parametrize(
+    "blank_field",
+    ("Trigger", "HEAD effect", "Problem", "Detect", "Pass", "Repair", "Origins"),
+)
+def test_stage_b_rejects_a_blank_required_value(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    blank_field: str,
+) -> None:
+    values = {
+        "Trigger": "Before review.",
+        "HEAD effect": "`neutral`",
+        "Problem": "Invalid records pass.",
+        "Detect": "Execute mutation probes.",
+        "Pass": "Every invalid mutation fails.",
+        "Repair": "Enforce the exact schema.",
+        "Origins": "PR #64.",
+    }
+    values[blank_field] = ""
+    relative_path = Path("ips-microkernel/knowledge/behavior.md")
+    destination = tmp_path / relative_path
+    destination.parent.mkdir(parents=True)
+    destination.write_text(
+        "# Stage B\n\n## Rules\n\n### Exact rule\n\n"
+        + "".join(f"- **{field}:** {value}\n" for field, value in values.items())
+        + "\n## Execution and correction\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_stage_b_rules(failures)
+
+    assert any("required fields must be non-empty" in failure for failure in failures)
+
+
 def test_ci_playbook_allows_duplicate_correction_records(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
@@ -301,7 +424,7 @@ def test_ci_playbook_allows_duplicate_correction_records(
     assert failures == []
 
 
-def test_ci_playbook_rejects_a_proof_style_or_incomplete_record(
+def test_ci_playbook_rejects_a_proof_style_field(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -313,7 +436,8 @@ def test_ci_playbook_rejects_a_proof_style_or_incomplete_record(
         "## Read when\n\nBefore remote push, read this leaf.\n\n"
         "## Correction records\n\n### Broken record\n\n"
         "- **Origin:** PR #64\n- **Trigger:** Trigger.\n"
-        "- **Mistake:** Mistake.\n- **Evidence:** Not allowed.\n\n"
+        "- **Mistake:** Mistake.\n- **Correction:** Correction.\n"
+        "- **Evidence:** Not allowed.\n\n"
         "## Return\n\nReturn to publication Gate A.\n",
         encoding="utf-8",
     )
@@ -323,6 +447,38 @@ def test_ci_playbook_rejects_a_proof_style_or_incomplete_record(
     documentation_checker._validate_ci_playbook_records(failures)
 
     assert any("exactly Origin, Trigger, Mistake, Correction" in failure for failure in failures)
+
+
+@pytest.mark.parametrize("blank_field", ("Origin", "Trigger", "Mistake", "Correction"))
+def test_ci_playbook_rejects_a_blank_required_value(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    blank_field: str,
+) -> None:
+    values = {
+        "Origin": "PR #64",
+        "Trigger": "A CI failure.",
+        "Mistake": "A concrete mistake.",
+        "Correction": "A concrete correction.",
+    }
+    values[blank_field] = ""
+    leaf = tmp_path / "ips-microkernel" / "ci" / "knowledge" / "sample.md"
+    leaf.parent.mkdir(parents=True)
+    fields = "".join(f"- **{field}:** {value}\n" for field, value in values.items())
+    leaf.write_text(
+        "# CI Playbook: sample corrections\n\n"
+        "## Read when\n\nBefore remote push, read this leaf.\n\n"
+        f"## Correction records\n\n### Broken record\n\n{fields}\n"
+        "## Return\n\nReturn to publication Gate A.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_ci_playbook_records(failures)
+
+    assert any("required fields must be non-empty" in failure for failure in failures)
 
 
 def test_gate_a_stage_b_push_and_review_order() -> None:

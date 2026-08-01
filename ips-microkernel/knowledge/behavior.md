@@ -54,16 +54,40 @@ proved/unproved classification, or permanence claim.
 - **Trigger:** Initial review or re-review is ready to dispatch.
 - **HEAD effect:** `neutral`
 - **Problem:** The PR description or review prompt omits or misstates the live
-  full base and head SHAs.
-- **Detect:** Read the live PR base and head full SHAs, then parse both declared
-  endpoints from the live PR description and copyable review prompt.
+  full base and head SHAs, or the description's selected, executed, carried,
+  and skipped inventory differs from the exact-head Actions output.
+- **Detect:** Read the live PR base and head full SHAs and the exact-head
+  Actions plan, then parse both declared endpoints plus selected, executed,
+  carried, and skipped groups from the live PR description and copyable review
+  prompt.
 - **Pass:** Both declared base values equal the live base, both declared head
-  values equal the live head, and the PR head is unchanged by metadata repair.
-- **Repair:** Replace every declared endpoint with the live full SHA, update
-  the prompt, save the PR description, and read the live metadata back before
+  values equal the live head, the PR evidence inventory equals the exact-head
+  Actions inventory, and the PR head is unchanged by metadata repair.
+- **Repair:** Replace every declared endpoint with the live full SHA, publish
+  the exact-head selected, executed, carried, and skipped inventory, update the
+  prompt, save the PR description, and read the live metadata back before
   dispatch.
 - **Origins:** PR #57
-  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143276537).
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143276537),
+  PR #64
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/64#issuecomment-5150763750).
+
+### Enforce exact operational record schemas
+
+- **Trigger:** A Stage A, Stage B, or CI Playbook record contract or validator
+  is added or changed.
+- **HEAD effect:** `moving`
+- **Problem:** Documentation verification filters for allowed labels and lets
+  an unknown field heading or blank required value pass.
+- **Detect:** For every affected record type, run a complete valid fixture,
+  then mutate it once with an unknown field and once per blank required field.
+- **Pass:** The valid fixture passes, duplicate policy remains intact, and
+  every unknown-field or blank-value mutation fails.
+- **Repair:** Parse every field heading instead of filtering allowed labels,
+  require the exact ordered schema and non-empty values, and retain the full
+  focused mutation matrix.
+- **Origins:** PR #64
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/64#issuecomment-5150763750).
 
 ### Invalidate head-bound review evidence
 
