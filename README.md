@@ -1,8 +1,7 @@
 # ReactorFront Portfolio
 
-> Status: first vertical slice completed; second vertical slice accepted and
-> tracked in [Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27)
-> — 2026-07-20
+> Status: second vertical slice completed with authenticated classification
+> review and immutable audit history — 2026-08-02
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -28,7 +27,7 @@ be used. Private client or employer materials are outside the project scope.
 
 ## Engineering evidence
 
-The completed first vertical slice demonstrates:
+The two completed vertical slices demonstrate:
 
 - strict TypeScript and React/Next.js application development
 - Python API and applied PyTorch ML engineering
@@ -38,6 +37,11 @@ The completed first vertical slice demonstrates:
 - tests, static analysis, supply-chain checks, and GitHub Actions verification
 - observability, failure diagnosis, migrations, and recovery design
 - focused issues, pull requests, ADRs, and release history
+- OIDC Authorization Code flow with PKCE and a server-owned Web session
+- independently authenticated and owner-filtered API resource access
+- private source delivery, immutable human decisions, idempotency, concurrency,
+  and append-only product audit history
+- real-browser security-negative, recovery, leakage-scan, and teardown proof
 
 ## Repository structure
 
@@ -88,6 +92,12 @@ Use the thin [delivery index](ips-microkernel/delivery/index.md) to select the
 governing contract without loading completed and current specifications
 together.
 
+The completed authenticated-review boundary is explained in the
+[architecture documentation](ips-microkernel/architecture/index.md). Its
+public HTTP operations and generated Web types are inspectable in the
+[OpenAPI 3.1 contract](packages/contracts/openapi/openapi.yaml) and
+[generated TypeScript](packages/contracts/generated/api.d.ts).
+
 ## Contributing and security
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing a change.
@@ -95,6 +105,15 @@ together.
   [`SECURITY.md`](SECURITY.md), never through a public Issue.
 - Use only repository-owned synthetic fixtures. Do not submit client,
   employer, personal, or otherwise confidential documents.
+
+The committed Dex configuration is deterministic test infrastructure, not a
+production identity provider. The repository is not a persistent hosted
+service and accepts no production accounts. Tokens stay behind the Next.js
+server boundary, mutations require CSRF protection, the API independently
+enforces bearer capabilities and document ownership, and source objects remain
+private. See the [security policy](SECURITY.md) and the
+[trust-boundary documentation](ips-microkernel/architecture/index.md#trust-boundaries-and-ownership)
+for the supported boundary and its limitations.
 
 ## AI-assisted engineering evidence
 
@@ -171,6 +190,57 @@ valid bearer token and capability. Required development ports bind only to
 loopback and can be changed with the safe examples in
 [`.env.example`](.env.example). The MinIO console is intentionally not
 published to the host.
+
+## Completed second vertical slice
+
+The authenticated classification-review slice is complete and traceable
+through the umbrella [Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27),
+its focused increments, and
+[Delivery Specification 0002](ips-microkernel/delivery/0002-second-vertical-slice.md).
+
+A repository-owned synthetic reviewer signs in through the real OIDC
+Authorization Code + PKCE path. The browser receives only an opaque server-
+owned session cookie and calls same-origin Next.js routes; the API validates
+the OAuth access token again, resolves the stable `(issuer, subject)` principal,
+and enforces capabilities plus document ownership. Supported source PDFs remain
+private and are streamed only after metadata, size, and SHA-256 verification.
+
+The reviewer can inspect the immutable machine classification, approve it or
+record one correction, and view deterministic audit history. The API commits
+the terminal decision, idempotency receipt, and audit event atomically while
+preserving machine evidence. Real PostgreSQL proof covers concurrent decisions,
+replay, stale preconditions, hidden targets, rollback, and populated-schema
+migration. The independent ML worker continues to receive no end-user identity
+or database access.
+
+The final production-shaped implementation head
+[`494c3aea491a5ad4a48c4516642d3d52438c9d10`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/494c3aea491a5ad4a48c4516642d3d52438c9d10)
+received an independent
+[Approved verdict](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152986667).
+[Full run 30711583766](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30711583766)
+executed all 9 verification groups and all 48 test files without carried or
+skipped evidence; final exact-head
+[run 30713515584](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30713515584)
+passed with complete evidence lineage. Squash merge
+[`fead80df7a4649893b50ce71e947f3f06a518de5`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/fead80df7a4649893b50ce71e947f3f06a518de5)
+then passed merged-main
+[run 30714445583](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30714445583).
+
+The full browser proof signs in, uploads and processes real synthetic PDFs,
+previews the matching private source, approves one result, corrects a
+deliberately limited second result, inspects ordered audit events, exercises
+security-negative and recovery paths, signs out, scans public artifacts for
+private content, and unconditionally tears down only the repository-owned
+Compose project. It uses no GitHub Secret, external identity account,
+maintainer session, or local Docker state.
+
+This completion is deliberately bounded. Dex remains a loopback-only synthetic
+test issuer; no production identity provider or persistent public deployment is
+selected. Sessions are process-local, PDFs are limited to one text-bearing page
+of at most 5 MiB, and the deterministic two-class model is neither calibrated
+nor production-quality evidence. The complete limitation and follow-up set is
+recorded in the
+[architecture documentation](ips-microkernel/architecture/index.md#known-limitations).
 
 ## Completed first vertical slice
 
