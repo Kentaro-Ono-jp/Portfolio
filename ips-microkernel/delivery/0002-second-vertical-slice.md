@@ -1,7 +1,8 @@
 # Delivery Specification 0002: Authenticated classification review and immutable audit trail
 
-- Status: Accepted
+- Status: Completed
 - Date: 2026-07-20
+- Completion date: 2026-08-02
 - Accepted: 2026-07-20
 - Owner: ReactorFront
 - Tracking issue: [#27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27)
@@ -696,17 +697,77 @@ following are true:
 
 ## Completion evidence
 
-Pending. Add implementation PRs, exact reviewed heads, authoritative workflow
-runs, accepted exceptions, known limitations, and follow-up slices only after
-the evidence exists.
+Delivery completed on 2026-08-02. The implementation progressed through the
+reviewable boundaries planned in
+[Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27):
+
+| Boundary | Focused history | Exact reviewed head and proof | Merge and default-branch proof |
+|---|---|---|---|
+| Accepted identity and delivery design | [Issue #28](https://github.com/Kentaro-Ono-jp/Portfolio/issues/28) / [PR #29](https://github.com/Kentaro-Ono-jp/Portfolio/pull/29) | [`36a4c5ee5bc259171bac34b0d78285ba43a49482`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/36a4c5ee5bc259171bac34b0d78285ba43a49482) received an [Approved documentation verdict](https://github.com/Kentaro-Ono-jp/Portfolio/pull/29#issuecomment-5023081541) under the accepted Markdown-only limitation | Squash merge [`0e47afc7c84d00eebf1e615c0e96b714c0cd1375`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/0e47afc7c84d00eebf1e615c0e96b714c0cd1375) retained the reviewed tree; no skipped workflow is represented as passing proof |
+| API authentication and principal foundation | [Issue #50](https://github.com/Kentaro-Ono-jp/Portfolio/issues/50) / [PR #51](https://github.com/Kentaro-Ono-jp/Portfolio/pull/51) | [`f079578cd6b673b2d6df6eb1bbe97a8352746837`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/f079578cd6b673b2d6df6eb1bbe97a8352746837) received [Approved re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/51#issuecomment-5134163196); [run 30563653412](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30563653412) executed 9/9 groups and 38/38 test files | Squash merge [`97da1fcb18ad99e036186f5f7161f0aa3dc09337`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/97da1fcb18ad99e036186f5f7161f0aa3dc09337) passed merged-main [run 30566516148](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30566516148) |
+| Server-owned Web session, protected documents, and private source | [Issue #56](https://github.com/Kentaro-Ono-jp/Portfolio/issues/56) / [PR #57](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57) | [`45eb5e5f6f15ea5c655671d077d7586f530fb9c4`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/45eb5e5f6f15ea5c655671d077d7586f530fb9c4) received [Approved re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143423042); full [run 30629757855](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30629757855) and final [run 30632555202](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30632555202) passed | Squash merge [`430ca83fb9fb9d4068dc254b73d45e4bde3a2b88`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/430ca83fb9fb9d4068dc254b73d45e4bde3a2b88) passed merged-main [run 30635085390](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30635085390) |
+| Immutable review decision and append-only audit history | [Issue #60](https://github.com/Kentaro-Ono-jp/Portfolio/issues/60) / [PR #61](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61) | [`f273a2c21e2100095b0fad532533118215ad0f91`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/f273a2c21e2100095b0fad532533118215ad0f91) received [Approved re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150270439); exact-head [run 30688051235](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30688051235) carried only the successful unaffected proof from full [run 30687317802](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30687317802) | Squash merge [`564dedb47c251c58324cc7440b252895c1349221`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/564dedb47c251c58324cc7440b252895c1349221) passed merged-main [run 30688710750](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30688710750) |
+| Complete authenticated browser review and production-shaped proof | [Issue #67](https://github.com/Kentaro-Ono-jp/Portfolio/issues/67) / [PR #68](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68) | [`494c3aea491a5ad4a48c4516642d3d52438c9d10`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/494c3aea491a5ad4a48c4516642d3d52438c9d10) received [Approved re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152986667); full [run 30711583766](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30711583766) executed 9/9 groups and 48/48 test files, and final exact-head [run 30713515584](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30713515584) skipped no evidence | Squash merge [`fead80df7a4649893b50ce71e947f3f06a518de5`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/fead80df7a4649893b50ce71e947f3f06a518de5) passed merged-main [run 30714445583](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30714445583) |
+
+The final secret-free cold-cache
+[run 30740826660](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30740826660)
+executed at exact default-branch head
+[`d582a4ab53268c2691973e772051a9724b15bca6`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/d582a4ab53268c2691973e772051a9724b15bca6)
+after the repository's Actions caches were removed. It reinstalled the pinned
+Node, Python, uv, pnpm, and Playwright dependencies, selected and executed all
+9/9 groups and 48/48 test files with no carried or skipped evidence, built the
+source-owned images, started the complete nine-service environment, passed the
+OIDC/browser/ML/PostgreSQL path, published measured Web/API/ML coverage, scanned
+56 public artifact files, sanitized one generated payload, and completed both
+verifier-owned and unconditional workflow-owned project-scoped teardown. It
+used no GitHub Secret, external identity account, maintainer state, or local
+Docker state.
+
+Supporting public evidence was established by
+[Issue #54](https://github.com/Kentaro-Ono-jp/Portfolio/issues/54) /
+[PR #55](https://github.com/Kentaro-Ono-jp/Portfolio/pull/55), which published
+truthful default-branch verification, measured Codecov, and MIT-license signals.
+[Issue #62](https://github.com/Kentaro-Ono-jp/Portfolio/issues/62) /
+[PR #69](https://github.com/Kentaro-Ono-jp/Portfolio/pull/69) later made
+external coverage-check handling deterministic without treating a non-required
+failure as successful proof. Final public architecture, security, limitations,
+and this durable completion record are owned by
+[Issue #70](https://github.com/Kentaro-Ono-jp/Portfolio/issues/70).
+
+### Accepted limitations
+
+- The pinned Dex boundary and reviewer are deterministic test infrastructure;
+  no production identity provider, account operation, or persistent public
+  deployment is selected.
+- The bounded Web session store is process-local. Shared durable sessions,
+  horizontal scaling, production secrets management, TLS termination, and
+  managed deployment remain outside this slice.
+- Supported input is one text-bearing PDF page of at most 5 MiB. Images,
+  scanned-document OCR, encryption, multi-page processing, range requests, and
+  presigned source delivery remain unsupported.
+- The two-class deterministic classifier uses a deliberately small synthetic
+  dataset. Its confidence is not calibrated, and no real-world accuracy,
+  fairness, robustness, privacy, or production-quality claim is made.
+- The slice has one synthetic reviewer and one terminal decision per completed
+  document. Multi-tenancy, assignments, reopening, comments, administration,
+  audit search/export/retention/legal hold, and field-level correction remain
+  future product decisions.
+
+### Follow-up slices
+
+No follow-up is accepted by this completion record. Candidate future slices
+must return through focused design and may address a production identity and
+deployment target, shared durable sessions, broader document/OCR support,
+measured model evaluation, multi-user review workflow, or operational audit
+features. Completion of this bounded slice does not authorize any of them.
 
 ## Change control
 
-This proposed specification becomes the implementation contract only after
-explicit acceptance. After acceptance, any material product, identity,
-session, authorization, persistence, source-access, audit, security,
-verification, or deployment-boundary change must be reflected here or in a new
-ADR before the slice is declared complete.
+This specification became the implementation contract after explicit
+acceptance. Any later material product, identity, session, authorization,
+persistence, source-access, audit, security, verification, or deployment-
+boundary change requires an updated accepted record before it changes this
+completed boundary.
 
 Small implementation details may change without an ADR when the observable
 contract and acceptance criteria remain unchanged.
