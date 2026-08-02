@@ -495,10 +495,14 @@ No Docker-backed evidence is run by an AI agent on local Docker Desktop.
 6. Publish final public evidence, exact workflow lineage, known limitations,
    follow-up slices, and the completion record.
 
-Each increment uses one focused Issue, branch, Draft PR, exact-head Actions
-proof, independent review, owner-authorized merge, merged-main proof, and
-evidence reconciliation. The umbrella Issue is the accumulated ledger; it is
-not permission to implement the complete slice as one bulk change.
+Each increment uses one focused Issue, branch, Draft PR, normal exact-head
+Actions proof or an applicable governed qualified limitation, independent
+review, owner-authorized merge, merged-main proof or the corresponding
+qualified limitation, and evidence reconciliation. A machine-qualified
+Markdown-only exception may intentionally produce no workflow run; that
+absence is never passing evidence and must satisfy its complete exception
+contract. The umbrella Issue is the accumulated ledger; it is not permission
+to implement the complete slice as one bulk change.
 
 ## Definition of done for the complete slice
 

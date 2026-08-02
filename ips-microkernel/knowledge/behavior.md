@@ -59,14 +59,19 @@ proved/unproved classification, or permanence claim.
 - **Detect:** Read the live PR base and head full SHAs and the exact-head
   Actions plan, then parse both declared endpoints plus selected, executed,
   carried, and skipped groups from the live PR description and copyable review
-  prompt.
+  prompt. When the PR invokes the Markdown-only exception, derive the complete
+  live base-to-head path inventory and parse the description's declared exact
+  Markdown path count and literal path list.
 - **Pass:** Both declared base values equal the live base, both declared head
   values equal the live head, the PR evidence inventory equals the exact-head
-  Actions inventory, and the PR head is unchanged by metadata repair.
+  Actions inventory, and, when applicable, the declared Markdown count and
+  literal path set exactly equal the complete live diff with every path ending
+  in `.md`; the PR head is unchanged by metadata repair.
 - **Repair:** Replace every declared endpoint with the live full SHA, publish
-  the exact-head selected, executed, carried, and skipped inventory, update the
-  prompt, save the PR description, and read the live metadata back before
-  dispatch.
+  the exact-head selected, executed, carried, and skipped inventory, and, for a
+  Markdown-only exception, publish the exact changed-path count and every
+  literal path. Update the prompt, save the PR description, and read the live
+  metadata back before dispatch.
 - **Origins:** PR #57
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143276537),
   PR #64
