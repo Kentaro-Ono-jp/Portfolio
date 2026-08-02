@@ -1,8 +1,9 @@
 # ADR-0019: Separate correction records, Stage B checks, and the pre-push CI Playbook
 
-- Status: Accepted
+- Status: Superseded
 - Date: 2026-08-01
 - Deciders: ReactorFront
+- Superseded by: ADR-0022
 - Supersedes: ADR-0018
 - Amends: ADR-0017 direct-implementer promotion boundary
 - Related: ADR-0014, ADR-0016, Issue #63
