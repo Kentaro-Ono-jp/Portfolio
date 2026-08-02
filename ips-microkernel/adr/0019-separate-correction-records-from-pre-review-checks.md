@@ -1,8 +1,9 @@
 # ADR-0019: Separate correction records, Stage B checks, and the pre-push CI Playbook
 
-- Status: Accepted
+- Status: Superseded
 - Date: 2026-08-01
 - Deciders: ReactorFront
+- Superseded by: ADR-0022
 - Supersedes: ADR-0018
 - Amends: ADR-0017 direct-implementer promotion boundary
 - Related: ADR-0014, ADR-0016, Issue #63
@@ -32,9 +33,7 @@ operational note used to prepare it.
 Repeated implementation and CI corrections are useful occurrence data. Their
 write path must not load historical records merely to deduplicate them. Stage
 B has a different purpose: it stays a small deduplicated set of mechanically
-decidable checks executed after successful exact-head CI or the complete
-machine-qualified no-run exception and immediately before review. An absent
-workflow under that exception is a limitation, never passing evidence.
+decidable checks executed after exact-head CI and immediately before review.
 
 ## Decision
 
@@ -45,13 +44,11 @@ B, and neither is a CI Playbook phase.
 
 - **Implementation Prune Stage A** records implementation-correction
   occurrences.
-- **Implementation Prune Stage B** executes post-proof-or-qualified-limitation
-  pre-review machine checks.
+- **Implementation Prune Stage B** executes post-CI pre-review machine checks.
 - **Publication Gate A** hardens a complete candidate before remote push and
   reads selected CI Playbook leaves.
-- **Publication Gate B** prepares independent-review dispatch after successful
-  exact-head CI or the complete machine-qualified no-run exception and executes
-  Stage B.
+- **Publication Gate B** prepares independent-review dispatch after exact-head
+  CI and executes Stage B.
 - **CI Playbook** has no Stage A/B or proved/unproved classification.
 
 ### Make Implementation Prune Stage A an occurrence ledger
@@ -78,12 +75,9 @@ push. Never create a push or CI run solely to certify a Stage A occurrence.
 
 ### Keep Implementation Prune Stage B as a post-CI pre-review check
 
-Stage B runs only after successful exact-head GitHub Actions or after the exact
-head fully satisfies the governed machine-qualified no-run exception, and
-immediately before initial review or re-review dispatch. Normal Actions proof
-remains the default. A missing workflow under the exception is a qualified
-limitation, never passing evidence. Stage B is not a correction ledger and is
-never used for CI-failure recording.
+Stage B runs only after successful exact-head GitHub Actions and immediately
+before initial review or re-review dispatch. It is not a correction ledger and
+is never used for CI-failure recording.
 
 Every Stage B rule supplies:
 
@@ -109,8 +103,7 @@ for proof or merge. If no rule qualifies, write nothing.
 
 Correct the repository file, append Stage A when the correction is an
 implementation correction, then return through pre-push CI Playbook hardening,
-one ordinary push, new exact-head Actions proof or the complete
-machine-qualified no-run exception, and Stage B. If the existing Stage B rule
+one ordinary push, new exact-head CI, and Stage B. If the existing Stage B rule
 detected the problem, do not duplicate it. Improve that rule only when its
 detection, pass condition, or repair procedure was incomplete.
 
@@ -124,8 +117,7 @@ text are optimized for mechanical execution.
 
 The new or strengthened rule need not be proved. Do not require an additional
 push or CI run solely to certify it. If persisting the rule in the repository
-later moves PR `HEAD`, ordinary candidate proof through exact-head Actions or
-the complete machine-qualified exception applies because the repository
+later moves PR `HEAD`, ordinary exact-head CI applies because the repository
 candidate changed, not because Stage B admission requires certification.
 
 ### Make the CI Playbook a pre-push correction notebook
@@ -190,8 +182,8 @@ become permanent governance decisions.
 - Stage B may contain unproved rules and must provide mechanical detection and
   repair text instead of relying on authority labels.
 - Persisting a repository-backed Stage B rule may move `HEAD` and therefore
-  require ordinary candidate proof even though rule admission itself requires
-  no proof.
+  require ordinary candidate CI even though rule admission itself requires no
+  proof.
 
 ## Rejected alternatives
 
