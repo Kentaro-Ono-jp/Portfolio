@@ -28,6 +28,51 @@ def test_repository_owned_governance_invariants_pass(
     assert documentation_checker.governance_failures() == []
 
 
+def test_merge_status_check_policy_is_machine_guarded(
+    documentation_checker: ModuleType,
+) -> None:
+    merge = Path("ips-microkernel/procedures/merge.md")
+    contract = documentation_checker.MERGE_STATUS_CHECK_FRAGMENTS
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+
+    assert contract.keys() == {merge}
+    assert all(fragment in required_text[merge] for fragment in contract[merge])
+
+
+def test_merge_status_check_policy_rejects_each_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("ips-microkernel/procedures/merge.md")
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    for fragment in documentation_checker.MERGE_STATUS_CHECK_FRAGMENTS[relative_path]:
+        assert fragment in normalized
+        target.write_text(
+            normalized.replace(
+                fragment,
+                "weakened merge status-check boundary",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        failures: list[str] = []
+
+        documentation_checker._validate_required_governance_text(
+            failures,
+            {relative_path: (fragment,)},
+        )
+
+        assert failures == [
+            f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"
+        ]
+
+
 @pytest.mark.parametrize(
     ("content", "target"),
     (
