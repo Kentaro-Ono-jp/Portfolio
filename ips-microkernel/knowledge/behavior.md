@@ -5,9 +5,11 @@
 
 ## Read when
 
-Read this checklist only after exact-head GitHub Actions succeeds and
+Read this checklist only after exact-head GitHub Actions succeeds or the exact
+head fully satisfies an applicable governed qualified no-run exception, and
 immediately before initial review or re-review dispatch. This execution point
-is Implementation Prune Stage B inside publication Gate B.
+is Implementation Prune Stage B inside publication Gate B. An absent workflow
+under an exception is a limitation, never passing evidence.
 
 Do not read it during first-pass implementation, publication Gate A,
 pre-push hardening, CI Playbook selection, or Stage A recording.
@@ -55,23 +57,30 @@ proved/unproved classification, or permanence claim.
 - **HEAD effect:** `neutral`
 - **Problem:** The PR description or review prompt omits or misstates the live
   full base and head SHAs, or the description's selected, executed, carried,
-  and skipped inventory differs from the exact-head Actions output.
-- **Detect:** Read the live PR base and head full SHAs and the exact-head
-  Actions plan, then parse both declared endpoints plus selected, executed,
-  carried, and skipped groups from the live PR description and copyable review
-  prompt. When the PR invokes the Markdown-only exception, derive the complete
-  live base-to-head path inventory and parse the description's declared exact
-  Markdown path count and literal path list.
+  and skipped group and test-file N/NN inventory differs from the applicable
+  exact-head evidence source.
+- **Detect:** Read the live PR base and head full SHAs. For normal proof, read
+  the successful exact-head Actions plan and inventory. For a qualified
+  Markdown-only no-run head, require the complete exception contract, confirm
+  that no exact-head Actions run exists, and use the exact committed-tree Gate
+  A planner and required local proof as the inventory source. Parse both
+  declared endpoints plus selected, executed, carried, and skipped groups and
+  test-file N/NN counts from the live PR description and copyable review
+  prompt. For that exception, also derive the complete live base-to-head path
+  inventory and parse the description's declared exact Markdown path count and
+  literal path list.
 - **Pass:** Both declared base values equal the live base, both declared head
-  values equal the live head, the PR evidence inventory equals the exact-head
-  Actions inventory, and, when applicable, the declared Markdown count and
-  literal path set exactly equal the complete live diff with every path ending
-  in `.md`; the PR head is unchanged by metadata repair.
+  values equal the live head, the PR evidence inventory and every N/NN count
+  equal the applicable exact-head evidence source, and, when applicable, the
+  declared Markdown count and literal path set exactly equal the complete live
+  diff with every path ending in `.md`; any absent workflow is declared only
+  as a qualified limitation, and the PR head is unchanged by metadata repair.
 - **Repair:** Replace every declared endpoint with the live full SHA, publish
-  the exact-head selected, executed, carried, and skipped inventory, and, for a
-  Markdown-only exception, publish the exact changed-path count and every
-  literal path. Update the prompt, save the PR description, and read the live
-  metadata back before dispatch.
+  the selected, executed, carried, and skipped inventory plus every group and
+  test-file N/NN count from the applicable exact-head evidence source, and, for
+  a Markdown-only exception, publish the exact changed-path count, every
+  literal path, and the no-run limitation. Update the prompt, save the PR
+  description, and read the live metadata back before dispatch.
 - **Origins:** PR #57
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143276537),
   PR #64

@@ -533,8 +533,11 @@ to implement the complete slice as one bulk change.
   migration, leakage-scan, and teardown proof pass from a clean runner.
 - [ ] Public evidence states exact metrics and limitations without production
   quality, calibration, fairness, privacy, robustness, or generalization claims.
-- [ ] Every focused Issue, PR, exact-head verdict, workflow, merge, and
-  merged-main result is recorded in Issue #72 and this completion record.
+- [ ] Every focused Issue, PR, exact-head verdict, authoritative workflow or
+  governed qualified limitation, merge, and merged-main workflow or
+  corresponding governed qualified limitation is recorded in Issue #72 and
+  this completion record; an absent workflow is never recorded as passing
+  evidence.
 
 ## Current accepted limitations
 
@@ -554,8 +557,11 @@ to implement the complete slice as one bulk change.
 ## Completion evidence
 
 Not yet available. Record each focused Issue, PR, exact reviewed head,
-authoritative workflow, squash merge, merged-main workflow, reconciliation,
-accepted limitation, and final cold-cache proof here as the slice advances.
+authoritative workflow or governed qualified limitation, squash merge,
+merged-main workflow or corresponding governed qualified limitation,
+reconciliation, accepted limitation, and final cold-cache proof here as the
+slice advances. A missing workflow remains a limitation and never passing
+evidence.
 
 ## Follow-up slices
 
