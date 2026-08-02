@@ -1,7 +1,7 @@
 # ReactorFront Portfolio
 
-> Status: second vertical slice completed with authenticated classification
-> review and immutable audit history — 2026-08-02
+> Status: third vertical slice accepted for human-feedback model evaluation,
+> governed promotion, and runtime ML lineage — 2026-08-02
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -24,6 +24,11 @@ results with traceable audit events.
 
 Only public, permissively licensed, or synthetic documents and datasets will
 be used. Private client or employer materials are outside the project scope.
+
+The accepted third vertical slice will join immutable human review to an
+explicitly curated synthetic dataset, leakage-aware champion/candidate
+evaluation, one reviewed promoted-model manifest, and traceable runtime ML
+lineage. Review outcomes will never become training data automatically.
 
 ## Engineering evidence
 
@@ -82,6 +87,7 @@ Portfolio/
 - [ADR-0007: Define the authentication, session, and API authorization boundary](ips-microkernel/adr/0007-authentication-session-and-api-authorization.md)
 - [ADR-0008: Route AI guidance through progressive disclosure](ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md)
 - [ADR-0013: Name the document governance architecture iPS Microkernel](ips-microkernel/adr/0013-name-ips-microkernel.md)
+- [ADR-0021: Govern human feedback, model evaluation, and promotion](ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md)
 
 Superseded decisions remain under the
 [ADR index](ips-microkernel/adr/index.md) as design history.
@@ -92,6 +98,9 @@ Use the thin [delivery index](ips-microkernel/delivery/index.md) to select the
 governing contract without loading completed and current specifications
 together.
 
+The current accepted work is governed by
+[Delivery Specification 0003](ips-microkernel/delivery/0003-third-vertical-slice.md)
+and its umbrella [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72).
 The completed authenticated-review boundary is explained in the
 [architecture documentation](ips-microkernel/architecture/index.md). Its
 public HTTP operations and generated Web types are inspectable in the
@@ -190,6 +199,34 @@ valid bearer token and capability. Required development ports bind only to
 loopback and can be changed with the safe examples in
 [`.env.example`](.env.example). The MinIO console is intentionally not
 published to the host.
+
+## Accepted third vertical slice
+
+The human-feedback model-evaluation slice is accepted and tracked through
+umbrella [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72),
+[ADR-0021](ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md),
+and
+[Delivery Specification 0003](ips-microkernel/delivery/0003-third-vertical-slice.md).
+
+The slice will preserve completed machine predictions and human decisions as
+separate immutable evidence. A bounded API-owned export may identify only
+repository-owned synthetic review outcomes as feedback candidates; explicit
+reviewed curation, rather than runtime behavior, will admit them into a
+versioned dataset snapshot.
+
+A leakage-aware evaluation path will establish the current champion baseline,
+compare a reproducible candidate under predeclared metrics, reject incomplete
+or regressing evidence, and bind an accepted artifact to one reviewed promotion
+manifest. New runtime results will carry dataset, pipeline, artifact, and
+evaluation lineage through the existing event, API, review, audit, and Web
+boundaries.
+
+This is accepted direction, not completed behavior. The current classifier,
+runtime contracts, synthetic corpus, and limitations remain exactly those of
+the completed second slice until focused implementation PRs are independently
+proved and merged. Automatic retraining, private-data reuse, OCR, structured
+field extraction, cloud deployment, RAG, and production-quality claims remain
+outside this slice.
 
 ## Completed second vertical slice
 
