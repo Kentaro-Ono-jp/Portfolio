@@ -609,6 +609,29 @@ KNOWLEDGE_CURATION_FRAGMENTS = {
     ),
 }
 
+MERGE_STATUS_CHECK_FRAGMENTS = {
+    Path("ips-microkernel/procedures/merge.md"): (
+        "canonical exact-head GitHub Actions proof",
+        "complete exact-head Checks API inventory and combined commit status inventory",
+        "classic branch-protection required status checks and every applicable active ruleset",
+        "including the pinned application or integration",
+        "when a required name exists as both a check run and a commit status",
+        "block when a required context is absent or pending",
+        "GitHub's passing check conclusions are `success`, `skipped`, and `neutral`",
+        "a passing commit status is `success`",
+        "`UNSTABLE`, `mergeable`, a check name, and a provider name are not evidence of requiredness",
+        "one machine-qualified merge-evidence record per check",
+        "the exact PR head SHA",
+        "check kind and name, reported state or conclusion, and provider URL",
+        "diagnostics as either `available` with its URL or `unavailable`",
+        "successful canonical exact-head Actions run URL",
+        "measured value, required threshold, and passing result",
+        "A non-required external failure remains recorded as a failure",
+        "never call it successful, dismiss it, lower a coverage threshold",
+        "Missing fields, uncovered changed areas, or contradictory values block merge",
+    ),
+}
+
 KNOWLEDGE_CURATOR_AUTHORITY_PATH = Path("ips-microkernel/references/authority.md")
 KNOWLEDGE_CURATOR_ACTION_FRAGMENTS = (
     "Freezes proved reusable candidates",
@@ -795,6 +818,7 @@ REQUIRED_GOVERNANCE_TEXT = {
         "Never infer or manufacture a disposition or waiver",
         "without a separate confirmation pause",
         "defer the merge mutation",
+        *MERGE_STATUS_CHECK_FRAGMENTS[Path("ips-microkernel/procedures/merge.md")],
         *REVIEW_ADJUDICATION_FRAGMENTS[Path("ips-microkernel/procedures/merge.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/procedures/merge.md")],
     ),
