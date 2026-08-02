@@ -39,59 +39,38 @@ def test_merge_status_check_policy_is_machine_guarded(
     assert all(fragment in required_text[merge] for fragment in contract[merge])
 
 
-@pytest.mark.parametrize(
-    "fragment",
-    (
-        "canonical exact-head GitHub Actions proof",
-        "complete exact-head Checks API inventory and combined commit status inventory",
-        "classic branch-protection required status checks and every applicable active ruleset",
-        "when a required name exists as both a check run and a commit status",
-        "block when a required context is absent or pending",
-        "GitHub's passing check conclusions are `success`, `skipped`, and `neutral`",
-        "a passing commit status is `success`",
-        "`UNSTABLE`, `mergeable`, a check name, and a provider name are not "
-        "evidence of requiredness",
-        "A terminally failing non-required external check",
-        "one machine-qualified merge-evidence record per check",
-        "the exact PR head SHA",
-        "check kind and name, reported state or conclusion, and provider URL",
-        "successful live classic-protection and applicable-ruleset reads that "
-        "prove the check is not required",
-        "diagnostics as either `available` with its URL or `unavailable`",
-        "successful canonical exact-head Actions run URL",
-        "each changed repository area covered by a canonical measured coverage gate",
-        "measured value, required threshold, and passing result",
-        "A non-required external failure remains recorded as a failure",
-        "never call it successful, dismiss it, lower a coverage threshold",
-        "A pending or otherwise non-terminal external check cannot use this exception",
-        "Missing fields, uncovered changed areas, or contradictory values block merge",
-    ),
-)
 def test_merge_status_check_policy_rejects_each_weakened_boundary(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    fragment: str,
 ) -> None:
     relative_path = Path("ips-microkernel/procedures/merge.md")
     source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
     normalized = " ".join(source.split())
-    assert fragment in normalized
     target = tmp_path / relative_path
     target.parent.mkdir(parents=True)
-    target.write_text(
-        normalized.replace(fragment, "weakened merge status-check boundary"),
-        encoding="utf-8",
-    )
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
-    failures: list[str] = []
 
-    documentation_checker._validate_required_governance_text(
-        failures,
-        {relative_path: (fragment,)},
-    )
+    for fragment in documentation_checker.MERGE_STATUS_CHECK_FRAGMENTS[relative_path]:
+        assert fragment in normalized
+        target.write_text(
+            normalized.replace(
+                fragment,
+                "weakened merge status-check boundary",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        failures: list[str] = []
 
-    assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
+        documentation_checker._validate_required_governance_text(
+            failures,
+            {relative_path: (fragment,)},
+        )
+
+        assert failures == [
+            f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"
+        ]
 
 
 @pytest.mark.parametrize(
