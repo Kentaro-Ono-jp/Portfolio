@@ -56,7 +56,7 @@ successful or machine-qualified.
    of requiredness. An unavailable, permission-denied, incomplete,
    contradictory, or unsupported protection/ruleset response is missing live
    evidence and blocks merge through recovery.
-6. A failing or pending non-required external check may pass this guard only
+6. A terminally failing non-required external check may pass this guard only
    with one machine-qualified merge-evidence record per check containing:
    - the exact PR head SHA;
    - check kind and name, reported state or conclusion, and provider URL;
@@ -72,7 +72,8 @@ successful or machine-qualified.
    successful, dismiss it, lower a coverage threshold, or use this exception
    for a canonical coverage failure. Missing fields, uncovered changed areas,
    or contradictory values block merge through recovery. A successful
-   non-required check needs no exception record.
+   non-required check needs no exception record. A pending or otherwise
+   non-terminal external check cannot use this exception and blocks merge.
 7. Pin merge to the reviewed head and use the repository's established merge
    method.
 8. Change Draft to Ready and merge the pinned exact head without a separate
