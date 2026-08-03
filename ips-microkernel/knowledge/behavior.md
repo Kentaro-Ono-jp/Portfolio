@@ -103,6 +103,28 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #64
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/64#issuecomment-5150763750).
 
+### Preserve composed governance invariants
+
+- **Trigger:** A required-governance fragment mapping is added to or composed
+  with the canonical required-text mapping, including when an existing path
+  receives constraints from more than one source.
+- **HEAD effect:** `moving`
+- **Problem:** Normal dictionary overwrite semantics silently replace an
+  earlier fragment tuple for the same path, while isolated helper tests pass
+  without exercising the final production mapping.
+- **Detect:** Import the production documentation checker, require every
+  fragment from each composed source mapping to exist in the final canonical
+  tuple for that path, then remove each source fragment once and validate the
+  mutated file through the final integrated tuple.
+- **Pass:** Every composed source fragment exists in the final canonical
+  mapping, every pre-existing invariant for the same path remains present,
+  and each one-fragment mutation fails production validation.
+- **Repair:** Explicitly merge the added fragments with the completed
+  canonical tuple for each repeated path and make mutation proof consume that
+  final integrated tuple instead of a bespoke fragment mapping.
+- **Origins:** PR #76
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/76#issuecomment-5167941319).
+
 ### Invalidate head-bound review evidence
 
 - **Trigger:** A correction push moved the PR head before re-review.

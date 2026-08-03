@@ -660,20 +660,26 @@ def test_gate_a_stage_b_push_and_review_order() -> None:
     )
 
 
-def test_adr_0019_supersedes_0018_with_the_complete_operational_model(
+def test_adr_0019_is_superseded_by_0022_with_the_complete_operational_model(
     documentation_checker: ModuleType,
 ) -> None:
     old_path = Path("ips-microkernel/adr/0018-bound-post-correction-careless-mistake-writeback.md")
     relative_path = Path(
         "ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"
     )
+    successor_path = Path("ips-microkernel/adr/0022-allow-stage-b-after-qualified-no-run.md")
     old_source = (REPOSITORY_ROOT / old_path).read_text(encoding="utf-8")
     source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    successor = (REPOSITORY_ROOT / successor_path).read_text(encoding="utf-8")
     normalized = " ".join(source.split())
 
     assert relative_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert successor_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
     assert "- Status: Superseded by ADR-0019" in old_source
-    assert "- Status: Accepted" in source
+    assert "- Status: Superseded" in source
+    assert "- Superseded by: ADR-0022" in source
+    assert "- Status: Accepted" in successor
+    assert "- Supersedes: ADR-0019" in successor
     assert "Make Implementation Prune Stage A an occurrence ledger" in source
     assert "Keep Implementation Prune Stage B as a post-CI pre-review check" in source
     assert "Make the CI Playbook a pre-push correction notebook" in source
@@ -682,6 +688,74 @@ def test_adr_0019_supersedes_0018_with_the_complete_operational_model(
     assert "Duplicate Mistake and Correction text is deliberate" in normalized
     assert "Stage B problem whose repair is HEAD-neutral" in source
     assert "Separate operational recording from candidate proof" in source
+
+
+def test_adr_0021_and_0022_are_required_governance_records(
+    documentation_checker: ModuleType,
+) -> None:
+    required = documentation_checker.REQUIRED_GOVERNANCE_FILES
+
+    assert (
+        Path("ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md")
+        in required
+    )
+    assert Path("ips-microkernel/adr/0022-allow-stage-b-after-qualified-no-run.md") in required
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        Path("ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md"),
+        Path("ips-microkernel/adr/0022-allow-stage-b-after-qualified-no-run.md"),
+    ),
+)
+def test_new_required_governance_record_cannot_disappear(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relative_path: Path,
+) -> None:
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_required_governance_files(
+        failures,
+        (relative_path,),
+    )
+
+    assert failures == [f"missing required governance file {relative_path.as_posix()}"]
+
+
+def test_final_adr_0022_supersession_contract_rejects_each_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    for relative_path, fragments in documentation_checker.ADR_0022_SUPERSESSION_FRAGMENTS.items():
+        source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+        normalized = " ".join(source.split())
+        final_fragments = documentation_checker.REQUIRED_GOVERNANCE_TEXT[relative_path]
+        assert all(fragment in final_fragments for fragment in fragments)
+        target = tmp_path / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+        for fragment in fragments:
+            assert fragment in normalized
+            target.write_text(
+                normalized.replace(fragment, "weakened ADR supersession boundary", 1),
+                encoding="utf-8",
+            )
+            failures: list[str] = []
+
+            documentation_checker._validate_required_governance_text(
+                failures,
+                {relative_path: final_fragments},
+            )
+
+            assert failures == [
+                f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"
+            ]
 
 
 def test_adr_0020_authorizes_an_unrestricted_local_focus_scratchpad(
