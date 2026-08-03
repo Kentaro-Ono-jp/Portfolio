@@ -701,7 +701,6 @@ KNOWLEDGE_CURATION_DISPOSITION_APPLICATIONS = {
 }
 
 REQUIRED_GOVERNANCE_TEXT = {
-    **ADR_0022_SUPERSESSION_FRAGMENTS,
     Path("GIT_AGENTS.md"): (
         "thin, tracked entrypoint",
         "open only that route",
@@ -1132,6 +1131,12 @@ REQUIRED_GOVERNANCE_TEXT = {
         "[Knowledge candidate]",
     ),
 }
+
+for relative_path, required_fragments in ADR_0022_SUPERSESSION_FRAGMENTS.items():
+    REQUIRED_GOVERNANCE_TEXT[relative_path] = (
+        *REQUIRED_GOVERNANCE_TEXT.get(relative_path, ()),
+        *required_fragments,
+    )
 
 FORBIDDEN_STALE_ROUTING_TEXT = {
     Path("CONTRIBUTING.md"): (

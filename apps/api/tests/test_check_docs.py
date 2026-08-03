@@ -726,7 +726,7 @@ def test_new_required_governance_record_cannot_disappear(
     assert failures == [f"missing required governance file {relative_path.as_posix()}"]
 
 
-def test_adr_0022_supersession_contract_rejects_each_weakened_boundary(
+def test_final_adr_0022_supersession_contract_rejects_each_weakened_boundary(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -734,6 +734,8 @@ def test_adr_0022_supersession_contract_rejects_each_weakened_boundary(
     for relative_path, fragments in documentation_checker.ADR_0022_SUPERSESSION_FRAGMENTS.items():
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
         normalized = " ".join(source.split())
+        final_fragments = documentation_checker.REQUIRED_GOVERNANCE_TEXT[relative_path]
+        assert all(fragment in final_fragments for fragment in fragments)
         target = tmp_path / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -748,7 +750,7 @@ def test_adr_0022_supersession_contract_rejects_each_weakened_boundary(
 
             documentation_checker._validate_required_governance_text(
                 failures,
-                {relative_path: (fragment,)},
+                {relative_path: final_fragments},
             )
 
             assert failures == [
