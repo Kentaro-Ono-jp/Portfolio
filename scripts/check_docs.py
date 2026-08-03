@@ -125,6 +125,10 @@ REQUIRED_GOVERNANCE_FILES = (
         "ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"
     ),
     Path("ips-microkernel/adr/0020-authorize-owner-controlled-focus-scratchpad.md"),
+    Path(
+        "ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md"
+    ),
+    Path("ips-microkernel/adr/0022-allow-stage-b-after-qualified-no-run.md"),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -636,6 +640,21 @@ MERGE_STATUS_CHECK_FRAGMENTS = {
     ),
 }
 
+ADR_0022_SUPERSESSION_FRAGMENTS = {
+    Path(
+        "ips-microkernel/adr/0019-separate-correction-records-from-pre-review-checks.md"
+    ): (
+        "- Status: Superseded",
+        "- Superseded by: ADR-0022",
+    ),
+    Path("ips-microkernel/adr/0022-allow-stage-b-after-qualified-no-run.md"): (
+        "- Status: Accepted",
+        "- Supersedes: ADR-0019",
+        "Preserve ADR-0019's separation",
+        "ADR-0022 changes only the Stage B entry and re-entry authority",
+    ),
+}
+
 KNOWLEDGE_CURATOR_AUTHORITY_PATH = Path("ips-microkernel/references/authority.md")
 KNOWLEDGE_CURATOR_ACTION_FRAGMENTS = (
     "Freezes proved reusable candidates",
@@ -682,6 +701,7 @@ KNOWLEDGE_CURATION_DISPOSITION_APPLICATIONS = {
 }
 
 REQUIRED_GOVERNANCE_TEXT = {
+    **ADR_0022_SUPERSESSION_FRAGMENTS,
     Path("GIT_AGENTS.md"): (
         "thin, tracked entrypoint",
         "open only that route",
@@ -2201,16 +2221,23 @@ def _validate_required_governance_text(
                 )
 
 
+def _validate_required_governance_files(
+    failures: list[str],
+    required_files: tuple[Path, ...] = REQUIRED_GOVERNANCE_FILES,
+) -> None:
+    for relative_path in required_files:
+        if not (REPOSITORY_ROOT / relative_path).is_file():
+            failures.append(
+                f"missing required governance file {relative_path.as_posix()}"
+            )
+
+
 def governance_failures() -> list[str]:
     failures: list[str] = []
 
     _validate_legacy_governance_layout(failures)
 
-    for relative_path in REQUIRED_GOVERNANCE_FILES:
-        if not (REPOSITORY_ROOT / relative_path).is_file():
-            failures.append(
-                f"missing required governance file {relative_path.as_posix()}"
-            )
+    _validate_required_governance_files(failures)
 
     _validate_required_governance_text(failures, REQUIRED_GOVERNANCE_TEXT)
 
