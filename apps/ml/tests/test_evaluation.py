@@ -418,6 +418,8 @@ def test_champion_report_is_complete_canonical_and_equal_to_baseline(tmp_path: P
         },
     }
     assert first["processedSampleCount"] == first["totalSampleCount"] == 4
+    assert [outcome["sampleId"] for outcome in first["sampleOutcomes"]] == first["testSampleIds"]
+    assert all(outcome["status"] == "accepted" for outcome in first["sampleOutcomes"])
     assert first["failureCounts"] == {}
     validate_evaluation_report(first, SCHEMA_PATH, snapshot, policy, classifier.checksum)
     baseline, baseline_bytes = load_champion_baseline(
@@ -435,8 +437,42 @@ def test_champion_report_is_complete_canonical_and_equal_to_baseline(tmp_path: P
     ("mutation", "code"),
     [
         (lambda report: report.pop("metrics"), "EVAL_REPORT_SCHEMA_VIOLATION"),
+        (lambda report: report.pop("sampleOutcomes"), "EVAL_REPORT_SCHEMA_VIOLATION"),
         (lambda report: report.update(artifactSha256="0" * 64), "EVAL_REPORT_ARTIFACT_MISMATCH"),
+        (lambda report: report.update(corpusSha256="0" * 64), "EVAL_REPORT_LINEAGE_MISMATCH"),
         (lambda report: report.update(datasetSha256="0" * 64), "EVAL_REPORT_LINEAGE_MISMATCH"),
+        (
+            lambda report: report.update(datasetVersion="forged-v999"),
+            "EVAL_REPORT_LINEAGE_MISMATCH",
+        ),
+        (
+            lambda report: report.update(evaluationRole="candidate"),
+            "EVAL_REPORT_LINEAGE_MISMATCH",
+        ),
+        (lambda report: report.update(modelName="forged-model"), "EVAL_REPORT_LINEAGE_MISMATCH"),
+        (
+            lambda report: report.update(modelVersion="forged-v999"),
+            "EVAL_REPORT_LINEAGE_MISMATCH",
+        ),
+        (
+            lambda report: report.update(pipelineVersion="forged-v999"),
+            "EVAL_REPORT_LINEAGE_MISMATCH",
+        ),
+        (lambda report: report.update(policySha256="0" * 64), "EVAL_REPORT_LINEAGE_MISMATCH"),
+        (
+            lambda report: report.update(policyVersion="forged-v999"),
+            "EVAL_REPORT_LINEAGE_MISMATCH",
+        ),
+        (
+            lambda report: report.update(preprocessingVersion="forged-v999"),
+            "EVAL_REPORT_LINEAGE_MISMATCH",
+        ),
+        (lambda report: report.update(splitSha256="0" * 64), "EVAL_REPORT_LINEAGE_MISMATCH"),
+        (
+            lambda report: report["testSampleIds"].__setitem__(0, "forged-sample"),
+            "EVAL_REPORT_LINEAGE_MISMATCH",
+        ),
+        (lambda report: report.update(totalSampleCount=5), "EVAL_REPORT_LINEAGE_MISMATCH"),
         (lambda report: report.update(processedSampleCount=3), "EVAL_INCOMPLETE_REPORT"),
         (
             lambda report: report["confusionMatrix"]["invoice"].update(invoice=1),
@@ -463,6 +499,57 @@ def test_report_mutations_fail_closed(
         report["reportSha256"] = sha256_bytes(canonical_json_bytes(unsigned))
 
     with pytest.raises(EvaluationError, match=code):
+        validate_evaluation_report(report, SCHEMA_PATH, snapshot, policy, classifier.checksum)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    [
+        (
+            lambda report: report["sampleOutcomes"][1].update(
+                sampleId=report["sampleOutcomes"][0]["sampleId"]
+            ),
+            "EVAL_REPORT_OUTCOME_MISMATCH",
+        ),
+        (
+            lambda report: report["sampleOutcomes"][0].update(trueLabel="report"),
+            "EVAL_REPORT_OUTCOME_MISMATCH",
+        ),
+        (
+            lambda report: report["sampleOutcomes"][0].update(prediction="report"),
+            "EVAL_REPORT_CONFUSION_MISMATCH",
+        ),
+        (
+            lambda report: report["sampleOutcomes"][0].update(trueLabelModelScore=0.0),
+            "EVAL_REPORT_METRIC_MISMATCH",
+        ),
+    ],
+)
+def test_atomic_outcome_mutations_fail_closed(
+    tmp_path: Path,
+    mutation: Callable[[dict[str, Any]], None],
+    code: str,
+) -> None:
+    snapshot, policy, classifier, original = report_context(tmp_path)
+    report = deepcopy(original)
+    mutation(report)
+    unsigned = {key: value for key, value in report.items() if key != "reportSha256"}
+    report["reportSha256"] = sha256_bytes(canonical_json_bytes(unsigned))
+
+    with pytest.raises(EvaluationError, match=code):
+        validate_evaluation_report(report, SCHEMA_PATH, snapshot, policy, classifier.checksum)
+
+
+def test_coherent_aggregate_score_gate_and_digest_forgery_fails_closed(tmp_path: Path) -> None:
+    snapshot, policy, classifier, original = report_context(tmp_path)
+    report = deepcopy(original)
+    report["metrics"]["meanTrueLabelModelScore"] = 0.0
+    report["absoluteGateResults"]["meanTrueLabelModelScore"] = False
+    report["absoluteGatesPassed"] = False
+    unsigned = {key: value for key, value in report.items() if key != "reportSha256"}
+    report["reportSha256"] = sha256_bytes(canonical_json_bytes(unsigned))
+
+    with pytest.raises(EvaluationError, match="EVAL_REPORT_METRIC_MISMATCH"):
         validate_evaluation_report(report, SCHEMA_PATH, snapshot, policy, classifier.checksum)
 
 
@@ -578,6 +665,7 @@ def test_frozen_report_contract_accepts_a_separate_candidate_identity() -> None:
 
     assert report["evaluationRole"] == "candidate"
     assert report["modelVersion"] == "candidate-v1"
+    assert len(report["sampleOutcomes"]) == report["processedSampleCount"]
 
 
 @pytest.mark.parametrize(

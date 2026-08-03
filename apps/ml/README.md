@@ -143,8 +143,10 @@ unsafe or missing sources, and family leakage.
 The current `document-type-v1` artifact remains unchanged. On the four
 held-out synthetic samples it processes 4/4 without a sanitized failure and
 records macro F1 `1.0`, invoice/report precision, recall, and F1 of `1.0`, and
-mean true-label model score `0.99982216`. The canonical report digest is
-`c6faa19f7a0f697e71cf30d6fa13d7bbe11b708827d2948d673a8ba66ace9b0a`.
+mean true-label model score `0.99982216`. Its four sanitized accepted outcomes
+are the atomic source for recomputing completeness, confusion, score quality,
+metrics, and gates. The canonical report digest is
+`1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5`.
 Two clean evaluations must be byte-identical to the committed baseline.
 
 These figures describe only this tiny reviewed synthetic snapshot. The score

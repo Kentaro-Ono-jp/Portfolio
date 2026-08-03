@@ -52,7 +52,37 @@
   "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
   "processedSampleCount": 4,
   "reportSchemaVersion": "evaluation-report-v1",
-  "reportSha256": "c6faa19f7a0f697e71cf30d6fa13d7bbe11b708827d2948d673a8ba66ace9b0a",
+  "reportSha256": "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+  "sampleOutcomes": [
+    {
+      "prediction": "invoice",
+      "sampleId": "invoice-test-001",
+      "status": "accepted",
+      "trueLabel": "invoice",
+      "trueLabelModelScore": 0.99994189
+    },
+    {
+      "prediction": "invoice",
+      "sampleId": "invoice-test-002",
+      "status": "accepted",
+      "trueLabel": "invoice",
+      "trueLabelModelScore": 0.99998161
+    },
+    {
+      "prediction": "report",
+      "sampleId": "report-test-001",
+      "status": "accepted",
+      "trueLabel": "report",
+      "trueLabelModelScore": 0.99974604
+    },
+    {
+      "prediction": "report",
+      "sampleId": "report-test-002",
+      "status": "accepted",
+      "trueLabel": "report",
+      "trueLabelModelScore": 0.9996191
+    }
+  ],
   "splitSha256": "4a2b00a69b0ea2df152f8c80d4d61a5f0d3d55be87a18b4d29a3cda7ff18bc65",
   "testSampleIds": [
     "invoice-test-001",

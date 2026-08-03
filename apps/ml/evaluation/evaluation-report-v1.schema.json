@@ -265,6 +265,47 @@
       "pattern": "^[0-9a-f]{64}$",
       "type": "string"
     },
+    "sampleOutcomes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "prediction": {
+            "enum": [
+              "invoice",
+              "report"
+            ]
+          },
+          "sampleId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "const": "accepted"
+          },
+          "trueLabel": {
+            "enum": [
+              "invoice",
+              "report"
+            ]
+          },
+          "trueLabelModelScore": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "prediction",
+          "sampleId",
+          "status",
+          "trueLabel",
+          "trueLabelModelScore"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
     "splitSha256": {
       "pattern": "^[0-9a-f]{64}$",
       "type": "string"
@@ -305,6 +346,7 @@
     "processedSampleCount",
     "reportSchemaVersion",
     "reportSha256",
+    "sampleOutcomes",
     "splitSha256",
     "testSampleIds",
     "totalSampleCount"

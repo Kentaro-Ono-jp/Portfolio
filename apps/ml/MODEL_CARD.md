@@ -51,8 +51,9 @@ requires both reports to be byte-identical to the committed baseline.
 On the four held-out synthetic samples, `document-type-v1` processes 4/4 with
 no sanitized failure. Its bounded baseline records macro F1 `1.0`, per-class
 precision/recall/F1 `1.0`, and mean true-label model score `0.99982216`. The
-report SHA-256 is
-`c6faa19f7a0f697e71cf30d6fa13d7bbe11b708827d2948d673a8ba66ace9b0a`.
+report records one sanitized accepted outcome per held-out sample so every
+published aggregate and gate can be recomputed independently. Its SHA-256 is
+`1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5`.
 Runtime CI separately retains real PyTorch inference through repository-
 generated invoice and report PDFs.
 

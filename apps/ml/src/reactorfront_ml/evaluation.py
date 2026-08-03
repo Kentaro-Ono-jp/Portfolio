@@ -457,7 +457,7 @@ def evaluate_model(
     if not test_samples or {sample.label for sample in test_samples} != set(CLASS_NAMES):
         raise EvaluationError("EVAL_MISSING_TEST_CLASS")
     confusion = {actual: {predicted: 0 for predicted in CLASS_NAMES} for actual in CLASS_NAMES}
-    true_label_scores: list[float] = []
+    sample_outcomes: list[dict[str, Any]] = []
     for sample in test_samples:
         try:
             result = classifier.classify(sample.text)
@@ -472,12 +472,24 @@ def evaluate_model(
         if result.model_version != model_version:
             raise EvaluationError("EVAL_MODEL_IDENTITY_MISMATCH")
         confusion[sample.label][result.classification] += 1
-        true_label_scores.append(
+        true_label_score = _rounded(
             result.confidence if result.classification == sample.label else 1.0 - result.confidence
+        )
+        sample_outcomes.append(
+            {
+                "prediction": result.classification,
+                "sampleId": sample.sample_id,
+                "status": "accepted",
+                "trueLabel": sample.label,
+                "trueLabelModelScore": true_label_score,
+            }
         )
 
     per_class, macro_f1 = _classification_metrics(confusion)
-    mean_score = _rounded(sum(true_label_scores) / len(true_label_scores))
+    mean_score = _rounded(
+        sum(cast(float, outcome["trueLabelModelScore"]) for outcome in sample_outcomes)
+        / len(sample_outcomes)
+    )
     gate_results = _absolute_gate_results(
         policy,
         macro_f1=macro_f1,
@@ -511,6 +523,7 @@ def evaluate_model(
         "preprocessingVersion": policy.value["preprocessingVersion"],
         "processedSampleCount": len(test_samples),
         "reportSchemaVersion": REPORT_SCHEMA_VERSION,
+        "sampleOutcomes": sample_outcomes,
         "splitSha256": snapshot.split_sha256,
         "testSampleIds": [sample.sample_id for sample in test_samples],
         "totalSampleCount": len(test_samples),
@@ -566,7 +579,8 @@ def validate_evaluation_report(
         raise EvaluationError("EVAL_REPORT_SCHEMA_VIOLATION")
     if report.get("artifactSha256") != artifact_sha256:
         raise EvaluationError("EVAL_REPORT_ARTIFACT_MISMATCH")
-    expected_ids = [sample.sample_id for sample in snapshot.samples_for("test")]
+    expected_samples = snapshot.samples_for("test")
+    expected_ids = [sample.sample_id for sample in expected_samples]
     expected_identity = {
         "corpusSha256": snapshot.corpus_sha256,
         "datasetSha256": snapshot.dataset_sha256,
@@ -574,8 +588,10 @@ def validate_evaluation_report(
         "evaluationRole": evaluation_role,
         "modelName": model_name,
         "modelVersion": model_version,
+        "pipelineVersion": policy.value["pipelineVersion"],
         "policySha256": policy.sha256,
         "policyVersion": policy.version,
+        "preprocessingVersion": policy.value["preprocessingVersion"],
         "splitSha256": snapshot.split_sha256,
         "testSampleIds": expected_ids,
         "totalSampleCount": len(expected_ids),
@@ -588,21 +604,44 @@ def validate_evaluation_report(
         or report.get("failures") != []
     ):
         raise EvaluationError("EVAL_INCOMPLETE_REPORT")
-    confusion = cast(dict[str, dict[str, int]], report["confusionMatrix"])
-    expected_counts = {
-        label: sum(sample.label == label for sample in snapshot.samples_for("test"))
-        for label in CLASS_NAMES
+    outcomes = cast(list[dict[str, Any]], report["sampleOutcomes"])
+    if (
+        len(outcomes) != len(expected_samples)
+        or [outcome["sampleId"] for outcome in outcomes] != expected_ids
+    ):
+        raise EvaluationError("EVAL_REPORT_OUTCOME_MISMATCH")
+    expected_confusion = {
+        actual: {predicted: 0 for predicted in CLASS_NAMES} for actual in CLASS_NAMES
     }
-    if any(sum(confusion[label].values()) != expected_counts[label] for label in CLASS_NAMES):
+    true_label_scores: list[float] = []
+    for sample, outcome in zip(expected_samples, outcomes, strict=True):
+        if (
+            outcome["trueLabel"] != sample.label
+            or outcome["status"] != "accepted"
+            or outcome["prediction"] not in CLASS_NAMES
+        ):
+            raise EvaluationError("EVAL_REPORT_OUTCOME_MISMATCH")
+        score = cast(float, outcome["trueLabelModelScore"])
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+            raise EvaluationError("EVAL_REPORT_OUTCOME_MISMATCH")
+        expected_confusion[sample.label][cast(str, outcome["prediction"])] += 1
+        true_label_scores.append(score)
+    if report["confusionMatrix"] != expected_confusion:
         raise EvaluationError("EVAL_REPORT_CONFUSION_MISMATCH")
-    expected_per_class, expected_macro_f1 = _classification_metrics(confusion)
+    expected_per_class, expected_macro_f1 = _classification_metrics(expected_confusion)
+    expected_mean_score = _rounded(sum(true_label_scores) / len(true_label_scores))
     metrics = cast(dict[str, Any], report["metrics"])
-    if metrics["macroF1"] != expected_macro_f1 or metrics["perClass"] != expected_per_class:
+    expected_metrics = {
+        "macroF1": expected_macro_f1,
+        "meanTrueLabelModelScore": expected_mean_score,
+        "perClass": expected_per_class,
+    }
+    if metrics != expected_metrics:
         raise EvaluationError("EVAL_REPORT_METRIC_MISMATCH")
     expected_gates = _absolute_gate_results(
         policy,
         macro_f1=expected_macro_f1,
-        mean_score=cast(float, metrics["meanTrueLabelModelScore"]),
+        mean_score=expected_mean_score,
         per_class=expected_per_class,
         processed_fraction=1.0,
         failure_count=0,
