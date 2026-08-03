@@ -1,0 +1,41 @@
+{
+  "absoluteGates": {
+    "macroF1Minimum": 0.95,
+    "meanTrueLabelModelScoreMinimum": 0.9,
+    "perClassRecallMinimum": 0.9,
+    "processedFractionMinimum": 1.0,
+    "sanitizedFailureCountMaximum": 0
+  },
+  "abstention": {
+    "allowed": false,
+    "failureCode": "EVAL_ABSTENTION_NOT_ALLOWED"
+  },
+  "championRelativeLimits": {
+    "macroF1RegressionMaximum": 0.02,
+    "meanTrueLabelModelScoreRegressionMaximum": 0.05,
+    "perClassRecallRegressionMaximum": 0.05
+  },
+  "classes": [
+    "invoice",
+    "report"
+  ],
+  "determinism": {
+    "canonicalReportByteDriftMaximum": 0,
+    "metricDecimalPlaces": 8
+  },
+  "metricDefinitions": {
+    "macroF1": "Arithmetic mean of the invoice and report F1 values.",
+    "meanTrueLabelModelScore": "Arithmetic mean of the model score assigned to each true label; this is not a calibration claim.",
+    "perClassF1": "Harmonic mean of precision and recall for one supported class, or zero when both are zero.",
+    "perClassPrecision": "True positives divided by all predictions for one supported class, or zero when absent.",
+    "perClassRecall": "True positives divided by all held-out samples for one supported class, or zero when absent."
+  },
+  "pipelineVersion": "pytorch-multinomial-naive-bayes-linear-v1",
+  "policyVersion": "document-classification-evaluation-v1",
+  "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
+  "schemaVersion": 1,
+  "scoreQuality": {
+    "calibrationClaim": false,
+    "measure": "meanTrueLabelModelScore"
+  }
+}

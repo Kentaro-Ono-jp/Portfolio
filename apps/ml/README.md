@@ -71,10 +71,20 @@ of accepting Celery's non-requeueing publication failure default.
 - `src/reactorfront_ml/processor.py`: source-integrity and processing orchestration
 - `src/reactorfront_ml/pdf_processing.py`: single-page PDF text boundary
 - `src/reactorfront_ml/model.py`: deterministic generation, verification, and inference
+- `src/reactorfront_ml/evaluation.py`: canonical snapshot validation, leakage guards,
+  metrics, quality gates, and report verification
 - `src/reactorfront_ml/rabbitmq.py`: durable result topology and confirmed publisher
 - `src/reactorfront_ml/storage.py`: S3-compatible source adapter
 - `src/reactorfront_ml/health.py`: model, MinIO, and RabbitMQ readiness
 - `data/training.json`: repository-authored synthetic training inputs
+- `evaluation/corpus/v1/`: canonical 18-sample inventory, portable sources,
+  fixed 12/2/4 train/validation/test assignment, and immutable snapshot
+- `evaluation/policy-v1.json`: predeclared absolute and champion-relative
+  quality gates, score treatment, completeness, and zero-drift policy
+- `evaluation/evaluation-report-v1.schema.json`: closed machine-readable report
+  contract
+- `evaluation/champion-baseline-v1.json`: complete canonical held-out report for
+  the checksum-verified current model
 - `model.expected.sha256`: reviewed artifact checksum
 - `audit-requirements.txt`: normalized CPU-wheel advisory identity for pip-audit
 - `tests/`: isolated unit and contract tests
@@ -107,6 +117,7 @@ Install the exact ML dependency set and run the non-container checks:
 ```console
 uv sync --project apps/ml --frozen
 uv run --project apps/ml python scripts/verify_ml_model.py
+uv run --project apps/ml python scripts/verify_ml_evaluation.py
 uv run --project apps/ml pytest apps/ml/tests --cov=reactorfront_ml --cov-branch
 python scripts/verify.py --static-only
 ```
@@ -118,3 +129,25 @@ CPU PyTorch inference, verifies a stable digest-mismatch failure, exercises
 duplicate delivery, RabbitMQ restart recovery, and original-message redelivery
 after an injected retry-publication failure, captures evidence, and always tears
 down only the `reactorfront-portfolio` Compose project.
+
+## Versioned evaluation baseline
+
+The repository-owned snapshot `reactorfront-synthetic-documents-v1` contains
+18 English snippets across ten source/template families. Its fixed split has
+12 training, two validation, and four held-out test samples; every split
+contains both supported classes and no family crosses a split. Canonical
+verification checks every source digest and rejects duplicate IDs or digests,
+conflicting normalized labels, normalized content reused across splits,
+unsafe or missing sources, and family leakage.
+
+The current `document-type-v1` artifact remains unchanged. On the four
+held-out synthetic samples it processes 4/4 without a sanitized failure and
+records macro F1 `1.0`, invoice/report precision, recall, and F1 of `1.0`, and
+mean true-label model score `0.99982216`. The canonical report digest is
+`c6faa19f7a0f697e71cf30d6fa13d7bbe11b708827d2948d673a8ba66ace9b0a`.
+Two clean evaluations must be byte-identical to the committed baseline.
+
+These figures describe only this tiny reviewed synthetic snapshot. The score
+is not a calibrated probability, and the baseline makes no production
+accuracy, fairness, privacy, robustness, or generalization claim. Candidate
+fitting and promotion remain separate later increments.

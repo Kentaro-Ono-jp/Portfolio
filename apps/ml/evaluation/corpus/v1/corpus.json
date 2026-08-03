@@ -1,0 +1,171 @@
+{
+  "description": "Repository-owned synthetic English document snippets for bounded invoice/report evaluation.",
+  "provenanceClasses": [
+    "repository-owned-synthetic"
+  ],
+  "samples": [
+    {
+      "familyId": "invoice-test-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-test-001.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-test-001",
+      "sourceSha256": "4582967beca45bcd0a6731ef10c57db3623da99159acb1caf106d47d5a0c0c97"
+    },
+    {
+      "familyId": "invoice-test-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-test-002.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-test-002",
+      "sourceSha256": "fc4983a25c7c16f6c6248318d3b9c9966b173d8cbe04527c4d1e4b63ae524a70"
+    },
+    {
+      "familyId": "invoice-billing-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-train-001.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-001",
+      "sourceSha256": "077d96d3a1e1a9407fc06c8852400afa7a9371ee18396ca00091558753d318f9"
+    },
+    {
+      "familyId": "invoice-billing-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-train-002.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-002",
+      "sourceSha256": "f6bb4c7253ba6fc562aed4a1a0ae7fe320b950dfde7f108a2ff513824cc7e365"
+    },
+    {
+      "familyId": "invoice-commerce-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-train-003.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-003",
+      "sourceSha256": "4437d3e96ef5561290c1e9585c0d9b3cdf8d176a49573cb6a933f9a2478e3479"
+    },
+    {
+      "familyId": "invoice-commerce-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-train-004.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-004",
+      "sourceSha256": "59a547ef29507e1a966f27c54663d58a84bcf3b4135253f88308aad869eb72d0"
+    },
+    {
+      "familyId": "invoice-services-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-train-005.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-005",
+      "sourceSha256": "41f3e56c1580a26628a4a2c14bfb85cd408c2431474b181de094081268e02ed3"
+    },
+    {
+      "familyId": "invoice-services-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-train-006.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-006",
+      "sourceSha256": "10eeb4cef64146a2dc57417acde72af38e586dbefb1f0188e8ef811900604aec"
+    },
+    {
+      "familyId": "invoice-validation-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/invoice-validation-001.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-validation-001",
+      "sourceSha256": "e09221e5a8eb6db497636b06757dd0f5dbcf1e08582235b26e4b877419b8253f"
+    },
+    {
+      "familyId": "report-test-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-test-001.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-test-001",
+      "sourceSha256": "ed4eaa2ea3a0e5451525c0caeb3c3990c90907b290a5d93ec1f337c54f1ded25"
+    },
+    {
+      "familyId": "report-test-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-test-002.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-test-002",
+      "sourceSha256": "4dd78a3437b992e4cff19d79c122a9b3d19a323895d31e763b526127fd24b124"
+    },
+    {
+      "familyId": "report-analysis-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-train-001.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-001",
+      "sourceSha256": "0396c13cbf28749abeb5eaafa47181c442eff8eb0fbd206fbcb6cd578076cd4a"
+    },
+    {
+      "familyId": "report-analysis-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-train-002.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-002",
+      "sourceSha256": "b69c2e4d2f4279722f927aa766651f968fd6f3c6199fdee99f9bc84831fe73d1"
+    },
+    {
+      "familyId": "report-operations-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-train-003.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-003",
+      "sourceSha256": "f344b169192e42f8ae58feaa5c4699885b1243f4cc8b6d9888d2f27df60d9e6c"
+    },
+    {
+      "familyId": "report-operations-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-train-004.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-004",
+      "sourceSha256": "f51649208817869ee1817cf4c2d5cfa0c9355f491f2db69c7b0d2b98999f17b4"
+    },
+    {
+      "familyId": "report-strategy-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-train-005.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-005",
+      "sourceSha256": "035234c7661a666e6baea71d03a18887143a1bdf14e6d9ef56f251db737191d7"
+    },
+    {
+      "familyId": "report-strategy-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-train-006.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-006",
+      "sourceSha256": "eaf30ccd6fea3eaf953c30c712d26b12c6813ddb241e67a72b01331e9b9a8b22"
+    },
+    {
+      "familyId": "report-validation-v1",
+      "label": "report",
+      "license": "MIT",
+      "path": "apps/ml/evaluation/corpus/v1/sources/report-validation-001.txt",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-validation-001",
+      "sourceSha256": "b721d1633ebb78051a8244915ced8e7f9eafccf9fcfbe14349081fbc844aac51"
+    }
+  ],
+  "schemaVersion": 1
+}

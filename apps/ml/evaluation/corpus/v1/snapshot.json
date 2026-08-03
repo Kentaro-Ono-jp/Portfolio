@@ -1,0 +1,9 @@
+{
+  "corpusPath": "apps/ml/evaluation/corpus/v1/corpus.json",
+  "corpusSha256": "f84fffa5f7aeecb645ccf073322464698b4bb12d3768655761714e8cc2514cf4",
+  "datasetSha256": "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+  "datasetVersion": "reactorfront-synthetic-documents-v1",
+  "schemaVersion": 1,
+  "splitManifestPath": "apps/ml/evaluation/corpus/v1/split.json",
+  "splitSha256": "4a2b00a69b0ea2df152f8c80d4d61a5f0d3d55be87a18b4d29a3cda7ff18bc65"
+}
