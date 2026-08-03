@@ -41,16 +41,30 @@ quality claim.
 
 ## Evaluation condition
 
-Canonical CI performs real PyTorch inference on a repository-generated invoice
-PDF and requires classification `invoice` with confidence at least `0.70`.
-It also verifies a report example, model checksum, deterministic regeneration,
-and stable failure behavior.
+The immutable `reactorfront-synthetic-documents-v1` snapshot contains 18
+repository-authored samples in a fixed family-disjoint split: 12 training, two
+validation, and four held-out test samples. Every split contains both classes.
+Canonical verification reconstructs this model from the original 12 training
+snippets, verifies artifact SHA-256, evaluates every held-out sample twice, and
+requires both reports to be byte-identical to the committed baseline.
+
+On the four held-out synthetic samples, `document-type-v1` processes 4/4 with
+no sanitized failure. Its bounded baseline records macro F1 `1.0`, per-class
+precision/recall/F1 `1.0`, and mean true-label model score `0.99982216`. The
+report records one sanitized accepted outcome per held-out sample so every
+published aggregate and gate can be recomputed independently. Its SHA-256 is
+`1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5`.
+Runtime CI separately retains real PyTorch inference through repository-
+generated invoice and report PDFs.
 
 ## Limitations and risks
 
 - The vocabulary is intentionally tiny and English-only.
 - Confidence is a synthetic demonstration value and is not calibrated for
   production use.
+- The held-out set has only four repository-authored synthetic samples; its
+  perfect class metrics do not establish external validity or production
+  quality.
 - PyTorch does not guarantee byte-identical results across arbitrary releases
   or platforms; reproducibility is claimed only for the pinned CPU build path.
 - Layout, tables, OCR, handwriting, images, adversarial PDFs, and domain drift

@@ -125,6 +125,44 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #76
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/76#issuecomment-5167941319).
 
+### Recompute evaluation aggregates from atomic outcomes
+
+- **Trigger:** A governed evaluation report adds or changes sample outcomes,
+  completeness, confusion, score-quality metrics, aggregate metrics, or gates.
+- **HEAD effect:** `moving`
+- **Problem:** A self-consistent aggregate, gate, and report-digest rewrite can
+  pass even though the published values are not derived from evaluated sample
+  outcomes.
+- **Detect:** Generate one valid complete report, then keep its atomic outcomes
+  unchanged while coherently changing an aggregate, every dependent gate, and
+  the report digest; separately mutate each atomic identity or outcome field
+  and recompute the report digest.
+- **Pass:** The valid report passes; every aggregate-only coherent rewrite and
+  every missing, duplicate, reordered, mislabeled, or altered atomic outcome
+  fails before its supplied aggregates or gates are trusted.
+- **Repair:** Preserve the minimal sanitized outcome for every declared sample
+  and recompute completeness, confusion, score quality, class metrics, and
+  gates exclusively from those outcomes before comparing supplied aggregates.
+- **Origins:** PR #78
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/78#issuecomment-5169278027).
+
+### Validate every policy-governed evaluation lineage field
+
+- **Trigger:** An evaluation report carries a version or digest governed by
+  the loaded evaluation policy, dataset snapshot, or expected artifact.
+- **HEAD effect:** `moving`
+- **Problem:** Schema shape and a self-recomputed report digest can certify a
+  forged lineage value that the validator omitted from expected identity.
+- **Detect:** Derive the complete expected lineage mapping from the loaded
+  policy, snapshot, artifact, and declared model role; mutate each report
+  lineage field once and recompute the report digest.
+- **Pass:** The unmodified report passes, every governed lineage field is in
+  the derived mapping, and every one-field coherent-digest mutation fails.
+- **Repair:** Add every policy-, snapshot-, artifact-, role-, and model-governed
+  field to expected identity and retain one coherent-digest mutation per field.
+- **Origins:** PR #78
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/78#issuecomment-5169278027).
+
 ### Invalidate head-bound review evidence
 
 - **Trigger:** A correction push moved the PR head before re-review.

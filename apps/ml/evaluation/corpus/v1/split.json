@@ -1,0 +1,79 @@
+{
+  "assignments": [
+    {
+      "sampleId": "invoice-test-001",
+      "split": "test"
+    },
+    {
+      "sampleId": "invoice-test-002",
+      "split": "test"
+    },
+    {
+      "sampleId": "invoice-train-001",
+      "split": "train"
+    },
+    {
+      "sampleId": "invoice-train-002",
+      "split": "train"
+    },
+    {
+      "sampleId": "invoice-train-003",
+      "split": "train"
+    },
+    {
+      "sampleId": "invoice-train-004",
+      "split": "train"
+    },
+    {
+      "sampleId": "invoice-train-005",
+      "split": "train"
+    },
+    {
+      "sampleId": "invoice-train-006",
+      "split": "train"
+    },
+    {
+      "sampleId": "invoice-validation-001",
+      "split": "validation"
+    },
+    {
+      "sampleId": "report-test-001",
+      "split": "test"
+    },
+    {
+      "sampleId": "report-test-002",
+      "split": "test"
+    },
+    {
+      "sampleId": "report-train-001",
+      "split": "train"
+    },
+    {
+      "sampleId": "report-train-002",
+      "split": "train"
+    },
+    {
+      "sampleId": "report-train-003",
+      "split": "train"
+    },
+    {
+      "sampleId": "report-train-004",
+      "split": "train"
+    },
+    {
+      "sampleId": "report-train-005",
+      "split": "train"
+    },
+    {
+      "sampleId": "report-train-006",
+      "split": "train"
+    },
+    {
+      "sampleId": "report-validation-001",
+      "split": "validation"
+    }
+  ],
+  "description": "Fixed family-disjoint train, validation, and held-out test assignments.",
+  "schemaVersion": 1,
+  "splitVersion": "family-disjoint-v1"
+}

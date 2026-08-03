@@ -41,6 +41,18 @@ diagnostics, artifacts, leakage scanning, failure ordering, or teardown.
   ephemeral resources; never run Docker prune or unscoped cleanup, and express
   local cleanup separately.
 
+### Exercise changed fail-closed boundaries before coverage publication
+
+- **Origin:** PR #78 external Codecov patch check
+- **Trigger:** Exact-head verification succeeded, but the later patch-coverage
+  check reported 90.15% against the repository target of 91.45%.
+- **Mistake:** Focused mutation tests left changed manifest-validation and
+  evaluator failure branches unexecuted, including finite confidence values
+  outside the declared zero-to-one range.
+- **Correction:** Add executable mutations for the changed fail-closed
+  branches and reject out-of-range confidence before publishing measured
+  coverage for the next exact head.
+
 ## Return
 
 Return to publication Gate A after repairing the triggered evidence and

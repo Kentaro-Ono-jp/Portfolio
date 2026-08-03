@@ -1,0 +1,356 @@
+{
+  "$id": "https://reactorfront.example/schemas/evaluation-report-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "absoluteGateResults": {
+      "additionalProperties": false,
+      "properties": {
+        "macroF1": {
+          "type": "boolean"
+        },
+        "meanTrueLabelModelScore": {
+          "type": "boolean"
+        },
+        "perClassRecall": {
+          "type": "boolean"
+        },
+        "processedFraction": {
+          "type": "boolean"
+        },
+        "sanitizedFailureCount": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "macroF1",
+        "meanTrueLabelModelScore",
+        "perClassRecall",
+        "processedFraction",
+        "sanitizedFailureCount"
+      ],
+      "type": "object"
+    },
+    "absoluteGatesPassed": {
+      "type": "boolean"
+    },
+    "artifactSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "classes": {
+      "items": false,
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "const": "invoice"
+        },
+        {
+          "const": "report"
+        }
+      ],
+      "type": "array"
+    },
+    "confusionMatrix": {
+      "additionalProperties": false,
+      "properties": {
+        "invoice": {
+          "additionalProperties": false,
+          "properties": {
+            "invoice": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "report": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "invoice",
+            "report"
+          ],
+          "type": "object"
+        },
+        "report": {
+          "additionalProperties": false,
+          "properties": {
+            "invoice": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "report": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "invoice",
+            "report"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "invoice",
+        "report"
+      ],
+      "type": "object"
+    },
+    "corpusSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "datasetSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "datasetVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "evaluationRole": {
+      "enum": [
+        "champion-baseline",
+        "candidate"
+      ]
+    },
+    "failureCounts": {
+      "additionalProperties": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "propertyNames": {
+        "pattern": "^EVAL_[A-Z0-9_]+$"
+      },
+      "type": "object"
+    },
+    "failures": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^EVAL_[A-Z0-9_]+$",
+            "type": "string"
+          },
+          "sampleId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "sampleId"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "macroF1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "meanTrueLabelModelScore": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "perClass": {
+          "additionalProperties": false,
+          "properties": {
+            "invoice": {
+              "additionalProperties": false,
+              "properties": {
+                "f1": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "precision": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "recall": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "f1",
+                "precision",
+                "recall"
+              ],
+              "type": "object"
+            },
+            "report": {
+              "additionalProperties": false,
+              "properties": {
+                "f1": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "precision": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "recall": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "f1",
+                "precision",
+                "recall"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "invoice",
+            "report"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "macroF1",
+        "meanTrueLabelModelScore",
+        "perClass"
+      ],
+      "type": "object"
+    },
+    "modelName": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "modelVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "pipelineVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "policySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "policyVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "preprocessingVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "processedSampleCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "reportSchemaVersion": {
+      "const": "evaluation-report-v1"
+    },
+    "reportSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sampleOutcomes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "prediction": {
+            "enum": [
+              "invoice",
+              "report"
+            ]
+          },
+          "sampleId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "const": "accepted"
+          },
+          "trueLabel": {
+            "enum": [
+              "invoice",
+              "report"
+            ]
+          },
+          "trueLabelModelScore": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "prediction",
+          "sampleId",
+          "status",
+          "trueLabel",
+          "trueLabelModelScore"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "splitSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "testSampleIds": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "totalSampleCount": {
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "absoluteGateResults",
+    "absoluteGatesPassed",
+    "artifactSha256",
+    "classes",
+    "confusionMatrix",
+    "corpusSha256",
+    "datasetSha256",
+    "datasetVersion",
+    "evaluationRole",
+    "failureCounts",
+    "failures",
+    "metrics",
+    "modelName",
+    "modelVersion",
+    "pipelineVersion",
+    "policySha256",
+    "policyVersion",
+    "preprocessingVersion",
+    "processedSampleCount",
+    "reportSchemaVersion",
+    "reportSha256",
+    "sampleOutcomes",
+    "splitSha256",
+    "testSampleIds",
+    "totalSampleCount"
+  ],
+  "title": "ReactorFront canonical document-classification evaluation report",
+  "type": "object"
+}

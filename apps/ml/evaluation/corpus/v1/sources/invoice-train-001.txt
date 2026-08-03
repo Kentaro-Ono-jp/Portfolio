@@ -1,0 +1,1 @@
+Invoice number INV-1001 amount due subtotal tax total payment terms vendor customer

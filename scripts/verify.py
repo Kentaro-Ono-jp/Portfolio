@@ -257,7 +257,10 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
     }:
         return expand_group_dependencies({"ml-runtime"})
 
-    if normalized == "scripts/verify_ml_model.py":
+    if normalized in {
+        "scripts/verify_ml_evaluation.py",
+        "scripts/verify_ml_model.py",
+    }:
         return frozenset({"ml-static"})
 
     if normalized == "scripts/check_ml_compose_boundary.py":
@@ -700,6 +703,7 @@ def static_checks(
                 "apps/ml/tests",
                 "scripts/pdf_fixture.py",
                 "scripts/check_ml_compose_boundary.py",
+                "scripts/verify_ml_evaluation.py",
                 "scripts/verify_ml_model.py",
                 "scripts/verify_ml_runtime.py",
             ],
@@ -718,6 +722,7 @@ def static_checks(
                 "apps/ml/tests",
                 "scripts/pdf_fixture.py",
                 "scripts/check_ml_compose_boundary.py",
+                "scripts/verify_ml_evaluation.py",
                 "scripts/verify_ml_model.py",
                 "scripts/verify_ml_runtime.py",
             ],
@@ -774,6 +779,17 @@ def static_checks(
             ],
         ),
         (
+            "Prove the canonical champion evaluation baseline",
+            [
+                uv,
+                "run",
+                "--project",
+                "apps/ml",
+                "python",
+                "scripts/verify_ml_evaluation.py",
+            ],
+        ),
+        (
             "Validate deployable Compose boundaries",
             [sys.executable, "scripts/check_ml_compose_boundary.py"],
         ),
@@ -804,6 +820,7 @@ def static_checks(
         "Audit the installed pinned ML dependency set": "ml-static",
         "Audit the normalized PyTorch CPU release identity": "ml-static",
         "Prove deterministic ML model generation": "ml-static",
+        "Prove the canonical champion evaluation baseline": "ml-static",
         "Validate deployable Compose boundaries": "compose",
         "Validate test identity boundary": "compose",
     }

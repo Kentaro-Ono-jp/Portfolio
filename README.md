@@ -214,17 +214,23 @@ repository-owned synthetic review outcomes as feedback candidates; explicit
 reviewed curation, rather than runtime behavior, will admit them into a
 versioned dataset snapshot.
 
-A leakage-aware evaluation path will establish the current champion baseline,
-compare a reproducible candidate under predeclared metrics, reject incomplete
-or regressing evidence, and bind an accepted artifact to one reviewed promotion
-manifest. New runtime results will carry dataset, pipeline, artifact, and
-evaluation lineage through the existing event, API, review, audit, and Web
-boundaries.
+A first focused implementation increment, tracked by
+[Issue #77](https://github.com/Kentaro-Ono-jp/Portfolio/issues/77), establishes
+an 18-sample repository-owned synthetic snapshot with fixed family-disjoint
+splits, deterministic leakage guards, a machine-readable policy and report
+schema, and the unchanged current champion's four-sample held-out baseline.
+That bounded baseline records macro F1 `1.0` and mean true-label model score
+`0.99982216`; it is neither a calibration nor a production-quality claim.
 
-This is accepted direction, not completed behavior. The current classifier,
-runtime contracts, synthetic corpus, and limitations remain exactly those of
-the completed second slice until focused implementation PRs are independently
-proved and merged. Automatic retraining, private-data reuse, OCR, structured
+Later focused increments will compare a reproducible candidate under the
+predeclared metrics, reject incomplete or regressing evidence, and bind an
+accepted artifact to one reviewed promotion manifest. New runtime results will
+then carry dataset, pipeline, artifact, and evaluation lineage through the
+existing event, API, review, audit, and Web boundaries.
+
+The classifier artifact and runtime contracts remain exactly those of the
+completed second slice; the evaluation boundary does not fit or promote a
+candidate. Automatic retraining, private-data reuse, OCR, structured
 field extraction, cloud deployment, RAG, and production-quality claims remain
 outside this slice.
 
