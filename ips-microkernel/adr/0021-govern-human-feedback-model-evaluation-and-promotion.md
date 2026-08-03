@@ -104,6 +104,12 @@ least:
 - a declared confidence-quality measure; and
 - every failed, abstained, or invalid sample identity with a sanitized reason.
 
+Every declared sample contributes one minimal sanitized atomic outcome. The
+validator derives completeness, confusion, confidence quality, class metrics,
+and gates exclusively from those outcomes before comparing any supplied
+aggregate. The canonical report digest proves byte identity and integrity; it
+does not replace independent derivation of the report's measured claims.
+
 The evaluation policy declares absolute quality gates, champion-relative
 regression limits, confidence behavior, completeness requirements, and the
 determinism tolerance before a candidate is fitted to satisfy them. A missing
