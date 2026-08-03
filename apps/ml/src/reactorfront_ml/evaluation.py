@@ -438,11 +438,19 @@ def _absolute_gate_results(
     }
 
 
-def evaluate_champion(
+def evaluate_model(
     snapshot: DatasetSnapshot,
     policy: EvaluationPolicy,
     classifier: DocumentClassifier,
+    *,
+    evaluation_role: str,
+    model_name: str,
+    model_version: str,
 ) -> dict[str, Any]:
+    if evaluation_role not in {"champion-baseline", "candidate"}:
+        raise EvaluationError("EVAL_INVALID_ROLE")
+    if not model_name or not model_version:
+        raise EvaluationError("EVAL_INVALID_MODEL_IDENTITY")
     if classifier.checksum is None or len(classifier.checksum) != 64:
         raise EvaluationError("EVAL_UNVERIFIED_ARTIFACT")
     test_samples = snapshot.samples_for("test")
@@ -457,6 +465,8 @@ def evaluate_champion(
             raise EvaluationError("EVAL_INFERENCE_FAILURE") from error
         if result.classification not in CLASS_NAMES or not math.isfinite(result.confidence):
             raise EvaluationError("EVAL_INVALID_PREDICTION")
+        if result.model_version != model_version:
+            raise EvaluationError("EVAL_MODEL_IDENTITY_MISMATCH")
         confusion[sample.label][result.classification] += 1
         true_label_scores.append(
             result.confidence if result.classification == sample.label else 1.0 - result.confidence
@@ -481,7 +491,7 @@ def evaluate_champion(
         "corpusSha256": snapshot.corpus_sha256,
         "datasetSha256": snapshot.dataset_sha256,
         "datasetVersion": snapshot.dataset_version,
-        "evaluationRole": "champion-baseline",
+        "evaluationRole": evaluation_role,
         "failureCounts": {},
         "failures": [],
         "metrics": {
@@ -489,8 +499,8 @@ def evaluate_champion(
             "meanTrueLabelModelScore": mean_score,
             "perClass": per_class,
         },
-        "modelName": MODEL_NAME,
-        "modelVersion": MODEL_VERSION,
+        "modelName": model_name,
+        "modelVersion": model_version,
         "pipelineVersion": policy.value["pipelineVersion"],
         "policySha256": policy.sha256,
         "policyVersion": policy.version,
@@ -505,12 +515,31 @@ def evaluate_champion(
     return report
 
 
+def evaluate_champion(
+    snapshot: DatasetSnapshot,
+    policy: EvaluationPolicy,
+    classifier: DocumentClassifier,
+) -> dict[str, Any]:
+    return evaluate_model(
+        snapshot,
+        policy,
+        classifier,
+        evaluation_role="champion-baseline",
+        model_name=MODEL_NAME,
+        model_version=MODEL_VERSION,
+    )
+
+
 def validate_evaluation_report(
     report: dict[str, Any],
     schema_path: Path,
     snapshot: DatasetSnapshot,
     policy: EvaluationPolicy,
     artifact_sha256: str,
+    *,
+    evaluation_role: str = "champion-baseline",
+    model_name: str = MODEL_NAME,
+    model_version: str = MODEL_VERSION,
 ) -> None:
     def contains_nonfinite(value: object) -> bool:
         if isinstance(value, float):
@@ -538,6 +567,9 @@ def validate_evaluation_report(
         "corpusSha256": snapshot.corpus_sha256,
         "datasetSha256": snapshot.dataset_sha256,
         "datasetVersion": snapshot.dataset_version,
+        "evaluationRole": evaluation_role,
+        "modelName": model_name,
+        "modelVersion": model_version,
         "policySha256": policy.sha256,
         "policyVersion": policy.version,
         "splitSha256": snapshot.split_sha256,

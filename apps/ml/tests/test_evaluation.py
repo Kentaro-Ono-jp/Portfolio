@@ -18,13 +18,20 @@ from reactorfront_ml.evaluation import (
     EvaluationPolicy,
     canonical_json_bytes,
     evaluate_champion,
+    evaluate_model,
     load_champion_baseline,
     load_dataset_snapshot,
     load_evaluation_policy,
     sha256_bytes,
     validate_evaluation_report,
 )
-from reactorfront_ml.model import DocumentClassifier, ModelArtifactError, generate_artifact
+from reactorfront_ml.model import (
+    MODEL_NAME,
+    MODEL_VERSION,
+    DocumentClassifier,
+    ModelArtifactError,
+    generate_artifact,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 EVALUATION_ROOT = REPOSITORY_ROOT / "apps" / "ml" / "evaluation"
@@ -447,7 +454,11 @@ def test_inaccurate_classifier_produces_complete_failing_gate_report() -> None:
     snapshot = load_dataset_snapshot(REPOSITORY_ROOT, SNAPSHOT_PATH)
     policy = load_evaluation_policy(POLICY_PATH)
     classifier = FakeClassifier(
-        ClassificationResult(classification="invoice", confidence=0.9, model_version="v")
+        ClassificationResult(
+            classification="invoice",
+            confidence=0.9,
+            model_version=MODEL_VERSION,
+        )
     )
 
     report = evaluate_champion(snapshot, policy, cast(DocumentClassifier, classifier))
@@ -459,6 +470,89 @@ def test_inaccurate_classifier_produces_complete_failing_gate_report() -> None:
         "precision": 0.0,
         "recall": 0.0,
     }
+
+
+def test_frozen_report_contract_accepts_a_separate_candidate_identity() -> None:
+    snapshot = load_dataset_snapshot(REPOSITORY_ROOT, SNAPSHOT_PATH)
+    policy = load_evaluation_policy(POLICY_PATH)
+    classifier = FakeClassifier(
+        ClassificationResult(
+            classification="invoice",
+            confidence=0.9,
+            model_version="candidate-v1",
+        )
+    )
+
+    report = evaluate_model(
+        snapshot,
+        policy,
+        cast(DocumentClassifier, classifier),
+        evaluation_role="candidate",
+        model_name="reactorfront-document-type-candidate",
+        model_version="candidate-v1",
+    )
+    validate_evaluation_report(
+        report,
+        SCHEMA_PATH,
+        snapshot,
+        policy,
+        classifier.checksum,
+        evaluation_role="candidate",
+        model_name="reactorfront-document-type-candidate",
+        model_version="candidate-v1",
+    )
+
+    assert report["evaluationRole"] == "candidate"
+    assert report["modelVersion"] == "candidate-v1"
+
+
+@pytest.mark.parametrize(
+    ("role", "name", "version", "code"),
+    [
+        ("other", MODEL_NAME, MODEL_VERSION, "EVAL_INVALID_ROLE"),
+        ("candidate", "", "candidate-v1", "EVAL_INVALID_MODEL_IDENTITY"),
+    ],
+)
+def test_evaluator_rejects_invalid_declared_identity(
+    role: str,
+    name: str,
+    version: str,
+    code: str,
+) -> None:
+    snapshot = load_dataset_snapshot(REPOSITORY_ROOT, SNAPSHOT_PATH)
+    policy = load_evaluation_policy(POLICY_PATH)
+    classifier = FakeClassifier(
+        ClassificationResult(
+            classification="invoice",
+            confidence=0.9,
+            model_version=version,
+        )
+    )
+
+    with pytest.raises(EvaluationError, match=code):
+        evaluate_model(
+            snapshot,
+            policy,
+            cast(DocumentClassifier, classifier),
+            evaluation_role=role,
+            model_name=name,
+            model_version=version,
+        )
+
+
+def test_evaluator_rejects_prediction_model_identity_mismatch() -> None:
+    snapshot = load_dataset_snapshot(REPOSITORY_ROOT, SNAPSHOT_PATH)
+    policy = load_evaluation_policy(POLICY_PATH)
+    classifier = FakeClassifier(
+        ClassificationResult(
+            classification="invoice",
+            confidence=0.9,
+            model_version="other",
+        )
+    )
+
+    with pytest.raises(EvaluationError, match="EVAL_MODEL_IDENTITY_MISMATCH"):
+        evaluate_champion(snapshot, policy, cast(DocumentClassifier, classifier))
 
 
 def test_unverified_classifier_fails_closed() -> None:

@@ -82,7 +82,7 @@ of accepting Celery's non-requeueing publication failure default.
 - `evaluation/policy-v1.json`: predeclared absolute and champion-relative
   quality gates, score treatment, completeness, and zero-drift policy
 - `evaluation/evaluation-report-v1.schema.json`: closed machine-readable report
-  contract
+  contract shared by champion and future candidate evaluations
 - `evaluation/champion-baseline-v1.json`: complete canonical held-out report for
   the checksum-verified current model
 - `model.expected.sha256`: reviewed artifact checksum

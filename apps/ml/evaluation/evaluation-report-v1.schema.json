@@ -111,7 +111,10 @@
       "type": "string"
     },
     "evaluationRole": {
-      "const": "champion-baseline"
+      "enum": [
+        "champion-baseline",
+        "candidate"
+      ]
     },
     "failureCounts": {
       "additionalProperties": {
@@ -228,10 +231,12 @@
       "type": "object"
     },
     "modelName": {
-      "const": "reactorfront-document-type"
+      "minLength": 1,
+      "type": "string"
     },
     "modelVersion": {
-      "const": "document-type-v1"
+      "minLength": 1,
+      "type": "string"
     },
     "pipelineVersion": {
       "minLength": 1,
