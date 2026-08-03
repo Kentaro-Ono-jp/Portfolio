@@ -168,9 +168,28 @@ def test_snapshot_is_canonical_complete_and_family_disjoint() -> None:
         ),
         (
             lambda value, root: value["samples"][0].update(
+                path="apps/ml/evaluation/corpus/v1/sources/../private.txt"
+            ),
+            "EVAL_UNSAFE_SOURCE_PATH",
+        ),
+        (
+            lambda value, root: value["samples"][0].update(
                 path="apps/ml/evaluation/corpus/v1/sources/missing.txt"
             ),
             "EVAL_MISSING_OR_INVALID_SOURCE",
+        ),
+        (lambda value, root: value.update(schemaVersion=0), "EVAL_INVALID_CORPUS"),
+        (
+            lambda value, root: value["samples"][0].update(unexpected="field"),
+            "EVAL_INVALID_SAMPLE",
+        ),
+        (
+            lambda value, root: value["samples"][0].update(sampleId=" "),
+            "EVAL_INVALID_SAMPLE",
+        ),
+        (
+            lambda value, root: value["samples"].__setitem__(0, "invalid"),
+            "EVAL_INVALID_SAMPLE",
         ),
         (lambda value, root: value["samples"].reverse(), "EVAL_NONCANONICAL_SAMPLE_ORDER"),
     ],
@@ -245,6 +264,11 @@ def test_family_leakage_fails_closed(tmp_path: Path) -> None:
         ),
         (lambda value: value["assignments"].pop(), "EVAL_INCOMPLETE_ASSIGNMENTS"),
         (lambda value: value["assignments"][0].update(split="other"), "EVAL_INVALID_ASSIGNMENT"),
+        (lambda value: value.update(schemaVersion=0), "EVAL_INVALID_SPLIT"),
+        (
+            lambda value: value["assignments"].__setitem__(0, "invalid"),
+            "EVAL_INVALID_ASSIGNMENT",
+        ),
         (lambda value: value["assignments"].reverse(), "EVAL_NONCANONICAL_ASSIGNMENT_ORDER"),
         (
             lambda value: next(
@@ -296,6 +320,52 @@ def test_noncanonical_json_and_source_fail_closed(tmp_path: Path) -> None:
 
     snapshot_path = mutate_corpus(repository_root, mutation)
     assert_snapshot_error(repository_root, snapshot_path, "EVAL_NONCANONICAL_SOURCE")
+
+
+@pytest.mark.parametrize(
+    ("content", "code"),
+    [
+        (b"{", "EVAL_INVALID_JSON"),
+        (canonical_json_bytes([]), "EVAL_INVALID_JSON_SHAPE"),
+    ],
+)
+def test_snapshot_rejects_invalid_json_or_shape(
+    tmp_path: Path,
+    content: bytes,
+    code: str,
+) -> None:
+    repository_root = copied_repository(tmp_path)
+    snapshot_path = repository_root / "apps/ml/evaluation/corpus/v1/snapshot.json"
+    snapshot_path.write_bytes(content)
+
+    assert_snapshot_error(repository_root, snapshot_path, code)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    [
+        (lambda value: value.update(unexpected="field"), "EVAL_INVALID_SNAPSHOT"),
+        (lambda value: value.update(datasetVersion=" "), "EVAL_INVALID_SNAPSHOT"),
+        (lambda value: value.update(schemaVersion=0), "EVAL_INVALID_SNAPSHOT"),
+        (lambda value: value.update(datasetVersion="other"), "EVAL_INVALID_SNAPSHOT"),
+        (
+            lambda value: value.update(corpusSha256="0" * 64),
+            "EVAL_SNAPSHOT_COMPONENT_DIGEST_MISMATCH",
+        ),
+    ],
+)
+def test_snapshot_metadata_mutations_fail_closed(
+    tmp_path: Path,
+    mutation: Callable[[dict[str, Any]], None],
+    code: str,
+) -> None:
+    repository_root = copied_repository(tmp_path)
+    snapshot_path = repository_root / "apps/ml/evaluation/corpus/v1/snapshot.json"
+    snapshot = read_json(snapshot_path)
+    mutation(snapshot)
+    write_json(snapshot_path, snapshot)
+
+    assert_snapshot_error(repository_root, snapshot_path, code)
 
 
 @pytest.mark.parametrize(
@@ -437,6 +507,10 @@ class FakeClassifier:
             ClassificationResult(classification="invoice", confidence=math.nan, model_version="v"),
             "EVAL_INVALID_PREDICTION",
         ),
+        (
+            ClassificationResult(classification="invoice", confidence=1.01, model_version="v"),
+            "EVAL_INVALID_PREDICTION",
+        ),
     ],
 )
 def test_prediction_failures_are_sanitized(
@@ -565,3 +639,23 @@ def test_unverified_classifier_fails_closed() -> None:
 
     with pytest.raises(EvaluationError, match="EVAL_UNVERIFIED_ARTIFACT"):
         evaluate_champion(snapshot, policy, cast(DocumentClassifier, classifier))
+
+
+def test_evaluator_rejects_incomplete_test_class_identity(tmp_path: Path) -> None:
+    snapshot = load_dataset_snapshot(REPOSITORY_ROOT, SNAPSHOT_PATH)
+    policy = load_evaluation_policy(POLICY_PATH)
+    assignments = dict(snapshot.assignments)
+    for sample in snapshot.samples_for("test"):
+        if sample.label == "report":
+            assignments[sample.sample_id] = "validation"
+    incomplete = DatasetSnapshot(
+        dataset_version=snapshot.dataset_version,
+        corpus_sha256=snapshot.corpus_sha256,
+        split_sha256=snapshot.split_sha256,
+        dataset_sha256=snapshot.dataset_sha256,
+        samples=snapshot.samples,
+        assignments=assignments,
+    )
+
+    with pytest.raises(EvaluationError, match="EVAL_MISSING_TEST_CLASS"):
+        evaluate_champion(incomplete, policy, build_classifier(tmp_path))

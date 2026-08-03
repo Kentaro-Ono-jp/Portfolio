@@ -463,7 +463,11 @@ def evaluate_model(
             result = classifier.classify(sample.text)
         except ModelArtifactError as error:
             raise EvaluationError("EVAL_INFERENCE_FAILURE") from error
-        if result.classification not in CLASS_NAMES or not math.isfinite(result.confidence):
+        if (
+            result.classification not in CLASS_NAMES
+            or not math.isfinite(result.confidence)
+            or not 0.0 <= result.confidence <= 1.0
+        ):
             raise EvaluationError("EVAL_INVALID_PREDICTION")
         if result.model_version != model_version:
             raise EvaluationError("EVAL_MODEL_IDENTITY_MISMATCH")
