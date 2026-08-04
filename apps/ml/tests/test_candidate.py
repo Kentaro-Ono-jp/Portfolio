@@ -161,8 +161,14 @@ def test_candidate_build_manifest_is_canonical_and_recomputed(tmp_path: Path) ->
     with pytest.raises(EvaluationError, match="EVAL_INVALID_CANDIDATE_BUILD_MANIFEST"):
         load_candidate_build_manifest(forged_path, snapshot, policy, DEPENDENCY_LOCK_PATH)
 
+    forged_path.write_text("{", encoding="utf-8")
+    with pytest.raises(EvaluationError, match="EVAL_INVALID_CANDIDATE_BUILD_MANIFEST"):
+        load_candidate_build_manifest(forged_path, snapshot, policy, DEPENDENCY_LOCK_PATH)
 
-def test_candidate_build_fails_closed_for_membership_policy_or_dependency() -> None:
+
+def test_candidate_build_fails_closed_for_membership_policy_or_dependency(
+    tmp_path: Path,
+) -> None:
     snapshot, policy, _ = candidate_context()
     assignments = dict(snapshot.assignments)
     assignments[snapshot.samples_for("train")[0].sample_id] = "validation"
@@ -181,6 +187,11 @@ def test_candidate_build_fails_closed_for_membership_policy_or_dependency() -> N
 
     with pytest.raises(EvaluationError, match="EVAL_CANDIDATE_DEPENDENCY_IDENTITY_MISSING"):
         build_candidate(snapshot, policy, DEPENDENCY_LOCK_PATH.with_name("missing.lock"))
+
+    empty_lock = tmp_path / "uv.lock"
+    empty_lock.write_bytes(b"")
+    with pytest.raises(EvaluationError, match="EVAL_CANDIDATE_DEPENDENCY_IDENTITY_MISSING"):
+        build_candidate(snapshot, policy, empty_lock)
 
 
 def test_candidate_report_and_comparison_match_reviewed_evidence() -> None:
