@@ -1,0 +1,38 @@
+{
+  "absoluteGatesPassed": true,
+  "candidate": {
+    "artifactSha256": "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09",
+    "modelName": "reactorfront-document-type",
+    "modelVersion": "document-type-candidate-v1",
+    "reportSha256": "83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861"
+  },
+  "champion": {
+    "artifactSha256": "82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac",
+    "modelName": "reactorfront-document-type",
+    "modelVersion": "document-type-v1",
+    "reportSha256": "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5"
+  },
+  "comparisonSchemaVersion": "candidate-comparison-v1",
+  "comparisonSha256": "92d8878c37a2c39a25f5d5241e54b1acaff7fbc2012d975d4b659f6fb72db041",
+  "datasetSha256": "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+  "eligible": true,
+  "policySha256": "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
+  "regressions": {
+    "macroF1": 0.0,
+    "meanTrueLabelModelScore": 0.0,
+    "perClassRecall": {
+      "invoice": 0.0,
+      "report": 0.0
+    }
+  },
+  "rejectionReasons": [],
+  "relativeGateResults": {
+    "macroF1": true,
+    "meanTrueLabelModelScore": true,
+    "perClassRecall": {
+      "invoice": true,
+      "report": true
+    }
+  },
+  "splitSha256": "4a2b00a69b0ea2df152f8c80d4d61a5f0d3d55be87a18b4d29a3cda7ff18bc65"
+}

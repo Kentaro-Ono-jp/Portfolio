@@ -71,8 +71,10 @@ of accepting Celery's non-requeueing publication failure default.
 - `src/reactorfront_ml/processor.py`: source-integrity and processing orchestration
 - `src/reactorfront_ml/pdf_processing.py`: single-page PDF text boundary
 - `src/reactorfront_ml/model.py`: deterministic generation, verification, and inference
+- `src/reactorfront_ml/candidate.py`: snapshot-bound candidate generation and
+  canonical build-lineage verification
 - `src/reactorfront_ml/evaluation.py`: canonical snapshot validation, leakage guards,
-  metrics, quality gates, and report verification
+  metrics, absolute and champion-relative gates, and report verification
 - `src/reactorfront_ml/rabbitmq.py`: durable result topology and confirmed publisher
 - `src/reactorfront_ml/storage.py`: S3-compatible source adapter
 - `src/reactorfront_ml/health.py`: model, MinIO, and RabbitMQ readiness
@@ -85,6 +87,13 @@ of accepting Celery's non-requeueing publication failure default.
   contract shared by champion and future candidate evaluations
 - `evaluation/champion-baseline-v1.json`: complete canonical held-out report for
   the checksum-verified current model
+- `evaluation/candidate-build-v1.json`: reviewed candidate artifact identity,
+  train-only membership, fixed seed, dependency lock, and no-calibration treatment
+- `evaluation/candidate-report-v1.json`: complete canonical held-out report for
+  the reproducible candidate
+- `evaluation/candidate-comparison-v1.json`: independently recomputed absolute
+  and champion-relative promotion-eligibility decision
+- `evaluation/candidate-comparison-v1.schema.json`: closed comparison-report contract
 - `model.expected.sha256`: reviewed artifact checksum
 - `audit-requirements.txt`: normalized CPU-wheel advisory identity for pip-audit
 - `tests/`: isolated unit and contract tests
@@ -149,7 +158,25 @@ metrics, and gates. The canonical report digest is
 `1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5`.
 Two clean evaluations must be byte-identical to the committed baseline.
 
+The snapshot-driven `document-type-candidate-v1` build consumes exactly the 12
+declared training samples and records the dataset, split, preprocessing,
+pipeline, fixed seed, `uv.lock`, training membership, and generated artifact
+identity. Two clean builds produce artifact SHA-256
+`17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09`.
+The generated artifact remains outside normal Git history.
+
+On the unchanged four-sample test split, the candidate also processes 4/4 with
+macro F1 `1.0`, per-class recall `1.0`, and mean true-label model score
+`0.99982216`. Its canonical report SHA-256 is
+`83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`;
+the independently recomputed comparison SHA-256 is
+`92d8878c37a2c39a25f5d5241e54b1acaff7fbc2012d975d4b659f6fb72db041`.
+All frozen absolute and champion-relative gates pass, making the candidate
+eligible for a later reviewed promotion. Eligibility does not change
+`model.expected.sha256`, runtime selection, or the active champion.
+
 These figures describe only this tiny reviewed synthetic snapshot. The score
 is not a calibrated probability, and the baseline makes no production
-accuracy, fairness, privacy, robustness, or generalization claim. Candidate
-fitting and promotion remain separate later increments.
+accuracy, fairness, privacy, robustness, or generalization claim. The candidate
+intentionally applies no confidence calibration; promotion and runtime
+selection remain separate later increments.

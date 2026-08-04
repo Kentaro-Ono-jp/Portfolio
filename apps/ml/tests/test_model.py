@@ -14,6 +14,7 @@ from reactorfront_ml.model import (
     DocumentClassifier,
     ModelArtifactError,
     generate_artifact,
+    generate_artifact_from_document,
     normalize_text,
 )
 
@@ -150,3 +151,33 @@ def test_generation_rejects_invalid_training_data(tmp_path: Path, value: object)
 
     with pytest.raises(ModelArtifactError):
         generate_artifact(path)
+
+
+def test_candidate_artifact_generation_rejects_invalid_identity_or_metadata() -> None:
+    document = json.loads(TRAINING_DATA.read_text(encoding="utf-8"))
+    with pytest.raises(ModelArtifactError, match="identity"):
+        generate_artifact_from_document(
+            document,
+            model_name=MODEL_NAME,
+            model_version="",
+            training_data_sha256="0" * 64,
+            training_metadata={},
+        )
+    with pytest.raises(ModelArtifactError, match="conflicts"):
+        generate_artifact_from_document(
+            document,
+            model_name=MODEL_NAME,
+            model_version="candidate-v1",
+            training_data_sha256="0" * 64,
+            training_metadata={"sampleCount": 12},
+        )
+
+
+def test_classifier_rejects_empty_expected_identity(tmp_path: Path) -> None:
+    artifact_path, checksum_path, _ = write_artifact(tmp_path)
+    with pytest.raises(ModelArtifactError, match="Expected model identity"):
+        DocumentClassifier(
+            artifact_path=artifact_path,
+            checksum_path=checksum_path,
+            expected_model_name="",
+        )

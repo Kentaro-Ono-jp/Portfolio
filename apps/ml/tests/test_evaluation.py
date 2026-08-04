@@ -506,6 +506,14 @@ def test_report_mutations_fail_closed(
     ("mutation", "code"),
     [
         (
+            lambda report: report["sampleOutcomes"].pop(),
+            "EVAL_REPORT_OUTCOME_MISMATCH",
+        ),
+        (
+            lambda report: report["sampleOutcomes"].reverse(),
+            "EVAL_REPORT_OUTCOME_MISMATCH",
+        ),
+        (
             lambda report: report["sampleOutcomes"][1].update(
                 sampleId=report["sampleOutcomes"][0]["sampleId"]
             ),
@@ -522,6 +530,10 @@ def test_report_mutations_fail_closed(
         (
             lambda report: report["sampleOutcomes"][0].update(trueLabelModelScore=0.0),
             "EVAL_REPORT_METRIC_MISMATCH",
+        ),
+        (
+            lambda report: report["sampleOutcomes"][0].update(status="rejected"),
+            "EVAL_REPORT_SCHEMA_VIOLATION",
         ),
     ],
 )
