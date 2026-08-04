@@ -57,6 +57,29 @@ published aggregate and gate can be recomputed independently. Its SHA-256 is
 Runtime CI separately retains real PyTorch inference through repository-
 generated invoice and report PDFs.
 
+## Evaluated candidate
+
+The separately versioned `document-type-candidate-v1` artifact is generated
+from exactly the accepted 12-sample training split rather than from validation
+or test data. Its reviewed build identity binds the dataset and split digests,
+training sample IDs, preprocessing and pipeline versions, fixed seed, pinned
+`uv.lock` digest, and artifact SHA-256
+`17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09`.
+The artifact remains generated outside Git history.
+
+The candidate processes all four held-out samples correctly with macro F1
+`1.0`, per-class recall `1.0`, and mean true-label model score `0.99982216`.
+Its canonical report SHA-256 is
+`83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`.
+The canonical comparison independently recomputes every absolute and
+champion-relative gate and records the candidate as eligible for a later
+reviewed promotion. No confidence calibration is fitted, so the value remains
+a model score rather than a calibrated probability.
+
+Candidate eligibility is not runtime promotion. The active model remains
+`document-type-v1` with its existing expected checksum until a later focused
+increment changes the canonical promotion manifest and runtime selection.
+
 ## Limitations and risks
 
 - The vocabulary is intentionally tiny and English-only.

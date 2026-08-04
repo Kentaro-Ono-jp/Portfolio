@@ -1,0 +1,186 @@
+{
+  "$id": "https://reactorfront.example/schemas/candidate-comparison-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "absoluteGatesPassed": {
+      "type": "boolean"
+    },
+    "candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "modelName": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "modelVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reportSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifactSha256",
+        "modelName",
+        "modelVersion",
+        "reportSha256"
+      ],
+      "type": "object"
+    },
+    "champion": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "modelName": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "modelVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reportSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifactSha256",
+        "modelName",
+        "modelVersion",
+        "reportSha256"
+      ],
+      "type": "object"
+    },
+    "comparisonSchemaVersion": {
+      "const": "candidate-comparison-v1"
+    },
+    "comparisonSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "datasetSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "eligible": {
+      "type": "boolean"
+    },
+    "policySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "regressions": {
+      "additionalProperties": false,
+      "properties": {
+        "macroF1": {
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "type": "number"
+        },
+        "meanTrueLabelModelScore": {
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "type": "number"
+        },
+        "perClassRecall": {
+          "additionalProperties": false,
+          "properties": {
+            "invoice": {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            "report": {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "invoice",
+            "report"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "macroF1",
+        "meanTrueLabelModelScore",
+        "perClassRecall"
+      ],
+      "type": "object"
+    },
+    "rejectionReasons": {
+      "items": {
+        "pattern": "^EVAL_CANDIDATE_[A-Z0-9_]+$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "relativeGateResults": {
+      "additionalProperties": false,
+      "properties": {
+        "macroF1": {
+          "type": "boolean"
+        },
+        "meanTrueLabelModelScore": {
+          "type": "boolean"
+        },
+        "perClassRecall": {
+          "additionalProperties": false,
+          "properties": {
+            "invoice": {
+              "type": "boolean"
+            },
+            "report": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "invoice",
+            "report"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "macroF1",
+        "meanTrueLabelModelScore",
+        "perClassRecall"
+      ],
+      "type": "object"
+    },
+    "splitSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "absoluteGatesPassed",
+    "candidate",
+    "champion",
+    "comparisonSchemaVersion",
+    "comparisonSha256",
+    "datasetSha256",
+    "eligible",
+    "policySha256",
+    "regressions",
+    "rejectionReasons",
+    "relativeGateResults",
+    "splitSha256"
+  ],
+  "title": "ReactorFront canonical champion-candidate comparison report",
+  "type": "object"
+}

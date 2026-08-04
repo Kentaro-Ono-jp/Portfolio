@@ -1,0 +1,49 @@
+{
+  "artifactSchemaVersion": 1,
+  "artifactSha256": "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09",
+  "classes": [
+    "invoice",
+    "report"
+  ],
+  "confidenceTreatment": {
+    "calibrationClaim": false,
+    "method": "none",
+    "validationSampleIds": []
+  },
+  "corpusSha256": "f84fffa5f7aeecb645ccf073322464698b4bb12d3768655761714e8cc2514cf4",
+  "datasetSha256": "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+  "datasetVersion": "reactorfront-synthetic-documents-v1",
+  "dependency": {
+    "lockPath": "apps/ml/uv.lock",
+    "sha256": "4d8a69b4e99d9545f375a3999ecb002ead2739ae68ba0e0e7380a34a48b6092e"
+  },
+  "modelName": "reactorfront-document-type",
+  "modelVersion": "document-type-candidate-v1",
+  "pipelineVersion": "pytorch-multinomial-naive-bayes-linear-v1",
+  "policySha256": "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
+  "policyVersion": "document-classification-evaluation-v1",
+  "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
+  "schemaVersion": "candidate-build-v1",
+  "splitSha256": "4a2b00a69b0ea2df152f8c80d4d61a5f0d3d55be87a18b4d29a3cda7ff18bc65",
+  "training": {
+    "algorithm": "pytorch-multinomial-naive-bayes-linear",
+    "dataSha256": "245de358faa8412d1534f10e5a72ff64218161d1ae7d1f43d96284fdd6918d0e",
+    "sampleCount": 12,
+    "sampleIds": [
+      "invoice-train-001",
+      "invoice-train-002",
+      "invoice-train-003",
+      "invoice-train-004",
+      "invoice-train-005",
+      "invoice-train-006",
+      "report-train-001",
+      "report-train-002",
+      "report-train-003",
+      "report-train-004",
+      "report-train-005",
+      "report-train-006"
+    ],
+    "seed": 20260719,
+    "trainingAccuracy": 1.0
+  }
+}

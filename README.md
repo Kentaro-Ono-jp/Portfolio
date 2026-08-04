@@ -222,15 +222,22 @@ schema, and the unchanged current champion's four-sample held-out baseline.
 That bounded baseline records macro F1 `1.0` and mean true-label model score
 `0.99982216`; it is neither a calibration nor a production-quality claim.
 
-Later focused increments will compare a reproducible candidate under the
-predeclared metrics, reject incomplete or regressing evidence, and bind an
-accepted artifact to one reviewed promotion manifest. New runtime results will
-then carry dataset, pipeline, artifact, and evaluation lineage through the
-existing event, API, review, audit, and Web boundaries.
+A second focused implementation increment, tracked by
+[Issue #79](https://github.com/Kentaro-Ono-jp/Portfolio/issues/79), builds
+`document-type-candidate-v1` deterministically from exactly the accepted 12
+training samples and compares its canonical held-out report with the frozen
+champion baseline. The candidate matches the bounded champion metrics, passes
+every absolute and champion-relative gate, and is eligible for later reviewed
+promotion. Its generated artifact remains outside Git history and no runtime
+model selection changes in this increment.
 
-The classifier artifact and runtime contracts remain exactly those of the
-completed second slice; the evaluation boundary does not fit or promote a
-candidate. Automatic retraining, private-data reuse, OCR, structured
+Later focused increments will bind an accepted artifact to one reviewed
+promotion manifest and carry dataset, pipeline, artifact, and evaluation
+lineage through the existing event, API, review, audit, and Web boundaries.
+
+The active classifier artifact and runtime contracts remain exactly those of
+the completed second slice; candidate eligibility is not promotion. Automatic
+retraining, private-data reuse, OCR, structured
 field extraction, cloud deployment, RAG, and production-quality claims remain
 outside this slice.
 

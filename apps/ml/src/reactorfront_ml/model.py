@@ -17,6 +17,7 @@ MODEL_NAME = "reactorfront-document-type"
 MODEL_VERSION = "document-type-v1"
 MODEL_SCHEMA_VERSION = 1
 TRAINING_SEED = 20260719
+TRAINING_ALGORITHM = "pytorch-multinomial-naive-bayes-linear"
 CLASS_NAMES = ("invoice", "report")
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
@@ -52,8 +53,7 @@ def tokenize(text: str) -> list[str]:
     return normalized.split() if normalized else []
 
 
-def _load_training_document(path: Path) -> TrainingDocument:
-    value = json.loads(path.read_text(encoding="utf-8"))
+def _validate_training_document(value: object) -> TrainingDocument:
     if not isinstance(value, dict):
         raise ModelArtifactError("Training data must be an object")
     description = value.get("description")
@@ -73,6 +73,10 @@ def _load_training_document(path: Path) -> TrainingDocument:
     if not validated or {item["label"] for item in validated} != set(CLASS_NAMES):
         raise ModelArtifactError("Training data must contain both supported classes")
     return {"description": description, "examples": validated}
+
+
+def _load_training_document(path: Path) -> TrainingDocument:
+    return _validate_training_document(json.loads(path.read_text(encoding="utf-8")))
 
 
 def _feature_vector(tokens: list[str], vocabulary: list[str]) -> torch.Tensor:
@@ -98,12 +102,18 @@ def _artifact_bytes(value: dict[str, object]) -> bytes:
     ).encode("utf-8")
 
 
-def generate_artifact(training_data_path: Path) -> GeneratedArtifact:
+def _generate_artifact(
+    document: TrainingDocument,
+    *,
+    model_name: str,
+    model_version: str,
+    training_data_sha256: str,
+    training_metadata: dict[str, object] | None = None,
+) -> GeneratedArtifact:
     torch.manual_seed(TRAINING_SEED)
     torch.use_deterministic_algorithms(True)
     torch.set_num_threads(1)
 
-    document = _load_training_document(training_data_path)
     examples = document["examples"]
     vocabulary = sorted({token for item in examples for token in tokenize(item["text"])})
     class_indexes = {name: index for index, name in enumerate(CLASS_NAMES)}
@@ -127,22 +137,26 @@ def generate_artifact(training_data_path: Path) -> GeneratedArtifact:
         correct += CLASS_NAMES[prediction] == item["label"]
     accuracy = correct / len(examples)
 
-    training_bytes = training_data_path.read_bytes()
+    metadata: dict[str, object] = {
+        "algorithm": TRAINING_ALGORITHM,
+        "seed": TRAINING_SEED,
+        "sampleCount": len(examples),
+        "dataSha256": training_data_sha256,
+        "trainingAccuracy": float(f"{accuracy:.8f}"),
+    }
+    if training_metadata is not None:
+        if set(metadata).intersection(training_metadata):
+            raise ModelArtifactError("Training metadata conflicts with canonical fields")
+        metadata.update(training_metadata)
     artifact: dict[str, object] = {
         "schemaVersion": MODEL_SCHEMA_VERSION,
-        "modelName": MODEL_NAME,
-        "modelVersion": MODEL_VERSION,
+        "modelName": model_name,
+        "modelVersion": model_version,
         "classes": list(CLASS_NAMES),
         "vocabulary": vocabulary,
         "weights": weights.tolist(),
         "bias": bias.tolist(),
-        "training": {
-            "algorithm": "pytorch-multinomial-naive-bayes-linear",
-            "seed": TRAINING_SEED,
-            "sampleCount": len(examples),
-            "dataSha256": hashlib.sha256(training_bytes).hexdigest(),
-            "trainingAccuracy": float(f"{accuracy:.8f}"),
-        },
+        "training": metadata,
     }
     content = _artifact_bytes(artifact)
     return GeneratedArtifact(
@@ -152,8 +166,51 @@ def generate_artifact(training_data_path: Path) -> GeneratedArtifact:
     )
 
 
+def generate_artifact(training_data_path: Path) -> GeneratedArtifact:
+    training_bytes = training_data_path.read_bytes()
+    return _generate_artifact(
+        _load_training_document(training_data_path),
+        model_name=MODEL_NAME,
+        model_version=MODEL_VERSION,
+        training_data_sha256=hashlib.sha256(training_bytes).hexdigest(),
+    )
+
+
+def generate_artifact_from_document(
+    document: TrainingDocument,
+    *,
+    model_name: str,
+    model_version: str,
+    training_data_sha256: str,
+    training_metadata: dict[str, object],
+) -> GeneratedArtifact:
+    if (
+        not model_name
+        or not model_version
+        or len(training_data_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in training_data_sha256)
+    ):
+        raise ModelArtifactError("Candidate artifact identity is invalid")
+    return _generate_artifact(
+        _validate_training_document(document),
+        model_name=model_name,
+        model_version=model_version,
+        training_data_sha256=training_data_sha256,
+        training_metadata=training_metadata,
+    )
+
+
 class DocumentClassifier:
-    def __init__(self, *, artifact_path: Path, checksum_path: Path) -> None:
+    def __init__(
+        self,
+        *,
+        artifact_path: Path,
+        checksum_path: Path,
+        expected_model_name: str = MODEL_NAME,
+        expected_model_version: str = MODEL_VERSION,
+    ) -> None:
+        if not expected_model_name or not expected_model_version:
+            raise ModelArtifactError("Expected model identity is invalid")
         content = artifact_path.read_bytes()
         expected_checksum = checksum_path.read_text(encoding="utf-8").strip()
         actual_checksum = hashlib.sha256(content).hexdigest()
@@ -165,7 +222,10 @@ class DocumentClassifier:
             raise ModelArtifactError("Model artifact must be an object")
         if value.get("schemaVersion") != MODEL_SCHEMA_VERSION:
             raise ModelArtifactError("Model artifact schema is unsupported")
-        if value.get("modelName") != MODEL_NAME or value.get("modelVersion") != MODEL_VERSION:
+        if (
+            value.get("modelName") != expected_model_name
+            or value.get("modelVersion") != expected_model_version
+        ):
             raise ModelArtifactError("Model identity does not match the runtime")
         if value.get("classes") != list(CLASS_NAMES):
             raise ModelArtifactError("Model classes do not match the runtime")
@@ -193,6 +253,8 @@ class DocumentClassifier:
         self._weights = weight_tensor
         self._bias = bias_tensor
         self.checksum = actual_checksum
+        self.model_name = expected_model_name
+        self.model_version = expected_model_version
 
     def classify(self, text: str) -> ClassificationResult:
         tokens = tokenize(text)
@@ -208,5 +270,5 @@ class DocumentClassifier:
         return ClassificationResult(
             classification=CLASS_NAMES[winner],
             confidence=confidence,
-            model_version=MODEL_VERSION,
+            model_version=self.model_version,
         )

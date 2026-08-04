@@ -93,9 +93,10 @@ Supporting scripts are implementation details of that entrypoint:
 - `verify_ml_model.py` proves independent model generations, checksum metadata,
   and real CPU PyTorch inference.
 - `verify_ml_evaluation.py` reconstructs the immutable corpus and family-
-  disjoint split, proves the checksum-verified champion report twice, validates
-  the closed report schema, and requires byte identity with the reviewed
-  baseline.
+  disjoint split; reproduces the champion baseline and snapshot-driven
+  candidate artifact and report twice; validates the closed report and
+  comparison schemas; recomputes promotion eligibility; rejects corrupted
+  candidate lineage; and requires byte identity with every reviewed record.
 - `verify_ml_runtime.py` obtains a synthetic OIDC access token and proves the
   authenticated API-to-outbox-to-worker path, source integrity, result
   contracts, stable failure, duplicate delivery, persistent result messages,

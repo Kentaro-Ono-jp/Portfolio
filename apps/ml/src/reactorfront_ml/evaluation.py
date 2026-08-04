@@ -23,6 +23,7 @@ SPLIT_SCHEMA_VERSION = 1
 SNAPSHOT_SCHEMA_VERSION = 1
 POLICY_SCHEMA_VERSION = 1
 REPORT_SCHEMA_VERSION = "evaluation-report-v1"
+COMPARISON_SCHEMA_VERSION = "candidate-comparison-v1"
 DATASET_VERSION = "reactorfront-synthetic-documents-v1"
 SPLIT_VERSION = "family-disjoint-v1"
 POLICY_VERSION = "document-classification-evaluation-v1"
@@ -394,6 +395,33 @@ def _rounded(value: float) -> float:
     return float(f"{value:.8f}")
 
 
+def _contains_nonfinite(value: object) -> bool:
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, dict):
+        return any(_contains_nonfinite(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_nonfinite(item) for item in value)
+    return False
+
+
+def _validate_json_schema(
+    value: dict[str, Any],
+    schema_path: Path,
+    *,
+    invalid_schema_code: str,
+    violation_code: str,
+) -> None:
+    schema, _ = _canonical_object(schema_path)
+    try:
+        Draft202012Validator.check_schema(schema)
+        errors = list(Draft202012Validator(schema).iter_errors(value))
+    except Exception as error:  # jsonschema exposes multiple schema error subclasses
+        raise EvaluationError(invalid_schema_code) from error
+    if errors:
+        raise EvaluationError(violation_code)
+
+
 def _ratio(numerator: float, denominator: float) -> float:
     return numerator / denominator if denominator else 0.0
 
@@ -558,25 +586,14 @@ def validate_evaluation_report(
     model_name: str = MODEL_NAME,
     model_version: str = MODEL_VERSION,
 ) -> None:
-    def contains_nonfinite(value: object) -> bool:
-        if isinstance(value, float):
-            return not math.isfinite(value)
-        if isinstance(value, dict):
-            return any(contains_nonfinite(item) for item in value.values())
-        if isinstance(value, list):
-            return any(contains_nonfinite(item) for item in value)
-        return False
-
-    if contains_nonfinite(report):
+    if _contains_nonfinite(report):
         raise EvaluationError("EVAL_NONFINITE_METRIC")
-    schema, _ = _canonical_object(schema_path)
-    try:
-        Draft202012Validator.check_schema(schema)
-        errors = list(Draft202012Validator(schema).iter_errors(report))
-    except Exception as error:  # jsonschema exposes multiple schema error subclasses
-        raise EvaluationError("EVAL_INVALID_REPORT_SCHEMA") from error
-    if errors:
-        raise EvaluationError("EVAL_REPORT_SCHEMA_VIOLATION")
+    _validate_json_schema(
+        report,
+        schema_path,
+        invalid_schema_code="EVAL_INVALID_REPORT_SCHEMA",
+        violation_code="EVAL_REPORT_SCHEMA_VIOLATION",
+    )
     if report.get("artifactSha256") != artifact_sha256:
         raise EvaluationError("EVAL_REPORT_ARTIFACT_MISMATCH")
     expected_samples = snapshot.samples_for("test")
@@ -656,6 +673,31 @@ def validate_evaluation_report(
         raise EvaluationError("EVAL_REPORT_DIGEST_MISMATCH")
 
 
+def load_evaluation_report(
+    path: Path,
+    schema_path: Path,
+    snapshot: DatasetSnapshot,
+    policy: EvaluationPolicy,
+    artifact_sha256: str,
+    *,
+    evaluation_role: str,
+    model_name: str,
+    model_version: str,
+) -> tuple[dict[str, Any], bytes]:
+    value, raw = _canonical_object(path)
+    validate_evaluation_report(
+        value,
+        schema_path,
+        snapshot,
+        policy,
+        artifact_sha256,
+        evaluation_role=evaluation_role,
+        model_name=model_name,
+        model_version=model_version,
+    )
+    return value, raw
+
+
 def load_champion_baseline(
     path: Path,
     schema_path: Path,
@@ -663,6 +705,179 @@ def load_champion_baseline(
     policy: EvaluationPolicy,
     artifact_sha256: str,
 ) -> tuple[dict[str, Any], bytes]:
+    return load_evaluation_report(
+        path,
+        schema_path,
+        snapshot,
+        policy,
+        artifact_sha256,
+        evaluation_role="champion-baseline",
+        model_name=MODEL_NAME,
+        model_version=MODEL_VERSION,
+    )
+
+
+def compare_candidate(
+    champion_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+    report_schema_path: Path,
+    snapshot: DatasetSnapshot,
+    policy: EvaluationPolicy,
+    champion_artifact_sha256: str,
+    candidate_artifact_sha256: str,
+    *,
+    candidate_model_name: str,
+    candidate_model_version: str,
+) -> dict[str, Any]:
+    validate_evaluation_report(
+        champion_report,
+        report_schema_path,
+        snapshot,
+        policy,
+        champion_artifact_sha256,
+    )
+    validate_evaluation_report(
+        candidate_report,
+        report_schema_path,
+        snapshot,
+        policy,
+        candidate_artifact_sha256,
+        evaluation_role="candidate",
+        model_name=candidate_model_name,
+        model_version=candidate_model_version,
+    )
+    champion_metrics = cast(dict[str, Any], champion_report["metrics"])
+    candidate_metrics = cast(dict[str, Any], candidate_report["metrics"])
+    relative_limits = cast(dict[str, float], policy.value["championRelativeLimits"])
+    macro_f1_regression = _rounded(champion_metrics["macroF1"] - candidate_metrics["macroF1"])
+    mean_score_regression = _rounded(
+        champion_metrics["meanTrueLabelModelScore"] - candidate_metrics["meanTrueLabelModelScore"]
+    )
+    champion_per_class = cast(dict[str, dict[str, float]], champion_metrics["perClass"])
+    candidate_per_class = cast(dict[str, dict[str, float]], candidate_metrics["perClass"])
+    recall_regressions = {
+        label: _rounded(champion_per_class[label]["recall"] - candidate_per_class[label]["recall"])
+        for label in CLASS_NAMES
+    }
+    relative_results: dict[str, Any] = {
+        "macroF1": macro_f1_regression <= relative_limits["macroF1RegressionMaximum"],
+        "meanTrueLabelModelScore": mean_score_regression
+        <= relative_limits["meanTrueLabelModelScoreRegressionMaximum"],
+        "perClassRecall": {
+            label: regression <= relative_limits["perClassRecallRegressionMaximum"]
+            for label, regression in recall_regressions.items()
+        },
+    }
+    rejection_reasons: list[str] = []
+    if candidate_report["absoluteGatesPassed"] is not True:
+        rejection_reasons.append("EVAL_CANDIDATE_ABSOLUTE_GATES_FAILED")
+    if relative_results["macroF1"] is not True:
+        rejection_reasons.append("EVAL_CANDIDATE_MACRO_F1_REGRESSION")
+    if relative_results["meanTrueLabelModelScore"] is not True:
+        rejection_reasons.append("EVAL_CANDIDATE_MEAN_SCORE_REGRESSION")
+    per_class_results = cast(dict[str, bool], relative_results["perClassRecall"])
+    for label in CLASS_NAMES:
+        if per_class_results[label] is not True:
+            rejection_reasons.append(f"EVAL_CANDIDATE_{label.upper()}_RECALL_REGRESSION")
+
+    comparison: dict[str, Any] = {
+        "absoluteGatesPassed": candidate_report["absoluteGatesPassed"],
+        "candidate": {
+            "artifactSha256": candidate_artifact_sha256,
+            "modelName": candidate_model_name,
+            "modelVersion": candidate_model_version,
+            "reportSha256": candidate_report["reportSha256"],
+        },
+        "champion": {
+            "artifactSha256": champion_artifact_sha256,
+            "modelName": champion_report["modelName"],
+            "modelVersion": champion_report["modelVersion"],
+            "reportSha256": champion_report["reportSha256"],
+        },
+        "comparisonSchemaVersion": COMPARISON_SCHEMA_VERSION,
+        "datasetSha256": snapshot.dataset_sha256,
+        "eligible": not rejection_reasons,
+        "policySha256": policy.sha256,
+        "regressions": {
+            "macroF1": macro_f1_regression,
+            "meanTrueLabelModelScore": mean_score_regression,
+            "perClassRecall": recall_regressions,
+        },
+        "rejectionReasons": rejection_reasons,
+        "relativeGateResults": relative_results,
+        "splitSha256": snapshot.split_sha256,
+    }
+    comparison["comparisonSha256"] = sha256_bytes(canonical_json_bytes(comparison))
+    return comparison
+
+
+def validate_candidate_comparison(
+    comparison: dict[str, Any],
+    comparison_schema_path: Path,
+    champion_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+    report_schema_path: Path,
+    snapshot: DatasetSnapshot,
+    policy: EvaluationPolicy,
+    champion_artifact_sha256: str,
+    candidate_artifact_sha256: str,
+    *,
+    candidate_model_name: str,
+    candidate_model_version: str,
+) -> None:
+    if _contains_nonfinite(comparison):
+        raise EvaluationError("EVAL_NONFINITE_COMPARISON")
+    _validate_json_schema(
+        comparison,
+        comparison_schema_path,
+        invalid_schema_code="EVAL_INVALID_COMPARISON_SCHEMA",
+        violation_code="EVAL_COMPARISON_SCHEMA_VIOLATION",
+    )
+    supplied_digest = comparison.get("comparisonSha256")
+    unsigned = {key: value for key, value in comparison.items() if key != "comparisonSha256"}
+    if supplied_digest != sha256_bytes(canonical_json_bytes(unsigned)):
+        raise EvaluationError("EVAL_COMPARISON_DIGEST_MISMATCH")
+    expected = compare_candidate(
+        champion_report,
+        candidate_report,
+        report_schema_path,
+        snapshot,
+        policy,
+        champion_artifact_sha256,
+        candidate_artifact_sha256,
+        candidate_model_name=candidate_model_name,
+        candidate_model_version=candidate_model_version,
+    )
+    if comparison != expected:
+        raise EvaluationError("EVAL_COMPARISON_MISMATCH")
+
+
+def load_candidate_comparison(
+    path: Path,
+    comparison_schema_path: Path,
+    champion_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+    report_schema_path: Path,
+    snapshot: DatasetSnapshot,
+    policy: EvaluationPolicy,
+    champion_artifact_sha256: str,
+    candidate_artifact_sha256: str,
+    *,
+    candidate_model_name: str,
+    candidate_model_version: str,
+) -> tuple[dict[str, Any], bytes]:
     value, raw = _canonical_object(path)
-    validate_evaluation_report(value, schema_path, snapshot, policy, artifact_sha256)
+    validate_candidate_comparison(
+        value,
+        comparison_schema_path,
+        champion_report,
+        candidate_report,
+        report_schema_path,
+        snapshot,
+        policy,
+        champion_artifact_sha256,
+        candidate_artifact_sha256,
+        candidate_model_name=candidate_model_name,
+        candidate_model_version=candidate_model_version,
+    )
     return value, raw
