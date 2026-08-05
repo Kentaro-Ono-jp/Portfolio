@@ -34,13 +34,13 @@ class DocumentProcessor:
         classifier: DocumentClassification,
         validator: EventContractValidator,
         publisher: ResultEventPublisher,
-        event_factory: ResultEventFactory | None = None,
+        event_factory: ResultEventFactory,
     ) -> None:
         self._storage = storage
         self._classifier = classifier
         self._validator = validator
         self._publisher = publisher
-        self._event_factory = event_factory or ResultEventFactory()
+        self._event_factory = event_factory
 
     def process(self, request: ProcessingRequest) -> None:
         self._publish(

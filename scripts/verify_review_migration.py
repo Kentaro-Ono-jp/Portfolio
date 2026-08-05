@@ -19,7 +19,7 @@ from reactorfront_api.settings import Settings
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 BASE_REVISION = "20260731_0003"
-HEAD_REVISION = "20260801_0004"
+HEAD_REVISION = "20260805_0005"
 DOCUMENT_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 JOB_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 OUTBOX_EVENT_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
@@ -159,6 +159,19 @@ def verify_preserved_fixture(database_url: str, *, expect_review_tables: bool) -
             if set(counts.values()) != {1}:
                 raise RuntimeError(f"Migration changed existing row counts: {counts}")
             if expect_review_tables:
+                lineage = connection.execute(
+                    text(
+                        "SELECT dataset_version, dataset_sha256, preprocessing_version, "
+                        "pipeline_version, artifact_sha256, evaluation_policy_version, "
+                        "evaluation_policy_sha256, evaluation_report_sha256 "
+                        "FROM processing_jobs WHERE id = :job_id"
+                    ),
+                    {"job_id": JOB_ID},
+                ).one()
+                if any(value is not None for value in lineage):
+                    raise RuntimeError(
+                        "Migration fabricated measured lineage for a legacy result"
+                    )
                 new_counts = {
                     table_name: int(
                         connection.execute(
@@ -182,6 +195,71 @@ def verify_preserved_fixture(database_url: str, *, expect_review_tables: bool) -
                     raise RuntimeError(
                         "The controlled API system principal is invalid."
                     )
+    finally:
+        engine.dispose()
+
+
+def prove_measured_lineage_downgrade_is_blocked(
+    database_url: str, config: Config
+) -> None:
+    engine = create_engine(database_url)
+    values = {
+        "dataset_version": "reactorfront-synthetic-documents-v1",
+        "dataset_sha256": "d" * 64,
+        "preprocessing_version": "nfkc-ascii-alphanumeric-bow-v1",
+        "pipeline_version": "pytorch-multinomial-naive-bayes-linear-v1",
+        "artifact_sha256": "a" * 64,
+        "evaluation_policy_version": "document-classification-evaluation-v1",
+        "evaluation_policy_sha256": "b" * 64,
+        "evaluation_report_sha256": "c" * 64,
+        "job_id": JOB_ID,
+    }
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE processing_jobs SET dataset_version = :dataset_version, "
+                    "dataset_sha256 = :dataset_sha256, "
+                    "preprocessing_version = :preprocessing_version, "
+                    "pipeline_version = :pipeline_version, "
+                    "artifact_sha256 = :artifact_sha256, "
+                    "evaluation_policy_version = :evaluation_policy_version, "
+                    "evaluation_policy_sha256 = :evaluation_policy_sha256, "
+                    "evaluation_report_sha256 = :evaluation_report_sha256 "
+                    "WHERE id = :job_id"
+                ),
+                values,
+            )
+        try:
+            command.downgrade(config, "20260801_0004")
+        except RuntimeError as error:
+            if "Refusing to discard" not in str(error):
+                raise
+        else:
+            raise RuntimeError(
+                "Measured lineage downgrade unexpectedly discarded evidence"
+            )
+        if current_revision(database_url) != HEAD_REVISION:
+            raise RuntimeError("Blocked downgrade moved the database revision")
+        with engine.begin() as connection:
+            preserved = connection.execute(
+                text(
+                    "SELECT evaluation_report_sha256 FROM processing_jobs WHERE id = :job_id"
+                ),
+                {"job_id": JOB_ID},
+            ).scalar_one()
+            if preserved != "c" * 64:
+                raise RuntimeError("Blocked downgrade changed measured lineage")
+            connection.execute(
+                text(
+                    "UPDATE processing_jobs SET dataset_version = NULL, "
+                    "dataset_sha256 = NULL, preprocessing_version = NULL, "
+                    "pipeline_version = NULL, artifact_sha256 = NULL, "
+                    "evaluation_policy_version = NULL, evaluation_policy_sha256 = NULL, "
+                    "evaluation_report_sha256 = NULL WHERE id = :job_id"
+                ),
+                {"job_id": JOB_ID},
+            )
     finally:
         engine.dispose()
 
@@ -223,6 +301,7 @@ def main() -> int:
         prepare_foundation_fixture(settings.database_url)
         command.upgrade(config, HEAD_REVISION)
         verify_preserved_fixture(settings.database_url, expect_review_tables=True)
+        prove_measured_lineage_downgrade_is_blocked(settings.database_url, config)
         command.downgrade(config, BASE_REVISION)
         verify_preserved_fixture(settings.database_url, expect_review_tables=False)
         command.upgrade(config, HEAD_REVISION)
@@ -246,6 +325,8 @@ def main() -> int:
         "preservedExistingRows": True,
         "forwardAndBackwardExplicit": True,
         "fabricatedHistoricalAuditEvents": False,
+        "fabricatedLegacyLineage": False,
+        "measuredLineageDowngradeBlocked": True,
         "apiSystemPrincipal": API_SYSTEM_PRINCIPAL_KEY,
     }
     ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)

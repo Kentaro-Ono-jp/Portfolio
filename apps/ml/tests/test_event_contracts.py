@@ -17,6 +17,7 @@ from reactorfront_ml.event_contracts import (
     parse_requested_event,
 )
 from reactorfront_ml.events import ResultEventFactory
+from reactorfront_ml.lineage import RuntimeModelEvidence
 from reactorfront_ml.model import MODEL_VERSION
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -28,6 +29,16 @@ EXAMPLE_PATH = (
     / "examples"
     / "events"
     / "document.processing.requested.v1.json"
+)
+MODEL_EVIDENCE = RuntimeModelEvidence(
+    dataset_version="reactorfront-synthetic-documents-v1",
+    dataset_sha256="e" * 64,
+    preprocessing_version="nfkc-ascii-alphanumeric-bow-v1",
+    pipeline_version="pytorch-multinomial-naive-bayes-linear-v1",
+    artifact_sha256="a" * 64,
+    evaluation_policy_version="document-classification-evaluation-v1",
+    evaluation_policy_sha256="b" * 64,
+    evaluation_report_sha256="c" * 64,
 )
 
 
@@ -57,8 +68,10 @@ def test_result_events_are_schema_valid_and_idempotently_identified() -> None:
     request = parse_requested_event(payload, validator=validator())
 
     now = datetime(2026, 7, 19, 3, 0, tzinfo=UTC)
-    first = ResultEventFactory(clock=lambda: now)
-    second = ResultEventFactory(clock=lambda: now + timedelta(seconds=1))
+    first = ResultEventFactory(model_evidence=MODEL_EVIDENCE, clock=lambda: now)
+    second = ResultEventFactory(
+        model_evidence=MODEL_EVIDENCE, clock=lambda: now + timedelta(seconds=1)
+    )
     result = ClassificationResult(
         classification="invoice",
         confidence=0.91,
@@ -72,7 +85,7 @@ def test_result_events_are_schema_valid_and_idempotently_identified() -> None:
             second.started(request=request, model_version=MODEL_VERSION),
         ),
         (
-            "document.processing.completed.v1",
+            "document.processing.completed.v2",
             first.completed(request=request, result=result),
             second.completed(request=request, result=result),
         ),
@@ -95,3 +108,15 @@ def test_result_events_are_schema_valid_and_idempotently_identified() -> None:
         validator().validate(event_type=event_type, payload=first_event)
         assert first_event["eventId"] == second_event["eventId"]
         assert first_event["occurredAt"] != second_event["occurredAt"]
+
+    assert first.completed(request=request, result=result)["modelEvidence"] == {
+        "status": "measured",
+        "datasetVersion": MODEL_EVIDENCE.dataset_version,
+        "datasetSha256": MODEL_EVIDENCE.dataset_sha256,
+        "preprocessingVersion": MODEL_EVIDENCE.preprocessing_version,
+        "pipelineVersion": MODEL_EVIDENCE.pipeline_version,
+        "artifactSha256": MODEL_EVIDENCE.artifact_sha256,
+        "evaluationPolicyVersion": MODEL_EVIDENCE.evaluation_policy_version,
+        "evaluationPolicySha256": MODEL_EVIDENCE.evaluation_policy_sha256,
+        "evaluationReportSha256": MODEL_EVIDENCE.evaluation_report_sha256,
+    }

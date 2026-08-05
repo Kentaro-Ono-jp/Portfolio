@@ -90,6 +90,22 @@ const documentIdentity = {
   jobId: "33333333-3333-4333-8333-333333333333",
   createdAt: "2026-07-18T07:00:00Z",
 };
+const legacyModelEvidence = { status: "legacy-unmeasured" };
+const measuredModelEvidence = {
+  status: "measured",
+  datasetVersion: "reactorfront-synthetic-documents-v1",
+  datasetSha256:
+    "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+  preprocessingVersion: "nfkc-ascii-alphanumeric-bow-v1",
+  pipelineVersion: "pytorch-multinomial-naive-bayes-linear-v1",
+  artifactSha256:
+    "82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac",
+  evaluationPolicyVersion: "document-classification-evaluation-v1",
+  evaluationPolicySha256:
+    "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
+  evaluationReportSha256:
+    "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+};
 const validDocumentStatuses = [
   { ...documentIdentity, status: "accepted" },
   { ...documentIdentity, status: "queued" },
@@ -106,6 +122,7 @@ const validDocumentStatuses = [
     classification: "invoice",
     confidence: 0.98,
     modelVersion: "document-type-v1",
+    modelEvidence: measuredModelEvidence,
   },
   {
     ...documentIdentity,
@@ -168,6 +185,7 @@ const reviewIdentity = {
   machineClassification: "invoice",
   machineConfidence: 0.98,
   modelVersion: "document-type-v1",
+  modelEvidence: legacyModelEvidence,
 };
 const terminalIdentity = {
   ...reviewIdentity,
@@ -225,6 +243,57 @@ for (const invalidCase of invalidReviewStates) {
 }
 
 const correlationId = "11111111-1111-4111-8111-111111111111";
+const auditEvent = compileReference("#/components/schemas/AuditEvent");
+const auditIdentity = {
+  eventId: "44444444-4444-4444-8444-444444444444",
+  occurredAt: "2026-08-01T00:00:00Z",
+  actorPrincipalId: "55555555-5555-4555-8555-555555555555",
+  documentId: documentIdentity.documentId,
+  jobId: documentIdentity.jobId,
+  correlationId,
+};
+const measuredAuditDetails = {
+  modelEvidenceStatus: "measured",
+  modelVersion: "document-type-v1",
+  datasetVersion: measuredModelEvidence.datasetVersion,
+  datasetSha256: measuredModelEvidence.datasetSha256,
+  preprocessingVersion: measuredModelEvidence.preprocessingVersion,
+  pipelineVersion: measuredModelEvidence.pipelineVersion,
+  artifactSha256: measuredModelEvidence.artifactSha256,
+  evaluationPolicyVersion: measuredModelEvidence.evaluationPolicyVersion,
+  evaluationPolicySha256: measuredModelEvidence.evaluationPolicySha256,
+  evaluationReportSha256: measuredModelEvidence.evaluationReportSha256,
+};
+const legacyAudit = {
+  ...auditIdentity,
+  action: "document.submitted",
+  detailsVersion: 1,
+  details: {},
+};
+const measuredAudit = {
+  ...auditIdentity,
+  action: "processing.completed",
+  detailsVersion: 2,
+  details: measuredAuditDetails,
+};
+expectValid(auditEvent, legacyAudit, "legacy audit event");
+expectValid(auditEvent, measuredAudit, "measured lineage audit event");
+expectInvalid(
+  auditEvent,
+  { ...legacyAudit, details: measuredAuditDetails },
+  "version 1 audit with measured details",
+);
+expectInvalid(
+  auditEvent,
+  { ...measuredAudit, details: {} },
+  "version 2 audit without measured details",
+);
+expectInvalid(
+  auditEvent,
+  { ...measuredAudit, action: "review.approved" },
+  "version 2 non-completion audit",
+);
+
 const authenticationContracts = [
   {
     responseName: "AuthenticationRequired",
@@ -347,6 +416,7 @@ console.log(
     `${invalidDocumentStatuses.length} invalid state cases, and ` +
     `${validReviews.length} review states with ` +
     `${invalidReviewStates.length} invalid review states, and ` +
+    `2 valid audit events with 3 invalid audit events, and ` +
     `${problemContracts.length * 2 + authenticationContracts.length} ` +
     `invalid problem cases.`,
 );

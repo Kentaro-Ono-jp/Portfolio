@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 import reactorfront_api.rabbitmq as rabbitmq
 from reactorfront_api.authentication import build_access_token_validator
 from reactorfront_api.domain import (
+    MeasuredModelEvidence,
     ProcessingStatus,
     PublicProblem,
     PublishFailureCode,
@@ -808,6 +809,21 @@ def integration_result_event(
     *,
     occurred_at: datetime,
 ) -> ResultEvent:
+    is_completed = event_type.is_completed
+    model_evidence = (
+        MeasuredModelEvidence(
+            dataset_version="reactorfront-synthetic-documents-v1",
+            dataset_sha256="4" * 64,
+            preprocessing_version="document-text-v1",
+            pipeline_version="tfidf-logreg-v1",
+            artifact_sha256="5" * 64,
+            evaluation_policy_version="champion-baseline-v1",
+            evaluation_policy_sha256="6" * 64,
+            evaluation_report_sha256="7" * 64,
+        )
+        if event_type is ResultEventType.COMPLETED_V2
+        else None
+    )
     return ResultEvent(
         event_id=uuid5(EVENT_ID, event_type.value),
         event_type=event_type,
@@ -821,10 +837,12 @@ def integration_result_event(
         logical_payload_sha256={
             ResultEventType.STARTED: "1" * 64,
             ResultEventType.COMPLETED: "2" * 64,
+            ResultEventType.COMPLETED_V2: "4" * 64,
             ResultEventType.FAILED: "3" * 64,
         }[event_type],
-        classification="invoice" if event_type is ResultEventType.COMPLETED else None,
-        confidence=0.9876 if event_type is ResultEventType.COMPLETED else None,
+        model_evidence=model_evidence,
+        classification="invoice" if is_completed else None,
+        confidence=0.9876 if is_completed else None,
         failure_code="SOURCE_DIGEST_MISMATCH" if event_type is ResultEventType.FAILED else None,
     )
 
@@ -866,7 +884,7 @@ def test_result_events_commit_idempotently_and_preserve_first_terminal_state(
     repository = SqlAlchemyResultEventRepository(engine=engine)
     started = integration_result_event(ResultEventType.STARTED, occurred_at=NOW)
     completed = integration_result_event(
-        ResultEventType.COMPLETED,
+        ResultEventType.COMPLETED_V2,
         occurred_at=NOW + timedelta(seconds=1),
     )
 
@@ -894,7 +912,27 @@ def test_result_events_commit_idempotently_and_preserve_first_terminal_state(
     assert status.predicted_class == "invoice"
     assert status.confidence == pytest.approx(0.9876)
     assert status.model_version == "document-type-v1"
+    assert status.model_evidence == completed.model_evidence
     assert status.failure_code is None
+    history = SqlAlchemySubmissionRepository(engine=engine).get_audit_history(
+        DOCUMENT_ID, LEGACY_SYSTEM_PRINCIPAL_ID
+    )
+    assert history is not None
+    completion = history.events[-1]
+    assert completion.action.value == "processing.completed"
+    assert completion.details_version == 2
+    assert completion.details == {
+        "modelEvidenceStatus": "measured",
+        "modelVersion": "document-type-v1",
+        "datasetVersion": "reactorfront-synthetic-documents-v1",
+        "datasetSha256": "4" * 64,
+        "preprocessingVersion": "document-text-v1",
+        "pipelineVersion": "tfidf-logreg-v1",
+        "artifactSha256": "5" * 64,
+        "evaluationPolicyVersion": "champion-baseline-v1",
+        "evaluationPolicySha256": "6" * 64,
+        "evaluationReportSha256": "7" * 64,
+    }
     assert table_count(engine, "result_event_receipts") == 2
 
 

@@ -44,6 +44,17 @@ EXPECTED_MODEL_CHECKSUM = (
     .read_text(encoding="utf-8")
     .strip()
 )
+EXPECTED_MODEL_EVIDENCE = {
+    "status": "measured",
+    "datasetVersion": "reactorfront-synthetic-documents-v1",
+    "datasetSha256": "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+    "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
+    "pipelineVersion": "pytorch-multinomial-naive-bayes-linear-v1",
+    "artifactSha256": EXPECTED_MODEL_CHECKSUM,
+    "evaluationPolicyVersion": "document-classification-evaluation-v1",
+    "evaluationPolicySha256": "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
+    "evaluationReportSha256": "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+}
 INVOICE_TEXT = REPOSITORY_ROOT / "tests" / "fixtures" / "canonical_invoice.txt"
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 CORRELATION_IDS = (
@@ -414,6 +425,10 @@ def assert_success_events(events: list[dict[str, object]]) -> dict[str, object]:
     terminal = completed[0]
     if terminal["classification"] != "invoice" or float(terminal["confidence"]) < 0.70:
         raise RuntimeError("Real PDF/PyTorch invoice result did not meet its contract")
+    if terminal.get("modelEvidence") != EXPECTED_MODEL_EVIDENCE:
+        raise RuntimeError(
+            "Completed event did not carry exact champion model evidence"
+        )
     if any(event["modelVersion"] != MODEL_VERSION for event in events):
         raise RuntimeError(
             "Result event model version did not match the reviewed model"
@@ -675,6 +690,7 @@ def main() -> int:
         "classification": completed["classification"],
         "confidence": completed["confidence"],
         "modelVersion": completed["modelVersion"],
+        "modelEvidence": completed["modelEvidence"],
         "duplicateStartedEventId": next(
             event["eventId"]
             for event in success_events

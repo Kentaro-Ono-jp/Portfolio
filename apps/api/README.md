@@ -48,6 +48,9 @@ API image roles.
 - at-least-once retry with bounded backoff and stable event identity
 - atomic post-confirm outbox publication and `accepted` to `queued` transition
 - manual-ack result-event consumption through the durable result queue
+- strict `document.processing.completed.v2` lineage validation and atomic
+  persistence, while admitted v1 history remains explicitly
+  `legacy-unmeasured`
 - canonical result transport/schema/identity validation before persistence
 - atomic result-event receipts and job-state transitions in PostgreSQL
 - logical-event deduplication that tolerates a changed redelivery timestamp
@@ -163,10 +166,12 @@ exercises the real HTTP, database, object-storage, publisher-confirm, result
 persistence, duplicate-delivery, ordering-race, poison-input, restart-recovery,
 stale-attempt fencing, and confirmation-deadline boundaries.
 
-The populated-schema proof also migrates the principal foundation into the
-review, idempotency, and audit schema in both directions. It preserves existing
+The populated-schema proof also migrates the principal foundation through the
+review, idempotency, audit, and runtime-lineage schema. It preserves existing
 documents, jobs, outbox events, principals, ownership, and result receipts and
-does not fabricate historical review or audit records.
+does not fabricate historical lineage, review, or audit records. A lineage
+migration downgrade is refused after measured evidence exists, because dropping
+those columns would destroy accepted provenance.
 
 All document operations require a validated bearer token and the mapped
 `documents:submit` or `documents:read` capability. Submission persists the
@@ -177,7 +182,8 @@ server; health and readiness probes remain intentionally anonymous.
 
 Review reads require `documents:read`, review writes require `reviews:write`,
 and audit reads require `audit:read`; ownership remains mandatory for all
-three. A completed machine result initially exposes an `unreviewed` entity tag.
+three. A completed machine result initially exposes an `unreviewed` entity tag
+that includes every immutable lineage field in its identity.
 The first successful write produces an immutable `approved` or `corrected`
 decision. An identical idempotent replay returns that result, while conflicting
 key reuse, stale evidence, cross-owner access, and a second terminal decision

@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  next>postcss: 8.5.19
+  next>postcss: 8.5.23
   next>sharp: 0.35.0
 
 importers:
@@ -104,8 +104,8 @@ importers:
         specifier: 29.1.1
         version: 29.1.1
       postcss:
-        specifier: 8.5.19
-        version: 8.5.19
+        specifier: 8.5.23
+        version: 8.5.23
       prettier:
         specifier: 3.9.5
         version: 3.9.5
@@ -2305,6 +2305,10 @@ packages:
     resolution: {integrity: sha512-Mz8SaolMd8nB+G13WkORcxQKHZ/NE4xXevtkJHVuG+guo9/wYKlIMTKAqGdEmYOXR2ijPjTYNHssizdaVSUNdQ==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postcss@8.5.23:
+    resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
+    engines: {node: ^10 || ^12 || >=14}
+
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
@@ -3413,7 +3417,7 @@ snapshots:
       '@alloc/quick-lru': 5.2.0
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
-      postcss: 8.5.19
+      postcss: 8.5.23
       tailwindcss: 4.3.3
 
   '@tanstack/query-core@5.101.2': {}
@@ -4880,7 +4884,7 @@ snapshots:
       '@swc/helpers': 0.5.15
       baseline-browser-mapping: 2.10.43
       caniuse-lite: 1.0.30001806
-      postcss: 8.5.19
+      postcss: 8.5.23
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
       styled-jsx: 5.1.6(@babel/core@7.29.7(supports-color@10.2.2))(react@19.2.7)
@@ -5033,6 +5037,12 @@ snapshots:
   possible-typed-array-names@1.1.0: {}
 
   postcss@8.5.19:
+    dependencies:
+      nanoid: 3.3.16
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+
+  postcss@8.5.23:
     dependencies:
       nanoid: 3.3.16
       picocolors: 1.1.1

@@ -231,12 +231,19 @@ every absolute and champion-relative gate, and is eligible for later reviewed
 promotion. Its generated artifact remains outside Git history and no runtime
 model selection changes in this increment.
 
-Later focused increments will bind an accepted artifact to one reviewed
-promotion manifest and carry dataset, pipeline, artifact, and evaluation
-lineage through the existing event, API, review, audit, and Web boundaries.
+A third focused implementation increment, tracked by
+[Issue #81](https://github.com/Kentaro-Ono-jp/Portfolio/issues/81), carries the
+current champion's immutable dataset, preprocessing, pipeline, artifact,
+evaluation-policy, and evaluation-report identity through the completed event,
+API persistence, review identity, audit history, generated contracts, and Web
+validators. Existing v1 rows remain explicitly `legacy-unmeasured`; no
+historical lineage is fabricated.
 
-The active classifier artifact and runtime contracts remain exactly those of
-the completed second slice; candidate eligibility is not promotion. Automatic
+Later focused increments will bind an accepted artifact to one reviewed
+promotion manifest and define bounded synthetic-feedback export and curation.
+
+The active classifier artifact remains exactly that of the completed second
+slice; candidate eligibility is not promotion. Automatic
 retraining, private-data reuse, OCR, structured
 field extraction, cloud deployment, RAG, and production-quality claims remain
 outside this slice.

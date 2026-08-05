@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     rabbitmq_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
     model_artifact_path: Path = REPOSITORY_ROOT / "artifacts" / "model" / "model.json"
     model_checksum_path: Path = REPOSITORY_ROOT / "artifacts" / "model" / "model.sha256"
+    champion_evaluation_report_path: Path = (
+        REPOSITORY_ROOT / "apps" / "ml" / "evaluation" / "champion-baseline-v1.json"
+    )
     event_contract_directory: Path = REPOSITORY_ROOT / "packages" / "contracts" / "events"
 
 

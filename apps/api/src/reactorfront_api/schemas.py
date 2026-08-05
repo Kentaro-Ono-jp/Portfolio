@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from reactorfront_api.domain import (
     AuditHistory,
     DocumentStatusRecord,
+    MeasuredModelEvidence,
     ProcessingStatus,
     ReviewRecord,
     ReviewStatus,
@@ -44,11 +45,36 @@ class ProcessingDocumentStatusResponse(StatusIdentity):
     started_at: datetime = Field(alias="startedAt")
 
 
+class LegacyModelEvidenceResponse(ApiModel):
+    status: Literal["legacy-unmeasured"]
+
+
+class MeasuredModelEvidenceResponse(ApiModel):
+    status: Literal["measured"]
+    dataset_version: str = Field(alias="datasetVersion", min_length=1, max_length=128)
+    dataset_sha256: str = Field(alias="datasetSha256", pattern=r"^[a-f0-9]{64}$")
+    preprocessing_version: str = Field(alias="preprocessingVersion", min_length=1, max_length=128)
+    pipeline_version: str = Field(alias="pipelineVersion", min_length=1, max_length=128)
+    artifact_sha256: str = Field(alias="artifactSha256", pattern=r"^[a-f0-9]{64}$")
+    evaluation_policy_version: str = Field(
+        alias="evaluationPolicyVersion", min_length=1, max_length=128
+    )
+    evaluation_policy_sha256: str = Field(alias="evaluationPolicySha256", pattern=r"^[a-f0-9]{64}$")
+    evaluation_report_sha256: str = Field(alias="evaluationReportSha256", pattern=r"^[a-f0-9]{64}$")
+
+
+ModelEvidenceResponse = Annotated[
+    LegacyModelEvidenceResponse | MeasuredModelEvidenceResponse,
+    Field(discriminator="status"),
+]
+
+
 class CompletedDocumentStatusResponse(StatusIdentity):
     status: Literal[ProcessingStatus.COMPLETED]
     classification: Literal["invoice", "report"]
     confidence: float = Field(ge=0, le=1)
     model_version: str = Field(alias="modelVersion", min_length=1, max_length=128)
+    model_evidence: ModelEvidenceResponse = Field(alias="modelEvidence")
     started_at: datetime = Field(alias="startedAt")
     completed_at: datetime = Field(alias="completedAt")
 
@@ -80,6 +106,7 @@ class ReviewIdentity(ApiModel):
     machine_classification: Literal["invoice", "report"] = Field(alias="machineClassification")
     machine_confidence: float = Field(alias="machineConfidence", ge=0, le=1)
     model_version: str = Field(alias="modelVersion", min_length=1, max_length=128)
+    model_evidence: ModelEvidenceResponse = Field(alias="modelEvidence")
 
 
 class UnreviewedReviewResponse(ReviewIdentity):
@@ -140,8 +167,49 @@ class AuditEventResponse(ApiModel):
     job_id: UUID = Field(alias="jobId")
     review_id: UUID | None = Field(default=None, alias="reviewId")
     correlation_id: UUID = Field(alias="correlationId")
-    details_version: Literal[1] = Field(alias="detailsVersion")
+    details_version: Literal[1, 2] = Field(alias="detailsVersion")
     details: dict[str, object]
+
+    @model_validator(mode="after")
+    def details_match_version(self) -> AuditEventResponse:
+        if self.details_version == 1:
+            if self.details:
+                raise ValueError("Version 1 audit details must be empty")
+            return self
+        expected = {
+            "modelEvidenceStatus",
+            "modelVersion",
+            "datasetVersion",
+            "datasetSha256",
+            "preprocessingVersion",
+            "pipelineVersion",
+            "artifactSha256",
+            "evaluationPolicyVersion",
+            "evaluationPolicySha256",
+            "evaluationReportSha256",
+        }
+        if self.action != "processing.completed" or set(self.details) != expected:
+            raise ValueError("Version 2 audit details must contain exact measured lineage")
+        if self.details.get("modelEvidenceStatus") != "measured":
+            raise ValueError("Version 2 audit details must be measured")
+        for key in expected - {"modelEvidenceStatus"}:
+            value = self.details.get(key)
+            if not isinstance(value, str) or not value:
+                raise ValueError("Version 2 audit lineage values must be non-empty strings")
+        for key in (
+            "datasetSha256",
+            "artifactSha256",
+            "evaluationPolicySha256",
+            "evaluationReportSha256",
+        ):
+            value = self.details[key]
+            if (
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+            ):
+                raise ValueError("Version 2 audit lineage digests must be SHA-256")
+        return self
 
 
 class AuditHistoryResponse(ApiModel):
@@ -207,6 +275,7 @@ def serialize_document_status(record: DocumentStatusRecord) -> DocumentStatusRes
                 classification=classification,
                 confidence=record.confidence,
                 model_version=record.model_version,
+                model_evidence=_serialize_model_evidence(record.model_evidence),
                 started_at=record.started_at,
                 completed_at=record.completed_at,
             )
@@ -247,6 +316,7 @@ def serialize_review(record: ReviewRecord) -> ReviewResponse:
             machine_classification=machine_classification,
             machine_confidence=float(record.machine_confidence),
             model_version=record.model_version,
+            model_evidence=_serialize_model_evidence(record.model_evidence),
             review_version=0,
         )
 
@@ -272,6 +342,7 @@ def serialize_review(record: ReviewRecord) -> ReviewResponse:
             machine_classification=machine_classification,
             machine_confidence=float(record.machine_confidence),
             model_version=record.model_version,
+            model_evidence=_serialize_model_evidence(record.model_evidence),
             review_version=1,
             final_classification=final_classification,
             reviewer_principal_id=record.reviewer_principal_id,
@@ -286,6 +357,7 @@ def serialize_review(record: ReviewRecord) -> ReviewResponse:
         machine_classification=machine_classification,
         machine_confidence=float(record.machine_confidence),
         model_version=record.model_version,
+        model_evidence=_serialize_model_evidence(record.model_evidence),
         review_version=1,
         final_classification=final_classification,
         reviewer_principal_id=record.reviewer_principal_id,
@@ -313,9 +385,27 @@ def serialize_audit_history(history: AuditHistory) -> AuditHistoryResponse:
                 job_id=event.job_id,
                 review_id=event.review_id,
                 correlation_id=event.correlation_id,
-                details_version=1,
+                details_version=event.details_version,
                 details=event.details,
             )
             for event in history.events
         ],
+    )
+
+
+def _serialize_model_evidence(
+    evidence: MeasuredModelEvidence | None,
+) -> ModelEvidenceResponse:
+    if evidence is None:
+        return LegacyModelEvidenceResponse(status="legacy-unmeasured")
+    return MeasuredModelEvidenceResponse(
+        status="measured",
+        dataset_version=evidence.dataset_version,
+        dataset_sha256=evidence.dataset_sha256,
+        preprocessing_version=evidence.preprocessing_version,
+        pipeline_version=evidence.pipeline_version,
+        artifact_sha256=evidence.artifact_sha256,
+        evaluation_policy_version=evidence.evaluation_policy_version,
+        evaluation_policy_sha256=evidence.evaluation_policy_sha256,
+        evaluation_report_sha256=evidence.evaluation_report_sha256,
     )

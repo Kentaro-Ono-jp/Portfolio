@@ -10,6 +10,7 @@ import pytest
 import reactorfront_api.persistence as persistence
 from reactorfront_api.domain import (
     AuditAction,
+    MeasuredModelEvidence,
     ProcessingStatus,
     ResultApplyOutcome,
     ResultEvent,
@@ -35,6 +36,16 @@ REQUEST_EVENT_ID = UUID("44444444-4444-4444-8444-444444444444")
 NOW = datetime(2026, 7, 20, 0, 0, tzinfo=UTC)
 OBJECT_KEY = f"documents/{DOCUMENT_ID}/source.pdf"
 SOURCE_SHA256 = "a" * 64
+MODEL_EVIDENCE = MeasuredModelEvidence(
+    dataset_version="reactorfront-synthetic-documents-v1",
+    dataset_sha256="d" * 64,
+    preprocessing_version="nfkc-ascii-alphanumeric-bow-v1",
+    pipeline_version="pytorch-multinomial-naive-bayes-linear-v1",
+    artifact_sha256="a" * 64,
+    evaluation_policy_version="document-classification-evaluation-v1",
+    evaluation_policy_sha256="b" * 64,
+    evaluation_report_sha256="c" * 64,
+)
 
 
 @dataclass
@@ -88,8 +99,9 @@ def result_event(
         source_sha256=SOURCE_SHA256,
         model_version=model_version,
         logical_payload_sha256=logical_payload_sha256,
-        classification="invoice" if event_type is ResultEventType.COMPLETED else None,
-        confidence=0.9876 if event_type is ResultEventType.COMPLETED else None,
+        model_evidence=(MODEL_EVIDENCE if event_type is ResultEventType.COMPLETED_V2 else None),
+        classification="invoice" if event_type.is_completed else None,
+        confidence=0.9876 if event_type.is_completed else None,
         failure_code="SOURCE_DIGEST_MISMATCH" if event_type is ResultEventType.FAILED else None,
     )
 
@@ -166,6 +178,7 @@ def repository_with_session(
     [
         (ResultEventType.STARTED, ProcessingStatus.QUEUED, ProcessingStatus.PROCESSING),
         (ResultEventType.COMPLETED, ProcessingStatus.PROCESSING, ProcessingStatus.COMPLETED),
+        (ResultEventType.COMPLETED_V2, ProcessingStatus.PROCESSING, ProcessingStatus.COMPLETED),
         (ResultEventType.FAILED, ProcessingStatus.PROCESSING, ProcessingStatus.FAILED),
     ],
 )
@@ -189,10 +202,13 @@ def test_apply_commits_receipt_and_expected_transition(
     if event_type is ResultEventType.STARTED:
         assert processing_job.attempt_count == 1
         assert processing_job.started_at == NOW
-    elif event_type is ResultEventType.COMPLETED:
+    elif event_type.is_completed:
         assert processing_job.predicted_class == "invoice"
         assert float(processing_job.confidence or 0) == 0.9876
         assert processing_job.failure_code is None
+        if event_type is ResultEventType.COMPLETED_V2:
+            assert processing_job.dataset_version == MODEL_EVIDENCE.dataset_version
+            assert processing_job.evaluation_report_sha256 == "c" * 64
     else:
         assert processing_job.failure_code == "SOURCE_DIGEST_MISMATCH"
         assert processing_job.predicted_class is None
@@ -210,9 +226,13 @@ def test_apply_commits_receipt_and_expected_transition(
             audit.action
             == {
                 ResultEventType.COMPLETED: AuditAction.PROCESSING_COMPLETED.value,
+                ResultEventType.COMPLETED_V2: AuditAction.PROCESSING_COMPLETED.value,
                 ResultEventType.FAILED: AuditAction.PROCESSING_FAILED.value,
             }[event_type]
         )
+        if event_type is ResultEventType.COMPLETED_V2:
+            assert audit.details_version == 2
+            assert audit.details["evaluationReportSha256"] == "c" * 64
 
 
 def test_apply_treats_matching_receipt_as_duplicate(

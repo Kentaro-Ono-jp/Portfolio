@@ -27,7 +27,7 @@ BROKER_URL = "amqp://guest:guest@localhost:5672/%2F"
 def event() -> dict[str, object]:
     return {
         "eventId": "11111111-1111-4111-8111-111111111111",
-        "eventType": "document.processing.completed.v1",
+        "eventType": "document.processing.completed.v2",
         "occurredAt": "2026-07-19T03:00:00Z",
         "correlationId": "22222222-2222-4222-8222-222222222222",
         "documentId": "33333333-3333-4333-8333-333333333333",
@@ -276,7 +276,7 @@ def test_publish_declares_durable_result_topology_and_persistent_json(
     installed = install_connection(monkeypatch)
     publisher = PikaResultEventPublisher(broker_url=BROKER_URL, timeout_seconds=5)
 
-    publisher.publish(event_type="document.processing.completed.v1", payload=event())
+    publisher.publish(event_type="document.processing.completed.v2", payload=event())
 
     assert installed.connection is not None and installed.connection.closed
     assert installed.ioloop.closed
@@ -301,7 +301,7 @@ def test_publish_declares_durable_result_topology_and_persistent_json(
     )
     publication = installed.channel.publications[0]
     assert publication["exchange"] == DOCUMENT_EXCHANGE
-    assert publication["routing_key"] == "document.processing.completed.v1"
+    assert publication["routing_key"] == "document.processing.completed.v2"
     assert publication["mandatory"] is True
     assert json.loads(cast(bytes, publication["body"])) == event()
     properties = cast(BasicProperties, publication["properties"])
@@ -328,7 +328,7 @@ def test_negative_confirmations_have_stable_codes(
     publisher = PikaResultEventPublisher(broker_url=BROKER_URL, timeout_seconds=5)
 
     with pytest.raises(ResultPublishError) as captured:
-        publisher.publish(event_type="document.processing.completed.v1", payload=event())
+        publisher.publish(event_type="document.processing.completed.v2", payload=event())
 
     assert captured.value.code is expected
 
@@ -340,7 +340,7 @@ def test_confirm_timeout_aborts_and_ignores_late_ack(
     publisher = PikaResultEventPublisher(broker_url=BROKER_URL, timeout_seconds=7)
 
     with pytest.raises(ResultPublishError) as captured:
-        publisher.publish(event_type="document.processing.completed.v1", payload=event())
+        publisher.publish(event_type="document.processing.completed.v2", payload=event())
 
     assert captured.value.code is PublishFailureCode.CONFIRM_TIMEOUT
     assert installed.ioloop.elapsed == 7
@@ -376,7 +376,7 @@ def test_close_failure_after_ack_does_not_reclassify_success(
     )
     publisher = PikaResultEventPublisher(broker_url=BROKER_URL, timeout_seconds=5)
 
-    publisher.publish(event_type="document.processing.completed.v1", payload=event())
+    publisher.publish(event_type="document.processing.completed.v2", payload=event())
 
     assert len(installed.channel.publications) == 1
     assert installed.connection is not None and installed.connection.aborted
@@ -416,6 +416,6 @@ def test_synchronous_publish_error_is_mapped(
     publisher = PikaResultEventPublisher(broker_url=BROKER_URL, timeout_seconds=5)
 
     with pytest.raises(ResultPublishError) as captured:
-        publisher.publish(event_type="document.processing.completed.v1", payload=event())
+        publisher.publish(event_type="document.processing.completed.v2", payload=event())
 
     assert captured.value.code is expected

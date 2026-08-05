@@ -9,15 +9,22 @@ from reactorfront_ml.domain import (
     ProcessingFailureCode,
     ProcessingRequest,
 )
+from reactorfront_ml.lineage import RuntimeModelEvidence
 
 STARTED_EVENT_TYPE = "document.processing.started.v1"
-COMPLETED_EVENT_TYPE = "document.processing.completed.v1"
+COMPLETED_EVENT_TYPE = "document.processing.completed.v2"
 FAILED_EVENT_TYPE = "document.processing.failed.v1"
 RESULT_EVENT_TYPES = (STARTED_EVENT_TYPE, COMPLETED_EVENT_TYPE, FAILED_EVENT_TYPE)
 
 
 class ResultEventFactory:
-    def __init__(self, *, clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        model_evidence: RuntimeModelEvidence,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._model_evidence = model_evidence
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def started(
@@ -42,6 +49,7 @@ class ResultEventFactory:
             "modelVersion": result.model_version,
             "classification": result.classification,
             "confidence": result.confidence,
+            "modelEvidence": self._model_evidence.to_event_payload(),
         }
 
     def failed(

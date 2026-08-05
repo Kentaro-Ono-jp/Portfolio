@@ -68,15 +68,15 @@ claim exactly-once delivery.
 ## Result-event RabbitMQ transport
 
 The ML worker publishes processing observations through the same durable direct
-exchange. The queue is declared now so publication can be proved before the
-later API-owned consumer exists.
+exchange. The API-owned consumer validates and persists those observations.
 
 | Element | Value |
 |---|---|
 | Exchange | `reactorfront.documents.v1` |
 | Queue | `reactorfront.document-processing.events.v1` |
 | Started routing key | `document.processing.started.v1` |
-| Completed routing key | `document.processing.completed.v1` |
+| Current completed routing key | `document.processing.completed.v2` |
+| Admitted legacy completed routing key | `document.processing.completed.v1` |
 | Failed routing key | `document.processing.failed.v1` |
 
 Each message body is the canonical JSON object validated against its versioned
@@ -85,6 +85,12 @@ document, and job identifiers are preserved in the payload and message
 metadata. Events use persistent delivery, mandatory routing, and bounded
 publisher confirms. The requested task is acknowledged only after the required
 result event confirms.
+
+The current `completed.v2` contract carries closed, immutable `modelEvidence`
+for the accepted dataset, preprocessing, pipeline, artifact, evaluation policy,
+and champion report. Historical `completed.v1` receipts remain readable and
+are exposed as `legacy-unmeasured`; they are not backfilled with invented
+lineage. Unknown evidence fields and partial evidence are rejected.
 
 Duplicate requested delivery may produce duplicate result messages. Logical
 event IDs are deterministic for the requested event and result type. The

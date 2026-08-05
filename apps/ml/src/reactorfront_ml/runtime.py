@@ -5,6 +5,8 @@ from functools import lru_cache
 
 from reactorfront_ml.domain import ResultEventPublisher, SourceStorage
 from reactorfront_ml.event_contracts import JsonSchemaEventValidator
+from reactorfront_ml.events import ResultEventFactory
+from reactorfront_ml.lineage import load_runtime_model_evidence
 from reactorfront_ml.model import DocumentClassifier
 from reactorfront_ml.processor import DocumentProcessor
 from reactorfront_ml.rabbitmq import PikaResultEventPublisher
@@ -34,6 +36,11 @@ def build_runtime(settings: Settings) -> WorkerRuntime:
         artifact_path=settings.model_artifact_path,
         checksum_path=settings.model_checksum_path,
     )
+    model_evidence = load_runtime_model_evidence(
+        settings.champion_evaluation_report_path,
+        expected_model_version=classifier.model_version,
+        expected_artifact_sha256=classifier.checksum,
+    )
     publisher = PikaResultEventPublisher(
         broker_url=settings.rabbitmq_url.get_secret_value(),
         timeout_seconds=settings.rabbitmq_timeout_seconds,
@@ -44,6 +51,7 @@ def build_runtime(settings: Settings) -> WorkerRuntime:
             classifier=classifier,
             validator=validator,
             publisher=publisher,
+            event_factory=ResultEventFactory(model_evidence=model_evidence),
         ),
         validator=validator,
         storage=storage,

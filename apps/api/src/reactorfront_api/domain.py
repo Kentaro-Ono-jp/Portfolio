@@ -74,7 +74,12 @@ class PublishFinalizeResult(StrEnum):
 class ResultEventType(StrEnum):
     STARTED = "document.processing.started.v1"
     COMPLETED = "document.processing.completed.v1"
+    COMPLETED_V2 = "document.processing.completed.v2"
     FAILED = "document.processing.failed.v1"
+
+    @property
+    def is_completed(self) -> bool:
+        return self in {ResultEventType.COMPLETED, ResultEventType.COMPLETED_V2}
 
 
 class ResultApplyOutcome(StrEnum):
@@ -188,6 +193,18 @@ class SubmissionResult:
 
 
 @dataclass(frozen=True, slots=True)
+class MeasuredModelEvidence:
+    dataset_version: str
+    dataset_sha256: str
+    preprocessing_version: str
+    pipeline_version: str
+    artifact_sha256: str
+    evaluation_policy_version: str
+    evaluation_policy_sha256: str
+    evaluation_report_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentStatusRecord:
     document_id: UUID
     job_id: UUID
@@ -198,6 +215,7 @@ class DocumentStatusRecord:
     predicted_class: str | None = None
     confidence: float | None = None
     model_version: str | None = None
+    model_evidence: MeasuredModelEvidence | None = None
     failure_code: str | None = None
 
 
@@ -248,6 +266,7 @@ class ReviewRecord:
     machine_confidence: Decimal
     model_version: str
     review_version: int
+    model_evidence: MeasuredModelEvidence | None = None
     review_id: UUID | None = None
     final_classification: str | None = None
     reviewer_principal_id: UUID | None = None
@@ -289,6 +308,22 @@ class AuditHistory:
 
 def review_entity_tag(record: ReviewRecord) -> str:
     confidence = format(record.machine_confidence.normalize(), "f")
+    evidence = record.model_evidence
+    evidence_identity = (
+        ("legacy-unmeasured",)
+        if evidence is None
+        else (
+            "measured",
+            evidence.dataset_version,
+            evidence.dataset_sha256,
+            evidence.preprocessing_version,
+            evidence.pipeline_version,
+            evidence.artifact_sha256,
+            evidence.evaluation_policy_version,
+            evidence.evaluation_policy_sha256,
+            evidence.evaluation_report_sha256,
+        )
+    )
     identity = "\x1f".join(
         (
             str(record.document_id),
@@ -297,6 +332,7 @@ def review_entity_tag(record: ReviewRecord) -> str:
             record.machine_classification,
             confidence,
             record.model_version,
+            *evidence_identity,
             str(record.review_version),
             str(record.review_id or ""),
             record.final_classification or "",
@@ -330,6 +366,7 @@ class ResultEvent:
     source_sha256: str
     model_version: str
     logical_payload_sha256: str
+    model_evidence: MeasuredModelEvidence | None = None
     classification: str | None = None
     confidence: float | None = None
     failure_code: str | None = None
