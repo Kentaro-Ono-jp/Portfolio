@@ -35,6 +35,7 @@ from reactorfront_api.domain import (
     DocumentSourceRecord,
     DocumentStatusRecord,
     DocumentSubmission,
+    MeasuredModelEvidence,
     OutboxInvariantError,
     OutboxLease,
     PrincipalKind,
@@ -135,6 +136,35 @@ class ProcessingJobRow(Base):
             name="ck_processing_jobs_failure_code",
         ),
         CheckConstraint(
+            "dataset_sha256 IS NULL OR dataset_sha256 ~ '^[a-f0-9]{64}$'",
+            name="ck_processing_jobs_dataset_sha256",
+        ),
+        CheckConstraint(
+            "artifact_sha256 IS NULL OR artifact_sha256 ~ '^[a-f0-9]{64}$'",
+            name="ck_processing_jobs_artifact_sha256",
+        ),
+        CheckConstraint(
+            "evaluation_policy_sha256 IS NULL OR evaluation_policy_sha256 ~ '^[a-f0-9]{64}$'",
+            name="ck_processing_jobs_evaluation_policy_sha256",
+        ),
+        CheckConstraint(
+            "evaluation_report_sha256 IS NULL OR evaluation_report_sha256 ~ '^[a-f0-9]{64}$'",
+            name="ck_processing_jobs_evaluation_report_sha256",
+        ),
+        CheckConstraint(
+            "(dataset_version IS NULL AND dataset_sha256 IS NULL "
+            "AND preprocessing_version IS NULL AND pipeline_version IS NULL "
+            "AND artifact_sha256 IS NULL AND evaluation_policy_version IS NULL "
+            "AND evaluation_policy_sha256 IS NULL AND evaluation_report_sha256 IS NULL) OR "
+            "(status = 'completed' AND dataset_version IS NOT NULL "
+            "AND dataset_sha256 IS NOT NULL AND preprocessing_version IS NOT NULL "
+            "AND pipeline_version IS NOT NULL AND artifact_sha256 IS NOT NULL "
+            "AND evaluation_policy_version IS NOT NULL "
+            "AND evaluation_policy_sha256 IS NOT NULL "
+            "AND evaluation_report_sha256 IS NOT NULL)",
+            name="ck_processing_jobs_model_evidence_shape",
+        ),
+        CheckConstraint(
             "(status IN ('accepted', 'queued') AND started_at IS NULL "
             "AND completed_at IS NULL AND model_version IS NULL "
             "AND predicted_class IS NULL AND confidence IS NULL AND failure_code IS NULL) OR "
@@ -161,6 +191,14 @@ class ProcessingJobRow(Base):
     model_version: Mapped[str | None] = mapped_column(String(128))
     predicted_class: Mapped[str | None] = mapped_column(String(32))
     confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    dataset_version: Mapped[str | None] = mapped_column(String(128))
+    dataset_sha256: Mapped[str | None] = mapped_column(String(64))
+    preprocessing_version: Mapped[str | None] = mapped_column(String(128))
+    pipeline_version: Mapped[str | None] = mapped_column(String(128))
+    artifact_sha256: Mapped[str | None] = mapped_column(String(64))
+    evaluation_policy_version: Mapped[str | None] = mapped_column(String(128))
+    evaluation_policy_sha256: Mapped[str | None] = mapped_column(String(64))
+    evaluation_report_sha256: Mapped[str | None] = mapped_column(String(64))
     failure_code: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -200,7 +238,8 @@ class ResultEventReceiptRow(Base):
     __table_args__ = (
         CheckConstraint(
             "event_type IN ('document.processing.started.v1', "
-            "'document.processing.completed.v1', 'document.processing.failed.v1')",
+            "'document.processing.completed.v1', 'document.processing.completed.v2', "
+            "'document.processing.failed.v1')",
             name="ck_result_event_receipts_type",
         ),
         CheckConstraint(
@@ -319,7 +358,10 @@ class AuditEventRow(Base):
             "'processing.failed', 'review.approved', 'review.corrected')",
             name="ck_audit_events_action",
         ),
-        CheckConstraint("details_version = 1", name="ck_audit_events_details_version"),
+        CheckConstraint(
+            "details_version = 1 OR (details_version = 2 AND action = 'processing.completed')",
+            name="ck_audit_events_details_version",
+        ),
         UniqueConstraint("action", "causation_id", name="uq_audit_events_causation"),
         Index("ix_audit_events_document_order", "document_id", "occurred_at", "id"),
     )
@@ -542,6 +584,7 @@ class SqlAlchemySubmissionRepository:
                 predicted_class=job.predicted_class,
                 confidence=float(job.confidence) if job.confidence is not None else None,
                 model_version=job.model_version,
+                model_evidence=self._model_evidence(job),
                 failure_code=job.failure_code,
             )
 
@@ -763,6 +806,7 @@ class SqlAlchemySubmissionRepository:
                 machine_confidence=job.confidence,
                 model_version=job.model_version,
                 review_version=0,
+                model_evidence=SqlAlchemySubmissionRepository._model_evidence(job),
             )
         if (
             decision.document_id != job.document_id
@@ -777,10 +821,38 @@ class SqlAlchemySubmissionRepository:
             machine_confidence=job.confidence,
             model_version=job.model_version,
             review_version=decision.review_version,
+            model_evidence=SqlAlchemySubmissionRepository._model_evidence(job),
             review_id=decision.id,
             final_classification=decision.final_classification,
             reviewer_principal_id=decision.reviewer_principal_id,
             decided_at=decision.decided_at,
+        )
+
+    @staticmethod
+    def _model_evidence(job: ProcessingJobRow) -> MeasuredModelEvidence | None:
+        values = (
+            job.dataset_version,
+            job.dataset_sha256,
+            job.preprocessing_version,
+            job.pipeline_version,
+            job.artifact_sha256,
+            job.evaluation_policy_version,
+            job.evaluation_policy_sha256,
+            job.evaluation_report_sha256,
+        )
+        if all(value is None for value in values):
+            return None
+        if any(value is None for value in values):
+            raise RuntimeError("Persisted model evidence is incomplete")
+        return MeasuredModelEvidence(
+            dataset_version=str(job.dataset_version),
+            dataset_sha256=str(job.dataset_sha256),
+            preprocessing_version=str(job.preprocessing_version),
+            pipeline_version=str(job.pipeline_version),
+            artifact_sha256=str(job.artifact_sha256),
+            evaluation_policy_version=str(job.evaluation_policy_version),
+            evaluation_policy_sha256=str(job.evaluation_policy_sha256),
+            evaluation_report_sha256=str(job.evaluation_report_sha256),
         )
 
     def is_ready(self) -> bool:
@@ -989,12 +1061,14 @@ class SqlAlchemyResultEventRepository:
                 return self._duplicate_outcome(receipt=concurrent_receipt, event=event)
 
             self._apply_transition(event=event, job=job)
-            if event.event_type in {ResultEventType.COMPLETED, ResultEventType.FAILED}:
+            if event.event_type.is_completed or event.event_type is ResultEventType.FAILED:
                 audit_action = (
                     AuditAction.PROCESSING_COMPLETED
-                    if event.event_type is ResultEventType.COMPLETED
+                    if event.event_type.is_completed
                     else AuditAction.PROCESSING_FAILED
                 )
+                details_version = 2 if event.model_evidence is not None else 1
+                details = self._audit_details(event)
                 session.add(
                     AuditEventRow(
                         id=uuid5(event.event_id, audit_action.value),
@@ -1006,8 +1080,8 @@ class SqlAlchemyResultEventRepository:
                         correlation_id=event.correlation_id,
                         causation_id=event.event_id,
                         occurred_at=event.occurred_at,
-                        details_version=1,
-                        details={},
+                        details_version=details_version,
+                        details=details,
                     )
                 )
             session.flush()
@@ -1097,15 +1171,49 @@ class SqlAlchemyResultEventRepository:
             return
 
         job.completed_at = event.occurred_at
-        if event.event_type is ResultEventType.COMPLETED:
+        if event.event_type.is_completed:
             if event.classification is None or event.confidence is None:
+                raise ResultEventInvariantError(code=ResultEventFailureCode.INVALID_EVENT)
+            if (
+                event.event_type is ResultEventType.COMPLETED_V2 and event.model_evidence is None
+            ) or (
+                event.event_type is ResultEventType.COMPLETED and event.model_evidence is not None
+            ):
                 raise ResultEventInvariantError(code=ResultEventFailureCode.INVALID_EVENT)
             job.status = ProcessingStatus.COMPLETED.value
             job.predicted_class = event.classification
             job.confidence = Decimal(str(event.confidence))
+            if event.model_evidence is not None:
+                evidence = event.model_evidence
+                job.dataset_version = evidence.dataset_version
+                job.dataset_sha256 = evidence.dataset_sha256
+                job.preprocessing_version = evidence.preprocessing_version
+                job.pipeline_version = evidence.pipeline_version
+                job.artifact_sha256 = evidence.artifact_sha256
+                job.evaluation_policy_version = evidence.evaluation_policy_version
+                job.evaluation_policy_sha256 = evidence.evaluation_policy_sha256
+                job.evaluation_report_sha256 = evidence.evaluation_report_sha256
             return
 
         if event.failure_code is None:
             raise ResultEventInvariantError(code=ResultEventFailureCode.INVALID_EVENT)
         job.status = ProcessingStatus.FAILED.value
         job.failure_code = event.failure_code
+
+    @staticmethod
+    def _audit_details(event: ResultEvent) -> dict[str, object]:
+        evidence = event.model_evidence
+        if evidence is None:
+            return {}
+        return {
+            "modelEvidenceStatus": "measured",
+            "modelVersion": event.model_version,
+            "datasetVersion": evidence.dataset_version,
+            "datasetSha256": evidence.dataset_sha256,
+            "preprocessingVersion": evidence.preprocessing_version,
+            "pipelineVersion": evidence.pipeline_version,
+            "artifactSha256": evidence.artifact_sha256,
+            "evaluationPolicyVersion": evidence.evaluation_policy_version,
+            "evaluationPolicySha256": evidence.evaluation_policy_sha256,
+            "evaluationReportSha256": evidence.evaluation_report_sha256,
+        }

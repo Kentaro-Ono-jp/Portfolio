@@ -66,8 +66,23 @@ def payload(*, event_type: str = "document.processing.completed.v1") -> dict[str
         "sourceSha256": "a" * 64,
         "modelVersion": "document-type-v1",
     }
-    if event_type == "document.processing.completed.v1":
+    if event_type in {
+        "document.processing.completed.v1",
+        "document.processing.completed.v2",
+    }:
         value.update(classification="invoice", confidence=0.9876)
+        if event_type == "document.processing.completed.v2":
+            value["modelEvidence"] = {
+                "status": "measured",
+                "datasetVersion": "reactorfront-synthetic-documents-v1",
+                "datasetSha256": "d" * 64,
+                "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
+                "pipelineVersion": "pytorch-multinomial-naive-bayes-linear-v1",
+                "artifactSha256": "a" * 64,
+                "evaluationPolicyVersion": "document-classification-evaluation-v1",
+                "evaluationPolicySha256": "b" * 64,
+                "evaluationReportSha256": "c" * 64,
+            }
     elif event_type == "document.processing.failed.v1":
         value["failureCode"] = "SOURCE_DIGEST_MISMATCH"
     return value
@@ -152,6 +167,54 @@ def test_handler_rejects_non_finite_confidence() -> None:
         )
         is DeliveryAction.REJECT
     )
+
+
+def test_handler_accepts_complete_v2_lineage_and_binds_it_to_the_digest() -> None:
+    value = payload(event_type="document.processing.completed.v2")
+    repository = FakeResultRepository()
+
+    assert (
+        handler(repository).handle(
+            body=json.dumps(value).encode(),
+            properties=properties(value),
+        )
+        is DeliveryAction.ACKNOWLEDGE
+    )
+    event = repository.applied[0]
+    assert event.model_evidence is not None
+    assert event.model_evidence.artifact_sha256 == "a" * 64
+    original_digest = event.logical_payload_sha256
+
+    changed = payload(event_type="document.processing.completed.v2")
+    changed["modelEvidence"]["evaluationReportSha256"] = "f" * 64
+    second_repository = FakeResultRepository()
+    assert (
+        handler(second_repository).handle(
+            body=json.dumps(changed).encode(),
+            properties=properties(changed),
+        )
+        is DeliveryAction.ACKNOWLEDGE
+    )
+    assert second_repository.applied[0].logical_payload_sha256 != original_digest
+
+
+def test_handler_rejects_incomplete_or_unknown_v2_lineage() -> None:
+    for mutation in ("missing", "unknown"):
+        value = payload(event_type="document.processing.completed.v2")
+        evidence = value["modelEvidence"]
+        if mutation == "missing":
+            del evidence["evaluationReportSha256"]
+        else:
+            evidence["sourceText"] = "must never cross this boundary"
+        repository = FakeResultRepository()
+        assert (
+            handler(repository).handle(
+                body=json.dumps(value).encode(),
+                properties=properties(value),
+            )
+            is DeliveryAction.REJECT
+        )
+        assert repository.applied == []
 
 
 def test_handler_rejects_inconsistent_transport_metadata() -> None:
@@ -275,6 +338,7 @@ def test_consumer_readiness_declares_durable_result_topology(
     assert [binding["routing_key"] for binding in channel.bindings] == [
         "document.processing.started.v1",
         "document.processing.completed.v1",
+        "document.processing.completed.v2",
         "document.processing.failed.v1",
     ]
 

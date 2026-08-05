@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 
+from reactorfront_ml.lineage import RuntimeLineageError
 from reactorfront_ml.model import ModelArtifactError
 from reactorfront_ml.runtime import build_runtime
 from reactorfront_ml.settings import Settings
@@ -10,7 +11,7 @@ from reactorfront_ml.settings import Settings
 def is_ready(settings: Settings) -> bool:
     try:
         runtime = build_runtime(settings)
-    except (ModelArtifactError, OSError, ValueError):
+    except (ModelArtifactError, RuntimeLineageError, OSError, ValueError):
         return False
     return runtime.storage.is_ready() and runtime.publisher.is_ready()
 

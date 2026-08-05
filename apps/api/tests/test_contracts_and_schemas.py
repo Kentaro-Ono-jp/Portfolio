@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -9,16 +10,18 @@ from uuid import UUID
 import pytest
 import yaml
 from jsonschema import ValidationError
+from pydantic import ValidationError as PydanticValidationError
 
 from reactorfront_api.domain import (
     DocumentStatusRecord,
+    MeasuredModelEvidence,
     ProcessingStatus,
     ReviewRecord,
     ReviewStatus,
     review_entity_tag,
 )
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
-from reactorfront_api.schemas import serialize_document_status, serialize_review
+from reactorfront_api.schemas import AuditEventResponse, serialize_document_status, serialize_review
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_DIRECTORY = REPOSITORY_ROOT / "packages" / "contracts" / "events"
@@ -198,6 +201,7 @@ def test_review_serializer_and_entity_tag_preserve_machine_evidence() -> None:
         "machineClassification": "invoice",
         "machineConfidence": 0.9876,
         "modelVersion": "document-type-v1",
+        "modelEvidence": {"status": "legacy-unmeasured"},
         "reviewVersion": 0,
     }
     first_tag = review_entity_tag(unreviewed)
@@ -234,6 +238,135 @@ def test_review_serializer_and_entity_tag_preserve_machine_evidence() -> None:
         decided_at=NOW,
     )
     assert serialize_review(approved).status == "approved"
+
+
+def test_review_entity_tag_binds_every_measured_lineage_identity() -> None:
+    evidence = MeasuredModelEvidence(
+        dataset_version="dataset-v1",
+        dataset_sha256="d" * 64,
+        preprocessing_version="preprocessing-v1",
+        pipeline_version="pipeline-v1",
+        artifact_sha256="a" * 64,
+        evaluation_policy_version="policy-v1",
+        evaluation_policy_sha256="b" * 64,
+        evaluation_report_sha256="c" * 64,
+    )
+    record = ReviewRecord(
+        document_id=DOCUMENT_ID,
+        job_id=JOB_ID,
+        status=ReviewStatus.UNREVIEWED,
+        machine_classification="invoice",
+        machine_confidence=Decimal("0.9876"),
+        model_version="document-type-v1",
+        review_version=0,
+        model_evidence=evidence,
+    )
+    baseline = review_entity_tag(record)
+    serialized = serialize_review(record).model_dump(by_alias=True, mode="json")
+    assert serialized["modelEvidence"] == {
+        "status": "measured",
+        "datasetVersion": "dataset-v1",
+        "datasetSha256": "d" * 64,
+        "preprocessingVersion": "preprocessing-v1",
+        "pipelineVersion": "pipeline-v1",
+        "artifactSha256": "a" * 64,
+        "evaluationPolicyVersion": "policy-v1",
+        "evaluationPolicySha256": "b" * 64,
+        "evaluationReportSha256": "c" * 64,
+    }
+    assert review_entity_tag(replace(record, model_evidence=None)) != baseline
+
+    for field_name in evidence.__dataclass_fields__:
+        current = getattr(evidence, field_name)
+        changed = "f" * 64 if field_name.endswith("sha256") else f"{current}-changed"
+        mutated = replace(evidence, **{field_name: changed})
+        assert review_entity_tag(replace(record, model_evidence=mutated)) != baseline
+
+    delimiter_left = replace(
+        evidence,
+        preprocessing_version="alpha\x1fbeta",
+        pipeline_version="gamma",
+    )
+    delimiter_right = replace(
+        evidence,
+        preprocessing_version="alpha",
+        pipeline_version="beta\x1fgamma",
+    )
+    assert delimiter_left != delimiter_right
+    assert review_entity_tag(replace(record, model_evidence=delimiter_left)) != review_entity_tag(
+        replace(record, model_evidence=delimiter_right)
+    )
+
+
+def measured_audit_details() -> dict[str, object]:
+    return {
+        "modelEvidenceStatus": "measured",
+        "modelVersion": "document-type-v1",
+        "datasetVersion": "dataset-v1",
+        "datasetSha256": "d" * 64,
+        "preprocessingVersion": "preprocessing-v1",
+        "pipelineVersion": "pipeline-v1",
+        "artifactSha256": "a" * 64,
+        "evaluationPolicyVersion": "policy-v1",
+        "evaluationPolicySha256": "b" * 64,
+        "evaluationReportSha256": "c" * 64,
+    }
+
+
+def audit_event(
+    *, action: str, details_version: int, details: dict[str, object]
+) -> dict[str, object]:
+    return {
+        "eventId": "44444444-4444-4444-8444-444444444444",
+        "action": action,
+        "occurredAt": NOW,
+        "actorPrincipalId": "55555555-5555-4555-8555-555555555555",
+        "documentId": DOCUMENT_ID,
+        "jobId": JOB_ID,
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "detailsVersion": details_version,
+        "details": details,
+    }
+
+
+def test_audit_response_accepts_exact_versioned_details() -> None:
+    legacy = AuditEventResponse.model_validate(
+        audit_event(action="document.submitted", details_version=1, details={})
+    )
+    measured = AuditEventResponse.model_validate(
+        audit_event(
+            action="processing.completed",
+            details_version=2,
+            details=measured_audit_details(),
+        )
+    )
+
+    assert legacy.details_version == 1
+    assert measured.details_version == 2
+
+
+@pytest.mark.parametrize(
+    ("action", "details_version", "details"),
+    [
+        ("document.submitted", 1, measured_audit_details()),
+        ("processing.completed", 2, {}),
+        ("review.approved", 2, measured_audit_details()),
+        (
+            "processing.completed",
+            2,
+            {**measured_audit_details(), "unknown": "not-allowed"},
+        ),
+    ],
+)
+def test_audit_response_rejects_mismatched_or_noncanonical_details(
+    action: str,
+    details_version: int,
+    details: dict[str, object],
+) -> None:
+    with pytest.raises(PydanticValidationError):
+        AuditEventResponse.model_validate(
+            audit_event(action=action, details_version=details_version, details=details)
+        )
 
 
 @pytest.mark.parametrize(

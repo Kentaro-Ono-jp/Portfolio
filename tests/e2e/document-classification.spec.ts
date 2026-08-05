@@ -84,6 +84,47 @@ interface AcceptedPayload {
   status: "accepted";
 }
 
+interface ModelEvidence {
+  status: "measured";
+  datasetVersion: string;
+  datasetSha256: string;
+  preprocessingVersion: string;
+  pipelineVersion: string;
+  artifactSha256: string;
+  evaluationPolicyVersion: string;
+  evaluationPolicySha256: string;
+  evaluationReportSha256: string;
+}
+
+const EXPECTED_MODEL_EVIDENCE: ModelEvidence = {
+  status: "measured",
+  datasetVersion: "reactorfront-synthetic-documents-v1",
+  datasetSha256:
+    "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+  preprocessingVersion: "nfkc-ascii-alphanumeric-bow-v1",
+  pipelineVersion: "pytorch-multinomial-naive-bayes-linear-v1",
+  artifactSha256:
+    "82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac",
+  evaluationPolicyVersion: "document-classification-evaluation-v1",
+  evaluationPolicySha256:
+    "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
+  evaluationReportSha256:
+    "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+};
+
+const EXPECTED_AUDIT_LINEAGE = {
+  modelEvidenceStatus: "measured",
+  modelVersion: "document-type-v1",
+  datasetVersion: EXPECTED_MODEL_EVIDENCE.datasetVersion,
+  datasetSha256: EXPECTED_MODEL_EVIDENCE.datasetSha256,
+  preprocessingVersion: EXPECTED_MODEL_EVIDENCE.preprocessingVersion,
+  pipelineVersion: EXPECTED_MODEL_EVIDENCE.pipelineVersion,
+  artifactSha256: EXPECTED_MODEL_EVIDENCE.artifactSha256,
+  evaluationPolicyVersion: EXPECTED_MODEL_EVIDENCE.evaluationPolicyVersion,
+  evaluationPolicySha256: EXPECTED_MODEL_EVIDENCE.evaluationPolicySha256,
+  evaluationReportSha256: EXPECTED_MODEL_EVIDENCE.evaluationReportSha256,
+};
+
 interface CompletedPayload {
   documentId: string;
   jobId: string;
@@ -91,6 +132,7 @@ interface CompletedPayload {
   classification: "invoice" | "report";
   confidence: number;
   modelVersion: string;
+  modelEvidence: ModelEvidence;
 }
 
 interface FailedPayload {
@@ -107,6 +149,7 @@ interface ReviewPayload {
   machineClassification: "invoice" | "report";
   machineConfidence: number;
   modelVersion: string;
+  modelEvidence: ModelEvidence;
   reviewVersion: 0 | 1;
   finalClassification?: "invoice" | "report";
   reviewerPrincipalId?: string;
@@ -125,6 +168,8 @@ interface AuditEventEvidence {
   actorPrincipalId: string;
   correlationId: string;
   reviewId?: string;
+  detailsVersion: number;
+  details: Record<string, unknown>;
 }
 
 function sourcePdfInput(page: Page) {
@@ -294,6 +339,9 @@ function auditEvents(
       typeof candidate.action !== "string" ||
       typeof candidate.actorPrincipalId !== "string" ||
       typeof candidate.correlationId !== "string" ||
+      typeof candidate.detailsVersion !== "number" ||
+      typeof candidate.details !== "object" ||
+      candidate.details === null ||
       (candidate.reviewId !== undefined &&
         typeof candidate.reviewId !== "string")
     ) {
@@ -303,6 +351,8 @@ function auditEvents(
       action: candidate.action,
       actorPrincipalId: candidate.actorPrincipalId,
       correlationId: candidate.correlationId,
+      detailsVersion: candidate.detailsVersion,
+      details: candidate.details as Record<string, unknown>,
       ...(candidate.reviewId === undefined
         ? {}
         : { reviewId: candidate.reviewId }),
@@ -456,11 +506,13 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     modelVersion: "document-type-v1",
   });
   expect(approvalCompleted.confidence).toBeGreaterThanOrEqual(0.7);
+  expect(approvalCompleted.modelEvidence).toEqual(EXPECTED_MODEL_EVIDENCE);
   expect(approvalInitialReview).toMatchObject({
     documentId: approvalAccepted.documentId,
     status: "unreviewed",
     machineClassification: "invoice",
     reviewVersion: 0,
+    modelEvidence: EXPECTED_MODEL_EVIDENCE,
   });
   expect(approvalInitialTag).toMatch(ENTITY_TAG_PATTERN);
   await expect(
@@ -541,6 +593,10 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     "processing.completed",
     "review.approved",
   ]);
+  expect(approvalAuditEvents[1]).toMatchObject({
+    detailsVersion: 2,
+    details: EXPECTED_AUDIT_LINEAGE,
+  });
   expect(approvalAuditEvents.at(-1)).toMatchObject({
     actorPrincipalId: approved.reviewerPrincipalId,
     correlationId: approvalDecisionCorrelation.response,
@@ -610,6 +666,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     status: "completed",
     classification: "invoice",
     modelVersion: "document-type-v1",
+    modelEvidence: EXPECTED_MODEL_EVIDENCE,
   });
   const correctionSourceProof = await assertSource(
     page,
@@ -657,6 +714,10 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     "processing.completed",
     "review.corrected",
   ]);
+  expect(correctionAuditEvents[1]).toMatchObject({
+    detailsVersion: 2,
+    details: EXPECTED_AUDIT_LINEAGE,
+  });
   expect(correctionAuditEvents.at(-1)).toMatchObject({
     actorPrincipalId: corrected.reviewerPrincipalId,
     correlationId: correctionDecisionCorrelation.response,

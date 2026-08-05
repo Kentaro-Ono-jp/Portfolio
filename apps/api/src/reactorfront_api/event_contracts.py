@@ -10,7 +10,12 @@ from uuid import UUID
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from referencing import Registry, Resource
 
-from reactorfront_api.domain import InvalidResultEvent, ResultEvent, ResultEventType
+from reactorfront_api.domain import (
+    InvalidResultEvent,
+    MeasuredModelEvidence,
+    ResultEvent,
+    ResultEventType,
+)
 
 
 class JsonSchemaEventValidator:
@@ -64,7 +69,8 @@ def parse_result_event(
         classification: str | None = None
         confidence: float | None = None
         failure_code: str | None = None
-        if event_type is ResultEventType.COMPLETED:
+        model_evidence: MeasuredModelEvidence | None = None
+        if event_type.is_completed:
             classification = str(typed_payload["classification"])
             confidence_value = typed_payload["confidence"]
             if not isinstance(confidence_value, int | float):
@@ -72,6 +78,20 @@ def parse_result_event(
             confidence = float(confidence_value)
             if not isfinite(confidence):
                 raise ValueError("Completed confidence must be finite")
+            if event_type is ResultEventType.COMPLETED_V2:
+                evidence = typed_payload["modelEvidence"]
+                if not isinstance(evidence, dict):
+                    raise TypeError("Completed model evidence must be an object")
+                model_evidence = MeasuredModelEvidence(
+                    dataset_version=str(evidence["datasetVersion"]),
+                    dataset_sha256=str(evidence["datasetSha256"]),
+                    preprocessing_version=str(evidence["preprocessingVersion"]),
+                    pipeline_version=str(evidence["pipelineVersion"]),
+                    artifact_sha256=str(evidence["artifactSha256"]),
+                    evaluation_policy_version=str(evidence["evaluationPolicyVersion"]),
+                    evaluation_policy_sha256=str(evidence["evaluationPolicySha256"]),
+                    evaluation_report_sha256=str(evidence["evaluationReportSha256"]),
+                )
         elif event_type is ResultEventType.FAILED:
             failure_code = str(typed_payload["failureCode"])
 
@@ -97,6 +117,7 @@ def parse_result_event(
             source_sha256=str(typed_payload["sourceSha256"]),
             model_version=str(typed_payload["modelVersion"]),
             logical_payload_sha256=logical_payload_sha256,
+            model_evidence=model_evidence,
             classification=classification,
             confidence=confidence,
             failure_code=failure_code,

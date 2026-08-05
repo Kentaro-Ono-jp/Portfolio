@@ -574,6 +574,69 @@ components:
         startedAt:
           type: string
           format: date-time
+    ModelEvidence:
+      oneOf:
+        - $ref: "#/components/schemas/LegacyModelEvidence"
+        - $ref: "#/components/schemas/MeasuredModelEvidence"
+      discriminator:
+        propertyName: status
+        mapping:
+          legacy-unmeasured: "#/components/schemas/LegacyModelEvidence"
+          measured: "#/components/schemas/MeasuredModelEvidence"
+    LegacyModelEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          const: legacy-unmeasured
+    MeasuredModelEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - datasetVersion
+        - datasetSha256
+        - preprocessingVersion
+        - pipelineVersion
+        - artifactSha256
+        - evaluationPolicyVersion
+        - evaluationPolicySha256
+        - evaluationReportSha256
+      properties:
+        status:
+          type: string
+          const: measured
+        datasetVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        datasetSha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        preprocessingVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        pipelineVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        artifactSha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        evaluationPolicyVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        evaluationPolicySha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        evaluationReportSha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
     CompletedDocumentStatus:
       type: object
       additionalProperties: false
@@ -584,6 +647,7 @@ components:
         - classification
         - confidence
         - modelVersion
+        - modelEvidence
         - createdAt
         - startedAt
         - completedAt
@@ -607,6 +671,8 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        modelEvidence:
+          $ref: "#/components/schemas/ModelEvidence"
         createdAt:
           type: string
           format: date-time
@@ -678,6 +744,7 @@ components:
         - machineClassification
         - machineConfidence
         - modelVersion
+        - modelEvidence
         - reviewVersion
       properties:
         documentId:
@@ -699,6 +766,8 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        modelEvidence:
+          $ref: "#/components/schemas/ModelEvidence"
         reviewVersion:
           type: integer
           const: 0
@@ -721,6 +790,7 @@ components:
         - machineClassification
         - machineConfidence
         - modelVersion
+        - modelEvidence
         - reviewVersion
         - finalClassification
         - reviewerPrincipalId
@@ -745,6 +815,8 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        modelEvidence:
+          $ref: "#/components/schemas/ModelEvidence"
         reviewVersion:
           type: integer
           const: 1
@@ -783,6 +855,7 @@ components:
         - machineClassification
         - machineConfidence
         - modelVersion
+        - modelEvidence
         - reviewVersion
         - finalClassification
         - reviewerPrincipalId
@@ -807,6 +880,8 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        modelEvidence:
+          $ref: "#/components/schemas/ModelEvidence"
         reviewVersion:
           type: integer
           const: 1
@@ -862,6 +937,29 @@ components:
         - correlationId
         - detailsVersion
         - details
+      allOf:
+        - if:
+            required:
+              - detailsVersion
+            properties:
+              detailsVersion:
+                const: 1
+          then:
+            properties:
+              details:
+                $ref: "#/components/schemas/AuditDetailsV1"
+        - if:
+            required:
+              - detailsVersion
+            properties:
+              detailsVersion:
+                const: 2
+          then:
+            properties:
+              action:
+                const: processing.completed
+              details:
+                $ref: "#/components/schemas/MeasuredProcessingAuditDetailsV2"
       properties:
         eventId:
           type: string
@@ -894,10 +992,66 @@ components:
           format: uuid
         detailsVersion:
           type: integer
-          const: 1
+          enum:
+            - 1
+            - 2
         details:
-          type: object
-          additionalProperties: false
+          oneOf:
+            - $ref: "#/components/schemas/AuditDetailsV1"
+            - $ref: "#/components/schemas/MeasuredProcessingAuditDetailsV2"
+    AuditDetailsV1:
+      type: object
+      additionalProperties: false
+    MeasuredProcessingAuditDetailsV2:
+      type: object
+      additionalProperties: false
+      required:
+        - modelEvidenceStatus
+        - modelVersion
+        - datasetVersion
+        - datasetSha256
+        - preprocessingVersion
+        - pipelineVersion
+        - artifactSha256
+        - evaluationPolicyVersion
+        - evaluationPolicySha256
+        - evaluationReportSha256
+      properties:
+        modelEvidenceStatus:
+          type: string
+          const: measured
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        datasetVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        datasetSha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        preprocessingVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        pipelineVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        artifactSha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        evaluationPolicyVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+        evaluationPolicySha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        evaluationReportSha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
     Health:
       type: object
       additionalProperties: false

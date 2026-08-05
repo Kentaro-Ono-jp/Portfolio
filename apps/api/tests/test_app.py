@@ -314,6 +314,7 @@ def test_review_decision_etag_idempotency_and_audit_contract() -> None:
         "machineClassification": "invoice",
         "machineConfidence": 0.9876,
         "modelVersion": "document-type-v1",
+        "modelEvidence": {"status": "legacy-unmeasured"},
         "reviewVersion": 0,
     }
     assert missing_precondition.status_code == 428

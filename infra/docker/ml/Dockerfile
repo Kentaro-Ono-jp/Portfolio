@@ -17,6 +17,7 @@ COPY apps/ml/pyproject.toml apps/ml/uv.lock apps/ml/README.md /workspace/apps/ml
 COPY apps/ml/src /workspace/apps/ml/src
 COPY apps/ml/data /workspace/apps/ml/data
 COPY apps/ml/model.expected.sha256 /workspace/apps/ml/model.expected.sha256
+COPY apps/ml/evaluation /workspace/apps/ml/evaluation
 
 RUN uv sync --project /workspace/apps/ml --frozen --no-dev --no-editable && \
     /workspace/apps/ml/.venv/bin/python -m reactorfront_ml.generate_model \
@@ -38,6 +39,7 @@ RUN groupadd --gid 10002 portfolio-ml && \
 WORKDIR /workspace
 COPY --from=builder /workspace/apps/ml/.venv /workspace/apps/ml/.venv
 COPY --from=builder --chown=10002:10002 /model /opt/reactorfront/model
+COPY --from=builder --chown=10002:10002 /workspace/apps/ml/evaluation /workspace/apps/ml/evaluation
 COPY --chown=10002:10002 apps/ml/MODEL_CARD.md /opt/reactorfront/model/MODEL_CARD.md
 COPY --chown=10002:10002 packages/contracts/events /workspace/packages/contracts/events
 

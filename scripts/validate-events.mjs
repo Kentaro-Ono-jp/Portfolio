@@ -57,14 +57,14 @@ for (const { filename, value: event } of examples) {
 }
 
 const completed = examples.find(
-  ({ value }) => value.eventType === "document.processing.completed.v1",
+  ({ value }) => value.eventType === "document.processing.completed.v2",
 );
 if (!completed) {
   throw new Error("A completed event example is required for negative validation.");
 }
 
 const completedSchema = ajv.getSchema(
-  `${schemaBase}/document.processing.completed.v1.schema.json`,
+  `${schemaBase}/document.processing.completed.v2.schema.json`,
 );
 const invalidCases = [
   {
@@ -83,6 +83,24 @@ const invalidCases = [
     name: "invalid source digest",
     mutate(event) {
       event.sourceSha256 = "not-a-sha256";
+    },
+  },
+  {
+    name: "missing measured lineage",
+    mutate(event) {
+      delete event.modelEvidence.evaluationReportSha256;
+    },
+  },
+  {
+    name: "unknown measured lineage field",
+    mutate(event) {
+      event.modelEvidence.trainingSampleId = "private-sample";
+    },
+  },
+  {
+    name: "invalid measured lineage digest",
+    mutate(event) {
+      event.modelEvidence.artifactSha256 = "not-a-sha256";
     },
   },
 ];

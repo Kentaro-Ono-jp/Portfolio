@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -74,7 +75,12 @@ class PublishFinalizeResult(StrEnum):
 class ResultEventType(StrEnum):
     STARTED = "document.processing.started.v1"
     COMPLETED = "document.processing.completed.v1"
+    COMPLETED_V2 = "document.processing.completed.v2"
     FAILED = "document.processing.failed.v1"
+
+    @property
+    def is_completed(self) -> bool:
+        return self in {ResultEventType.COMPLETED, ResultEventType.COMPLETED_V2}
 
 
 class ResultApplyOutcome(StrEnum):
@@ -188,6 +194,18 @@ class SubmissionResult:
 
 
 @dataclass(frozen=True, slots=True)
+class MeasuredModelEvidence:
+    dataset_version: str
+    dataset_sha256: str
+    preprocessing_version: str
+    pipeline_version: str
+    artifact_sha256: str
+    evaluation_policy_version: str
+    evaluation_policy_sha256: str
+    evaluation_report_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentStatusRecord:
     document_id: UUID
     job_id: UUID
@@ -198,6 +216,7 @@ class DocumentStatusRecord:
     predicted_class: str | None = None
     confidence: float | None = None
     model_version: str | None = None
+    model_evidence: MeasuredModelEvidence | None = None
     failure_code: str | None = None
 
 
@@ -248,6 +267,7 @@ class ReviewRecord:
     machine_confidence: Decimal
     model_version: str
     review_version: int
+    model_evidence: MeasuredModelEvidence | None = None
     review_id: UUID | None = None
     final_classification: str | None = None
     reviewer_principal_id: UUID | None = None
@@ -289,19 +309,44 @@ class AuditHistory:
 
 def review_entity_tag(record: ReviewRecord) -> str:
     confidence = format(record.machine_confidence.normalize(), "f")
-    identity = "\x1f".join(
-        (
-            str(record.document_id),
-            str(record.job_id),
-            record.status.value,
-            record.machine_classification,
-            confidence,
-            record.model_version,
-            str(record.review_version),
-            str(record.review_id or ""),
-            record.final_classification or "",
-            str(record.reviewer_principal_id or ""),
-        )
+    evidence = record.model_evidence
+    evidence_identity = (
+        {"status": "legacy-unmeasured"}
+        if evidence is None
+        else {
+            "artifactSha256": evidence.artifact_sha256,
+            "datasetSha256": evidence.dataset_sha256,
+            "datasetVersion": evidence.dataset_version,
+            "evaluationPolicySha256": evidence.evaluation_policy_sha256,
+            "evaluationPolicyVersion": evidence.evaluation_policy_version,
+            "evaluationReportSha256": evidence.evaluation_report_sha256,
+            "pipelineVersion": evidence.pipeline_version,
+            "preprocessingVersion": evidence.preprocessing_version,
+            "status": "measured",
+        }
+    )
+    identity = json.dumps(
+        {
+            "documentId": str(record.document_id),
+            "finalClassification": record.final_classification,
+            "jobId": str(record.job_id),
+            "machineClassification": record.machine_classification,
+            "machineConfidence": confidence,
+            "modelEvidence": evidence_identity,
+            "modelVersion": record.model_version,
+            "reviewId": str(record.review_id) if record.review_id is not None else None,
+            "reviewVersion": record.review_version,
+            "reviewerPrincipalId": (
+                str(record.reviewer_principal_id)
+                if record.reviewer_principal_id is not None
+                else None
+            ),
+            "status": record.status.value,
+        },
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
     )
     return f'"{hashlib.sha256(identity.encode("utf-8")).hexdigest()}"'
 
@@ -330,6 +375,7 @@ class ResultEvent:
     source_sha256: str
     model_version: str
     logical_payload_sha256: str
+    model_evidence: MeasuredModelEvidence | None = None
     classification: str | None = None
     confidence: float | None = None
     failure_code: str | None = None

@@ -10,8 +10,38 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+
+def load_script_module(name: str) -> ModuleType:
+    path = REPOSITORY_ROOT / "scripts" / f"{name}.py"
+    specification = importlib.util.spec_from_file_location(name, path)
+    assert specification is not None
+    assert specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    "script_name",
+    ["verify_principal_migration", "verify_review_migration"],
+)
+def test_populated_migration_verifiers_track_current_alembic_head(script_name: str) -> None:
+    config = Config()
+    config.set_main_option(
+        "script_location",
+        str(REPOSITORY_ROOT / "apps" / "api" / "alembic"),
+    )
+    expected_head = ScriptDirectory.from_config(config).get_current_head()
+
+    verifier = load_script_module(script_name)
+
+    assert expected_head == verifier.HEAD_REVISION
 
 
 def verifier_args(**overrides: object) -> argparse.Namespace:
@@ -476,10 +506,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 49
+    assert len(inventory) == 51
     assert len(verifier.selected_test_files(plan.groups)) == 17
     assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 17/49 selected" in verifier.plan_lines(plan)
+    assert "Test files: 17/51 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(

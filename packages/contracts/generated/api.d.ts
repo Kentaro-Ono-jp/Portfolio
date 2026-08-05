@@ -181,6 +181,29 @@ export interface components {
             /** Format: date-time */
             startedAt: string;
         };
+        ModelEvidence: components["schemas"]["LegacyModelEvidence"] | components["schemas"]["MeasuredModelEvidence"];
+        LegacyModelEvidence: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "legacy-unmeasured";
+        };
+        MeasuredModelEvidence: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "measured";
+            datasetVersion: string;
+            datasetSha256: string;
+            preprocessingVersion: string;
+            pipelineVersion: string;
+            artifactSha256: string;
+            evaluationPolicyVersion: string;
+            evaluationPolicySha256: string;
+            evaluationReportSha256: string;
+        };
         CompletedDocumentStatus: {
             /** Format: uuid */
             documentId: string;
@@ -194,6 +217,7 @@ export interface components {
             classification: components["schemas"]["Classification"];
             confidence: number;
             modelVersion: string;
+            modelEvidence: components["schemas"]["ModelEvidence"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -236,6 +260,7 @@ export interface components {
             machineClassification: components["schemas"]["Classification"];
             machineConfidence: number;
             modelVersion: string;
+            modelEvidence: components["schemas"]["ModelEvidence"];
             /** @constant */
             reviewVersion: 0;
         };
@@ -253,6 +278,7 @@ export interface components {
             machineClassification: components["schemas"]["Classification"];
             machineConfidence: number;
             modelVersion: string;
+            modelEvidence: components["schemas"]["ModelEvidence"];
             /** @constant */
             reviewVersion: 1;
             finalClassification: components["schemas"]["Classification"];
@@ -284,6 +310,7 @@ export interface components {
             machineClassification: components["schemas"]["Classification"];
             machineConfidence: number;
             modelVersion: string;
+            modelEvidence: components["schemas"]["ModelEvidence"];
             /** @constant */
             reviewVersion: 1;
             finalClassification: components["schemas"]["Classification"];
@@ -324,9 +351,23 @@ export interface components {
             reviewId?: string;
             /** Format: uuid */
             correlationId: string;
+            /** @enum {integer} */
+            detailsVersion: 1 | 2;
+            details: components["schemas"]["AuditDetailsV1"] | components["schemas"]["MeasuredProcessingAuditDetailsV2"];
+        } & (unknown & unknown);
+        AuditDetailsV1: Record<string, never>;
+        MeasuredProcessingAuditDetailsV2: {
             /** @constant */
-            detailsVersion: 1;
-            details: Record<string, never>;
+            modelEvidenceStatus: "measured";
+            modelVersion: string;
+            datasetVersion: string;
+            datasetSha256: string;
+            preprocessingVersion: string;
+            pipelineVersion: string;
+            artifactSha256: string;
+            evaluationPolicyVersion: string;
+            evaluationPolicySha256: string;
+            evaluationReportSha256: string;
         };
         Health: {
             /** @constant */

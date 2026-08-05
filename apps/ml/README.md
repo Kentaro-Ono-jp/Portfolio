@@ -38,11 +38,16 @@ argument of the existing Celery protocol v2 envelope on the durable
 canonical JSON Schema before touching storage or the model.
 
 For a valid request, the worker confirms `document.processing.started.v1`
-before inference and then confirms one logical `document.processing.completed.v1`
-or `document.processing.failed.v1` terminal outcome. Result events use the
+before inference and then confirms one logical `document.processing.completed.v2`
+or `document.processing.failed.v1` terminal outcome. A completed event carries
+the accepted champion's immutable dataset, preprocessing, pipeline, artifact,
+evaluation-policy, and evaluation-report identity. Result events use the
 durable direct exchange `reactorfront.documents.v1` and durable queue
 `reactorfront.document-processing.events.v1`. The separate API-owned
 `api-events` role consumes that queue without importing ML implementation.
+Worker startup derives the expected lineage from the canonical dataset
+snapshot and evaluation policy, then fully validates the champion report and
+runtime artifact before publishing any measured evidence.
 
 Result messages are persistent, mandatory-routed, and subject to a bounded
 wall-clock publisher-confirm outcome. The requested task is late-acknowledged;
@@ -86,7 +91,9 @@ of accepting Celery's non-requeueing publication failure default.
 - `evaluation/evaluation-report-v1.schema.json`: closed machine-readable report
   contract shared by champion and future candidate evaluations
 - `evaluation/champion-baseline-v1.json`: complete canonical held-out report for
-  the checksum-verified current model
+  the checksum-verified current model; runtime startup verifies its canonical
+  digest, accepted role and gates, model version, and artifact checksum before
+  publishing lineage
 - `evaluation/candidate-build-v1.json`: reviewed candidate artifact identity,
   train-only membership, fixed seed, dependency lock, and no-calibration treatment
 - `evaluation/candidate-report-v1.json`: complete canonical held-out report for
@@ -114,6 +121,7 @@ local examples and Compose replaces them with service DNS names.
 | `PORTFOLIO_ML_RABBITMQ_TIMEOUT_SECONDS` | `5` |
 | `PORTFOLIO_ML_MODEL_ARTIFACT_PATH` | `artifacts/model/model.json` |
 | `PORTFOLIO_ML_MODEL_CHECKSUM_PATH` | `artifacts/model/model.sha256` |
+| `PORTFOLIO_ML_CHAMPION_EVALUATION_REPORT_PATH` | `apps/ml/evaluation/champion-baseline-v1.json` |
 | `PORTFOLIO_ML_EVENT_CONTRACT_DIRECTORY` | `packages/contracts/events` |
 
 There is intentionally no database setting. The Compose service publishes no
@@ -180,3 +188,7 @@ is not a calibrated probability, and the baseline makes no production
 accuracy, fairness, privacy, robustness, or generalization claim. The candidate
 intentionally applies no confidence calibration; promotion and runtime
 selection remain separate later increments.
+
+Runtime lineage describes only the already selected champion. It neither
+promotes `document-type-candidate-v1` nor turns review outcomes into training
+data.

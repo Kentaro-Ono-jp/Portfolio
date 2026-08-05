@@ -16,6 +16,7 @@ from reactorfront_ml.domain import (
     TransientProcessingError,
 )
 from reactorfront_ml.events import ResultEventFactory
+from reactorfront_ml.lineage import RuntimeModelEvidence
 from reactorfront_ml.model import MODEL_VERSION, ModelArtifactError
 from reactorfront_ml.processor import DocumentProcessor
 from tests.fakes import FakeClassifier, FakePublisher, FakeStorage, FakeValidator
@@ -23,6 +24,16 @@ from tests.fakes import FakeClassifier, FakePublisher, FakeStorage, FakeValidato
 PDF_TEXT = "INVOICE invoice total amount due tax payment"
 PDF_CONTENT = b"synthetic-pdf-content"
 NOW = datetime(2026, 7, 19, 3, 0, tzinfo=UTC)
+MODEL_EVIDENCE = RuntimeModelEvidence(
+    dataset_version="reactorfront-synthetic-documents-v1",
+    dataset_sha256="e" * 64,
+    preprocessing_version="nfkc-ascii-alphanumeric-bow-v1",
+    pipeline_version="pytorch-multinomial-naive-bayes-linear-v1",
+    artifact_sha256="a" * 64,
+    evaluation_policy_version="document-classification-evaluation-v1",
+    evaluation_policy_sha256="b" * 64,
+    evaluation_report_sha256="c" * 64,
+)
 
 
 def request(*, digest: str | None = None) -> ProcessingRequest:
@@ -59,7 +70,7 @@ def processor(
         classifier=selected_classifier,
         validator=selected_validator,
         publisher=selected_publisher,
-        event_factory=ResultEventFactory(clock=lambda: NOW),
+        event_factory=ResultEventFactory(model_evidence=MODEL_EVIDENCE, clock=lambda: NOW),
     )
     return (
         subject,
@@ -80,12 +91,13 @@ def test_success_confirms_started_before_completed(monkeypatch: pytest.MonkeyPat
     assert classifier.texts == [PDF_TEXT]
     assert [event_type for event_type, _ in publisher.published] == [
         "document.processing.started.v1",
-        "document.processing.completed.v1",
+        "document.processing.completed.v2",
     ]
     assert publisher.published == validator.validated
     completed = publisher.published[-1][1]
     assert completed["classification"] == "invoice"
     assert completed["confidence"] == 0.91
+    assert completed["modelEvidence"]["artifactSha256"] == "a" * 64
 
 
 def test_digest_mismatch_publishes_sanitized_failed_event() -> None:

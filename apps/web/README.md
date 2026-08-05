@@ -36,6 +36,9 @@ the client bundle.
   idempotency key for the one terminal review mutation.
 - Validate immutable machine evidence, terminal human-review state, and
   deterministically ordered audit events before rendering them.
+- Admit strict measured runtime lineage and explicit `legacy-unmeasured`
+  compatibility in shared response validators. This bounded increment changes
+  contract handling only; a dedicated lineage panel remains a later UI concern.
 
 ## Implementation
 

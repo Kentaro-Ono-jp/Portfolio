@@ -42,12 +42,29 @@ export const processingStatus: DocumentStatus = {
   startedAt: STARTED_AT,
 };
 
+export const measuredModelEvidence = {
+  status: "measured" as const,
+  datasetVersion: "reactorfront-synthetic-documents-v1",
+  datasetSha256:
+    "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+  preprocessingVersion: "nfkc-ascii-alphanumeric-bow-v1",
+  pipelineVersion: "pytorch-multinomial-naive-bayes-linear-v1",
+  artifactSha256:
+    "82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac",
+  evaluationPolicyVersion: "document-classification-evaluation-v1",
+  evaluationPolicySha256:
+    "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
+  evaluationReportSha256:
+    "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+};
+
 export const completedStatus: DocumentStatus = {
   ...processingStatus,
   status: "completed",
   classification: "invoice",
   confidence: 0.987,
   modelVersion: "document-type-v1",
+  modelEvidence: measuredModelEvidence,
   completedAt: COMPLETED_AT,
 };
 
@@ -75,6 +92,7 @@ export const unreviewedReview: Review = {
   machineClassification: "invoice",
   machineConfidence: 0.987,
   modelVersion: "document-type-v1",
+  modelEvidence: measuredModelEvidence,
   reviewVersion: 0,
 };
 
@@ -85,6 +103,7 @@ export const approvedReview: TerminalReview = {
   machineClassification: "invoice",
   machineConfidence: 0.987,
   modelVersion: "document-type-v1",
+  modelEvidence: measuredModelEvidence,
   reviewVersion: 1,
   finalClassification: "invoice",
   reviewerPrincipalId: REVIEWER_PRINCIPAL_ID,
@@ -98,6 +117,7 @@ export const correctedReview: TerminalReview = {
   machineClassification: "invoice",
   machineConfidence: 0.987,
   modelVersion: "document-type-v1",
+  modelEvidence: measuredModelEvidence,
   reviewVersion: 1,
   finalClassification: "report",
   reviewerPrincipalId: REVIEWER_PRINCIPAL_ID,
@@ -126,8 +146,19 @@ export const auditHistory: AuditHistory = {
       documentId: DOCUMENT_ID,
       jobId: JOB_ID,
       correlationId: "88888888-8888-4888-8888-888888888888",
-      detailsVersion: 1,
-      details: {},
+      detailsVersion: 2,
+      details: {
+        modelEvidenceStatus: "measured",
+        modelVersion: "document-type-v1",
+        datasetVersion: measuredModelEvidence.datasetVersion,
+        datasetSha256: measuredModelEvidence.datasetSha256,
+        preprocessingVersion: measuredModelEvidence.preprocessingVersion,
+        pipelineVersion: measuredModelEvidence.pipelineVersion,
+        artifactSha256: measuredModelEvidence.artifactSha256,
+        evaluationPolicyVersion: measuredModelEvidence.evaluationPolicyVersion,
+        evaluationPolicySha256: measuredModelEvidence.evaluationPolicySha256,
+        evaluationReportSha256: measuredModelEvidence.evaluationReportSha256,
+      },
     },
     {
       eventId: "99999999-9999-4999-8999-999999999999",

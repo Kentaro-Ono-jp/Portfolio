@@ -111,6 +111,26 @@ const processingStatusSchema = z.strictObject({
   startedAt: timestampSchema,
 });
 
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
+const legacyModelEvidenceSchema = z.strictObject({
+  status: z.literal("legacy-unmeasured"),
+});
+const measuredModelEvidenceSchema = z.strictObject({
+  status: z.literal("measured"),
+  datasetVersion: z.string().min(1).max(128),
+  datasetSha256: sha256Schema,
+  preprocessingVersion: z.string().min(1).max(128),
+  pipelineVersion: z.string().min(1).max(128),
+  artifactSha256: sha256Schema,
+  evaluationPolicyVersion: z.string().min(1).max(128),
+  evaluationPolicySha256: sha256Schema,
+  evaluationReportSha256: sha256Schema,
+});
+const modelEvidenceSchema = z.discriminatedUnion("status", [
+  legacyModelEvidenceSchema,
+  measuredModelEvidenceSchema,
+]);
+
 const completedStatusSchema = z.strictObject({
   documentId: identifierSchema,
   jobId: identifierSchema,
@@ -118,6 +138,7 @@ const completedStatusSchema = z.strictObject({
   classification: z.enum(["invoice", "report"]),
   confidence: z.number().min(0).max(1),
   modelVersion: z.string().min(1).max(128),
+  modelEvidence: modelEvidenceSchema,
   createdAt: timestampSchema,
   startedAt: timestampSchema,
   completedAt: timestampSchema,
@@ -154,6 +175,7 @@ const reviewMachineFields = {
   jobId: identifierSchema,
   machineConfidence: z.number().min(0).max(1),
   modelVersion: z.string().min(1).max(128),
+  modelEvidence: modelEvidenceSchema,
 };
 
 const unreviewedReviewSchema = z.strictObject({
@@ -219,7 +241,7 @@ export const terminalReviewSchema: z.ZodType<TerminalReview> = z.union([
   correctedReviewSchema,
 ]);
 
-const auditEventFields = {
+const auditIdentityFields = {
   eventId: identifierSchema,
   action: z.enum([
     "document.submitted",
@@ -233,13 +255,37 @@ const auditEventFields = {
   documentId: identifierSchema,
   jobId: identifierSchema,
   correlationId: identifierSchema,
-  detailsVersion: z.literal(1),
-  details: z.strictObject({}),
 };
 
 const auditEventSchema = z.union([
-  z.strictObject(auditEventFields),
-  z.strictObject({ ...auditEventFields, reviewId: identifierSchema }),
+  z.strictObject({
+    ...auditIdentityFields,
+    detailsVersion: z.literal(1),
+    details: z.strictObject({}),
+  }),
+  z.strictObject({
+    ...auditIdentityFields,
+    reviewId: identifierSchema,
+    detailsVersion: z.literal(1),
+    details: z.strictObject({}),
+  }),
+  z.strictObject({
+    ...auditIdentityFields,
+    action: z.literal("processing.completed"),
+    detailsVersion: z.literal(2),
+    details: z.strictObject({
+      modelEvidenceStatus: z.literal("measured"),
+      modelVersion: z.string().min(1).max(128),
+      datasetVersion: z.string().min(1).max(128),
+      datasetSha256: sha256Schema,
+      preprocessingVersion: z.string().min(1).max(128),
+      pipelineVersion: z.string().min(1).max(128),
+      artifactSha256: sha256Schema,
+      evaluationPolicyVersion: z.string().min(1).max(128),
+      evaluationPolicySha256: sha256Schema,
+      evaluationReportSha256: sha256Schema,
+    }),
+  }),
 ]);
 
 export const auditHistorySchema: z.ZodType<AuditHistory> = z

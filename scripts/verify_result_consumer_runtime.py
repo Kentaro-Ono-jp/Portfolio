@@ -30,6 +30,17 @@ INVOICE_TEXT = REPOSITORY_ROOT / "tests" / "fixtures" / "canonical_invoice.txt"
 REQUEST_QUEUE = "reactorfront.document-processing.requested.v1"
 REQUEST_ROUTING_KEY = "document.processing.requested.v1"
 MODEL_VERSION = "document-type-v1"
+MODEL_EVIDENCE = {
+    "status": "measured",
+    "datasetVersion": "reactorfront-synthetic-documents-v1",
+    "datasetSha256": "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
+    "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
+    "pipelineVersion": "pytorch-multinomial-naive-bayes-linear-v1",
+    "artifactSha256": "82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac",
+    "evaluationPolicyVersion": "document-classification-evaluation-v1",
+    "evaluationPolicySha256": "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
+    "evaluationReportSha256": "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+}
 
 
 def compose(*arguments: str, capture: bool = False, check: bool = True) -> str:
@@ -192,6 +203,12 @@ def result_event(
     }
     if event_type == "document.processing.failed.v1":
         value["failureCode"] = "SOURCE_DIGEST_MISMATCH"
+    elif event_type == "document.processing.completed.v2":
+        value.update(
+            classification="invoice",
+            confidence=0.98,
+            modelEvidence=dict(MODEL_EVIDENCE),
+        )
     return value
 
 
@@ -355,7 +372,10 @@ def persistence_evidence(settings: Settings, *, document_id: UUID) -> dict[str, 
                     text(
                         "SELECT j.id, j.status, j.attempt_count, j.model_version, "
                         "j.predicted_class, j.confidence, j.failure_code, "
-                        "j.started_at, j.completed_at "
+                        "j.started_at, j.completed_at, j.dataset_version, "
+                        "j.dataset_sha256, j.preprocessing_version, j.pipeline_version, "
+                        "j.artifact_sha256, j.evaluation_policy_version, "
+                        "j.evaluation_policy_sha256, j.evaluation_report_sha256 "
                         "FROM processing_jobs j WHERE j.document_id = :document_id"
                     ),
                     {"document_id": document_id},
@@ -389,6 +409,21 @@ def persistence_evidence(settings: Settings, *, document_id: UUID) -> dict[str, 
         "failureCode": job["failure_code"],
         "startedAt": job["started_at"].isoformat() if job["started_at"] else None,
         "completedAt": job["completed_at"].isoformat() if job["completed_at"] else None,
+        "modelEvidence": (
+            None
+            if job["dataset_version"] is None
+            else {
+                "status": "measured",
+                "datasetVersion": job["dataset_version"],
+                "datasetSha256": job["dataset_sha256"],
+                "preprocessingVersion": job["preprocessing_version"],
+                "pipelineVersion": job["pipeline_version"],
+                "artifactSha256": job["artifact_sha256"],
+                "evaluationPolicyVersion": job["evaluation_policy_version"],
+                "evaluationPolicySha256": job["evaluation_policy_sha256"],
+                "evaluationReportSha256": job["evaluation_report_sha256"],
+            }
+        ),
         "receipts": [dict(receipt) for receipt in receipts],
     }
 
@@ -481,6 +516,7 @@ def main() -> int:
         completed.get("classification") != "invoice"
         or float(completed.get("confidence", 0)) < 0.70
         or completed.get("modelVersion") != MODEL_VERSION
+        or completed.get("modelEvidence") != MODEL_EVIDENCE
         or not completed.get("startedAt")
         or not completed.get("completedAt")
         or success_persistence["status"] != "completed"
@@ -488,15 +524,27 @@ def main() -> int:
         or success_persistence["modelVersion"] != MODEL_VERSION
         or success_persistence["classification"] != "invoice"
         or success_persistence["failureCode"] is not None
+        or success_persistence["modelEvidence"] != MODEL_EVIDENCE
         or not success_persistence["startedAt"]
         or not success_persistence["completedAt"]
         or success_receipt_types
         != {
             "document.processing.started.v1",
-            "document.processing.completed.v1",
+            "document.processing.completed.v2",
         }
     ):
         raise RuntimeError("Completed API-owned result persistence was inconsistent")
+
+    conflicting_lineage = result_event(
+        success_request,
+        event_type="document.processing.completed.v2",
+    )
+    conflicting_lineage["modelEvidence"]["evaluationReportSha256"] = "f" * 64
+    publish_result(settings, conflicting_lineage)
+    wait_for_consumer_log(
+        event="result_event_rejected",
+        failure_code="EVENT_ID_REUSE",
+    )
 
     wrong_failed = result_event(
         success_request,
@@ -631,6 +679,7 @@ def main() -> int:
         "consumerRestartRecovery": True,
         "identityMismatchRejected": True,
         "terminalConflictRejected": True,
+        "conflictingLineageRedeliveryRejected": True,
         "invalidEventRejected": True,
         "dependencyReadinessRecovery": True,
         "invoiceSha256": hashlib.sha256(invoice_pdf).hexdigest(),
