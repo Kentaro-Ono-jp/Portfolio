@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from types import TracebackType
 from uuid import UUID, uuid5
@@ -27,6 +27,7 @@ from reactorfront_api.persistence import (
     ProcessingJobRow,
     ResultEventReceiptRow,
     SqlAlchemyResultEventRepository,
+    SqlAlchemySubmissionRepository,
 )
 
 CORRELATION_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -263,6 +264,40 @@ def test_apply_rejects_event_id_reuse(monkeypatch: pytest.MonkeyPatch) -> None:
         repository_with_session(monkeypatch, session).apply(candidate)
 
     assert captured.value.code is ResultEventFailureCode.EVENT_ID_REUSE
+
+
+@pytest.mark.parametrize(
+    ("event_type", "model_evidence"),
+    [
+        (ResultEventType.COMPLETED, MODEL_EVIDENCE),
+        (ResultEventType.COMPLETED_V2, None),
+    ],
+)
+def test_apply_rejects_completed_evidence_version_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    event_type: ResultEventType,
+    model_evidence: MeasuredModelEvidence | None,
+) -> None:
+    candidate = replace(result_event(event_type), model_evidence=model_evidence)
+    processing_job = job(ProcessingStatus.PROCESSING)
+    session = FakeResultSession(
+        scalar_values=[processing_job, requested(), candidate.event_id],
+        rows={ResultEventReceiptRow: None, DocumentRow: document()},
+    )
+
+    with pytest.raises(ResultEventInvariantError) as captured:
+        repository_with_session(monkeypatch, session).apply(candidate)
+
+    assert captured.value.code is ResultEventFailureCode.INVALID_EVENT
+    assert session.flushes == 0
+
+
+def test_persisted_model_evidence_must_be_all_or_none() -> None:
+    processing_job = job(ProcessingStatus.COMPLETED)
+    processing_job.dataset_version = "dataset-v1"
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        SqlAlchemySubmissionRepository._model_evidence(processing_job)
 
 
 @pytest.mark.parametrize(

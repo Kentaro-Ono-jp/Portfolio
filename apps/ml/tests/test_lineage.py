@@ -33,6 +33,8 @@ def test_load_runtime_model_evidence_binds_the_accepted_champion() -> None:
         ({"modelVersion": "document-type-candidate-v1"}, "model version"),
         ({"artifactSha256": "0" * 64}, "artifact digest"),
         ({"absoluteGatesPassed": False}, "accepted champion"),
+        ({"datasetVersion": ""}, "field datasetVersion"),
+        ({"datasetSha256": "not-a-digest"}, "digest datasetSha256"),
     ],
 )
 def test_load_runtime_model_evidence_rejects_mutated_champion(
@@ -68,6 +70,49 @@ def test_load_runtime_model_evidence_rejects_noncanonical_report(tmp_path: Path)
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
     with pytest.raises(RuntimeLineageError, match="not canonical"):
+        load_runtime_model_evidence(
+            path,
+            expected_model_version="document-type-v1",
+            expected_artifact_sha256=ARTIFACT_SHA256,
+        )
+
+
+@pytest.mark.parametrize("content", ["{", '{"reportSha256": NaN}\n'])
+def test_load_runtime_model_evidence_rejects_unavailable_json(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    path = tmp_path / "invalid.json"
+    path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(RuntimeLineageError, match=r"unavailable|not canonical"):
+        load_runtime_model_evidence(
+            path,
+            expected_model_version="document-type-v1",
+            expected_artifact_sha256=ARTIFACT_SHA256,
+        )
+
+
+def test_load_runtime_model_evidence_rejects_missing_report(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeLineageError, match="unavailable"):
+        load_runtime_model_evidence(
+            tmp_path / "missing.json",
+            expected_model_version="document-type-v1",
+            expected_artifact_sha256=ARTIFACT_SHA256,
+        )
+
+
+def test_load_runtime_model_evidence_rejects_report_digest_mismatch(tmp_path: Path) -> None:
+    value = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
+    value["reportSha256"] = "0" * 64
+    path = tmp_path / "digest-mismatch.json"
+    path.write_bytes(
+        (
+            json.dumps(value, allow_nan=False, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
+        ).encode()
+    )
+
+    with pytest.raises(RuntimeLineageError, match="report digest"):
         load_runtime_model_evidence(
             path,
             expected_model_version="document-type-v1",

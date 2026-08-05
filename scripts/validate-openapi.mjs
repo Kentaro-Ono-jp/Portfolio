@@ -154,6 +154,26 @@ const invalidDocumentStatuses = [
     name: "failed document without failureCode",
     value: withoutProperty(validDocumentStatuses[4], "failureCode"),
   },
+  {
+    name: "completed document with incomplete measured evidence",
+    value: {
+      ...validDocumentStatuses[3],
+      modelEvidence: withoutProperty(
+        measuredModelEvidence,
+        "evaluationReportSha256",
+      ),
+    },
+  },
+  {
+    name: "completed document with unknown measured evidence",
+    value: {
+      ...validDocumentStatuses[3],
+      modelEvidence: {
+        ...measuredModelEvidence,
+        sourceText: "must never cross this boundary",
+      },
+    },
+  },
 ];
 
 for (const invalidCase of invalidDocumentStatuses) {
