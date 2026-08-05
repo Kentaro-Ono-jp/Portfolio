@@ -282,6 +282,21 @@ def test_review_entity_tag_binds_every_measured_lineage_identity() -> None:
         mutated = replace(evidence, **{field_name: changed})
         assert review_entity_tag(replace(record, model_evidence=mutated)) != baseline
 
+    delimiter_left = replace(
+        evidence,
+        preprocessing_version="alpha\x1fbeta",
+        pipeline_version="gamma",
+    )
+    delimiter_right = replace(
+        evidence,
+        preprocessing_version="alpha",
+        pipeline_version="beta\x1fgamma",
+    )
+    assert delimiter_left != delimiter_right
+    assert review_entity_tag(replace(record, model_evidence=delimiter_left)) != review_entity_tag(
+        replace(record, model_evidence=delimiter_right)
+    )
+
 
 def measured_audit_details() -> dict[str, object]:
     return {

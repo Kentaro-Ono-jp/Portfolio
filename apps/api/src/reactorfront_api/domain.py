@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -310,34 +311,42 @@ def review_entity_tag(record: ReviewRecord) -> str:
     confidence = format(record.machine_confidence.normalize(), "f")
     evidence = record.model_evidence
     evidence_identity = (
-        ("legacy-unmeasured",)
+        {"status": "legacy-unmeasured"}
         if evidence is None
-        else (
-            "measured",
-            evidence.dataset_version,
-            evidence.dataset_sha256,
-            evidence.preprocessing_version,
-            evidence.pipeline_version,
-            evidence.artifact_sha256,
-            evidence.evaluation_policy_version,
-            evidence.evaluation_policy_sha256,
-            evidence.evaluation_report_sha256,
-        )
+        else {
+            "artifactSha256": evidence.artifact_sha256,
+            "datasetSha256": evidence.dataset_sha256,
+            "datasetVersion": evidence.dataset_version,
+            "evaluationPolicySha256": evidence.evaluation_policy_sha256,
+            "evaluationPolicyVersion": evidence.evaluation_policy_version,
+            "evaluationReportSha256": evidence.evaluation_report_sha256,
+            "pipelineVersion": evidence.pipeline_version,
+            "preprocessingVersion": evidence.preprocessing_version,
+            "status": "measured",
+        }
     )
-    identity = "\x1f".join(
-        (
-            str(record.document_id),
-            str(record.job_id),
-            record.status.value,
-            record.machine_classification,
-            confidence,
-            record.model_version,
-            *evidence_identity,
-            str(record.review_version),
-            str(record.review_id or ""),
-            record.final_classification or "",
-            str(record.reviewer_principal_id or ""),
-        )
+    identity = json.dumps(
+        {
+            "documentId": str(record.document_id),
+            "finalClassification": record.final_classification,
+            "jobId": str(record.job_id),
+            "machineClassification": record.machine_classification,
+            "machineConfidence": confidence,
+            "modelEvidence": evidence_identity,
+            "modelVersion": record.model_version,
+            "reviewId": str(record.review_id) if record.review_id is not None else None,
+            "reviewVersion": record.review_version,
+            "reviewerPrincipalId": (
+                str(record.reviewer_principal_id)
+                if record.reviewer_principal_id is not None
+                else None
+            ),
+            "status": record.status.value,
+        },
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
     )
     return f'"{hashlib.sha256(identity.encode("utf-8")).hexdigest()}"'
 

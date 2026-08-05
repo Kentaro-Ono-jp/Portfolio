@@ -231,6 +231,24 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #61
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5149897788).
 
+### Frame hashed structured identities unambiguously
+
+- **Trigger:** An ETag, idempotency digest, or other strong identity hash adds
+  or changes two or more accepted variable-length string fields.
+- **HEAD effect:** `moving`
+- **Problem:** Joining fields with a sentinel that is also accepted inside a
+  field lets distinct structured identities produce the same hash input.
+- **Detect:** Construct two otherwise-identical accepted identities by moving
+  the chosen sentinel from the end of one adjacent field to the start of the
+  next, then compare their final tokens; also replay one identity unchanged.
+- **Pass:** The two distinct accepted structures produce different tokens,
+  while the unchanged replay remains stable.
+- **Repair:** Serialize an explicit typed structure with canonical key and
+  value framing, or length-prefix every field, and retain the delimiter-
+  relocation regression at the production identity function.
+- **Origins:** PR #82
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/82#issuecomment-5194808938).
+
 ### Enforce constrained request parameters at runtime
 
 - **Trigger:** OpenAPI adds or changes a pattern, range, format, or enum for a
