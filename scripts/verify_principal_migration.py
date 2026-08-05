@@ -18,7 +18,7 @@ from reactorfront_api.settings import Settings
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 V1_REVISION = "20260720_0002"
-HEAD_REVISION = "20260801_0004"
+HEAD_REVISION = "20260805_0005"
 DOCUMENT_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 JOB_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 OUTBOX_EVENT_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")

@@ -33,6 +33,17 @@ transaction order, flush behavior, or commit and rollback boundaries.
 - **Correction:** Make job and outbox dependency flush order explicit and
   cover the concrete PostgreSQL transaction with regression tests.
 
+### Keep populated-schema verifier heads aligned with Alembic
+
+- **Origin:** PR #82
+  [run 31023188296](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31023188296)
+- **Trigger:** A new migration extends the current Alembic head while multiple
+  populated-schema verifiers upgrade through that head.
+- **Mistake:** One verifier retained the preceding revision and treated a
+  successful upgrade to the new real head as failure.
+- **Correction:** Update every populated-schema verifier's declared head and
+  statically require those declarations to equal Alembic's current head.
+
 ## Return
 
 Return to publication Gate A after repairing only the triggered persistence
