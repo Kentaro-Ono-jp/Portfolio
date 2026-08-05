@@ -66,8 +66,8 @@ def test_load_runtime_model_evidence_rejects_mutated_champion(
 
 def test_load_runtime_model_evidence_rejects_noncanonical_report(tmp_path: Path) -> None:
     value = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
-    path = tmp_path / "pretty.json"
-    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    path = tmp_path / "compact.json"
+    path.write_bytes(json.dumps(value, separators=(",", ":"), sort_keys=True).encode())
 
     with pytest.raises(RuntimeLineageError, match="not canonical"):
         load_runtime_model_evidence(

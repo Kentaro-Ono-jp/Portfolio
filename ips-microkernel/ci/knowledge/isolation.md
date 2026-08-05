@@ -34,6 +34,17 @@ fault records, shared queues, or state that may survive or race another actor.
   production adapter, require the same first failure as production, then cover
   each later condition with the earlier one satisfied.
 
+### Construct representation faults independently of host newline translation
+
+- **Origin:** PR #82
+  [run 31022587681](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31022587681)
+- **Trigger:** A test fixture must differ byte-for-byte from a canonical JSON
+  representation on every supported runner operating system.
+- **Mistake:** A noncanonical fixture relied on Windows newline translation and
+  became canonical when written on Linux.
+- **Correction:** Write an explicitly compact JSON byte representation so the
+  intended representation fault is deterministic across operating systems.
+
 ## Return
 
 Return to publication Gate A after repairing only the triggered isolation
