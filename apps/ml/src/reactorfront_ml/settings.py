@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     champion_evaluation_report_path: Path = (
         REPOSITORY_ROOT / "apps" / "ml" / "evaluation" / "champion-baseline-v1.json"
     )
+    evaluation_repository_root: Path = REPOSITORY_ROOT
+    evaluation_dataset_snapshot_path: Path = (
+        REPOSITORY_ROOT / "apps" / "ml" / "evaluation" / "corpus" / "v1" / "snapshot.json"
+    )
+    evaluation_policy_path: Path = REPOSITORY_ROOT / "apps" / "ml" / "evaluation" / "policy-v1.json"
+    evaluation_report_schema_path: Path = (
+        REPOSITORY_ROOT / "apps" / "ml" / "evaluation" / "evaluation-report-v1.schema.json"
+    )
     event_contract_directory: Path = REPOSITORY_ROOT / "packages" / "contracts" / "events"
 
 

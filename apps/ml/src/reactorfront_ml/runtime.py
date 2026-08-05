@@ -38,6 +38,10 @@ def build_runtime(settings: Settings) -> WorkerRuntime:
     )
     model_evidence = load_runtime_model_evidence(
         settings.champion_evaluation_report_path,
+        repository_root=settings.evaluation_repository_root,
+        dataset_snapshot_path=settings.evaluation_dataset_snapshot_path,
+        evaluation_policy_path=settings.evaluation_policy_path,
+        evaluation_report_schema_path=settings.evaluation_report_schema_path,
         expected_model_version=classifier.model_version,
         expected_artifact_sha256=classifier.checksum,
     )

@@ -45,6 +45,9 @@ evaluation-policy, and evaluation-report identity. Result events use the
 durable direct exchange `reactorfront.documents.v1` and durable queue
 `reactorfront.document-processing.events.v1`. The separate API-owned
 `api-events` role consumes that queue without importing ML implementation.
+Worker startup derives the expected lineage from the canonical dataset
+snapshot and evaluation policy, then fully validates the champion report and
+runtime artifact before publishing any measured evidence.
 
 Result messages are persistent, mandatory-routed, and subject to a bounded
 wall-clock publisher-confirm outcome. The requested task is late-acknowledged;

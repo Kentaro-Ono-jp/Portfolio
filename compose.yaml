@@ -200,7 +200,11 @@ services:
       PORTFOLIO_ML_RABBITMQ_TIMEOUT_SECONDS: "5"
       PORTFOLIO_ML_MODEL_ARTIFACT_PATH: /opt/reactorfront/model/model.json
       PORTFOLIO_ML_MODEL_CHECKSUM_PATH: /opt/reactorfront/model/model.sha256
-      PORTFOLIO_ML_CHAMPION_EVALUATION_REPORT_PATH: /opt/reactorfront/model/champion-baseline-v1.json
+      PORTFOLIO_ML_CHAMPION_EVALUATION_REPORT_PATH: /workspace/apps/ml/evaluation/champion-baseline-v1.json
+      PORTFOLIO_ML_EVALUATION_REPOSITORY_ROOT: /workspace
+      PORTFOLIO_ML_EVALUATION_DATASET_SNAPSHOT_PATH: /workspace/apps/ml/evaluation/corpus/v1/snapshot.json
+      PORTFOLIO_ML_EVALUATION_POLICY_PATH: /workspace/apps/ml/evaluation/policy-v1.json
+      PORTFOLIO_ML_EVALUATION_REPORT_SCHEMA_PATH: /workspace/apps/ml/evaluation/evaluation-report-v1.schema.json
       PORTFOLIO_ML_EVENT_CONTRACT_DIRECTORY: /workspace/packages/contracts/events
     depends_on:
       minio:

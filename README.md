@@ -237,7 +237,9 @@ current champion's immutable dataset, preprocessing, pipeline, artifact,
 evaluation-policy, and evaluation-report identity through the completed event,
 API persistence, review identity, audit history, generated contracts, and Web
 validators. Existing v1 rows remain explicitly `legacy-unmeasured`; no
-historical lineage is fabricated.
+historical lineage is fabricated. Runtime readiness independently derives the
+expected lineage from the canonical dataset snapshot, policy, report schema,
+and active artifact, so a coherently re-digested report rewrite fails closed.
 
 Later focused increments will bind an accepted artifact to one reviewed
 promotion manifest and define bounded synthetic-feedback export and curation.
