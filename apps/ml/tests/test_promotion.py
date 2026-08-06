@@ -53,6 +53,36 @@ def test_promoted_candidate_is_canonical_reproducible_and_fully_bound() -> None:
     assert first.manifest_sha256 == second.manifest_sha256
 
 
+@pytest.mark.parametrize("boolean_version", [True, False])
+def test_promotion_rejects_boolean_artifact_schema_versions_before_evidence_load(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    boolean_version: bool,
+) -> None:
+    value = manifest_value()
+    value["artifactSchemaVersion"] = boolean_version
+    path = tmp_path / "boolean-artifact-schema-version.json"
+    write_manifest(path, value)
+    evidence_loads = 0
+    original = promotion.load_dataset_snapshot
+
+    def counted_load_dataset_snapshot(*args: object, **kwargs: object):
+        nonlocal evidence_loads
+        evidence_loads += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        promotion,
+        "load_dataset_snapshot",
+        counted_load_dataset_snapshot,
+    )
+
+    with pytest.raises(PromotionError, match="PROMOTION_SCHEMA_VIOLATION"):
+        load(path)
+
+    assert evidence_loads == 0
+
+
 def test_same_manifest_path_can_select_the_previously_accepted_champion_for_rollback(
     tmp_path: Path,
 ) -> None:
