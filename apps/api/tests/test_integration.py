@@ -8,7 +8,9 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
 from uuid import UUID, uuid5
 
 import boto3
@@ -44,6 +46,7 @@ from reactorfront_api.domain import (
     review_entity_tag,
 )
 from reactorfront_api.event_contracts import JsonSchemaEventValidator
+from reactorfront_api.feedback_export import FeedbackExporter
 from reactorfront_api.outbox import (
     DispatchCycleResult,
     DispatcherPolicy,
@@ -56,6 +59,8 @@ from reactorfront_api.persistence import (
     OutboxEventRow,
     PrincipalRow,
     ProcessingJobRow,
+    ReviewDecisionRow,
+    SqlAlchemyFeedbackExportRepository,
     SqlAlchemyOutboxRepository,
     SqlAlchemyPrincipalRepository,
     SqlAlchemyResultEventRepository,
@@ -81,6 +86,8 @@ DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
 JOB_ID = UUID("33333333-3333-4333-8333-333333333333")
 EVENT_ID = UUID("44444444-4444-4444-8444-444444444444")
 NOW = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+FEEDBACK_INVENTORY_PATH = REPOSITORY_ROOT / "apps/ml/evaluation/corpus/v1/corpus.json"
 
 
 @pytest.fixture
@@ -183,6 +190,113 @@ def test_oidc_principal_resolution_is_stable_and_distinct_from_legacy(
         assert api_system is not None
         assert api_system.kind == "system"
         assert api_system.system_key == "api-processing"
+
+
+def test_feedback_export_reads_terminal_measured_review_without_mutation(
+    engine: Engine,
+) -> None:
+    inventory = json.loads(FEEDBACK_INVENTORY_PATH.read_bytes())
+    eligible_source_sha256 = str(inventory["samples"][0]["sourceSha256"])
+    private_filename = "private-feedback-source-name.pdf"
+    private_object_key = "documents/private-feedback-object/source.pdf"
+    document_id = UUID("90000000-0000-4000-8000-000000000001")
+    job_id = UUID("90000000-0000-4000-8000-000000000002")
+    review_id = UUID("90000000-0000-4000-8000-000000000003")
+    with Session(engine) as session, session.begin():
+        session.add(
+            DocumentRow(
+                id=document_id,
+                submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+                original_filename=private_filename,
+                object_key=private_object_key,
+                sha256=eligible_source_sha256,
+                content_type="application/pdf",
+                size_bytes=123,
+                created_at=NOW,
+            )
+        )
+        session.add(
+            ProcessingJobRow(
+                id=job_id,
+                document_id=document_id,
+                status="completed",
+                attempt_count=1,
+                model_version="document-type-v1",
+                predicted_class="invoice",
+                confidence=Decimal("0.9900"),
+                dataset_version="reactorfront-synthetic-documents-v1",
+                dataset_sha256="1" * 64,
+                preprocessing_version="normalized-whitespace-v1",
+                pipeline_version="document-classifier-v1",
+                artifact_sha256="2" * 64,
+                evaluation_policy_version="classification-evaluation-policy-v1",
+                evaluation_policy_sha256="3" * 64,
+                evaluation_report_sha256="4" * 64,
+                failure_code=None,
+                created_at=NOW,
+                started_at=NOW,
+                completed_at=NOW,
+            )
+        )
+        session.add(
+            ReviewDecisionRow(
+                id=review_id,
+                document_id=document_id,
+                job_id=job_id,
+                reviewer_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+                machine_classification="invoice",
+                final_classification="report",
+                status="corrected",
+                review_version=1,
+                decided_at=NOW,
+            )
+        )
+
+    before = {
+        table: table_count(engine, table)
+        for table in (
+            "documents",
+            "processing_jobs",
+            "review_decisions",
+            "idempotency_records",
+            "audit_events",
+        )
+    }
+    repository = SqlAlchemyFeedbackExportRepository(engine=engine)
+    rendered = FeedbackExporter(
+        repository=repository,
+        inventory_path=FEEDBACK_INVENTORY_PATH,
+    ).export_bytes()
+    after = {table: table_count(engine, table) for table in before}
+
+    document = json.loads(rendered)
+    assert before == after
+    assert document["omissions"] == []
+    assert document["candidates"] == [
+        {
+            "candidateId": document["candidates"][0]["candidateId"],
+            "finalClassification": "report",
+            "machineClassification": "invoice",
+            "modelLineage": {
+                "artifactSha256": "2" * 64,
+                "datasetSha256": "1" * 64,
+                "datasetVersion": "reactorfront-synthetic-documents-v1",
+                "evaluationPolicySha256": "3" * 64,
+                "evaluationPolicyVersion": "classification-evaluation-policy-v1",
+                "evaluationReportSha256": "4" * 64,
+                "modelVersion": "document-type-v1",
+                "pipelineVersion": "document-classifier-v1",
+                "preprocessingVersion": "normalized-whitespace-v1",
+            },
+            "reviewOutcome": "corrected",
+            "sourceSha256": eligible_source_sha256,
+        }
+    ]
+    assert private_filename.encode() not in rendered
+    assert private_object_key.encode() not in rendered
+    assert str(document_id).encode() not in rendered
+    assert str(job_id).encode() not in rendered
+    assert str(review_id).encode() not in rendered
 
 
 def test_submission_crosses_real_http_postgres_and_s3_boundaries(

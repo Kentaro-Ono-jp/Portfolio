@@ -58,6 +58,7 @@ from reactorfront_api.domain import (
     SubmissionPersistenceError,
     review_entity_tag,
 )
+from reactorfront_api.feedback_export import FeedbackObservation
 
 LEGACY_SYSTEM_PRINCIPAL_ID = UUID("00000000-0000-4000-8000-000000000001")
 LEGACY_SYSTEM_PRINCIPAL_KEY = "legacy-first-slice"
@@ -859,6 +860,36 @@ class SqlAlchemySubmissionRepository:
         with self._engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         return True
+
+    def close(self) -> None:
+        self._engine.dispose()
+
+
+class SqlAlchemyFeedbackExportRepository:
+    def __init__(self, *, engine: Engine) -> None:
+        self._engine = engine
+
+    def list_feedback_observations(self) -> tuple[FeedbackObservation, ...]:
+        statement = (
+            select(DocumentRow.sha256, ProcessingJobRow, ReviewDecisionRow)
+            .join(ProcessingJobRow, ProcessingJobRow.document_id == DocumentRow.id)
+            .join(ReviewDecisionRow, ReviewDecisionRow.job_id == ProcessingJobRow.id)
+        )
+        with Session(self._engine) as session, session.begin():
+            session.execute(text("SET TRANSACTION READ ONLY"))
+            rows = session.execute(statement).all()
+            return tuple(
+                FeedbackObservation(
+                    source_sha256=source_sha256,
+                    processing_status=job.status,
+                    machine_classification=job.predicted_class,
+                    final_classification=decision.final_classification,
+                    review_outcome=decision.status,
+                    model_version=job.model_version,
+                    model_evidence=SqlAlchemySubmissionRepository._model_evidence(job),
+                )
+                for source_sha256, job, decision in rows
+            )
 
     def close(self) -> None:
         self._engine.dispose()

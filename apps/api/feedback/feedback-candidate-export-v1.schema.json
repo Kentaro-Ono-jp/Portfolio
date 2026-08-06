@@ -1,0 +1,155 @@
+{
+  "$id": "https://github.com/Kentaro-Ono-jp/Portfolio/blob/main/apps/api/feedback/feedback-candidate-export-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidates": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateId": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "finalClassification": {
+            "enum": [
+              "invoice",
+              "report"
+            ]
+          },
+          "machineClassification": {
+            "enum": [
+              "invoice",
+              "report"
+            ]
+          },
+          "modelLineage": {
+            "additionalProperties": false,
+            "properties": {
+              "artifactSha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "datasetSha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "datasetVersion": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "evaluationPolicySha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "evaluationPolicyVersion": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "evaluationReportSha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "modelVersion": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "pipelineVersion": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "preprocessingVersion": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifactSha256",
+              "datasetSha256",
+              "datasetVersion",
+              "evaluationPolicySha256",
+              "evaluationPolicyVersion",
+              "evaluationReportSha256",
+              "modelVersion",
+              "pipelineVersion",
+              "preprocessingVersion"
+            ],
+            "type": "object"
+          },
+          "reviewOutcome": {
+            "enum": [
+              "approved",
+              "corrected"
+            ]
+          },
+          "sourceSha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidateId",
+          "finalClassification",
+          "machineClassification",
+          "modelLineage",
+          "reviewOutcome",
+          "sourceSha256"
+        ],
+        "type": "object"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "exportSha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "inventorySha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "omissions": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reason": {
+            "enum": [
+              "not-completed",
+              "nonterminal-review",
+              "invalid-source-identity",
+              "unsupported-or-inconsistent-label",
+              "legacy-unmeasured",
+              "incomplete-lineage",
+              "unknown-source",
+              "duplicate-observation",
+              "conflicting-observation"
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "schemaVersion": {
+      "const": 1
+    }
+  },
+  "required": [
+    "candidates",
+    "exportSha256",
+    "inventorySha256",
+    "omissions",
+    "schemaVersion"
+  ],
+  "title": "Feedback candidate export v1",
+  "type": "object"
+}
