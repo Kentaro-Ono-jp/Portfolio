@@ -506,10 +506,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 51
+    assert len(inventory) == 52
     assert len(verifier.selected_test_files(plan.groups)) == 17
     assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 17/51 selected" in verifier.plan_lines(plan)
+    assert "Test files: 17/52 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(

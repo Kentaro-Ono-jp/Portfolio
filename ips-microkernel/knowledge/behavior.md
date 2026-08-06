@@ -103,6 +103,26 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #64
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/64#issuecomment-5150763750).
 
+### Validate JSON discriminator types before value equality
+
+- **Trigger:** A Python JSON validator adds or changes an integer schema
+  version or discriminator whose accepted value is checked by equality.
+- **HEAD effect:** `moving`
+- **Problem:** Python treats booleans as integers, so value equality accepts a
+  JSON boolean as an integer discriminator and bypasses the malformed-contract
+  guard.
+- **Detect:** Parse one canonical valid document, then replace only the integer
+  discriminator with each JSON boolean, canonicalize the mutation, and invoke
+  the production parser while counting downstream repository or projection
+  calls.
+- **Pass:** The integer document succeeds; both boolean mutations fail with
+  the canonical invalid-contract result before any downstream call.
+- **Repair:** Require the exact parsed JSON integer type before comparing the
+  supported value, and retain the canonical boolean mutation matrix at the
+  production parser.
+- **Origins:** PR #84
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/84#issuecomment-5205208334).
+
 ### Preserve composed governance invariants
 
 - **Trigger:** A required-governance fragment mapping is added to or composed
@@ -264,6 +284,28 @@ proved/unproved classification, or permanence claim.
   parser and add a production-boundary regression test.
 - **Origins:** PR #61
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
+
+### Prove cross-boundary identities from producer-originated state
+
+- **Trigger:** A consumer adds or changes an identity comparison with a record,
+  manifest, or allowlist owned by another boundary.
+- **HEAD effect:** `moving`
+- **Problem:** A direct consumer-store seed uses an identity that the production
+  producer cannot create, so verification passes while every real record fails
+  the comparison.
+- **Detect:** For every affected identity class, originate one accepted value
+  through the production producer, capture the persisted consumer input, and
+  compare it with the exact reviewed external record; mutate the producer value
+  once and repeat the consumer decision.
+- **Pass:** Producer-originated accepted state matches exactly one reviewed
+  external identity and reaches the intended consumer outcome, while the
+  mutated identity fails closed; no passing proof relies only on direct
+  consumer-store seeding.
+- **Repair:** Establish an explicit reviewed identity or binding representable
+  by both boundaries, validate it before use, and replace the direct seed with
+  producer-originated integration proof plus one mismatched negative.
+- **Origins:** PR #84
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/84#issuecomment-5204630868).
 
 ### Normalize semantic timestamps before ordering
 

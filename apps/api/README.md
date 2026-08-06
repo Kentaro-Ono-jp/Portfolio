@@ -51,6 +51,9 @@ API image roles.
 - strict `document.processing.completed.v2` lineage validation and atomic
   persistence, while admitted v1 history remains explicitly
   `legacy-unmeasured`
+- read-only feedback-candidate projection for terminal synthetic reviews, with
+  canonical output, corpus-inventory eligibility, measured lineage, aggregate
+  sanitized omissions, and no automatic dataset or model mutation
 - canonical result transport/schema/identity validation before persistence
 - atomic result-event receipts and job-state transitions in PostgreSQL
 - logical-event deduplication that tolerates a changed redelivery timestamp
@@ -111,6 +114,9 @@ result therefore remains authoritative.
 - `src/reactorfront_api/result_consumer.py`: result validation, acknowledgement policy,
   and durable consumer topology
 - `src/reactorfront_api/events_main.py`: long-running result-consumer and readiness role
+- `src/reactorfront_api/feedback_export.py`: canonical sanitized feedback projection
+- `src/reactorfront_api/feedback_export_main.py`: bounded stdout-only export command
+- `feedback/`: closed export schema and explicit repository-curation procedure
 - `alembic/`: explicit database history
 - `tests/`: unit tests and real-service integration proof
 
@@ -188,3 +194,13 @@ The first successful write produces an immutable `approved` or `corrected`
 decision. An identical idempotent replay returns that result, while conflicting
 key reuse, stale evidence, cross-owner access, and a second terminal decision
 cannot mutate it.
+
+The feedback exporter is an offline API-area command rather than an HTTP
+endpoint. It reads terminal review and measured result state in a PostgreSQL
+read-only transaction, accepts one explicit canonical repository-owned
+feedback source-identity inventory that binds corpus text digests to producer-
+reachable deterministic PDF digests, and writes only the closed v1 export
+document to standard output. Source bytes, filenames, actor identity, internal IDs,
+timestamps, comments, database values, and object keys are excluded. Repeated
+export over unchanged state and inventory is byte-identical. See
+[the feedback export and curation procedure](feedback/README.md).

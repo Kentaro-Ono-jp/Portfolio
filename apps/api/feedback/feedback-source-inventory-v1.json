@@ -1,0 +1,173 @@
+{
+  "corpusInventorySha256": "f84fffa5f7aeecb645ccf073322464698b4bb12d3768655761714e8cc2514cf4",
+  "description": "Reviewed bindings between repository-owned synthetic corpus sources and deterministic uploadable PDF fixtures for feedback eligibility.",
+  "fixtureGeneratorSha256": "24d78f6f1cacdcb61624e58d294d5712a380e7903ce1d83e3f3ccf53d4a4f519",
+  "provenanceClasses": [
+    "repository-owned-synthetic"
+  ],
+  "samples": [
+    {
+      "corpusSourceSha256": "4582967beca45bcd0a6731ef10c57db3623da99159acb1caf106d47d5a0c0c97",
+      "familyId": "invoice-test-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-test-001",
+      "sourceSha256": "d487717079a44b1cbc653037547cb41927b9c99743cfb9ca14f405f464329e4a"
+    },
+    {
+      "corpusSourceSha256": "fc4983a25c7c16f6c6248318d3b9c9966b173d8cbe04527c4d1e4b63ae524a70",
+      "familyId": "invoice-test-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-test-002",
+      "sourceSha256": "ae8fe29fa7e56ecf393e4e0b5192b42da4aa4783af03d2845f4091f0c28aab60"
+    },
+    {
+      "corpusSourceSha256": "077d96d3a1e1a9407fc06c8852400afa7a9371ee18396ca00091558753d318f9",
+      "familyId": "invoice-billing-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-001",
+      "sourceSha256": "fb21447890dadbf064bbb1af855697767cab5ddcb5658b5f8b7a9b189d70fa66"
+    },
+    {
+      "corpusSourceSha256": "f6bb4c7253ba6fc562aed4a1a0ae7fe320b950dfde7f108a2ff513824cc7e365",
+      "familyId": "invoice-billing-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-002",
+      "sourceSha256": "eb24c099fce3f398fc9214832631a24a37406102d3d08681e1bc3579853311db"
+    },
+    {
+      "corpusSourceSha256": "4437d3e96ef5561290c1e9585c0d9b3cdf8d176a49573cb6a933f9a2478e3479",
+      "familyId": "invoice-commerce-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-003",
+      "sourceSha256": "1e842ed38b74bf4f8ac4cee9f7e4663dfa96ba2399bf8de8400ce86d6fb8f6d7"
+    },
+    {
+      "corpusSourceSha256": "59a547ef29507e1a966f27c54663d58a84bcf3b4135253f88308aad869eb72d0",
+      "familyId": "invoice-commerce-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-004",
+      "sourceSha256": "508bbddc8da934bffd1f73d7dd30dbbfd5da5cfc9287872c0cc14475f3d1b99b"
+    },
+    {
+      "corpusSourceSha256": "41f3e56c1580a26628a4a2c14bfb85cd408c2431474b181de094081268e02ed3",
+      "familyId": "invoice-services-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-005",
+      "sourceSha256": "917f83c3a92e064ce98aad043b285929d61dcab24643a530f9b8f64068916d25"
+    },
+    {
+      "corpusSourceSha256": "10eeb4cef64146a2dc57417acde72af38e586dbefb1f0188e8ef811900604aec",
+      "familyId": "invoice-services-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-train-006",
+      "sourceSha256": "2878a75fd2d26dcf062f32329f9cda59aea6f42992da3d809e85f2de95e8a01a"
+    },
+    {
+      "corpusSourceSha256": "e09221e5a8eb6db497636b06757dd0f5dbcf1e08582235b26e4b877419b8253f",
+      "familyId": "invoice-validation-v1",
+      "label": "invoice",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "invoice-validation-001",
+      "sourceSha256": "adfb973a4b09854fcf3a972c5023fa6c248a26fb5e5383ba9b8d6ba32fa336c7"
+    },
+    {
+      "corpusSourceSha256": "ed4eaa2ea3a0e5451525c0caeb3c3990c90907b290a5d93ec1f337c54f1ded25",
+      "familyId": "report-test-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-test-001",
+      "sourceSha256": "388ec4ec21bf204aadc5591bcf6a3216da4480c5c538325299c3d2e53f83e8b2"
+    },
+    {
+      "corpusSourceSha256": "4dd78a3437b992e4cff19d79c122a9b3d19a323895d31e763b526127fd24b124",
+      "familyId": "report-test-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-test-002",
+      "sourceSha256": "a69e1da83794a93f458fa0fb53efbde4561b276e0a20972563376c78e402532c"
+    },
+    {
+      "corpusSourceSha256": "0396c13cbf28749abeb5eaafa47181c442eff8eb0fbd206fbcb6cd578076cd4a",
+      "familyId": "report-analysis-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-001",
+      "sourceSha256": "cb3d7725b92c6db7b7dfe106dfd90156417ed4bfd03ee428d56946010fb62755"
+    },
+    {
+      "corpusSourceSha256": "b69c2e4d2f4279722f927aa766651f968fd6f3c6199fdee99f9bc84831fe73d1",
+      "familyId": "report-analysis-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-002",
+      "sourceSha256": "9f17714a078fa0aa25e76f7b7c5aad8d1b1e72a276af6f100a753eafe57227a4"
+    },
+    {
+      "corpusSourceSha256": "f344b169192e42f8ae58feaa5c4699885b1243f4cc8b6d9888d2f27df60d9e6c",
+      "familyId": "report-operations-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-003",
+      "sourceSha256": "019328fcf359293f89097d0be6aa5b5545ebb758cf815c284593711358b2dc51"
+    },
+    {
+      "corpusSourceSha256": "f51649208817869ee1817cf4c2d5cfa0c9355f491f2db69c7b0d2b98999f17b4",
+      "familyId": "report-operations-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-004",
+      "sourceSha256": "2fd93c61a6dcf9e9b84c2cd8afdce8ee2a42f4460bff89ae4f6e1b41562791ad"
+    },
+    {
+      "corpusSourceSha256": "035234c7661a666e6baea71d03a18887143a1bdf14e6d9ef56f251db737191d7",
+      "familyId": "report-strategy-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-005",
+      "sourceSha256": "e342c1aebb090681d2127a6a1cd76f09b87207b721dd65a6d8fae77666b12617"
+    },
+    {
+      "corpusSourceSha256": "eaf30ccd6fea3eaf953c30c712d26b12c6813ddb241e67a72b01331e9b9a8b22",
+      "familyId": "report-strategy-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-train-006",
+      "sourceSha256": "8805e5ad181902d9b507acd376007d3436de29daa6c5314d443c8c6ac9eda78d"
+    },
+    {
+      "corpusSourceSha256": "b721d1633ebb78051a8244915ced8e7f9eafccf9fcfbe14349081fbc844aac51",
+      "familyId": "report-validation-v1",
+      "label": "report",
+      "license": "MIT",
+      "provenance": "repository-owned-synthetic",
+      "sampleId": "report-validation-001",
+      "sourceSha256": "9e41191aafa3eddfb5c836b317371cbbca99dae57e9a95bcd18db28c12f7a88f"
+    }
+  ],
+  "schemaVersion": 1
+}
