@@ -56,7 +56,8 @@ def main(
             try:
                 repository.close()
             except Exception:
-                failure_code = "FEEDBACK_EXPORT_FAILED"
+                if failure_code is None:
+                    failure_code = "FEEDBACK_EXPORT_FAILED"
                 rendered = None
     if failure_code is not None or rendered is None:
         errors.write(f"feedback export failed: {failure_code or 'FEEDBACK_EXPORT_FAILED'}\n")

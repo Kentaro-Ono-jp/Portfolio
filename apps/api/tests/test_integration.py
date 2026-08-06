@@ -215,6 +215,7 @@ def test_feedback_export_reads_terminal_measured_review_without_mutation(
                 created_at=NOW,
             )
         )
+        session.flush()
         session.add(
             ProcessingJobRow(
                 id=job_id,
@@ -238,6 +239,7 @@ def test_feedback_export_reads_terminal_measured_review_without_mutation(
                 completed_at=NOW,
             )
         )
+        session.flush()
         session.add(
             ReviewDecisionRow(
                 id=review_id,

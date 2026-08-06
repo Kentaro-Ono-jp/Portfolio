@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from dataclasses import dataclass, replace
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -357,10 +359,41 @@ def test_cli_failure_is_stable_and_emits_no_partial_document(
 
     assert result == 1
     assert stdout.getvalue() == b""
-    expected_code = (
-        "FEEDBACK_DATABASE_UNAVAILABLE" if close_error is None else "FEEDBACK_EXPORT_FAILED"
+    assert stderr.getvalue() == "feedback export failed: FEEDBACK_DATABASE_UNAVAILABLE\n"
+    assert "private" not in stderr.getvalue()
+    assert repository.closed is True
+
+
+def test_cli_close_failure_after_success_is_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = FakeFeedbackRepository(
+        (observation(corpus_digests()[0]),),
+        close_error=RuntimeError("private close failure"),
     )
-    assert stderr.getvalue() == f"feedback export failed: {expected_code}\n"
+    monkeypatch.setattr(
+        feedback_export_main,
+        "get_settings",
+        lambda: SimpleNamespace(database_url="postgresql+psycopg://synthetic"),
+    )
+    monkeypatch.setattr(feedback_export_main, "create_database_engine", lambda _url: object())
+    monkeypatch.setattr(
+        feedback_export_main,
+        "SqlAlchemyFeedbackExportRepository",
+        lambda *, engine: repository,
+    )
+    stdout = BytesIO()
+    stderr = StringIO()
+
+    result = feedback_export_main.main(
+        ["--inventory", str(INVENTORY_PATH)],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == 1
+    assert stdout.getvalue() == b""
+    assert stderr.getvalue() == "feedback export failed: FEEDBACK_EXPORT_FAILED\n"
     assert "private" not in stderr.getvalue()
     assert repository.closed is True
 
@@ -390,3 +423,30 @@ def test_cli_output_failure_is_sanitized(monkeypatch: pytest.MonkeyPatch) -> Non
     assert stderr.getvalue() == "feedback export failed: FEEDBACK_OUTPUT_UNAVAILABLE\n"
     assert "private" not in stderr.getvalue()
     assert repository.closed is True
+
+
+def test_documented_module_invocation_has_portable_imports_and_stable_failure(
+    tmp_path: Path,
+) -> None:
+    invalid_inventory = tmp_path / "invalid-inventory.json"
+    invalid_inventory.write_bytes(b"{")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "reactorfront_api.feedback_export_main",
+            "--inventory",
+            str(invalid_inventory),
+        ],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == b""
+    assert result.stderr.decode().splitlines() == [
+        "feedback export failed: FEEDBACK_INVALID_INVENTORY_JSON"
+    ]
+    assert str(invalid_inventory).encode() not in result.stderr
