@@ -74,6 +74,7 @@ class SourceStorage(Protocol):
 
 class DocumentClassification(Protocol):
     checksum: str
+    model_version: str
 
     def classify(self, text: str) -> ClassificationResult: ...
 

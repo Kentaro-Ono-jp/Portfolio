@@ -25,7 +25,6 @@ from reactorfront_ml.rabbitmq import (
     REQUEST_ROUTING_KEY,
     RESULT_QUEUE,
 )
-from reactorfront_ml.model import MODEL_VERSION
 from reactorfront_ml.settings import Settings
 from pdf_fixture import build_fixture
 from oidc_test_client import obtain_access_token
@@ -39,11 +38,13 @@ class HostOidcSettings:
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
-EXPECTED_MODEL_CHECKSUM = (
-    (REPOSITORY_ROOT / "apps" / "ml" / "model.expected.sha256")
-    .read_text(encoding="utf-8")
-    .strip()
+PROMOTION_MANIFEST = json.loads(
+    (
+        REPOSITORY_ROOT / "apps" / "ml" / "evaluation" / "promoted-model-v1.json"
+    ).read_text(encoding="utf-8")
 )
+EXPECTED_MODEL_CHECKSUM = PROMOTION_MANIFEST["artifactSha256"]
+EXPECTED_MODEL_VERSION = PROMOTION_MANIFEST["modelVersion"]
 EXPECTED_MODEL_EVIDENCE = {
     "status": "measured",
     "datasetVersion": "reactorfront-synthetic-documents-v1",
@@ -53,7 +54,7 @@ EXPECTED_MODEL_EVIDENCE = {
     "artifactSha256": EXPECTED_MODEL_CHECKSUM,
     "evaluationPolicyVersion": "document-classification-evaluation-v1",
     "evaluationPolicySha256": "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
-    "evaluationReportSha256": "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+    "evaluationReportSha256": PROMOTION_MANIFEST["evaluationReportSha256"],
 }
 INVOICE_TEXT = REPOSITORY_ROOT / "tests" / "fixtures" / "canonical_invoice.txt"
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
@@ -429,7 +430,7 @@ def assert_success_events(events: list[dict[str, object]]) -> dict[str, object]:
         raise RuntimeError(
             "Completed event did not carry exact champion model evidence"
         )
-    if any(event["modelVersion"] != MODEL_VERSION for event in events):
+    if any(event["modelVersion"] != EXPECTED_MODEL_VERSION for event in events):
         raise RuntimeError(
             "Result event model version did not match the reviewed model"
         )
@@ -443,7 +444,7 @@ def assert_failure_events(events: list[dict[str, object]]) -> dict[str, object]:
     failed = events[-1]
     if failed["failureCode"] != "SOURCE_DIGEST_MISMATCH":
         raise RuntimeError("Digest failure did not use its stable sanitized code")
-    if any(event["modelVersion"] != MODEL_VERSION for event in events):
+    if any(event["modelVersion"] != EXPECTED_MODEL_VERSION for event in events):
         raise RuntimeError(
             "Failure event model version did not match the reviewed model"
         )
@@ -492,6 +493,39 @@ def inspect_worker_boundary() -> dict[str, object]:
         "cudaAvailable": False,
     }:
         raise RuntimeError(f"ML image runtime boundary was invalid: {value}")
+    return value
+
+
+def prove_promotion_readiness_fail_closed() -> dict[str, bool]:
+    probe = (
+        "import json,tempfile; "
+        "from pathlib import Path; "
+        "from reactorfront_ml.health import is_ready; "
+        "from reactorfront_ml.settings import Settings; "
+        "settings=Settings(); "
+        "root=Path(tempfile.mkdtemp(prefix='promotion-readiness-')); "
+        "value=json.loads(settings.promotion_manifest_path.read_text(encoding='utf-8')); "
+        "value['modelVersion']='unreviewed-newest-v9'; "
+        "manifest=root/'unreviewed.json'; "
+        "manifest.write_text(json.dumps(value,ensure_ascii=True,indent=2,sort_keys=True)+'\\n',encoding='utf-8'); "
+        "unreviewed=not is_ready(Settings(promotion_manifest_path=manifest)); "
+        "checksum=root/'mismatched.sha256'; "
+        "checksum.write_text('0'*64+'\\n',encoding='utf-8'); "
+        "mismatch=not is_ready(Settings(model_checksum_path=checksum)); "
+        "assert unreviewed and mismatch; "
+        "print(json.dumps({'artifactMismatchRejected':mismatch,'unreviewedNewestRejected':unreviewed},sort_keys=True))"
+    )
+    value = json.loads(
+        compose("exec", "-T", "ml-worker", "python", "-c", probe, capture=True)
+    )
+    expected = {
+        "artifactMismatchRejected": True,
+        "unreviewedNewestRejected": True,
+    }
+    if value != expected:
+        raise RuntimeError(
+            f"Promotion readiness fail-closed proof was invalid: {value}"
+        )
     return value
 
 
@@ -622,6 +656,7 @@ def main() -> int:
 
     compose("up", "--detach", "--build", "--wait", "ml-worker")
     worker_boundary = inspect_worker_boundary()
+    promotion_readiness = prove_promotion_readiness_fail_closed()
     wait_for_result_depth(settings, minimum=4)
     compose("restart", "rabbitmq")
     compose("up", "--detach", "--wait", "rabbitmq", "api", "api-outbox", "ml-worker")
@@ -691,6 +726,7 @@ def main() -> int:
         "confidence": completed["confidence"],
         "modelVersion": completed["modelVersion"],
         "modelEvidence": completed["modelEvidence"],
+        "promotionReadiness": promotion_readiness,
         "duplicateStartedEventId": next(
             event["eventId"]
             for event in success_events

@@ -43,7 +43,6 @@ CANDIDATE_BUILD_PATH = EVALUATION_ROOT / "candidate-build-v1.json"
 CANDIDATE_REPORT_PATH = EVALUATION_ROOT / "candidate-report-v1.json"
 CANDIDATE_COMPARISON_PATH = EVALUATION_ROOT / "candidate-comparison-v1.json"
 DEPENDENCY_LOCK_PATH = ML_ROOT / "uv.lock"
-CHAMPION_CHECKSUM_PATH = ML_ROOT / "model.expected.sha256"
 
 
 def write_json(path: Path, value: object) -> None:
@@ -79,7 +78,7 @@ def candidate_report(snapshot: Any, policy: EvaluationPolicy, build: Any) -> dic
 
 
 def champion_report(snapshot: Any, policy: EvaluationPolicy) -> dict[str, Any]:
-    checksum = CHAMPION_CHECKSUM_PATH.read_text(encoding="utf-8").strip()
+    checksum = json.loads(CHAMPION_PATH.read_text(encoding="utf-8"))["artifactSha256"]
     value, _ = load_champion_baseline(
         CHAMPION_PATH,
         REPORT_SCHEMA_PATH,
@@ -263,7 +262,7 @@ class DegradedCandidateClassifier:
 def test_degraded_candidate_is_rejected_without_changing_champion() -> None:
     snapshot, policy, _ = candidate_context()
     champion = champion_report(snapshot, policy)
-    champion_checksum_before = CHAMPION_CHECKSUM_PATH.read_bytes()
+    champion_report_before = CHAMPION_PATH.read_bytes()
     degraded = evaluate_model(
         snapshot,
         policy,
@@ -292,7 +291,7 @@ def test_degraded_candidate_is_rejected_without_changing_champion() -> None:
         "EVAL_CANDIDATE_MEAN_SCORE_REGRESSION",
         "EVAL_CANDIDATE_REPORT_RECALL_REGRESSION",
     ]
-    assert CHAMPION_CHECKSUM_PATH.read_bytes() == champion_checksum_before
+    assert CHAMPION_PATH.read_bytes() == champion_report_before
 
 
 def test_comparison_rejects_corrupted_candidate_lineage() -> None:

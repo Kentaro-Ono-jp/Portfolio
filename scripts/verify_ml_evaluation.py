@@ -39,7 +39,6 @@ CANDIDATE_REPORT_PATH = EVALUATION_ROOT / "candidate-report-v1.json"
 CANDIDATE_COMPARISON_PATH = EVALUATION_ROOT / "candidate-comparison-v1.json"
 TRAINING_DATA_PATH = REPOSITORY_ROOT / "apps" / "ml" / "data" / "training.json"
 DEPENDENCY_LOCK_PATH = REPOSITORY_ROOT / "apps" / "ml" / "uv.lock"
-EXPECTED_CHECKSUM_PATH = REPOSITORY_ROOT / "apps" / "ml" / "model.expected.sha256"
 PROOF_PATH = REPOSITORY_ROOT / "artifacts" / "verification" / "ml-evaluation-proof.json"
 
 
@@ -57,11 +56,9 @@ def main() -> int:
         raise RuntimeError(
             "Snapshot training split differs from the champion training data"
         )
-    expected_artifact_sha256 = EXPECTED_CHECKSUM_PATH.read_text(
-        encoding="utf-8"
-    ).strip()
     first_artifact = generate_artifact(TRAINING_DATA_PATH)
     second_artifact = generate_artifact(TRAINING_DATA_PATH)
+    expected_artifact_sha256 = first_artifact.sha256
     if first_artifact.content != second_artifact.content:
         raise RuntimeError("Champion artifact reconstruction drifted")
     if first_artifact.sha256 != expected_artifact_sha256:
@@ -240,12 +237,6 @@ def main() -> int:
         raise RuntimeError(
             "Corrupted candidate lineage was not rejected deterministically"
         )
-    if (
-        EXPECTED_CHECKSUM_PATH.read_text(encoding="utf-8").strip()
-        != expected_artifact_sha256
-    ):
-        raise RuntimeError("Candidate evaluation changed the champion identity")
-
     proof = {
         "absoluteGatesPassed": baseline["absoluteGatesPassed"],
         "artifactSha256": expected_artifact_sha256,

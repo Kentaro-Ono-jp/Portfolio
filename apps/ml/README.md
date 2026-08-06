@@ -45,9 +45,10 @@ evaluation-policy, and evaluation-report identity. Result events use the
 durable direct exchange `reactorfront.documents.v1` and durable queue
 `reactorfront.document-processing.events.v1`. The separate API-owned
 `api-events` role consumes that queue without importing ML implementation.
-Worker startup derives the expected lineage from the canonical dataset
-snapshot and evaluation policy, then fully validates the champion report and
-runtime artifact before publishing any measured evidence.
+Worker startup derives the selected identity from the one canonical promotion
+manifest, reconstructs its artifact, and validates the dataset, policy,
+evaluation report, comparison, and runtime artifact before publishing any
+measured evidence.
 
 Result messages are persistent, mandatory-routed, and subject to a bounded
 wall-clock publisher-confirm outcome. The requested task is late-acknowledged;
@@ -80,6 +81,8 @@ of accepting Celery's non-requeueing publication failure default.
   canonical build-lineage verification
 - `src/reactorfront_ml/evaluation.py`: canonical snapshot validation, leakage guards,
   metrics, absolute and champion-relative gates, and report verification
+- `src/reactorfront_ml/promotion.py`: canonical promotion/rollback selection,
+  reviewed-evidence validation, and deterministic artifact reconstruction
 - `src/reactorfront_ml/rabbitmq.py`: durable result topology and confirmed publisher
 - `src/reactorfront_ml/storage.py`: S3-compatible source adapter
 - `src/reactorfront_ml/health.py`: model, MinIO, and RabbitMQ readiness
@@ -91,9 +94,7 @@ of accepting Celery's non-requeueing publication failure default.
 - `evaluation/evaluation-report-v1.schema.json`: closed machine-readable report
   contract shared by champion and future candidate evaluations
 - `evaluation/champion-baseline-v1.json`: complete canonical held-out report for
-  the checksum-verified current model; runtime startup verifies its canonical
-  digest, accepted role and gates, model version, and artifact checksum before
-  publishing lineage
+  the previous checksum-verified champion and reviewed rollback identity
 - `evaluation/candidate-build-v1.json`: reviewed candidate artifact identity,
   train-only membership, fixed seed, dependency lock, and no-calibration treatment
 - `evaluation/candidate-report-v1.json`: complete canonical held-out report for
@@ -101,7 +102,8 @@ of accepting Celery's non-requeueing publication failure default.
 - `evaluation/candidate-comparison-v1.json`: independently recomputed absolute
   and champion-relative promotion-eligibility decision
 - `evaluation/candidate-comparison-v1.schema.json`: closed comparison-report contract
-- `model.expected.sha256`: reviewed artifact checksum
+- `evaluation/promoted-model-v1.json`: sole reviewed runtime model selection
+- `evaluation/promoted-model-v1.schema.json`: closed promotion and rollback contract
 - `audit-requirements.txt`: normalized CPU-wheel advisory identity for pip-audit
 - `tests/`: isolated unit and contract tests
 
@@ -121,7 +123,8 @@ local examples and Compose replaces them with service DNS names.
 | `PORTFOLIO_ML_RABBITMQ_TIMEOUT_SECONDS` | `5` |
 | `PORTFOLIO_ML_MODEL_ARTIFACT_PATH` | `artifacts/model/model.json` |
 | `PORTFOLIO_ML_MODEL_CHECKSUM_PATH` | `artifacts/model/model.sha256` |
-| `PORTFOLIO_ML_CHAMPION_EVALUATION_REPORT_PATH` | `apps/ml/evaluation/champion-baseline-v1.json` |
+| `PORTFOLIO_ML_PROMOTION_MANIFEST_PATH` | `apps/ml/evaluation/promoted-model-v1.json` |
+| `PORTFOLIO_ML_PROMOTION_MANIFEST_SCHEMA_PATH` | `apps/ml/evaluation/promoted-model-v1.schema.json` |
 | `PORTFOLIO_ML_EVENT_CONTRACT_DIRECTORY` | `packages/contracts/events` |
 
 There is intentionally no database setting. The Compose service publishes no
@@ -157,7 +160,7 @@ verification checks every source digest and rejects duplicate IDs or digests,
 conflicting normalized labels, normalized content reused across splits,
 unsafe or missing sources, and family leakage.
 
-The current `document-type-v1` artifact remains unchanged. On the four
+The previous `document-type-v1` champion remains reproducible. On the four
 held-out synthetic samples it processes 4/4 without a sanitized failure and
 records macro F1 `1.0`, invoice/report precision, recall, and F1 of `1.0`, and
 mean true-label model score `0.99982216`. Its four sanitized accepted outcomes
@@ -179,16 +182,19 @@ macro F1 `1.0`, per-class recall `1.0`, and mean true-label model score
 `83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`;
 the independently recomputed comparison SHA-256 is
 `92d8878c37a2c39a25f5d5241e54b1acaff7fbc2012d975d4b659f6fb72db041`.
-All frozen absolute and champion-relative gates pass, making the candidate
-eligible for a later reviewed promotion. Eligibility does not change
-`model.expected.sha256`, runtime selection, or the active champion.
+All frozen absolute and champion-relative gates pass. The reviewed
+`promoted-model-v1.json` now selects this exact candidate and binds its
+artifact, dataset, preprocessing, pipeline, policy, report, comparison, and
+task ontology. The image build generates only that selection; startup and
+readiness reject a missing, noncanonical, mismatched, ineligible, or merely
+newest artifact without fallback.
 
 These figures describe only this tiny reviewed synthetic snapshot. The score
 is not a calibrated probability, and the baseline makes no production
-accuracy, fairness, privacy, robustness, or generalization claim. The candidate
-intentionally applies no confidence calibration; promotion and runtime
-selection remain separate later increments.
+accuracy, fairness, privacy, robustness, or generalization claim. The promoted
+model intentionally applies no confidence calibration.
 
-Runtime lineage describes only the already selected champion. It neither
-promotes `document-type-candidate-v1` nor turns review outcomes into training
-data.
+Runtime lineage now describes `document-type-candidate-v1`. The same manifest
+schema can select the previously accepted `document-type-v1` identity for a
+reviewed rollback, while prior machine and human evidence remains immutable.
+Neither promotion nor rollback turns review outcomes into training data.

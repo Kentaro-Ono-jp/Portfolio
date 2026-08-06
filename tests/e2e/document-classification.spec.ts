@@ -104,17 +104,17 @@ const EXPECTED_MODEL_EVIDENCE: ModelEvidence = {
   preprocessingVersion: "nfkc-ascii-alphanumeric-bow-v1",
   pipelineVersion: "pytorch-multinomial-naive-bayes-linear-v1",
   artifactSha256:
-    "82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac",
+    "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09",
   evaluationPolicyVersion: "document-classification-evaluation-v1",
   evaluationPolicySha256:
     "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
   evaluationReportSha256:
-    "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+    "83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861",
 };
 
 const EXPECTED_AUDIT_LINEAGE = {
   modelEvidenceStatus: "measured",
-  modelVersion: "document-type-v1",
+  modelVersion: "document-type-candidate-v1",
   datasetVersion: EXPECTED_MODEL_EVIDENCE.datasetVersion,
   datasetSha256: EXPECTED_MODEL_EVIDENCE.datasetSha256,
   preprocessingVersion: EXPECTED_MODEL_EVIDENCE.preprocessingVersion,
@@ -503,7 +503,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     jobId: approvalAccepted.jobId,
     status: "completed",
     classification: "invoice",
-    modelVersion: "document-type-v1",
+    modelVersion: "document-type-candidate-v1",
   });
   expect(approvalCompleted.confidence).toBeGreaterThanOrEqual(0.7);
   expect(approvalCompleted.modelEvidence).toEqual(EXPECTED_MODEL_EVIDENCE);
@@ -665,7 +665,7 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
     documentId: correctionAccepted.documentId,
     status: "completed",
     classification: "invoice",
-    modelVersion: "document-type-v1",
+    modelVersion: "document-type-candidate-v1",
     modelEvidence: EXPECTED_MODEL_EVIDENCE,
   });
   const correctionSourceProof = await assertSource(

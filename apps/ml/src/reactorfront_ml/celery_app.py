@@ -16,7 +16,6 @@ from reactorfront_ml.domain import (
 )
 from reactorfront_ml.event_contracts import parse_requested_event
 from reactorfront_ml.logging_config import configure_logging, log_event
-from reactorfront_ml.model import MODEL_VERSION
 from reactorfront_ml.rabbitmq import (
     DOCUMENT_EXCHANGE,
     REQUEST_QUEUE,
@@ -89,7 +88,7 @@ def process_document(task: Task[Any, Any], payload: object) -> None:
             "ml_requested_event_rejected",
             **_safe_identity_fields(payload),
             failureCode="INVALID_REQUEST_EVENT",
-            modelVersion=MODEL_VERSION,
+            modelVersion=runtime.classifier.model_version,
             modelSha256=runtime.classifier.checksum,
         )
         raise Reject(reason="INVALID_REQUEST_EVENT", requeue=False) from None
@@ -101,7 +100,7 @@ def process_document(task: Task[Any, Any], payload: object) -> None:
         "documentId": str(request.document_id),
         "jobId": str(request.job_id),
         "attempt": attempt,
-        "modelVersion": MODEL_VERSION,
+        "modelVersion": runtime.classifier.model_version,
         "modelSha256": runtime.classifier.checksum,
     }
     try:

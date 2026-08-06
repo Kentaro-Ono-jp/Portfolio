@@ -541,8 +541,9 @@ to implement the complete slice as one bulk change.
 
 ## Current accepted limitations
 
-- The current promoted model remains the completed second-slice classifier
-  until a later focused increment proves and promotes a candidate.
+- The promoted `document-type-candidate-v1` model is measured only on the tiny
+  reviewed synthetic corpus; its previously accepted champion remains a
+  reviewed rollback target through the same manifest path.
 - The accepted corpus will be synthetic and bounded; its future metrics will
   not establish real-world document quality.
 - The input remains one text-bearing PDF page of at most 5 MiB.

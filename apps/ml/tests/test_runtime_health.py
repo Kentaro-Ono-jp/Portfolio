@@ -30,7 +30,14 @@ def test_build_runtime_wires_independent_dependencies(
     observed: dict[str, object] = {}
     fake_storage = FakeStorage()
     fake_publisher = FakePublisher()
-    fake_classifier = SimpleNamespace(checksum="a" * 64, model_version="document-type-v1")
+    fake_promotion = SimpleNamespace(
+        model_name="reactorfront-document-type",
+        model_version="document-type-candidate-v1",
+    )
+    fake_classifier = SimpleNamespace(
+        checksum="a" * 64,
+        model_version="document-type-candidate-v1",
+    )
     fake_validator = SimpleNamespace()
     fake_evidence = RuntimeModelEvidence(
         dataset_version="dataset-v1",
@@ -44,14 +51,19 @@ def test_build_runtime_wires_independent_dependencies(
     )
 
     monkeypatch.setattr(
-        runtime.JsonSchemaEventValidator,
-        "__new__",
-        lambda cls, **values: observed.setdefault("validator", fake_validator),
+        runtime,
+        "JsonSchemaEventValidator",
+        lambda **values: observed.setdefault("validator", fake_validator),
     )
     monkeypatch.setattr(
         runtime.S3SourceStorage,
         "create",
         lambda **values: observed.setdefault("storage", fake_storage),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "load_promoted_model",
+        lambda *args, **values: observed.setdefault("promotion", fake_promotion),
     )
     monkeypatch.setattr(
         runtime,
@@ -79,6 +91,7 @@ def test_build_runtime_wires_independent_dependencies(
         "storage",
         "classifier",
         "publisher",
+        "promotion",
         "model_evidence",
     }
 

@@ -29,17 +29,22 @@ ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 INVOICE_TEXT = REPOSITORY_ROOT / "tests" / "fixtures" / "canonical_invoice.txt"
 REQUEST_QUEUE = "reactorfront.document-processing.requested.v1"
 REQUEST_ROUTING_KEY = "document.processing.requested.v1"
-MODEL_VERSION = "document-type-v1"
+PROMOTION_MANIFEST = json.loads(
+    (
+        REPOSITORY_ROOT / "apps" / "ml" / "evaluation" / "promoted-model-v1.json"
+    ).read_text(encoding="utf-8")
+)
+MODEL_VERSION = PROMOTION_MANIFEST["modelVersion"]
 MODEL_EVIDENCE = {
     "status": "measured",
     "datasetVersion": "reactorfront-synthetic-documents-v1",
     "datasetSha256": "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046",
     "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
     "pipelineVersion": "pytorch-multinomial-naive-bayes-linear-v1",
-    "artifactSha256": "82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac",
+    "artifactSha256": PROMOTION_MANIFEST["artifactSha256"],
     "evaluationPolicyVersion": "document-classification-evaluation-v1",
     "evaluationPolicySha256": "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
-    "evaluationReportSha256": "1337d7bf0368799ebd2bc088cfda16544ca78c3ed77f96ba265a7d9b090a19b5",
+    "evaluationReportSha256": PROMOTION_MANIFEST["evaluationReportSha256"],
 }
 
 
