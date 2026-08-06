@@ -53,6 +53,13 @@ diagnostics, artifacts, leakage scanning, failure ordering, or teardown.
   branches and reject out-of-range confidence before publishing measured
   coverage for the next exact head.
 
+### Cover runtime promotion error translation
+
+- **Origin:** PR #86 `codecov/patch` external check.
+- **Trigger:** Exact-head Actions published complete measured coverage, but the required patch-coverage check reported `91.36%` against a `91.45%` target.
+- **Mistake:** Invalid promotion evidence was translated to the stable runtime-lineage failure without a focused test executing that changed error path.
+- **Correction:** Exercise runtime construction with rejected promotion evidence and require the exact `RuntimeLineageError` plus preserved `PromotionError` cause.
+
 ## Return
 
 Return to publication Gate A after repairing the triggered evidence and

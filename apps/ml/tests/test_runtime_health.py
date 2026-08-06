@@ -11,6 +11,7 @@ import reactorfront_ml.runtime as runtime
 from reactorfront_ml.domain import ResultEventPublisher, SourceStorage
 from reactorfront_ml.lineage import RuntimeLineageError, RuntimeModelEvidence
 from reactorfront_ml.model import ModelArtifactError
+from reactorfront_ml.promotion import PromotionError
 from reactorfront_ml.settings import Settings
 from tests.fakes import FakePublisher, FakeStorage
 
@@ -94,6 +95,31 @@ def test_build_runtime_wires_independent_dependencies(
         "promotion",
         "model_evidence",
     }
+
+
+def test_build_runtime_reports_invalid_promotion_as_runtime_lineage(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(runtime, "JsonSchemaEventValidator", lambda **_: SimpleNamespace())
+    monkeypatch.setattr(
+        runtime.S3SourceStorage,
+        "create",
+        lambda **_: FakeStorage(),
+    )
+
+    def reject_promotion(*_: object, **__: object) -> object:
+        raise PromotionError("PROMOTION_SCHEMA_VIOLATION")
+
+    monkeypatch.setattr(runtime, "load_promoted_model", reject_promotion)
+
+    with pytest.raises(
+        RuntimeLineageError,
+        match="Promoted model evidence is invalid: PROMOTION_SCHEMA_VIOLATION",
+    ) as raised:
+        runtime.build_runtime(settings(tmp_path))
+
+    assert isinstance(raised.value.__cause__, PromotionError)
 
 
 def test_readiness_requires_model_storage_and_broker(
