@@ -247,6 +247,28 @@ def test_feedback_export_reads_terminal_measured_review_without_mutation(
     assert unknown_submission.document_id == unknown_document_id
     assert unknown_submission.job_id == unknown_job_id
 
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE outbox_events SET published_at = CURRENT_TIMESTAMP "
+                "WHERE event_id IN (:eligible_event_id, :unknown_event_id)"
+            ),
+            {
+                "eligible_event_id": EVENT_ID,
+                "unknown_event_id": unknown_event_id,
+            },
+        )
+        connection.execute(
+            text(
+                "UPDATE processing_jobs SET status = 'queued' "
+                "WHERE id IN (:eligible_job_id, :unknown_job_id)"
+            ),
+            {
+                "eligible_job_id": JOB_ID,
+                "unknown_job_id": unknown_job_id,
+            },
+        )
+
     result_repository = SqlAlchemyResultEventRepository(engine=engine)
     started = replace(
         integration_result_event(ResultEventType.STARTED, occurred_at=NOW),

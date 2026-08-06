@@ -45,6 +45,19 @@ fault records, shared queues, or state that may survive or race another actor.
 - **Correction:** Write an explicitly compact JSON byte representation so the
   intended representation fault is deterministic across operating systems.
 
+### Advance producer-created test records through required consumer state
+
+- **Origin:** PR #84
+  [run 31102938185](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31102938185)
+- **Trigger:** Integration proof creates records through a production producer
+  and then sends them to a stateful downstream consumer.
+- **Mistake:** The proof invoked the consumer while producer-created records
+  remained in their initial accepted state, so the consumer correctly deferred
+  work that the test expected to apply.
+- **Correction:** Advance only the test-owned records through the documented
+  intermediate state before invoking the consumer, then assert the intended
+  production outcome and retain mismatched-state coverage separately.
+
 ## Return
 
 Return to publication Gate A after repairing only the triggered isolation
