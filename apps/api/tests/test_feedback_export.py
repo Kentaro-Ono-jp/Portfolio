@@ -307,6 +307,23 @@ def test_inventory_mutations_fail_closed(
         load_feedback_inventory(path)
 
 
+@pytest.mark.parametrize("schema_version", [True, False])
+def test_boolean_inventory_versions_fail_before_repository_projection(
+    tmp_path: Path,
+    schema_version: bool,
+) -> None:
+    value = json.loads(INVENTORY_PATH.read_bytes())
+    value["schemaVersion"] = schema_version
+    path = tmp_path / "corpus.json"
+    path.write_bytes(canonical_json_bytes(value))
+    repository = FakeFeedbackRepository((observation(corpus_digests()[0]),))
+
+    with pytest.raises(FeedbackExportError, match="FEEDBACK_INVALID_INVENTORY"):
+        FeedbackExporter(repository=repository, inventory_path=path).export_bytes()
+
+    assert repository.calls == 0
+
+
 @pytest.mark.parametrize(
     ("content", "code"),
     [

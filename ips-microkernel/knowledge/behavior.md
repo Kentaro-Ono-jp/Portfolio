@@ -103,6 +103,26 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #64
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/64#issuecomment-5150763750).
 
+### Validate JSON discriminator types before value equality
+
+- **Trigger:** A Python JSON validator adds or changes an integer schema
+  version or discriminator whose accepted value is checked by equality.
+- **HEAD effect:** `moving`
+- **Problem:** Python treats booleans as integers, so value equality accepts a
+  JSON boolean as an integer discriminator and bypasses the malformed-contract
+  guard.
+- **Detect:** Parse one canonical valid document, then replace only the integer
+  discriminator with each JSON boolean, canonicalize the mutation, and invoke
+  the production parser while counting downstream repository or projection
+  calls.
+- **Pass:** The integer document succeeds; both boolean mutations fail with
+  the canonical invalid-contract result before any downstream call.
+- **Repair:** Require the exact parsed JSON integer type before comparing the
+  supported value, and retain the canonical boolean mutation matrix at the
+  production parser.
+- **Origins:** PR #84
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/84#issuecomment-5205208334).
+
 ### Preserve composed governance invariants
 
 - **Trigger:** A required-governance fragment mapping is added to or composed

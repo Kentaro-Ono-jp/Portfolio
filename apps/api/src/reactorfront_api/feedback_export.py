@@ -94,7 +94,8 @@ def load_feedback_inventory(path: Path) -> FeedbackInventory:
     }:
         raise FeedbackExportError("FEEDBACK_INVALID_INVENTORY")
     if (
-        value["schemaVersion"] != INVENTORY_SCHEMA_VERSION
+        type(value["schemaVersion"]) is not int
+        or value["schemaVersion"] != INVENTORY_SCHEMA_VERSION
         or value["provenanceClasses"] != [SUPPORTED_PROVENANCE]
         or not _is_required_string(value["description"])
         or not _is_sha256(value["corpusInventorySha256"])
