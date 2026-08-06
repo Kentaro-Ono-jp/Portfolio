@@ -198,8 +198,9 @@ cannot mutate it.
 The feedback exporter is an offline API-area command rather than an HTTP
 endpoint. It reads terminal review and measured result state in a PostgreSQL
 read-only transaction, accepts one explicit canonical repository-owned
-synthetic corpus inventory, and writes only the closed v1 export document to
-standard output. Source bytes, filenames, actor identity, internal IDs,
+feedback source-identity inventory that binds corpus text digests to producer-
+reachable deterministic PDF digests, and writes only the closed v1 export
+document to standard output. Source bytes, filenames, actor identity, internal IDs,
 timestamps, comments, database values, and object keys are excluded. Repeated
 export over unchanged state and inventory is byte-identical. See
 [the feedback export and curation procedure](feedback/README.md).

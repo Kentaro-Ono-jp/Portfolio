@@ -265,6 +265,28 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #61
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/61#issuecomment-5150104462).
 
+### Prove cross-boundary identities from producer-originated state
+
+- **Trigger:** A consumer adds or changes an identity comparison with a record,
+  manifest, or allowlist owned by another boundary.
+- **HEAD effect:** `moving`
+- **Problem:** A direct consumer-store seed uses an identity that the production
+  producer cannot create, so verification passes while every real record fails
+  the comparison.
+- **Detect:** For every affected identity class, originate one accepted value
+  through the production producer, capture the persisted consumer input, and
+  compare it with the exact reviewed external record; mutate the producer value
+  once and repeat the consumer decision.
+- **Pass:** Producer-originated accepted state matches exactly one reviewed
+  external identity and reaches the intended consumer outcome, while the
+  mutated identity fails closed; no passing proof relies only on direct
+  consumer-store seeding.
+- **Repair:** Establish an explicit reviewed identity or binding representable
+  by both boundaries, validate it before use, and replace the direct seed with
+  producer-originated integration proof plus one mismatched negative.
+- **Origins:** PR #84
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/84#issuecomment-5204630868).
+
 ### Normalize semantic timestamps before ordering
 
 - **Trigger:** A request, response, or event sequence orders accepted RFC 3339

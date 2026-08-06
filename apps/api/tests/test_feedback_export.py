@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -11,6 +12,7 @@ from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
+from scripts.pdf_fixture import build_fixture
 
 import reactorfront_api.feedback_export_main as feedback_export_main
 from reactorfront_api.domain import MeasuredModelEvidence
@@ -19,12 +21,14 @@ from reactorfront_api.feedback_export import (
     FeedbackExportError,
     FeedbackObservation,
     canonical_json_bytes,
-    load_corpus_inventory,
+    load_feedback_inventory,
     sha256_bytes,
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-INVENTORY_PATH = REPOSITORY_ROOT / "apps/ml/evaluation/corpus/v1/corpus.json"
+INVENTORY_PATH = REPOSITORY_ROOT / "apps/api/feedback/feedback-source-inventory-v1.json"
+CORPUS_INVENTORY_PATH = REPOSITORY_ROOT / "apps/ml/evaluation/corpus/v1/corpus.json"
+FIXTURE_GENERATOR_PATH = REPOSITORY_ROOT / "scripts/pdf_fixture.py"
 SCHEMA_PATH = REPOSITORY_ROOT / "apps/api/feedback/feedback-candidate-export-v1.schema.json"
 MEASURED_EVIDENCE = MeasuredModelEvidence(
     dataset_version="reactorfront-synthetic-documents-v1",
@@ -99,6 +103,28 @@ def decoded_export(repository: FakeFeedbackRepository) -> tuple[dict[str, Any], 
     return json.loads(rendered), rendered
 
 
+def test_feedback_inventory_binds_corpus_to_producer_upload_identity() -> None:
+    inventory = json.loads(INVENTORY_PATH.read_bytes())
+    corpus = json.loads(CORPUS_INVENTORY_PATH.read_bytes())
+
+    assert inventory["corpusInventorySha256"] == sha256_bytes(CORPUS_INVENTORY_PATH.read_bytes())
+    assert inventory["fixtureGeneratorSha256"] == sha256_bytes(FIXTURE_GENERATOR_PATH.read_bytes())
+    assert [sample["sampleId"] for sample in inventory["samples"]] == [
+        sample["sampleId"] for sample in corpus["samples"]
+    ]
+    for binding, corpus_sample in zip(inventory["samples"], corpus["samples"], strict=True):
+        assert {
+            key: binding[key] for key in ("familyId", "label", "license", "provenance", "sampleId")
+        } == {
+            key: corpus_sample[key]
+            for key in ("familyId", "label", "license", "provenance", "sampleId")
+        }
+        assert binding["corpusSourceSha256"] == corpus_sample["sourceSha256"]
+        fixture = build_fixture(REPOSITORY_ROOT / corpus_sample["path"])
+        assert fixture.startswith(b"%PDF-")
+        assert binding["sourceSha256"] == hashlib.sha256(fixture).hexdigest()
+
+
 def test_export_is_closed_canonical_minimal_and_byte_identical() -> None:
     first_digest, second_digest = corpus_digests()[:2]
     approved = observation(first_digest)
@@ -147,6 +173,7 @@ def test_export_is_closed_canonical_minimal_and_byte_identical() -> None:
 
 def test_export_uses_only_allowlisted_values() -> None:
     repository = FakeFeedbackRepository((observation(corpus_digests()[0]),))
+    inventory = json.loads(INVENTORY_PATH.read_bytes())
 
     _document, rendered = decoded_export(repository)
 
@@ -160,6 +187,8 @@ def test_export_uses_only_allowlisted_values() -> None:
         "objectKey",
         "originalFilename",
         "comment",
+        inventory["samples"][0]["corpusSourceSha256"],
+        inventory["samples"][0]["sampleId"],
     ):
         assert forbidden.encode() not in rendered
 
@@ -237,12 +266,22 @@ def test_duplicate_is_deduplicated_and_conflict_omits_the_source() -> None:
             "FEEDBACK_CONFLICTING_INVENTORY",
         ),
         (
+            lambda value: value["samples"][1].update(
+                corpusSourceSha256=value["samples"][0]["corpusSourceSha256"]
+            ),
+            "FEEDBACK_CONFLICTING_INVENTORY",
+        ),
+        (
             lambda value: value["samples"][0].update(provenance="private"),
             "FEEDBACK_INVALID_INVENTORY_SAMPLE",
         ),
         (
-            lambda value: value["samples"][0].update(path="../private.txt"),
+            lambda value: value["samples"][0].update(corpusSourceSha256="invalid"),
             "FEEDBACK_INVALID_INVENTORY_SAMPLE",
+        ),
+        (
+            lambda value: value.update(fixtureGeneratorSha256="invalid"),
+            "FEEDBACK_INVALID_INVENTORY",
         ),
         (
             lambda value: value.update(unexpected=True),
@@ -265,7 +304,7 @@ def test_inventory_mutations_fail_closed(
     path.write_bytes(canonical_json_bytes(value))
 
     with pytest.raises(FeedbackExportError, match=code):
-        load_corpus_inventory(path)
+        load_feedback_inventory(path)
 
 
 @pytest.mark.parametrize(
@@ -284,7 +323,7 @@ def test_invalid_inventory_bytes_fail_closed(tmp_path: Path, content: bytes, cod
     path.write_bytes(content)
 
     with pytest.raises(FeedbackExportError, match=code):
-        load_corpus_inventory(path)
+        load_feedback_inventory(path)
 
 
 def test_database_failure_is_sanitized() -> None:

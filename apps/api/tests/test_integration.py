@@ -8,7 +8,6 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID, uuid5
@@ -21,6 +20,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 from scripts.oidc_test_client import obtain_access_token
+from scripts.pdf_fixture import build_fixture, build_single_page_text_pdf
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -87,7 +87,8 @@ JOB_ID = UUID("33333333-3333-4333-8333-333333333333")
 EVENT_ID = UUID("44444444-4444-4444-8444-444444444444")
 NOW = datetime(2026, 7, 18, 9, 0, tzinfo=UTC)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-FEEDBACK_INVENTORY_PATH = REPOSITORY_ROOT / "apps/ml/evaluation/corpus/v1/corpus.json"
+FEEDBACK_INVENTORY_PATH = REPOSITORY_ROOT / "apps/api/feedback/feedback-source-inventory-v1.json"
+CORPUS_INVENTORY_PATH = REPOSITORY_ROOT / "apps/ml/evaluation/corpus/v1/corpus.json"
 
 
 @pytest.fixture
@@ -193,62 +194,123 @@ def test_oidc_principal_resolution_is_stable_and_distinct_from_legacy(
 
 
 def test_feedback_export_reads_terminal_measured_review_without_mutation(
+    settings: Settings,
     engine: Engine,
+    s3: S3Client,
 ) -> None:
     inventory = json.loads(FEEDBACK_INVENTORY_PATH.read_bytes())
-    eligible_source_sha256 = str(inventory["samples"][0]["sourceSha256"])
+    binding = inventory["samples"][0]
+    corpus = json.loads(CORPUS_INVENTORY_PATH.read_bytes())
+    corpus_sample = next(
+        sample for sample in corpus["samples"] if sample["sampleId"] == binding["sampleId"]
+    )
+    fixture = build_fixture(REPOSITORY_ROOT / corpus_sample["path"])
+    eligible_source_sha256 = hashlib.sha256(fixture).hexdigest()
+    assert eligible_source_sha256 == binding["sourceSha256"]
     private_filename = "private-feedback-source-name.pdf"
-    private_object_key = "documents/private-feedback-object/source.pdf"
-    document_id = UUID("90000000-0000-4000-8000-000000000001")
-    job_id = UUID("90000000-0000-4000-8000-000000000002")
+    private_object_key = f"documents/{DOCUMENT_ID}/source.pdf"
     review_id = UUID("90000000-0000-4000-8000-000000000003")
+
+    submission = make_real_service(settings=settings, engine=engine, s3=s3).submit(
+        stream=BytesIO(fixture),
+        original_filename=private_filename,
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+    )
+    assert submission.document_id == DOCUMENT_ID
+    assert submission.job_id == JOB_ID
+
+    unknown_document_id = UUID("90000000-0000-4000-8000-000000000011")
+    unknown_job_id = UUID("90000000-0000-4000-8000-000000000012")
+    unknown_event_id = UUID("90000000-0000-4000-8000-000000000013")
+    unknown_review_id = UUID("90000000-0000-4000-8000-000000000014")
+    unknown_private_filename = "unknown-private-feedback-source.pdf"
+    unknown_fixture = build_single_page_text_pdf("unreviewed synthetic identity")
+    unknown_source_sha256 = hashlib.sha256(unknown_fixture).hexdigest()
+    generated_ids = iter((unknown_document_id, unknown_job_id, unknown_event_id))
+    unknown_submission = DocumentService(
+        repository=SqlAlchemySubmissionRepository(engine=engine),
+        object_storage=S3ObjectStorage(client=s3, bucket=settings.s3_bucket),
+        event_validator=JsonSchemaEventValidator(
+            contract_directory=settings.event_contract_directory
+        ),
+        id_factory=lambda: next(generated_ids),
+        clock=lambda: NOW,
+    ).submit(
+        stream=BytesIO(unknown_fixture),
+        original_filename=unknown_private_filename,
+        content_type="application/pdf",
+        correlation_id=CORRELATION_ID,
+        principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+    )
+    assert unknown_submission.document_id == unknown_document_id
+    assert unknown_submission.job_id == unknown_job_id
+
+    result_repository = SqlAlchemyResultEventRepository(engine=engine)
+    started = replace(
+        integration_result_event(ResultEventType.STARTED, occurred_at=NOW),
+        source_sha256=eligible_source_sha256,
+    )
+    completed = replace(
+        integration_result_event(
+            ResultEventType.COMPLETED_V2,
+            occurred_at=NOW + timedelta(seconds=1),
+        ),
+        source_sha256=eligible_source_sha256,
+    )
+    assert result_repository.apply(started) is ResultApplyOutcome.APPLIED
+    assert result_repository.apply(completed) is ResultApplyOutcome.APPLIED
+
+    unknown_result_base = {
+        "correlation_id": CORRELATION_ID,
+        "document_id": unknown_document_id,
+        "job_id": unknown_job_id,
+        "object_key": f"documents/{unknown_document_id}/source.pdf",
+        "source_sha256": unknown_source_sha256,
+    }
+    unknown_started = replace(
+        integration_result_event(ResultEventType.STARTED, occurred_at=NOW),
+        event_id=uuid5(unknown_event_id, ResultEventType.STARTED.value),
+        **unknown_result_base,
+    )
+    unknown_completed = replace(
+        integration_result_event(
+            ResultEventType.COMPLETED_V2,
+            occurred_at=NOW + timedelta(seconds=1),
+        ),
+        event_id=uuid5(unknown_event_id, ResultEventType.COMPLETED_V2.value),
+        **unknown_result_base,
+    )
+    assert result_repository.apply(unknown_started) is ResultApplyOutcome.APPLIED
+    assert result_repository.apply(unknown_completed) is ResultApplyOutcome.APPLIED
+
     with Session(engine) as session, session.begin():
-        session.add(
-            DocumentRow(
-                id=document_id,
-                submitted_by_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
-                original_filename=private_filename,
-                object_key=private_object_key,
-                sha256=eligible_source_sha256,
-                content_type="application/pdf",
-                size_bytes=123,
-                created_at=NOW,
-            )
-        )
-        session.flush()
-        session.add(
-            ProcessingJobRow(
-                id=job_id,
-                document_id=document_id,
-                status="completed",
-                attempt_count=1,
-                model_version="document-type-v1",
-                predicted_class="invoice",
-                confidence=Decimal("0.9900"),
-                dataset_version="reactorfront-synthetic-documents-v1",
-                dataset_sha256="1" * 64,
-                preprocessing_version="normalized-whitespace-v1",
-                pipeline_version="document-classifier-v1",
-                artifact_sha256="2" * 64,
-                evaluation_policy_version="classification-evaluation-policy-v1",
-                evaluation_policy_sha256="3" * 64,
-                evaluation_report_sha256="4" * 64,
-                failure_code=None,
-                created_at=NOW,
-                started_at=NOW,
-                completed_at=NOW,
-            )
-        )
-        session.flush()
+        persisted_document = session.get(DocumentRow, DOCUMENT_ID)
+        assert persisted_document is not None
+        assert persisted_document.sha256 == eligible_source_sha256
         session.add(
             ReviewDecisionRow(
                 id=review_id,
-                document_id=document_id,
-                job_id=job_id,
+                document_id=DOCUMENT_ID,
+                job_id=JOB_ID,
                 reviewer_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
                 machine_classification="invoice",
                 final_classification="report",
                 status="corrected",
+                review_version=1,
+                decided_at=NOW,
+            )
+        )
+        session.add(
+            ReviewDecisionRow(
+                id=unknown_review_id,
+                document_id=unknown_document_id,
+                job_id=unknown_job_id,
+                reviewer_principal_id=LEGACY_SYSTEM_PRINCIPAL_ID,
+                machine_classification="invoice",
+                final_classification="invoice",
+                status="approved",
                 review_version=1,
                 decided_at=NOW,
             )
@@ -273,32 +335,37 @@ def test_feedback_export_reads_terminal_measured_review_without_mutation(
 
     document = json.loads(rendered)
     assert before == after
-    assert document["omissions"] == []
+    assert document["omissions"] == [{"count": 1, "reason": "unknown-source"}]
     assert document["candidates"] == [
         {
             "candidateId": document["candidates"][0]["candidateId"],
             "finalClassification": "report",
             "machineClassification": "invoice",
             "modelLineage": {
-                "artifactSha256": "2" * 64,
-                "datasetSha256": "1" * 64,
+                "artifactSha256": "5" * 64,
+                "datasetSha256": "4" * 64,
                 "datasetVersion": "reactorfront-synthetic-documents-v1",
-                "evaluationPolicySha256": "3" * 64,
-                "evaluationPolicyVersion": "classification-evaluation-policy-v1",
-                "evaluationReportSha256": "4" * 64,
+                "evaluationPolicySha256": "6" * 64,
+                "evaluationPolicyVersion": "champion-baseline-v1",
+                "evaluationReportSha256": "7" * 64,
                 "modelVersion": "document-type-v1",
-                "pipelineVersion": "document-classifier-v1",
-                "preprocessingVersion": "normalized-whitespace-v1",
+                "pipelineVersion": "tfidf-logreg-v1",
+                "preprocessingVersion": "document-text-v1",
             },
             "reviewOutcome": "corrected",
             "sourceSha256": eligible_source_sha256,
         }
     ]
     assert private_filename.encode() not in rendered
+    assert unknown_private_filename.encode() not in rendered
     assert private_object_key.encode() not in rendered
-    assert str(document_id).encode() not in rendered
-    assert str(job_id).encode() not in rendered
+    assert unknown_source_sha256.encode() not in rendered
+    assert str(DOCUMENT_ID).encode() not in rendered
+    assert str(JOB_ID).encode() not in rendered
     assert str(review_id).encode() not in rendered
+    assert str(unknown_document_id).encode() not in rendered
+    assert str(unknown_job_id).encode() not in rendered
+    assert str(unknown_review_id).encode() not in rendered
 
 
 def test_submission_crosses_real_http_postgres_and_s3_boundaries(

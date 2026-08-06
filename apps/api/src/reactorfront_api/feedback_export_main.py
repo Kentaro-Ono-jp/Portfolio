@@ -22,7 +22,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--inventory",
         type=Path,
         required=True,
-        help="Canonical reviewed synthetic-corpus inventory JSON.",
+        help="Canonical reviewed feedback source-identity inventory JSON.",
     )
     return parser.parse_args(argv)
 

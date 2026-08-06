@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Protocol, cast
 
 from reactorfront_api.domain import MeasuredModelEvidence
@@ -13,7 +13,6 @@ INVENTORY_SCHEMA_VERSION = 1
 SUPPORTED_CLASSIFICATIONS = frozenset({"invoice", "report"})
 SUPPORTED_LICENSE = "MIT"
 SUPPORTED_PROVENANCE = "repository-owned-synthetic"
-SOURCE_PATH_PREFIX = "apps/ml/evaluation/corpus/"
 OMISSION_ORDER = (
     "not-completed",
     "nonterminal-review",
@@ -51,7 +50,7 @@ class FeedbackObservationRepository(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class CorpusInventory:
+class FeedbackInventory:
     source_sha256s: frozenset[str]
     inventory_sha256: str
 
@@ -74,7 +73,7 @@ def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def load_corpus_inventory(path: Path) -> CorpusInventory:
+def load_feedback_inventory(path: Path) -> FeedbackInventory:
     try:
         raw = path.read_bytes()
         parsed = json.loads(raw)
@@ -85,12 +84,21 @@ def load_corpus_inventory(path: Path) -> CorpusInventory:
     value = cast(dict[str, Any], parsed)
     if raw != canonical_json_bytes(value):
         raise FeedbackExportError("FEEDBACK_NONCANONICAL_INVENTORY")
-    if set(value) != {"description", "provenanceClasses", "samples", "schemaVersion"}:
+    if set(value) != {
+        "corpusInventorySha256",
+        "description",
+        "fixtureGeneratorSha256",
+        "provenanceClasses",
+        "samples",
+        "schemaVersion",
+    }:
         raise FeedbackExportError("FEEDBACK_INVALID_INVENTORY")
     if (
         value["schemaVersion"] != INVENTORY_SCHEMA_VERSION
         or value["provenanceClasses"] != [SUPPORTED_PROVENANCE]
         or not _is_required_string(value["description"])
+        or not _is_sha256(value["corpusInventorySha256"])
+        or not _is_sha256(value["fixtureGeneratorSha256"])
         or not isinstance(value["samples"], list)
         or not value["samples"]
     ):
@@ -98,16 +106,17 @@ def load_corpus_inventory(path: Path) -> CorpusInventory:
 
     sample_ids: set[str] = set()
     source_sha256s: set[str] = set()
+    corpus_source_sha256s: set[str] = set()
     ordered_sample_ids: list[str] = []
     for raw_sample in value["samples"]:
         if not isinstance(raw_sample, dict):
             raise FeedbackExportError("FEEDBACK_INVALID_INVENTORY_SAMPLE")
         sample = cast(dict[str, Any], raw_sample)
         if set(sample) != {
+            "corpusSourceSha256",
             "familyId",
             "label",
             "license",
-            "path",
             "provenance",
             "sampleId",
             "sourceSha256",
@@ -123,17 +132,20 @@ def load_corpus_inventory(path: Path) -> CorpusInventory:
             or sample["provenance"] != SUPPORTED_PROVENANCE
             or sample["license"] != SUPPORTED_LICENSE
             or not _is_required_string(sample["familyId"])
-            or not _is_portable_source_path(sample["path"])
+            or not _is_sha256(sample["corpusSourceSha256"])
             or not _is_sha256(sample["sourceSha256"])
+            or sample["corpusSourceSha256"] == sample["sourceSha256"]
         ):
             raise FeedbackExportError("FEEDBACK_INVALID_INVENTORY_SAMPLE")
+        corpus_source_sha256 = cast(str, sample["corpusSourceSha256"])
         source_sha256 = cast(str, sample["sourceSha256"])
-        if source_sha256 in source_sha256s:
+        if source_sha256 in source_sha256s or corpus_source_sha256 in corpus_source_sha256s:
             raise FeedbackExportError("FEEDBACK_CONFLICTING_INVENTORY")
+        corpus_source_sha256s.add(corpus_source_sha256)
         source_sha256s.add(source_sha256)
     if ordered_sample_ids != sorted(ordered_sample_ids):
         raise FeedbackExportError("FEEDBACK_NONCANONICAL_INVENTORY")
-    return CorpusInventory(
+    return FeedbackInventory(
         source_sha256s=frozenset(source_sha256s),
         inventory_sha256=sha256_bytes(raw),
     )
@@ -150,7 +162,7 @@ class FeedbackExporter:
         self._inventory_path = inventory_path
 
     def export_bytes(self) -> bytes:
-        inventory = load_corpus_inventory(self._inventory_path)
+        inventory = load_feedback_inventory(self._inventory_path)
         try:
             observations = self._repository.list_feedback_observations()
         except Exception as error:
@@ -175,7 +187,7 @@ class FeedbackExporter:
 
 def _project_candidates(
     observations: tuple[FeedbackObservation, ...],
-    inventory: CorpusInventory,
+    inventory: FeedbackInventory,
 ) -> tuple[list[dict[str, object]], dict[str, int]]:
     omission_counts: dict[str, int] = {}
     by_source: dict[str, list[dict[str, object]]] = {}
@@ -214,7 +226,7 @@ def _project_candidates(
 
 def _observation_omission_reason(
     observation: FeedbackObservation,
-    inventory: CorpusInventory,
+    inventory: FeedbackInventory,
 ) -> str | None:
     if observation.processing_status != "completed":
         return "not-completed"
@@ -299,10 +311,3 @@ def _is_sha256(value: object) -> bool:
         and len(value) == 64
         and all(character in "0123456789abcdef" for character in value)
     )
-
-
-def _is_portable_source_path(value: object) -> bool:
-    if not isinstance(value, str) or not value.startswith(SOURCE_PATH_PREFIX) or "\\" in value:
-        return False
-    path = PurePosixPath(value)
-    return not path.is_absolute() and ".." not in path.parts and path.as_posix() == value
