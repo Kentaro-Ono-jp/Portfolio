@@ -1,7 +1,7 @@
 # ReactorFront Portfolio
 
-> Status: third vertical slice accepted for human-feedback model evaluation,
-> governed promotion, and runtime ML lineage — 2026-08-02
+> Status: third vertical slice completed with governed human-feedback model
+> evaluation, reviewed promotion, runtime lineage, and public proof — 2026-08-08
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -10,7 +10,7 @@
 > AI-assisted work starts with [`GIT_AGENTS.md`](GIT_AGENTS.md).
 
 This repository is ReactorFront's public engineering portfolio. It is not a
-static profile site or a collection of disconnected demos. It will contain one
+static profile site or a collection of disconnected demos. It contains one
 reproducible, production-oriented system that exposes product reasoning,
 application development, applied ML, architecture, security, testing, and
 operations as reviewable evidence.
@@ -25,14 +25,14 @@ results with traceable audit events.
 Only public, permissively licensed, or synthetic documents and datasets will
 be used. Private client or employer materials are outside the project scope.
 
-The accepted third vertical slice will join immutable human review to an
+The completed third vertical slice joins immutable human review to an
 explicitly curated synthetic dataset, leakage-aware champion/candidate
 evaluation, one reviewed promoted-model manifest, and traceable runtime ML
-lineage. Review outcomes will never become training data automatically.
+lineage. Review outcomes never become training data automatically.
 
 ## Engineering evidence
 
-The two completed vertical slices demonstrate:
+The three completed vertical slices demonstrate:
 
 - strict TypeScript and React/Next.js application development
 - Python API and applied PyTorch ML engineering
@@ -47,6 +47,11 @@ The two completed vertical slices demonstrate:
 - private source delivery, immutable human decisions, idempotency, concurrency,
   and append-only product audit history
 - real-browser security-negative, recovery, leakage-scan, and teardown proof
+- synthetic-only feedback candidates and explicit reviewed data curation
+- family-disjoint dataset snapshots and reproducible champion/candidate evaluation
+- reviewed model promotion, rollback identity, and immutable runtime lineage
+- an authenticated model-evidence experience that separates model score,
+  measured corpus evidence, and the human final decision
 
 ## Repository structure
 
@@ -98,10 +103,10 @@ Use the thin [delivery index](ips-microkernel/delivery/index.md) to select the
 governing contract without loading completed and current specifications
 together.
 
-The current accepted work is governed by
+The completed model-evaluation boundary is governed by
 [Delivery Specification 0003](ips-microkernel/delivery/0003-third-vertical-slice.md)
 and its umbrella [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72).
-The completed authenticated-review boundary is explained in the
+The complete implemented system is explained in the
 [architecture documentation](ips-microkernel/architecture/index.md). Its
 public HTTP operations and generated Web types are inspectable in the
 [OpenAPI 3.1 contract](packages/contracts/openapi/openapi.yaml) and
@@ -200,67 +205,63 @@ loopback and can be changed with the safe examples in
 [`.env.example`](.env.example). The MinIO console is intentionally not
 published to the host.
 
-## Accepted third vertical slice
+## Completed third vertical slice
 
-The human-feedback model-evaluation slice is accepted and tracked through
+The human-feedback model-evaluation slice is complete and traceable through
 umbrella [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72),
 [ADR-0021](ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md),
 and
 [Delivery Specification 0003](ips-microkernel/delivery/0003-third-vertical-slice.md).
 
-The slice will preserve completed machine predictions and human decisions as
-separate immutable evidence. A bounded API-owned export may identify only
-repository-owned synthetic review outcomes as feedback candidates; explicit
-reviewed curation, rather than runtime behavior, will admit them into a
-versioned dataset snapshot.
+Completed machine predictions and human decisions remain separate immutable
+evidence. The API-owned feedback export admits no data: it emits only bounded,
+sanitized candidates whose source digests already belong to the reviewed
+synthetic inventory. A separate reviewed curation change is required before a
+repository-owned source can enter a versioned snapshot.
 
-A first focused implementation increment, tracked by
-[Issue #77](https://github.com/Kentaro-Ono-jp/Portfolio/issues/77), establishes
-an 18-sample repository-owned synthetic snapshot with fixed family-disjoint
-splits, deterministic leakage guards, a machine-readable policy and report
-schema, and the unchanged current champion's four-sample held-out baseline.
-That bounded baseline records macro F1 `1.0` and mean true-label model score
-`0.99982216`; it is neither a calibration nor a production-quality claim.
+The active `document-type-candidate-v1` classifier is reconstructed from the
+fixed 12-sample training split in the 18-sample
+`reactorfront-synthetic-documents-v1` snapshot. All source/template families
+are disjoint across the 12/2/4 train/validation/test assignment. On the four
+held-out synthetic samples the candidate processes 4/4 with macro F1 `1.0`,
+per-class recall `1.0`, mean true-label model score `0.99982216`, and no
+sanitized failure. These measurements are neither calibrated probability nor
+production accuracy, fairness, privacy, robustness, or generalization claims.
 
-A second focused implementation increment, tracked by
-[Issue #79](https://github.com/Kentaro-Ono-jp/Portfolio/issues/79), builds
-`document-type-candidate-v1` deterministically from exactly the accepted 12
-training samples and compares its canonical held-out report with the frozen
-champion baseline. The candidate matches the bounded champion metrics, passes
-every absolute and champion-relative gate, and is eligible for later reviewed
-promotion. Its generated artifact remains outside Git history and no runtime
-model selection changes in this increment.
+One reviewed manifest binds the exact dataset, preprocessing, pipeline,
+evaluation policy, report, comparison, artifact, and ontology used at runtime.
+Worker build, startup, and readiness fail closed on drift. The previously
+accepted `document-type-v1` lineage remains the exact reviewed rollback target;
+rollback cannot rewrite prior predictions, reviews, audits, or feedback
+candidates.
 
-A third focused implementation increment, tracked by
-[Issue #81](https://github.com/Kentaro-Ono-jp/Portfolio/issues/81), carries the
-then-current champion's immutable dataset, preprocessing, pipeline, artifact,
-evaluation-policy, and evaluation-report identity through the completed event,
-API persistence, review identity, audit history, generated contracts, and Web
-validators. Existing v1 rows remain explicitly `legacy-unmeasured`; no
-historical lineage is fabricated. Runtime readiness independently derives the
-expected lineage from the canonical dataset snapshot, policy, report schema,
-and active artifact, so a coherently re-digested report rewrite fails closed.
+Measured `completed.v2` lineage crosses the event, API persistence, review
+ETag, audit record, OpenAPI, generated Web types, and authenticated result.
+Existing results remain explicitly `legacy-unmeasured`. The Web evidence panel
+shows exact machine lineage and corpus measurements separately from the
+immutable human approval or correction.
 
-A fourth focused implementation increment, tracked by
-[Issue #83](https://github.com/Kentaro-Ono-jp/Portfolio/issues/83), projects only
-eligible terminal reviews through a canonical, API-owned, read-only feedback-
-candidate export. Export does not admit data, fit a model, or change runtime
-selection.
+The public [model-development summary](apps/ml/MODEL_DEVELOPMENT.md) and
+[model card](apps/ml/MODEL_CARD.md) expose the exact reproducible identities,
+evidence links, intended use, and limitations. Focused Issues, PRs, reviewed
+heads, authoritative workflows or qualified limitations, squash merges, and
+merged-main proof are recorded in the
+[completion evidence](ips-microkernel/delivery/0003-third-vertical-slice.md#completion-evidence).
 
-A fifth focused implementation increment, tracked by
-[Issue #85](https://github.com/Kentaro-Ono-jp/Portfolio/issues/85), promotes the
-eligible candidate through one reviewed manifest. The ML image generates only
-the selected artifact, and startup/readiness fail closed unless its dataset,
-pipeline, policy, report, comparison, artifact, and ontology identities match.
-The same manifest schema retains the previously accepted classifier as a
-reviewed rollback target.
+The authoritative completion baseline is cold-cache
+[run 31203098116](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31203098116)
+against exact `main` commit
+`ac12aa76645c28b95b0aba250136d1b5353cb5be`. After repository-scoped Actions
+caches were removed, the workflow freshly installed the pinned Node, API, ML,
+and Playwright dependencies, selected and executed all 9/9 verification groups
+and 53/53 test files with none carried or skipped, published measured coverage,
+sanitized public artifacts, and removed the isolated Compose project. It used
+no repository or organization GitHub Secret, external end-user identity,
+maintainer-local runtime state, local AI-agent Docker, or private input data.
 
-The active classifier is now `document-type-candidate-v1`; its evidence remains
-bounded to the tiny repository-owned synthetic corpus. Automatic retraining,
-private-data reuse, OCR, structured field extraction, cloud deployment, RAG,
-and production-quality claims remain outside this slice. Later increments will
-add the bounded Web evidence presentation and publish the final completion
-record.
+Automatic retraining, private-data reuse, OCR, structured field extraction,
+cloud deployment, RAG, production identity, persistent hosting, and production-
+quality model claims remain outside this completed slice.
 
 ## Completed second vertical slice
 

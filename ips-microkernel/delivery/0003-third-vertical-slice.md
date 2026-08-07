@@ -1,8 +1,9 @@
 # Delivery Specification 0003: Human-feedback model evaluation and governed promotion
 
-- Status: Accepted
+- Status: Completed
 - Date: 2026-08-02
 - Accepted: 2026-08-02
+- Completed: 2026-08-08
 - Owner: ReactorFront
 - Tracking issue: [#72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72)
 - Related decisions:
@@ -506,40 +507,40 @@ to implement the complete slice as one bulk change.
 
 ## Definition of done for the complete slice
 
-- [ ] ADR-0021 and this specification remain accepted and aligned.
-- [ ] Every corpus sample has reviewed provenance, label, family, split, and
+- [x] ADR-0021 and this specification remain accepted and aligned.
+- [x] Every corpus sample has reviewed provenance, label, family, split, and
   digest identity.
-- [ ] Duplicate, conflicting-label, source-identity, and family leakage fail
+- [x] Duplicate, conflicting-label, source-identity, and family leakage fail
   deterministically.
-- [ ] The evaluation policy and champion baseline precede candidate fitting.
-- [ ] Champion and candidate reports are complete, canonical, and reproducible.
-- [ ] Exact numeric absolute, relative, confidence, and completeness gates are
+- [x] The evaluation policy and champion baseline precede candidate fitting.
+- [x] Champion and candidate reports are complete, canonical, and reproducible.
+- [x] Exact numeric absolute, relative, confidence, and completeness gates are
   enforced without candidate-local weakening.
-- [ ] At least one ineligible candidate or corrupted-lineage case is rejected
+- [x] At least one ineligible candidate or corrupted-lineage case is rejected
   without changing the champion.
-- [ ] The promoted manifest binds the exact dataset, pipeline, artifact, policy,
+- [x] The promoted manifest binds the exact dataset, pipeline, artifact, policy,
   and report used by runtime.
-- [ ] Feedback export is synthetic-only, canonical, minimal, and cannot train or
+- [x] Feedback export is synthetic-only, canonical, minimal, and cannot train or
   promote automatically.
-- [ ] Completed.v2 lineage is validated and persisted atomically with event
+- [x] Completed.v2 lineage is validated and persisted atomically with event
   receipt and terminal result.
-- [ ] Existing results remain explicit legacy evidence without fabricated
+- [x] Existing results remain explicit legacy evidence without fabricated
   lineage.
-- [ ] Review ETags, idempotency, concurrency, immutable machine evidence, and
+- [x] Review ETags, idempotency, concurrency, immutable machine evidence, and
   append-only audit history remain correct.
-- [ ] The Web distinguishes one model score, measured corpus evidence, and a
+- [x] The Web distinguishes one model score, measured corpus evidence, and a
   human final decision.
-- [ ] Static, real-service, browser, security-negative, recovery, rollback,
+- [x] Static, real-service, browser, security-negative, recovery, rollback,
   migration, leakage-scan, and teardown proof pass from a clean runner.
-- [ ] Public evidence states exact metrics and limitations without production
+- [x] Public evidence states exact metrics and limitations without production
   quality, calibration, fairness, privacy, robustness, or generalization claims.
-- [ ] Every focused Issue, PR, exact-head verdict, authoritative workflow or
+- [x] Every focused Issue, PR, exact-head verdict, authoritative workflow or
   governed qualified limitation, merge, and merged-main workflow or
   corresponding governed qualified limitation is recorded in Issue #72 and
   this completion record; an absent workflow is never recorded as passing
   evidence.
 
-## Current accepted limitations
+## Accepted limitations
 
 - The promoted `document-type-candidate-v1` model is measured only on the tiny
   reviewed synthetic corpus; its previously accepted champion remains a
@@ -557,12 +558,42 @@ to implement the complete slice as one bulk change.
 
 ## Completion evidence
 
-Not yet available. Record each focused Issue, PR, exact reviewed head,
-authoritative workflow or governed qualified limitation, squash merge,
-merged-main workflow or corresponding governed qualified limitation,
-reconciliation, accepted limitation, and final cold-cache proof here as the
-slice advances. A missing workflow remains a limitation and never passing
-evidence.
+Delivery completed on 2026-08-08. The implementation progressed through the
+reviewable boundaries planned in
+[Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72):
+
+| Boundary | Focused history | Exact reviewed head and proof | Merge and default-branch proof |
+|---|---|---|---|
+| Model-lifecycle planning baseline | [Issue #73](https://github.com/Kentaro-Ono-jp/Portfolio/issues/73) / [PR #74](https://github.com/Kentaro-Ono-jp/Portfolio/pull/74) | [`55b98205329ba013044e8791f81e6547e06a1511`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/55b98205329ba013044e8791f81e6547e06a1511) received an [Approved verdict](https://github.com/Kentaro-Ono-jp/Portfolio/pull/74#issuecomment-5159021659); exact-base [run 30742036017](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30742036017) passed | Squash merge [`8dc604d6331b8dc0709adb60adf5242113dce907`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/8dc604d6331b8dc0709adb60adf5242113dce907) retained the reviewed tree; the exact review head and merged-main commit intentionally have no workflow under the complete Markdown-only exception, and neither absence is represented as passing proof |
+| Corpus, policy, and champion baseline | [Issue #77](https://github.com/Kentaro-Ono-jp/Portfolio/issues/77) / [PR #78](https://github.com/Kentaro-Ono-jp/Portfolio/pull/78) | [`f72fbed23fcecad3ea75c81b200bceaf33ae8f0b`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/f72fbed23fcecad3ea75c81b200bceaf33ae8f0b) received an [Approved verdict](https://github.com/Kentaro-Ono-jp/Portfolio/pull/78#issuecomment-5169653340); exact-head [run 30835859778](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30835859778) passed | Squash merge [`09b2f7c17bfabebc6fa4b30cb171e862a9bba8ea`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/09b2f7c17bfabebc6fa4b30cb171e862a9bba8ea) passed merged-main [run 30837211726](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30837211726) |
+| Candidate build and comparison | [Issue #79](https://github.com/Kentaro-Ono-jp/Portfolio/issues/79) / [PR #80](https://github.com/Kentaro-Ono-jp/Portfolio/pull/80) | [`cdfad936de8404d9348048f7d04880be4efe3feb`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/cdfad936de8404d9348048f7d04880be4efe3feb) received an [Approved verdict](https://github.com/Kentaro-Ono-jp/Portfolio/pull/80#issuecomment-5181328591); exact-head [run 30923809472](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30923809472) plus successful predecessor [run 30922706707](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30922706707) supplied complete evidence | Squash merge [`605eb81a5ae469150502cbf7fe5518907393b33b`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/605eb81a5ae469150502cbf7fe5518907393b33b) passed merged-main [run 30925833703](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/30925833703) |
+| Runtime lineage and compatibility | [Issue #81](https://github.com/Kentaro-Ono-jp/Portfolio/issues/81) / [PR #82](https://github.com/Kentaro-Ono-jp/Portfolio/pull/82) | [`f9b7f1831a80b43c5bf7799f658afa0e96e4a0c6`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/f9b7f1831a80b43c5bf7799f658afa0e96e4a0c6) received [Approved re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/82#issuecomment-5195113569); exact-head [run 31028591654](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31028591654) carried only successful unaffected evidence from full [run 31025849786](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31025849786) | Squash merge [`359f0c7faac57901718aaf35d78ea3b3475cebb1`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/359f0c7faac57901718aaf35d78ea3b3475cebb1) passed merged-main [run 31030641158](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31030641158) |
+| Bounded feedback curation | [Issue #83](https://github.com/Kentaro-Ono-jp/Portfolio/issues/83) / [PR #84](https://github.com/Kentaro-Ono-jp/Portfolio/pull/84) | [`d2f582793a413f93a10e4d603f8265a69b072e1d`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/d2f582793a413f93a10e4d603f8265a69b072e1d) received [Approved re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/84#issuecomment-5205520986); exact-head [run 31106307730](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31106307730) passed with none skipped | Squash merge [`72f35f1766c198fbd9f7af82afb9c80369951f69`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/72f35f1766c198fbd9f7af82afb9c80369951f69) passed merged-main [run 31108001985](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31108001985) |
+| Governed promotion and rollback | [Issue #85](https://github.com/Kentaro-Ono-jp/Portfolio/issues/85) / [PR #86](https://github.com/Kentaro-Ono-jp/Portfolio/pull/86) | [`789279be42b4d4333510420e4171772f91d54097`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/789279be42b4d4333510420e4171772f91d54097) received an [Approved verdict](https://github.com/Kentaro-Ono-jp/Portfolio/pull/86#issuecomment-5215898936); exact-head [run 31118570935 attempt 3](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31118570935) passed with none skipped | Squash merge [`5270c764cc939ec2cca5779d90d53d73e6ee82be`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/5270c764cc939ec2cca5779d90d53d73e6ee82be) passed merged-main [run 31170580533](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31170580533) |
+| Authenticated model-evidence experience | [Issue #87](https://github.com/Kentaro-Ono-jp/Portfolio/issues/87) / [PR #88](https://github.com/Kentaro-Ono-jp/Portfolio/pull/88) | [`46558a5319b7c678b9c3d4f0a93e18d83743d41a`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/46558a5319b7c678b9c3d4f0a93e18d83743d41a) received an [Approved verdict](https://github.com/Kentaro-Ono-jp/Portfolio/pull/88#issuecomment-5217594772); exact-head [run 31180524304](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31180524304) executed all 9/9 groups and 53/53 test files with no carry or skip | Squash merge [`662e8b0ba7b431377bbe5cedbff1ea8ca4a64fca`](https://github.com/Kentaro-Ono-jp/Portfolio/commit/662e8b0ba7b431377bbe5cedbff1ea8ca4a64fca) passed merged-main [run 31183117304](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31183117304) |
+
+The final cold-cache baseline is
+[run 31203098116](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31203098116)
+against exact default-branch commit
+`ac12aa76645c28b95b0aba250136d1b5353cb5be`. Repository-scoped Actions caches
+were deleted before dispatch. The run freshly installed the pinned Node, API,
+ML, and Playwright dependencies; selected and executed all 9/9 groups and
+53/53 test files with none carried or skipped; reproduced model and service
+runtime, real-browser, coverage, migration, recovery, security-negative, and
+sanitizer proof; and removed only the `reactorfront-portfolio` Compose project.
+It referenced no repository or organization GitHub Secret and used no external
+end-user identity, maintainer-local runtime state, local AI-agent Docker, or
+private input data. The artifact leakage scan passed for 57 public files after
+sanitizing one bounded payload, and all three measured coverage publications
+succeeded.
+
+Final public architecture, security, model-development, model-card,
+limitations, workflow, and this durable completion evidence are owned by
+[Issue #93](https://github.com/Kentaro-Ono-jp/Portfolio/issues/93). Its exact
+reviewed-head, merge, default-branch proof, and reconciliation remain in the
+focused Issue and [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72),
+where live post-merge state can be recorded without self-referential commit
+metadata.
 
 ## Follow-up slices
 

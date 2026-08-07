@@ -28,7 +28,10 @@ OCR, scanned or encrypted documents, empty text, multiple pages, images, GPU,
 production model-quality claims, direct API state access, and Web behavior are
 not supported in this boundary. See [`MODEL_CARD.md`](MODEL_CARD.md) for the
 model identity, provenance, evaluation condition, checksum, intended use, and
-limitations.
+limitations. See [`MODEL_DEVELOPMENT.md`](MODEL_DEVELOPMENT.md) for the
+feedback-candidate, curation, family-disjoint evaluation, promotion, rollback,
+runtime-lineage, and immutable human-decision boundary with stable evidence
+links.
 
 ## Task and result transport
 
@@ -104,6 +107,8 @@ of accepting Celery's non-requeueing publication failure default.
 - `evaluation/candidate-comparison-v1.schema.json`: closed comparison-report contract
 - `evaluation/promoted-model-v1.json`: sole reviewed runtime model selection
 - `evaluation/promoted-model-v1.schema.json`: closed promotion and rollback contract
+- `MODEL_DEVELOPMENT.md`: bounded model-development and evidence summary
+- `MODEL_CARD.md`: promoted model identity, intended use, evaluation, and limitations
 - `audit-requirements.txt`: normalized CPU-wheel advisory identity for pip-audit
 - `tests/`: isolated unit and contract tests
 
