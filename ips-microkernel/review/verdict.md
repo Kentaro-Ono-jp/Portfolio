@@ -20,6 +20,8 @@ Previous verdict: `<URL | none>`
 
 ### Findings or approval basis
 
+Pre-mortem: `<material failure paths considered and their evidence-backed outcome>`
+
 <severity, exact evidence, and impact; include prior-finding status for re-review>
 
 ### Reusable governance candidate
@@ -47,6 +49,10 @@ or one numbered item for every atomic reusable candidate:
 Do not claim cleanup is complete before the comment. Cleanup occurs after the
 only permitted GitHub write.
 
+Within the existing findings-or-approval-basis section, record the most
+plausible material failure path or paths inspected and their evidence-backed
+outcome. A bare attestation that the pre-mortem was performed is insufficient.
+
 Keep exactly one candidate section. When candidates exist, use their stable
 discovery order and one numbered item for every atomic reusable candidate.
 `none` is permitted only when no reusable candidate was discovered; never use
@@ -58,9 +64,9 @@ guidance, implementation, an Issue, or the PR.
 
 ## Publication guard
 
-If the comment cannot accurately state the reviewed SHA, evidence, every
-reusable-governance candidate or valid `none`, limitations, and scheduled
-cleanup, do not publish a partial verdict.
+If the comment cannot accurately state the reviewed SHA, pre-mortem outcome,
+evidence, every reusable-governance candidate or valid `none`, limitations,
+and scheduled cleanup, do not publish a partial verdict.
 
 ## Next
 
