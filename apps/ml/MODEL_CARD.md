@@ -11,6 +11,13 @@
 - Selection: reviewed [`promoted-model-v1.json`](evaluation/promoted-model-v1.json)
 - Runtime: pinned CPU PyTorch in the `ml-worker` image
 
+The complete dataset, split, preprocessing, pipeline, policy, report,
+comparison, promotion, rollback, feedback-candidate, runtime-lineage, and human-
+decision boundary is collected in the
+[governed model-development summary](MODEL_DEVELOPMENT.md). The implementation
+and proof history is recorded in
+[Delivery Specification 0003](../../ips-microkernel/delivery/0003-third-vertical-slice.md#completion-evidence).
+
 ## Intended use
 
 This model is a repository-verification artifact for classifying the first
@@ -51,11 +58,13 @@ Canonical verification reconstructs this model from the original 12 training
 snippets, verifies artifact SHA-256, evaluates every held-out sample twice, and
 requires both reports to be byte-identical to the committed candidate report.
 
-On the four held-out synthetic samples, `document-type-candidate-v1` processes 4/4 with
-no sanitized failure. Its bounded baseline records macro F1 `1.0`, per-class
-precision/recall/F1 `1.0`, and mean true-label model score `0.99982216`. The
-report records one sanitized accepted outcome per held-out sample so every
-published aggregate and gate can be recomputed independently. Its SHA-256 is
+On the four held-out synthetic samples, `document-type-candidate-v1` processes
+4/4 with no sanitized failure. Its bounded baseline records macro F1 `1.0`,
+per-class precision/recall/F1 `1.0`, and mean true-label model score
+`0.99982216`. The canonical
+[`candidate-report-v1.json`](evaluation/candidate-report-v1.json) records one
+sanitized accepted outcome per held-out sample so every published aggregate
+and gate can be recomputed independently. Its SHA-256 is
 `83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`.
 Runtime CI separately retains real PyTorch inference through repository-
 generated invoice and report PDFs.
@@ -74,12 +83,14 @@ The model processes all four held-out samples correctly with macro F1
 `1.0`, per-class recall `1.0`, and mean true-label model score `0.99982216`.
 Its canonical report SHA-256 is
 `83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`.
-The canonical comparison independently recomputes every absolute and
-champion-relative gate and records the candidate as eligible. The reviewed
-promotion manifest selects exactly that candidate, report, policy, dataset,
-pipeline, artifact, and ontology; the image build and worker readiness both
-fail closed when any identity differs. No confidence calibration is fitted, so
-the value remains a model score rather than a calibrated probability.
+The canonical
+[`candidate-comparison-v1.json`](evaluation/candidate-comparison-v1.json)
+independently recomputes every absolute and champion-relative gate and records
+the candidate as eligible. The reviewed promotion manifest selects exactly
+that candidate, report, policy, dataset, pipeline, artifact, and ontology; the
+image build and worker readiness both fail closed when any identity differs.
+No confidence calibration is fitted, so the value remains a model score rather
+than a calibrated probability.
 
 The previous `document-type-v1` artifact remains a reviewed rollback target
 through the same manifest schema. Rollback must be another reviewed manifest

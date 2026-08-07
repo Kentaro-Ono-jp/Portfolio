@@ -1,13 +1,17 @@
 # Architecture documentation
 
 The implemented product is a Document Intelligence and Human Review Platform.
-Its completed second vertical slice authenticates one repository-owned
-synthetic reviewer, processes supported PDFs through an asynchronous ML
-boundary, protects the private source, records one immutable approval or
-correction, and exposes an append-only product audit history.
+Its three completed vertical slices authenticate one repository-owned
+synthetic reviewer, process supported PDFs through an asynchronous promoted ML
+boundary, protect the private source, record one immutable approval or
+correction, expose append-only product audit history, and carry the exact
+reviewed model lineage into the authenticated result.
 
-The governing boundaries are [ADR-0007](../adr/0007-authentication-session-and-api-authorization.md)
-and [Delivery Specification 0002](../delivery/0002-second-vertical-slice.md).
+The governing boundaries are
+[ADR-0007](../adr/0007-authentication-session-and-api-authorization.md),
+[ADR-0021](../adr/0021-govern-human-feedback-model-evaluation-and-promotion.md),
+[Delivery Specification 0002](../delivery/0002-second-vertical-slice.md), and
+[Delivery Specification 0003](../delivery/0003-third-vertical-slice.md).
 The public HTTP surface is the
 [OpenAPI 3.1 contract](../../packages/contracts/openapi/openapi.yaml), with its
 [generated TypeScript representation](../../packages/contracts/generated/api.d.ts).
@@ -23,7 +27,7 @@ flowchart LR
     Database[("PostgreSQL\nprincipals and business state")]
     Objects[("Private S3-compatible storage\nsource PDFs")]
     Broker["RabbitMQ\nat-least-once delivery"]
-    ML["Independent ML worker\nPDF extraction and PyTorch"]
+    ML["Independent ML worker\nreviewed manifest and PyTorch"]
 
     Reviewer -->|"opaque cookie and CSRF token"| Web
     Web <-->|"Authorization Code + PKCE"| Identity
@@ -48,11 +52,11 @@ or identity detail.
 | Browser | Render state, start sign-in, send same-origin mutations with CSRF, and display source/review/audit results | Access, refresh, and ID tokens; private upstream URLs; object credentials |
 | Next.js Web | Validate OIDC callback state, nonce, issuer, and PKCE; own the bounded server session; attach access tokens to API calls | PostgreSQL access, resource-ownership policy, ML implementation |
 | Dex fixture | Provide a deterministic loopback OIDC protocol boundary and synthetic reviewer for tests | Production accounts, production credentials, product-owned user storage |
-| FastAPI resource server | Validate every bearer token, map `(issuer, subject)` to an API principal, enforce capabilities and ownership, and own all business mutations | Browser-supplied actor authority, end-user tokens in durable state |
+| FastAPI resource server | Validate every bearer token, enforce capabilities and ownership, own all business mutations, and project only sanitized eligible feedback candidates | Browser-supplied actor authority, end-user tokens in durable state, automatic dataset admission |
 | PostgreSQL | Own principals, documents, jobs, outbox rows, immutable review decisions, idempotency receipts, and audit events | Tokens, session cookies, source text, mutable profile copies |
 | Private object storage | Hold bounded source PDFs under API-created object identities | Public buckets, browser credentials, durable public URLs |
 | RabbitMQ | Carry requested work and result events with stable identities and at-least-once delivery | End-user identity, OAuth claims, source text |
-| ML worker | Verify and extract the supported PDF, run the deterministic model, and publish a result event | PostgreSQL access, reviewer identity, review or authorization policy |
+| ML worker | Validate the reviewed promotion manifest, reconstruct the selected artifact, verify and extract the supported PDF, and publish a result with immutable lineage | PostgreSQL access, reviewer identity, review or authorization policy, runtime model switching |
 
 `apps/web`, `apps/api`, and `apps/ml` remain independently deployable. Their
 only shared application surface is language-neutral material in
@@ -102,6 +106,57 @@ write wins; identical retry is stable, conflicting idempotency reuse is
 rejected, stale evidence fails its precondition, and no second terminal
 decision can overwrite the result.
 
+## Governed model-development and runtime lineage
+
+```mermaid
+flowchart LR
+    Review["API-owned immutable\nhuman review"]
+    Export["Sanitized feedback\ncandidate export"]
+    Curation["Explicit reviewed\ncuration"]
+    Snapshot["18-sample immutable snapshot\nfamily-disjoint 12/2/4 split"]
+    Evaluation["Champion/candidate evaluation\npredeclared policy"]
+    Manifest["Reviewed promotion manifest"]
+    Worker["Promoted ML worker"]
+    Result["completed.v2 immutable lineage"]
+    Web["Authenticated evidence panel"]
+
+    Review --> Export
+    Export -.->|"never admits automatically"| Curation
+    Curation --> Snapshot
+    Snapshot --> Evaluation
+    Evaluation --> Manifest
+    Manifest --> Worker
+    Worker --> Result
+    Result --> Web
+```
+
+The feedback export is an API-owned read-only projection, not an ML database
+client or training trigger. It includes only stable candidate and source
+digests, machine/final classifications, review outcome, and required machine
+lineage for sources already in the reviewed synthetic inventory. Source bytes
+and text, filenames, product identifiers, actor identity, tokens, timestamps,
+comments, and database keys are excluded.
+
+The fixed snapshot prevents a source/template family from crossing train,
+validation, or held-out test splits. Candidate fitting uses only the training
+membership. Evaluation reconstructs the artifact and reports twice, requires
+byte identity, recomputes the predeclared absolute and champion-relative gates,
+and rejects leakage, incomplete outcomes, corrupted lineage, or an ineligible
+candidate without mutating runtime selection.
+
+The sole reviewed manifest selects `document-type-candidate-v1` and binds its
+dataset, preprocessing, pipeline, policy, report, comparison, artifact, and
+ontology. Build, startup, and readiness reject drift or an unreviewed newest
+artifact. `document-type-v1` remains the exact reviewed rollback target.
+Measured `completed.v2` events carry the selected identities into atomic API
+persistence, review ETags, audit detail, generated contracts, and the Web.
+Legacy results stay explicitly `legacy-unmeasured`; a later human decision
+cannot rewrite machine evidence or authorize model development.
+
+Exact identities and bounded measurements are published in the
+[model-development summary](../../apps/ml/MODEL_DEVELOPMENT.md) and
+[model card](../../apps/ml/MODEL_CARD.md).
+
 ## Security properties
 
 - OIDC Authorization Code flow uses PKCE, state, nonce, exact callback and
@@ -117,6 +172,11 @@ decision can overwrite the result.
   SHA-256 before returning any PDF bytes, and uses private no-store responses.
 - Machine classification, confidence, model version, and terminal processing
   evidence remain immutable and visibly separate from the human decision.
+- Only reviewed repository-owned synthetic sources can become feedback
+  candidates; export cannot curate, train, evaluate, promote, or change runtime
+  selection.
+- The promoted runtime model is selected by one canonical reviewed manifest;
+  dataset, pipeline, artifact, policy, report, and comparison drift fails closed.
 - Verification artifacts are scanned and sanitized before public upload;
   project-scoped teardown remains unconditional.
 
@@ -134,11 +194,13 @@ GitHub-hosted runtime verification. AI-assisted local work uses
 `--static-only`; Docker-backed identity, browser, database, broker, object-
 storage, and ML proof runs only in GitHub Actions.
 
-The complete runtime proof signs in through real OIDC Code + PKCE, processes an
-invoice and a deliberately limited synthetic correction fixture, reads the
-private source, proves approval and correction, exercises authentication,
-authorization, CSRF, concurrency, idempotency, recovery, and sign-out, scans
-public artifacts for private content, and tears down only the
+The complete runtime proof reconstructs and evaluates the champion and
+candidate, rejects invalid lineage and ineligible selection, signs in through
+real OIDC Code + PKCE, processes repository-owned invoice and report PDFs
+through the promoted model, exposes exact measured and explicit legacy
+evidence, proves approval and correction, exercises authentication,
+authorization, CSRF, concurrency, idempotency, broker recovery, and sign-out,
+scans public artifacts for private content, and tears down only the
 `reactorfront-portfolio` Compose project.
 
 The [workflow summary](../../.github/workflows/README.md) maps identity,
@@ -147,9 +209,9 @@ coverage, failure evidence, and teardown outcomes to the canonical verifier.
 The [verification script documentation](../../scripts/README.md) describes the
 same root entrypoint used locally and by GitHub Actions.
 
-Reviewable evidence is recorded in [Issue #27](https://github.com/Kentaro-Ono-jp/Portfolio/issues/27)
+Reviewable evidence is recorded in [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72)
 and the completion section of
-[Delivery Specification 0002](../delivery/0002-second-vertical-slice.md#completion-evidence).
+[Delivery Specification 0003](../delivery/0003-third-vertical-slice.md#completion-evidence).
 
 ## Known limitations
 
@@ -164,10 +226,13 @@ does not claim production readiness.
 - The supported source is one text-bearing PDF page of at most 5 MiB. Scanned-
   image OCR, multi-page processing, image upload, range requests, and presigned
   source delivery are not implemented.
-- The deliberately small deterministic classifier supports the bounded
-  `invoice` and `report` demonstration. Its confidence is not calibrated and
-  its synthetic training/evaluation data does not establish production model
-  quality.
+- The promoted classifier supports only the bounded `invoice` and `report`
+  demonstration. Its fixed 18-sample repository-authored corpus and four held-
+  out samples do not establish production accuracy, calibration, fairness,
+  privacy, robustness, generalization, or domain-drift performance.
+- Model promotion and rollback are reviewed repository changes. There is no
+  online learning, automatic runtime-data admission, mutable model registry,
+  canary, shadow traffic, A/B test, or runtime switching control.
 - Multi-tenancy, organization membership, assignment queues, administration,
   account recovery, MFA, audit search/export/retention/legal hold, and managed
   cloud deployment remain separate product decisions.
@@ -179,5 +244,7 @@ does not claim production readiness.
 - [ADR-0003: Adopt the initial technology stack](../adr/0003-initial-technology-stack.md)
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](../adr/0004-api-state-ownership-and-transactional-outbox.md)
 - [ADR-0007: Define the authentication, session, and API authorization boundary](../adr/0007-authentication-session-and-api-authorization.md)
+- [ADR-0021: Govern human feedback, model evaluation, and promotion](../adr/0021-govern-human-feedback-model-evaluation-and-promotion.md)
 - [Delivery Specification 0001: First end-to-end vertical slice](../delivery/0001-first-vertical-slice.md)
 - [Delivery Specification 0002: Authenticated classification review and immutable audit trail](../delivery/0002-second-vertical-slice.md)
+- [Delivery Specification 0003: Human-feedback model evaluation and governed promotion](../delivery/0003-third-vertical-slice.md)

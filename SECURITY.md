@@ -30,6 +30,14 @@ fixture, a server-owned Next.js session, independent API bearer-token
 validation, owner-filtered private source access, one immutable human review
 decision, and append-only product audit history.
 
+Model development is synthetic-only and review-gated. The API-owned feedback
+export accepts only source digests already present in the reviewed synthetic
+inventory and excludes source bytes or text, filenames, document and job
+identifiers, correlation and principal identifiers, tokens, timestamps,
+comments, and database keys. Export cannot modify the corpus, assign a split,
+fit or evaluate a model, update the promotion manifest, or change runtime
+selection. A separate reviewed curation change is required.
+
 The browser receives only an opaque `HttpOnly`, `SameSite=Lax` session cookie.
 OAuth tokens remain server-side, and state-changing same-origin operations
 require CSRF verification. The API validates token signature, algorithm,
@@ -47,6 +55,15 @@ messages, ML tasks, logs, and public evidence. Failure artifacts pass a private-
 content leakage gate before upload, and teardown targets only the
 `reactorfront-portfolio` Compose project.
 
+The promoted worker derives its expected dataset, preprocessing, pipeline,
+artifact, evaluation-policy, report, comparison, and ontology identities from
+one reviewed manifest. Image build, startup, and readiness fail closed on
+missing, noncanonical, mismatched, ineligible, or unreviewed-newest evidence.
+Measured `completed.v2` lineage is immutable after persistence; existing rows
+remain explicitly `legacy-unmeasured`, and human review stays separate from the
+machine result. Public evaluation records contain repository-owned synthetic
+identities and sanitized outcomes only.
+
 This repository is not a persistent hosted service and does not operate
 production user accounts. Dex is test infrastructure, not a selected
 production identity provider. Production TLS termination, shared durable
@@ -54,10 +71,18 @@ sessions, secrets management, account recovery, MFA, multi-tenancy, cloud IAM,
 and operational monitoring remain outside the completed slice. Supported
 documents are bounded to one text-bearing PDF page of at most 5 MiB; scanned-
 document OCR, multi-page processing, image upload, and production model-quality
-or calibrated-confidence claims are also outside scope.
+or calibrated-confidence claims are also outside scope. The fixed synthetic
+corpus does not establish production accuracy, calibration, fairness, privacy,
+robustness, generalization, or domain-drift behavior. Automatic or online
+learning, unreviewed runtime-data admission, a mutable model registry, runtime
+switching, canary or shadow traffic, and model-administration controls are not
+implemented.
 
 The complete implemented trust boundary and limitations are documented in
 [`ips-microkernel/architecture/index.md`](ips-microkernel/architecture/index.md).
+Exact public model evidence and its limitations are documented in the
+[`apps/ml/MODEL_DEVELOPMENT.md`](apps/ml/MODEL_DEVELOPMENT.md) summary and
+[`apps/ml/MODEL_CARD.md`](apps/ml/MODEL_CARD.md).
 
 Public source does not make third-party systems or accounts valid test targets.
 Do not probe infrastructure, identities, or services that are not owned by this
