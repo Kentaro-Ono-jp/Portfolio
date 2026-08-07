@@ -3,9 +3,11 @@
 <!-- ips-role: router -->
 <!-- ips-rule: review-permission-boundary -->
 
-Use this router only in a separate initial-review or re-review task. Earlier
-chat and implementation-agent memory are not inputs. Do not preload all review
-states.
+Use this router only in a newly spawned review subagent dedicated to a separate
+initial-review or re-review task. The implementation agent must not substitute
+its own role switch, isolated phase, or other same-agent review for that
+subagent. Earlier chat and implementation-agent memory are not inputs. Do not
+preload all review states.
 
 ## Required inputs
 
