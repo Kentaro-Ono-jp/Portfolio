@@ -465,6 +465,7 @@ SHALLOW_REVIEW_DIFF_FRAGMENTS = {
 
 REVIEW_PREMORTEM_FRAGMENTS = {
     Path("ips-microkernel/review/inspect.md"): (
+        "Judge behavior against focused scope, non-targets, failure model, acceptance criteria, relevant accepted design, tests, and public safety",
         "Before running verification, conduct a bounded pre-mortem of the exact candidate",
         "merged and caused a material failure within the focused scope and accepted design",
         "trigger, propagation, material impact, detection, and recovery paths",
@@ -1525,8 +1526,21 @@ def _validate_review_premortem_sequence(failures: list[str]) -> None:
     inspect_path = REPOSITORY_ROOT / "ips-microkernel/review/inspect.md"
     if inspect_path.is_file():
         inspect = " ".join(inspect_path.read_text(encoding="utf-8").split())
+        scope_judgment = (
+            "Judge behavior against focused scope, non-targets, failure model, "
+            "acceptance criteria, relevant accepted design, tests, and public safety"
+        )
         premortem = "Before running verification, conduct a bounded pre-mortem"
         verification = "Run the smallest relevant non-Docker static verification"
+        if (
+            scope_judgment in inspect
+            and premortem in inspect
+            and inspect.index(scope_judgment) > inspect.index(premortem)
+        ):
+            failures.append(
+                "ips-microkernel/review/inspect.md: focused-scope and accepted-design "
+                "judgment must precede the bounded pre-mortem"
+            )
         if (
             premortem in inspect
             and verification in inspect

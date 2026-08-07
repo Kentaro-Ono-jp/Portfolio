@@ -1639,6 +1639,15 @@ def test_review_premortem_contract_rejects_each_weakened_boundary(
             ]
 
 
+def _swap_review_sequence_markers(source: str, first: str, second: str) -> str:
+    assert first in source
+    assert second in source
+    assert source.index(first) < source.index(second)
+    sentinel = "REVIEW_SEQUENCE_FIRST_MARKER"
+    assert sentinel not in source
+    return source.replace(first, sentinel, 1).replace(second, first, 1).replace(sentinel, second, 1)
+
+
 def test_review_premortem_must_precede_verification(
     documentation_checker: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
@@ -1647,13 +1656,19 @@ def test_review_premortem_must_precede_verification(
     inspect = tmp_path / "ips-microkernel/review/inspect.md"
     verdict = tmp_path / "ips-microkernel/review/verdict.md"
     inspect.parent.mkdir(parents=True)
+    source = " ".join(
+        (REPOSITORY_ROOT / "ips-microkernel/review/inspect.md").read_text(encoding="utf-8").split()
+    )
     inspect.write_text(
-        "Run the smallest relevant non-Docker static verification.\n"
-        "Before running verification, conduct a bounded pre-mortem.\n",
+        _swap_review_sequence_markers(
+            source,
+            "Before running verification, conduct a bounded pre-mortem",
+            "Run the smallest relevant non-Docker static verification",
+        ),
         encoding="utf-8",
     )
     verdict.write_text(
-        "### Findings or approval basis\nPre-mortem:\n### Reusable governance candidate\n",
+        (REPOSITORY_ROOT / "ips-microkernel/review/verdict.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
@@ -1663,6 +1678,41 @@ def test_review_premortem_must_precede_verification(
 
     assert failures == [
         "ips-microkernel/review/inspect.md: bounded pre-mortem must precede local verification"
+    ]
+
+
+def test_review_premortem_must_follow_scope_and_design_judgment(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    inspect = tmp_path / "ips-microkernel/review/inspect.md"
+    verdict = tmp_path / "ips-microkernel/review/verdict.md"
+    inspect.parent.mkdir(parents=True)
+    source = " ".join(
+        (REPOSITORY_ROOT / "ips-microkernel/review/inspect.md").read_text(encoding="utf-8").split()
+    )
+    inspect.write_text(
+        _swap_review_sequence_markers(
+            source,
+            "Judge behavior against focused scope, non-targets, failure model, "
+            "acceptance criteria, relevant accepted design, tests, and public safety",
+            "Before running verification, conduct a bounded pre-mortem",
+        ),
+        encoding="utf-8",
+    )
+    verdict.write_text(
+        (REPOSITORY_ROOT / "ips-microkernel/review/verdict.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_review_premortem_sequence(failures)
+
+    assert failures == [
+        "ips-microkernel/review/inspect.md: focused-scope and accepted-design "
+        "judgment must precede the bounded pre-mortem"
     ]
 
 

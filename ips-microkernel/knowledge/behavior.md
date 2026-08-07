@@ -145,6 +145,23 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #76
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/76#issuecomment-5167941319).
 
+### Guard both boundaries of ordered workflow invariants
+
+- **Trigger:** A required governance procedure adds or changes an action that
+  must occur after one named predecessor and before one named successor.
+- **HEAD effect:** `moving`
+- **Problem:** A sequence guard checks only the successor boundary, so moving
+  the action before its required predecessor still passes focused verification.
+- **Detect:** Import the production governance checker, validate the canonical
+  procedure, then mutate the procedure once by moving the action before its
+  required predecessor and once by moving it after its required successor.
+- **Pass:** The canonical procedure passes, and both one-boundary order
+  mutations fail with the corresponding predecessor or successor diagnostic.
+- **Repair:** Encode both ordering comparisons in the production checker and
+  retain one focused negative test for each reversed boundary.
+- **Origins:** PR #92
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/92#issuecomment-5219432881).
+
 ### Recompute evaluation aggregates from atomic outcomes
 
 - **Trigger:** A governed evaluation report adds or changes sample outcomes,
