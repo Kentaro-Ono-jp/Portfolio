@@ -1,0 +1,140 @@
+{
+  "$id": "https://reactorfront.example/schemas/promoted-model-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifactSchemaVersion": {
+      "const": 1
+    },
+    "artifactSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "comparisonSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "datasetSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "datasetVersion": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "evaluationPolicySha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "evaluationPolicyVersion": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "evaluationReportSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "candidateBuildPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "candidateComparisonPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "candidateComparisonSchemaPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "candidateReportPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "championReportPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "championTrainingDataPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "datasetSnapshotPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "dependencyLockPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "evaluationPolicyPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "evaluationReportSchemaPath": {
+          "$ref": "#/$defs/repositoryPath"
+        }
+      },
+      "required": [
+        "candidateBuildPath",
+        "candidateComparisonPath",
+        "candidateComparisonSchemaPath",
+        "candidateReportPath",
+        "championReportPath",
+        "championTrainingDataPath",
+        "datasetSnapshotPath",
+        "dependencyLockPath",
+        "evaluationPolicyPath",
+        "evaluationReportSchemaPath"
+      ],
+      "type": "object"
+    },
+    "modelName": {
+      "const": "reactorfront-document-type"
+    },
+    "modelVersion": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "pipelineVersion": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "preprocessingVersion": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "schemaVersion": {
+      "const": "promoted-model-v1"
+    },
+    "selectionType": {
+      "enum": [
+        "candidate-promotion",
+        "rollback"
+      ]
+    },
+    "taskOntology": {
+      "const": [
+        "invoice",
+        "report"
+      ]
+    }
+  },
+  "required": [
+    "artifactSchemaVersion",
+    "artifactSha256",
+    "comparisonSha256",
+    "datasetSha256",
+    "datasetVersion",
+    "evaluationPolicySha256",
+    "evaluationPolicyVersion",
+    "evaluationReportSha256",
+    "evidence",
+    "modelName",
+    "modelVersion",
+    "pipelineVersion",
+    "preprocessingVersion",
+    "schemaVersion",
+    "selectionType",
+    "taskOntology"
+  ],
+  "title": "ReactorFront promoted model manifest",
+  "type": "object",
+  "$defs": {
+    "nonempty": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repositoryPath": {
+      "pattern": "^apps/ml/[A-Za-z0-9._/-]+$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    }
+  }
+}

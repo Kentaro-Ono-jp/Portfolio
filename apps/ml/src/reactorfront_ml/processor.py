@@ -20,7 +20,7 @@ from reactorfront_ml.events import (
     ResultEventFactory,
 )
 from reactorfront_ml.logging_config import log_event
-from reactorfront_ml.model import MODEL_VERSION, ModelArtifactError
+from reactorfront_ml.model import ModelArtifactError
 from reactorfront_ml.pdf_processing import extract_single_page_text
 
 LOGGER = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class DocumentProcessor:
             event_type=STARTED_EVENT_TYPE,
             payload=self._event_factory.started(
                 request=request,
-                model_version=MODEL_VERSION,
+                model_version=self._classifier.model_version,
             ),
         )
         log_event(
@@ -55,7 +55,7 @@ class DocumentProcessor:
             logging.INFO,
             "ml_processing_started",
             **self._fields(request),
-            modelVersion=MODEL_VERSION,
+            modelVersion=self._classifier.model_version,
             modelSha256=self._classifier.checksum,
         )
         try:
@@ -107,7 +107,7 @@ class DocumentProcessor:
             event_type=FAILED_EVENT_TYPE,
             payload=self._event_factory.failed(
                 request=request,
-                model_version=MODEL_VERSION,
+                model_version=self._classifier.model_version,
                 failure_code=failure_code,
             ),
         )
@@ -117,7 +117,7 @@ class DocumentProcessor:
             "ml_processing_failed",
             **self._fields(request),
             failureCode=failure_code.value,
-            modelVersion=MODEL_VERSION,
+            modelVersion=self._classifier.model_version,
             modelSha256=self._classifier.checksum,
         )
 

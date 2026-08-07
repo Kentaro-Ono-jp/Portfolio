@@ -29,6 +29,10 @@ class FakeClassifier:
     error: Exception | None = None
     texts: list[str] = field(default_factory=list)
 
+    @property
+    def model_version(self) -> str:
+        return self.result.model_version
+
     def classify(self, text: str) -> ClassificationResult:
         self.texts.append(text)
         if self.error is not None:

@@ -67,7 +67,10 @@ def install_runtime(
     runtime = SimpleNamespace(
         processor=processor,
         validator=JsonSchemaEventValidator(contract_directory=CONTRACT_DIRECTORY),
-        classifier=SimpleNamespace(checksum="a" * 64),
+        classifier=SimpleNamespace(
+            checksum="a" * 64,
+            model_version="document-type-candidate-v1",
+        ),
     )
     monkeypatch.setattr(celery_app, "get_runtime", lambda: runtime)
 

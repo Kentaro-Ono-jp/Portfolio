@@ -233,7 +233,7 @@ model selection changes in this increment.
 
 A third focused implementation increment, tracked by
 [Issue #81](https://github.com/Kentaro-Ono-jp/Portfolio/issues/81), carries the
-current champion's immutable dataset, preprocessing, pipeline, artifact,
+then-current champion's immutable dataset, preprocessing, pipeline, artifact,
 evaluation-policy, and evaluation-report identity through the completed event,
 API persistence, review identity, audit history, generated contracts, and Web
 validators. Existing v1 rows remain explicitly `legacy-unmeasured`; no
@@ -241,14 +241,26 @@ historical lineage is fabricated. Runtime readiness independently derives the
 expected lineage from the canonical dataset snapshot, policy, report schema,
 and active artifact, so a coherently re-digested report rewrite fails closed.
 
-Later focused increments will bind an accepted artifact to one reviewed
-promotion manifest and define bounded synthetic-feedback export and curation.
+A fourth focused implementation increment, tracked by
+[Issue #83](https://github.com/Kentaro-Ono-jp/Portfolio/issues/83), projects only
+eligible terminal reviews through a canonical, API-owned, read-only feedback-
+candidate export. Export does not admit data, fit a model, or change runtime
+selection.
 
-The active classifier artifact remains exactly that of the completed second
-slice; candidate eligibility is not promotion. Automatic
-retraining, private-data reuse, OCR, structured
-field extraction, cloud deployment, RAG, and production-quality claims remain
-outside this slice.
+A fifth focused implementation increment, tracked by
+[Issue #85](https://github.com/Kentaro-Ono-jp/Portfolio/issues/85), promotes the
+eligible candidate through one reviewed manifest. The ML image generates only
+the selected artifact, and startup/readiness fail closed unless its dataset,
+pipeline, policy, report, comparison, artifact, and ontology identities match.
+The same manifest schema retains the previously accepted classifier as a
+reviewed rollback target.
+
+The active classifier is now `document-type-candidate-v1`; its evidence remains
+bounded to the tiny repository-owned synthetic corpus. Automatic retraining,
+private-data reuse, OCR, structured field extraction, cloud deployment, RAG,
+and production-quality claims remain outside this slice. Later increments will
+add the bounded Web evidence presentation and publish the final completion
+record.
 
 ## Completed second vertical slice
 

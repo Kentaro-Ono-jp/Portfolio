@@ -100,6 +100,24 @@ def test_success_confirms_started_before_completed(monkeypatch: pytest.MonkeyPat
     assert completed["modelEvidence"]["artifactSha256"] == "a" * 64
 
 
+def test_started_completed_and_failed_events_use_the_runtime_selected_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected_version = "document-type-candidate-v1"
+    classifier = FakeClassifier(result=ClassificationResult("invoice", 0.91, selected_version))
+    subject, _, _, _, publisher = processor(classifier=classifier)
+    monkeypatch.setattr("reactorfront_ml.processor.extract_single_page_text", lambda _: PDF_TEXT)
+
+    subject.process(request())
+    assert all(payload["modelVersion"] == selected_version for _, payload in publisher.published)
+
+    failed_subject, _, _, _, failed_publisher = processor(classifier=classifier)
+    failed_subject.process(request(digest="0" * 64))
+    assert all(
+        payload["modelVersion"] == selected_version for _, payload in failed_publisher.published
+    )
+
+
 def test_digest_mismatch_publishes_sanitized_failed_event() -> None:
     subject, _, classifier, _, publisher = processor()
 

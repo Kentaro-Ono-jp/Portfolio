@@ -4,35 +4,45 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from reactorfront_ml.model import DocumentClassifier, generate_artifact
+from reactorfront_ml.model import DocumentClassifier
+from reactorfront_ml.promotion import load_promoted_model
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-TRAINING_DATA = REPOSITORY_ROOT / "apps" / "ml" / "data" / "training.json"
-EXPECTED_CHECKSUM = (
-    (REPOSITORY_ROOT / "apps" / "ml" / "model.expected.sha256")
-    .read_text(encoding="utf-8")
-    .strip()
-)
+EVALUATION_ROOT = REPOSITORY_ROOT / "apps" / "ml" / "evaluation"
+PROMOTION_MANIFEST = EVALUATION_ROOT / "promoted-model-v1.json"
+PROMOTION_SCHEMA = EVALUATION_ROOT / "promoted-model-v1.schema.json"
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 
 
 def main() -> int:
-    first = generate_artifact(TRAINING_DATA)
-    second = generate_artifact(TRAINING_DATA)
-    if first.content != second.content or first.sha256 != second.sha256:
-        raise RuntimeError("Independent model generations did not match")
-    if first.sha256 != EXPECTED_CHECKSUM:
-        raise RuntimeError("Generated model checksum differs from the reviewed value")
+    first = load_promoted_model(
+        PROMOTION_MANIFEST,
+        PROMOTION_SCHEMA,
+        repository_root=REPOSITORY_ROOT,
+    )
+    second = load_promoted_model(
+        PROMOTION_MANIFEST,
+        PROMOTION_SCHEMA,
+        repository_root=REPOSITORY_ROOT,
+    )
+    if (
+        first.artifact.content != second.artifact.content
+        or first.artifact.sha256 != second.artifact.sha256
+        or first.manifest_sha256 != second.manifest_sha256
+    ):
+        raise RuntimeError("Independent promoted-model generations did not match")
 
     with TemporaryDirectory(prefix="reactorfront-ml-model-") as directory:
         root = Path(directory)
         artifact_path = root / "model.json"
         checksum_path = root / "model.sha256"
-        artifact_path.write_bytes(first.content)
-        checksum_path.write_text(f"{first.sha256}\n", encoding="utf-8")
+        artifact_path.write_bytes(first.artifact.content)
+        checksum_path.write_text(f"{first.artifact.sha256}\n", encoding="utf-8")
         classifier = DocumentClassifier(
             artifact_path=artifact_path,
             checksum_path=checksum_path,
+            expected_model_name=first.model_name,
+            expected_model_version=first.model_version,
         )
         invoice = classifier.classify(
             "Invoice INV-9001 bill to customer subtotal tax total amount due payment terms"
@@ -50,8 +60,11 @@ def main() -> int:
 
     ARTIFACT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     metadata = {
-        "modelSha256": first.sha256,
-        "trainingAccuracy": first.training_accuracy,
+        "manifestSha256": first.manifest_sha256,
+        "modelSha256": first.artifact.sha256,
+        "modelVersion": first.model_version,
+        "selectionType": first.selection_type,
+        "trainingAccuracy": first.artifact.training_accuracy,
         "invoice": {
             "classification": invoice.classification,
             "confidence": invoice.confidence,
