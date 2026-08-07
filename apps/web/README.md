@@ -37,8 +37,11 @@ the client bundle.
 - Validate immutable machine evidence, terminal human-review state, and
   deterministically ordered audit events before rendering them.
 - Admit strict measured runtime lineage and explicit `legacy-unmeasured`
-  compatibility in shared response validators. This bounded increment changes
-  contract handling only; a dedicated lineage panel remains a later UI concern.
+  compatibility in shared response validators.
+- Present a bounded evidence panel that keeps the per-document confidence score
+  distinct from model-quality claims, shows exact measured dataset, pipeline,
+  artifact, policy, and report identities, and never fabricates lineage for a
+  legacy result.
 
 ## Implementation
 

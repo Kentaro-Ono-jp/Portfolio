@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -84,7 +85,7 @@ interface AcceptedPayload {
   status: "accepted";
 }
 
-interface ModelEvidence {
+interface MeasuredModelEvidence {
   status: "measured";
   datasetVersion: string;
   datasetSha256: string;
@@ -96,7 +97,13 @@ interface ModelEvidence {
   evaluationReportSha256: string;
 }
 
-const EXPECTED_MODEL_EVIDENCE: ModelEvidence = {
+interface LegacyModelEvidence {
+  status: "legacy-unmeasured";
+}
+
+type ModelEvidence = MeasuredModelEvidence | LegacyModelEvidence;
+
+const EXPECTED_MODEL_EVIDENCE: MeasuredModelEvidence = {
   status: "measured",
   datasetVersion: "reactorfront-synthetic-documents-v1",
   datasetSha256:
@@ -170,6 +177,58 @@ interface AuditEventEvidence {
   reviewId?: string;
   detailsVersion: number;
   details: Record<string, unknown>;
+}
+
+interface PreparedLegacyEvidence {
+  documentId: string;
+  jobId: string;
+}
+
+function prepareLegacyEvidence(
+  ownerDocumentId: string,
+): PreparedLegacyEvidence {
+  const output = execFileSync(
+    "uv",
+    [
+      "run",
+      "--project",
+      "apps/api",
+      "python",
+      "scripts/prepare_browser_legacy_evidence.py",
+      "--owner-document-id",
+      ownerDocumentId,
+    ],
+    { cwd: path.resolve("."), encoding: "utf8" },
+  );
+  return JSON.parse(output) as PreparedLegacyEvidence;
+}
+
+async function exposePreparedDocument(
+  page: Page,
+  prepared: PreparedLegacyEvidence,
+): Promise<void> {
+  await page.route("**/api/documents", async (route) => {
+    const request = route.request();
+    if (
+      request.method() !== "POST" ||
+      new URL(request.url()).pathname !== "/api/documents"
+    ) {
+      await route.continue();
+      return;
+    }
+    const correlationId = await request.headerValue("X-Correlation-ID");
+    if (correlationId === null) {
+      throw new Error(
+        "Prepared-document request lacked a correlation identity.",
+      );
+    }
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      headers: { "X-Correlation-ID": correlationId },
+      body: JSON.stringify({ ...prepared, status: "accepted" }),
+    });
+  });
 }
 
 function sourcePdfInput(page: Page) {
@@ -518,6 +577,34 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
   await expect(
     page.getByText("Machine classification", { exact: true }),
   ).toBeVisible();
+  const measuredEvidencePanel = page.getByRole("region", {
+    name: "Model evidence",
+    exact: true,
+  });
+  await expect(
+    measuredEvidencePanel.getByText("Measured lineage", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    measuredEvidencePanel.getByText(
+      "Confidence is this model's score for this PDF, not a measured production-quality claim.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  for (const value of [
+    "document-type-candidate-v1",
+    EXPECTED_MODEL_EVIDENCE.datasetVersion,
+    EXPECTED_MODEL_EVIDENCE.datasetSha256,
+    EXPECTED_MODEL_EVIDENCE.preprocessingVersion,
+    EXPECTED_MODEL_EVIDENCE.pipelineVersion,
+    EXPECTED_MODEL_EVIDENCE.artifactSha256,
+    EXPECTED_MODEL_EVIDENCE.evaluationPolicyVersion,
+    EXPECTED_MODEL_EVIDENCE.evaluationPolicySha256,
+    EXPECTED_MODEL_EVIDENCE.evaluationReportSha256,
+  ]) {
+    await expect(
+      measuredEvidencePanel.getByText(value, { exact: true }),
+    ).toBeVisible();
+  }
   const approvalSource = await assertSource(
     page,
     approvalAccepted,
@@ -731,6 +818,98 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
   await page
     .getByRole("button", { name: "Classify another PDF", exact: true })
     .click();
+  const preparedLegacy = prepareLegacyEvidence(approvalAccepted.documentId);
+  await exposePreparedDocument(page, preparedLegacy);
+  const legacyResponses = await upload(
+    page,
+    {
+      name: "legacy-evidence.pdf",
+      mimeType: "application/pdf",
+      buffer: invoiceSource,
+    },
+    "completed",
+  );
+  await page.unroute("**/api/documents");
+  const legacyAccepted = await responseJson<AcceptedPayload>(
+    legacyResponses.upload,
+  );
+  const legacyCompleted = await responseJson<CompletedPayload>(
+    legacyResponses.terminal,
+  );
+  const legacyInitialReview = await responseJson<ReviewPayload>(
+    legacyResponses.review!,
+  );
+  expect(legacyAccepted).toEqual({ ...preparedLegacy, status: "accepted" });
+  expect(legacyCompleted).toMatchObject({
+    ...preparedLegacy,
+    status: "completed",
+    classification: "report",
+    modelVersion: "document-type-v1",
+    modelEvidence: { status: "legacy-unmeasured" },
+  });
+  expect(legacyInitialReview).toMatchObject({
+    ...preparedLegacy,
+    status: "unreviewed",
+    machineClassification: "report",
+    modelVersion: "document-type-v1",
+    modelEvidence: { status: "legacy-unmeasured" },
+  });
+  const legacyEvidencePanel = page.getByRole("region", {
+    name: "Model evidence",
+    exact: true,
+  });
+  await expect(
+    legacyEvidencePanel.getByText("Legacy unmeasured", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    legacyEvidencePanel.getByText(/No measured evidence is inferred/u),
+  ).toBeVisible();
+  await expect(
+    legacyEvidencePanel.getByText(EXPECTED_MODEL_EVIDENCE.datasetVersion, {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  const legacyDecisionResponse = page.waitForResponse((response) =>
+    reviewResponse(response, "PUT", "approved"),
+  );
+  await page
+    .getByRole("button", {
+      name: "Approve report classification",
+      exact: true,
+    })
+    .click();
+  const legacyDecision = await legacyDecisionResponse;
+  const legacyApproved = await responseJson<ReviewPayload>(legacyDecision);
+  registerObservedPrivateProfileCanaries(
+    sensitiveCanaries,
+    legacyApproved.reviewerPrincipalId,
+  );
+  expect(legacyApproved).toMatchObject({
+    status: "approved",
+    machineClassification: "report",
+    finalClassification: "report",
+    modelEvidence: { status: "legacy-unmeasured" },
+    reviewVersion: 1,
+  });
+  const legacyAudit = await browserJsonRequest(
+    page,
+    `/api/documents/${legacyAccepted.documentId}/audit-events`,
+  );
+  const legacyAuditEvents = auditEvents(legacyAudit, sensitiveCanaries);
+  const legacyAuditActions = legacyAuditEvents.map((event) => event.action);
+  expect(legacyAuditActions).toEqual([
+    "document.submitted",
+    "processing.completed",
+    "review.approved",
+  ]);
+  expect(legacyAuditEvents[1]).toMatchObject({
+    detailsVersion: 1,
+    details: {},
+  });
+
+  await page
+    .getByRole("button", { name: "Classify another PDF", exact: true })
+    .click();
   const failedResponses = await upload(
     page,
     {
@@ -779,10 +958,12 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
       `/api/documents/${approvalAccepted.documentId}/source`,
       `/api/documents/${approvalAccepted.documentId}/review`,
       `/api/documents/${approvalAccepted.documentId}/audit-events`,
+      `/api/documents/${legacyAccepted.documentId}/review`,
+      `/api/documents/${legacyAccepted.documentId}/audit-events`,
     ].map((target) => browserJsonRequest(page, target)),
   );
   expect(deniedAfterSignOut.map((result) => result.status)).toEqual([
-    401, 401, 401,
+    401, 401, 401, 401, 401,
   ]);
   expect(
     await page.evaluate(() => ({
@@ -812,6 +993,11 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
       {
         completed: {
           ...approvalCompleted,
+          visibleEvidence: {
+            status: "measured",
+            exactLineage: true,
+            boundedQualityClaim: true,
+          },
           source: approvalSource,
           decision: {
             status: approved.status,
@@ -847,6 +1033,19 @@ test("proves authenticated approval, correction, audit, negative, and recovery p
           auditActions: correctionAuditActions,
           uploadCorrelation: correctionUploadCorrelation,
           pollCorrelation: correctionPollCorrelation,
+        },
+        legacy: {
+          ...legacyCompleted,
+          visibleEvidence: {
+            status: "legacy-unmeasured",
+            fabricatedMeasuredFields: false,
+          },
+          decision: {
+            status: legacyApproved.status,
+            finalClassification: legacyApproved.finalClassification,
+            reviewVersion: legacyApproved.reviewVersion,
+          },
+          auditActions: legacyAuditActions,
         },
         failed: {
           ...failed,

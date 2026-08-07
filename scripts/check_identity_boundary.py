@@ -13,6 +13,23 @@ DEX_IMAGE = (
 )
 
 
+def expected_loopback_web_public_base(web: dict[str, object]) -> str:
+    ports = web.get("ports")
+    if not isinstance(ports, list) or len(ports) != 1:
+        raise RuntimeError("Web must expose one loopback-only public port.")
+    port = ports[0]
+    if (
+        not isinstance(port, dict)
+        or port.get("host_ip") != "127.0.0.1"
+        or str(port.get("target")) != "3000"
+    ):
+        raise RuntimeError("Web must expose one loopback-only public port.")
+    published = str(port.get("published", ""))
+    if not published.isdecimal() or not 1 <= int(published) <= 65535:
+        raise RuntimeError("Web must publish one valid host port.")
+    return f"http://127.0.0.1:{published}"
+
+
 def main() -> int:
     result = subprocess.run(
         [
@@ -57,9 +74,11 @@ def main() -> int:
         raise RuntimeError(
             "The API must validate the public issuer through the Dex backchannel."
         )
-    web_environment = config["services"]["web"].get("environment", {})
+    web = config["services"]["web"]
+    web_public_base = expected_loopback_web_public_base(web)
+    web_environment = web.get("environment", {})
     required_web_environment = {
-        "PORTFOLIO_WEB_PUBLIC_BASE_URL": "http://127.0.0.1:53000",
+        "PORTFOLIO_WEB_PUBLIC_BASE_URL": web_public_base,
         "PORTFOLIO_WEB_OIDC_ISSUER": "http://127.0.0.1:5556/dex",
         "PORTFOLIO_WEB_OIDC_DISCOVERY_URL": (
             "http://identity:5556/dex/.well-known/openid-configuration"
@@ -85,7 +104,7 @@ def main() -> int:
         "grantTypes:\n    - authorization_code",
         "responseTypes:\n    - code",
         "public: true",
-        "http://127.0.0.1:53000/api/auth/callback",
+        f"{web_public_base}/api/auth/callback",
         "reviewer@synthetic.invalid",
         "reactorfront-reviewers",
     )

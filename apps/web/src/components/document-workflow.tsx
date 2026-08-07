@@ -30,6 +30,8 @@ const PROGRESS_STATES = [
 
 type Classification = "invoice" | "report";
 
+type CompletedDocument = Extract<DocumentStatus, { status: "completed" }>;
+
 interface PendingDecision {
   finalClassification: Classification;
   idempotencyKey: string;
@@ -46,6 +48,120 @@ function progressIndex(
     return 2;
   }
   return PROGRESS_STATES.indexOf(status);
+}
+
+function EvidenceValue({ children }: { children: string }) {
+  return (
+    <dd className="mt-1 break-all font-mono text-xs leading-5 text-slate-900">
+      {children}
+    </dd>
+  );
+}
+
+function ModelEvidencePanel({ document }: { document: CompletedDocument }) {
+  const evidence = document.modelEvidence;
+
+  return (
+    <section
+      className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/80 p-5"
+      aria-labelledby="model-evidence-title"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Immutable machine lineage
+          </p>
+          <h3
+            id="model-evidence-title"
+            className="mt-1 text-xl font-semibold text-slate-950"
+          >
+            Model evidence
+          </h3>
+        </div>
+        <span
+          className={`rounded-full px-3 py-1 font-mono text-xs font-semibold ${
+            evidence.status === "measured"
+              ? "bg-teal-100 text-teal-900"
+              : "bg-amber-100 text-amber-900"
+          }`}
+        >
+          {evidence.status === "measured"
+            ? "Measured lineage"
+            : "Legacy unmeasured"}
+        </span>
+      </div>
+
+      <p className="mt-4 text-sm leading-6 text-slate-600">
+        Confidence is this model&apos;s score for this PDF, not a measured
+        production-quality claim.
+      </p>
+
+      {evidence.status === "measured" ? (
+        <>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            These identifiers bind the prediction to the repository-owned
+            synthetic evaluation that authorized this model.
+          </p>
+          <dl className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Model</dt>
+              <EvidenceValue>{document.modelVersion}</EvidenceValue>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Dataset</dt>
+              <EvidenceValue>{evidence.datasetVersion}</EvidenceValue>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-medium text-slate-500">
+                Dataset SHA-256
+              </dt>
+              <EvidenceValue>{evidence.datasetSha256}</EvidenceValue>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">
+                Preprocessing
+              </dt>
+              <EvidenceValue>{evidence.preprocessingVersion}</EvidenceValue>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Pipeline</dt>
+              <EvidenceValue>{evidence.pipelineVersion}</EvidenceValue>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-medium text-slate-500">
+                Model artifact SHA-256
+              </dt>
+              <EvidenceValue>{evidence.artifactSha256}</EvidenceValue>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">
+                Evaluation policy
+              </dt>
+              <EvidenceValue>{evidence.evaluationPolicyVersion}</EvidenceValue>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">
+                Evaluation policy SHA-256
+              </dt>
+              <EvidenceValue>{evidence.evaluationPolicySha256}</EvidenceValue>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-medium text-slate-500">
+                Evaluation report SHA-256
+              </dt>
+              <EvidenceValue>{evidence.evaluationReportSha256}</EvidenceValue>
+            </div>
+          </dl>
+        </>
+      ) : (
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          This historical result has no recorded dataset, pipeline, artifact,
+          policy, or evaluation-report lineage. No measured evidence is inferred
+          or backfilled.
+        </p>
+      )}
+    </section>
+  );
 }
 
 export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
@@ -357,6 +473,10 @@ export function DocumentWorkflow({ csrfToken }: { csrfToken: string }) {
                   </div>
                 </dl>
               </div>
+            ) : null}
+
+            {completedDocument !== null ? (
+              <ModelEvidencePanel document={completedDocument} />
             ) : null}
 
             {completedDocument !== null ? (

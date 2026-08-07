@@ -238,6 +238,74 @@ def test_cross_cutting_or_unknown_change_fails_closed_to_every_group(
     assert "full verification" in plan.reason
 
 
+def test_github_actions_runtime_ports_avoid_linux_ephemeral_range() -> None:
+    workflow = (REPOSITORY_ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
+    compose = (REPOSITORY_ROOT / "compose.yaml").read_text(encoding="utf-8")
+    ports = {
+        "PORTFOLIO_API_PORT": 28000,
+        "PORTFOLIO_WEB_PORT": 23000,
+        "PORTFOLIO_POSTGRES_PORT": 25432,
+        "PORTFOLIO_MINIO_PORT": 29000,
+        "PORTFOLIO_RABBITMQ_PORT": 25672,
+    }
+
+    for name, port in ports.items():
+        assert f'{name}: "{port}"' in workflow
+        assert not 32768 <= port <= 60999
+
+    for value in (
+        "postgresql+psycopg://portfolio:portfolio-local-password@127.0.0.1:25432/portfolio",
+        "http://127.0.0.1:29000",
+        "amqp://portfolio:portfolio-local-password@127.0.0.1:25672/%2F",
+        "http://127.0.0.1:28000",
+        "http://127.0.0.1:23000",
+    ):
+        assert value in workflow
+    assert (
+        "PORTFOLIO_WEB_PUBLIC_BASE_URL: ${PORTFOLIO_WEB_PUBLIC_BASE_URL:-http://127.0.0.1:53000}"
+    ) in compose
+    dex_config = (REPOSITORY_ROOT / "infra/docker/identity/dex.yaml").read_text(encoding="utf-8")
+    assert "http://127.0.0.1:23000/api/auth/callback" in dex_config
+    assert "http://127.0.0.1:53000/api/auth/callback" in dex_config
+
+
+def test_identity_boundary_aligns_public_url_with_published_web_port() -> None:
+    checker = load_script_module("check_identity_boundary")
+
+    assert (
+        checker.expected_loopback_web_public_base(
+            {
+                "ports": [
+                    {
+                        "host_ip": "127.0.0.1",
+                        "published": "23000",
+                        "target": 3000,
+                    }
+                ]
+            }
+        )
+        == "http://127.0.0.1:23000"
+    )
+
+
+@pytest.mark.parametrize(
+    "ports",
+    [
+        [],
+        [{"host_ip": "0.0.0.0", "published": "23000", "target": 3000}],
+        [{"host_ip": "127.0.0.1", "published": "invalid", "target": 3000}],
+        [{"host_ip": "127.0.0.1", "published": "23000", "target": 8000}],
+    ],
+)
+def test_identity_boundary_rejects_invalid_web_public_ports(
+    ports: list[dict[str, object]],
+) -> None:
+    checker = load_script_module("check_identity_boundary")
+
+    with pytest.raises(RuntimeError, match="Web must"):
+        checker.expected_loopback_web_public_base({"ports": ports})
+
+
 def test_documentation_change_selects_only_documentation(verifier: ModuleType) -> None:
     plan = verifier.plan_for_paths(["ips-microkernel/work-router.md"])
 
@@ -914,6 +982,13 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
         "completed": {
             "documentId": "44444444-4444-4444-8444-444444444444",
             "classification": "invoice",
+            "modelVersion": "document-type-candidate-v1",
+            "modelEvidence": verifier.EXPECTED_BROWSER_MODEL_EVIDENCE,
+            "visibleEvidence": {
+                "status": "measured",
+                "exactLineage": True,
+                "boundedQualityClaim": True,
+            },
             "source": source,
             "decision": {
                 "status": "approved",
@@ -941,6 +1016,7 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
         "correction": {
             "documentId": "55555555-5555-4555-8555-555555555555",
             "classification": "invoice",
+            "modelEvidence": verifier.EXPECTED_BROWSER_MODEL_EVIDENCE,
             "humanGroundTruth": "report",
             "fixturePurpose": "synthetic correction proof, not model quality",
             "source": source,
@@ -964,6 +1040,24 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
                 "response": correction_correlation,
             },
         },
+        "legacy": {
+            "modelVersion": "document-type-v1",
+            "modelEvidence": {"status": "legacy-unmeasured"},
+            "visibleEvidence": {
+                "status": "legacy-unmeasured",
+                "fabricatedMeasuredFields": False,
+            },
+            "decision": {
+                "status": "approved",
+                "finalClassification": "report",
+                "reviewVersion": 1,
+            },
+            "auditActions": [
+                "document.submitted",
+                "processing.completed",
+                "review.approved",
+            ],
+        },
         "failed": {
             "status": "failed",
             "failureCode": "INVALID_PDF",
@@ -975,7 +1069,7 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
         "invalidFile": {"apiRequestCreated": False},
         "security": {
             "anonymousReviewStatus": 401,
-            "postSignOutStatuses": [401, 401, 401],
+            "postSignOutStatuses": [401, 401, 401, 401, 401],
             "browserTokenStorage": False,
         },
     }

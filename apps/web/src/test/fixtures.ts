@@ -68,6 +68,12 @@ export const completedStatus: DocumentStatus = {
   completedAt: COMPLETED_AT,
 };
 
+export const legacyCompletedStatus: DocumentStatus = {
+  ...completedStatus,
+  modelVersion: "document-type-v1",
+  modelEvidence: { status: "legacy-unmeasured" },
+};
+
 export const failedStatus: DocumentStatus = {
   ...acceptedDocument,
   status: "failed",
@@ -108,6 +114,12 @@ export const approvedReview: TerminalReview = {
   finalClassification: "invoice",
   reviewerPrincipalId: REVIEWER_PRINCIPAL_ID,
   decidedAt: DECIDED_AT,
+};
+
+export const legacyApprovedReview: TerminalReview = {
+  ...approvedReview,
+  modelVersion: "document-type-v1",
+  modelEvidence: { status: "legacy-unmeasured" },
 };
 
 export const correctedReview: TerminalReview = {

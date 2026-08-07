@@ -32,6 +32,9 @@ import {
   completedStatus,
   correctedReview,
   failedStatus,
+  legacyApprovedReview,
+  legacyCompletedStatus,
+  measuredModelEvidence,
   processingStatus,
   queuedStatus,
   REVIEW_ENTITY_TAG,
@@ -164,7 +167,7 @@ describe("DocumentWorkflow", () => {
     expect(screen.getByLabelText("Polling for status")).toBeInTheDocument();
   });
 
-  it("renders the completed result and resets for another document", async () => {
+  it("renders the completed result with exact measured evidence and resets", async () => {
     vi.mocked(createDocument).mockResolvedValue(acceptedDocument);
     vi.mocked(getDocument).mockResolvedValue(completedStatus);
     renderWorkflow();
@@ -176,7 +179,29 @@ describe("DocumentWorkflow", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("98.7%")).toBeInTheDocument();
-    expect(screen.getByText("document-type-v1")).toBeInTheDocument();
+    expect(screen.getAllByText("document-type-v1")).toHaveLength(2);
+    const evidencePanel = screen.getByRole("region", {
+      name: "Model evidence",
+    });
+    expect(within(evidencePanel).getByText("Measured lineage")).toBeVisible();
+    expect(
+      within(evidencePanel).getByText(
+        "Confidence is this model's score for this PDF, not a measured production-quality claim.",
+      ),
+    ).toBeVisible();
+    for (const evidenceValue of [
+      "document-type-v1",
+      measuredModelEvidence.datasetVersion,
+      measuredModelEvidence.datasetSha256,
+      measuredModelEvidence.preprocessingVersion,
+      measuredModelEvidence.pipelineVersion,
+      measuredModelEvidence.artifactSha256,
+      measuredModelEvidence.evaluationPolicyVersion,
+      measuredModelEvidence.evaluationPolicySha256,
+      measuredModelEvidence.evaluationReportSha256,
+    ]) {
+      expect(within(evidencePanel).getByText(evidenceValue)).toBeVisible();
+    }
     expect(await screen.findByText("Human decision")).toBeInTheDocument();
     expect(screen.getByText("Approved")).toBeInTheDocument();
     expect(screen.getByText("review.approved")).toBeInTheDocument();
@@ -195,6 +220,31 @@ describe("DocumentWorkflow", () => {
     ).toBeEnabled();
     expect(screen.queryByText("invoice")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Source PDF")).toHaveFocus();
+  });
+
+  it("renders legacy evidence explicitly without fabricating lineage", async () => {
+    vi.mocked(createDocument).mockResolvedValue(acceptedDocument);
+    vi.mocked(getDocument).mockResolvedValue(legacyCompletedStatus);
+    vi.mocked(getDocumentReview).mockResolvedValue({
+      review: legacyApprovedReview,
+      entityTag: REVIEW_ENTITY_TAG,
+    });
+    renderWorkflow();
+    await submit();
+
+    const evidencePanel = await screen.findByRole("region", {
+      name: "Model evidence",
+    });
+    expect(within(evidencePanel).getByText("Legacy unmeasured")).toBeVisible();
+    expect(
+      within(evidencePanel).getByText(/No measured evidence is inferred/u),
+    ).toBeVisible();
+    expect(
+      within(evidencePanel).queryByText(measuredModelEvidence.datasetVersion),
+    ).not.toBeInTheDocument();
+    expect(
+      within(evidencePanel).queryByText(measuredModelEvidence.artifactSha256),
+    ).not.toBeInTheDocument();
   });
 
   it("commits a correction and reuses its idempotency key after uncertainty", async () => {
@@ -327,5 +377,25 @@ describe("DocumentWorkflow", () => {
       ),
     ).toBeInTheDocument();
     await waitFor(() => expect(getDocument).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows stable recovery guidance when result evidence is invalid", async () => {
+    vi.mocked(createDocument).mockResolvedValue(acceptedDocument);
+    vi.mocked(getDocument).mockRejectedValue(
+      new DocumentRequestError({
+        ...canonicalProblem,
+        code: "WEB_INVALID_RESPONSE",
+      }),
+    );
+    renderWorkflow();
+    await submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "could not be verified. Retry the request; if it persists, classify the PDF again.",
+    );
+    expect(screen.getByRole("button", { name: "Retry status" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Classify another PDF" }),
+    ).toBeVisible();
   });
 });

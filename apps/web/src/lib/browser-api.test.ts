@@ -242,6 +242,9 @@ describe("browser API client", () => {
   it("produces stable known and fallback guidance", () => {
     expect(problemGuidance(canonicalProblem)).toMatch(/application\/pdf/);
     expect(
+      problemGuidance({ ...canonicalProblem, code: "WEB_INVALID_RESPONSE" }),
+    ).toContain("classify the PDF again");
+    expect(
       problemGuidance({ ...canonicalProblem, code: "SOMETHING_NEW" }),
     ).toContain("SOMETHING_NEW");
     expect(terminalFailureGuidance("SOURCE_DIGEST_MISMATCH")).toMatch(
