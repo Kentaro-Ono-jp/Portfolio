@@ -21,23 +21,34 @@ after a correction must be committed and pushed to an existing Draft PR.
 5. Push only the exact Gate-A-checked `HEAD` and open a Draft PR linked to the
    focused Issue and governing tracking Issue. Read back the remote branch tip
    and live PR head; require both to equal the full pushed SHA.
-6. Treat the pushed commit and Draft PR as the recoverable task checkpoint.
+6. Immediately after that first push submits the head to GitHub Actions, the
+   main implementation thread attempts `thread/compact/start` for its current
+   thread when the host exposes that capability.
+7. Treat the pushed commit and Draft PR as the recoverable task checkpoint.
    Uncommitted or unpushed work is not durable handoff state.
-7. Require GitHub Actions to target and succeed for the exact pushed head. A
+8. Require GitHub Actions to target and succeed for the exact pushed head. A
    different pushed SHA makes older CI, verdict, and endpoint evidence stale.
-8. Reconcile the PR description with current scope, non-targets, failure model,
+9. Reconcile the PR description with current scope, non-targets, failure model,
    acceptance criteria, selected/executed/carried/skipped groups and both N/NN
    counts, exact full base and head SHAs, exact-head workflow state, and any
    Stage A occurrence, Stage B rule, or CI Playbook record included in the
    candidate. Absence of an operational record needs no `none` placeholder.
-9. Complete publication Gate B by executing every triggered rule in the
+10. Complete publication Gate B by executing every triggered rule in the
    [Implementation Prune Stage B checklist](../knowledge/behavior.md). Read the
    live title and description back, require declared endpoints to equal live
    PR endpoints, and confirm metadata repair did not move the PR head.
-10. Supply a copyable initial-review prompt with repository, PR, governing
+11. Supply a copyable initial-review prompt with repository, PR, governing
     tracking Issue, focused Issue, expected full base SHA, expected full head
     SHA, review cycle `initial`, previous verdict `none`, and current workflow
     evidence or qualified limitation. Dispatch only after Stage B passes.
+12. Immediately after dispatching the initial-review subagent, the same main
+    implementation thread attempts `thread/compact/start` for its current
+    thread when the host exposes that capability.
+
+Both compaction checkpoints are experimental and best-effort. Repository
+guidance neither provides nor guarantees the App Server capability. An
+unavailable tool, rejected request, or missed checkpoint does not invalidate CI,
+review evidence, merge eligibility, or lifecycle completion.
 
 CI Playbook reading and test/proof repair occur before `git push`. Never defer
 them to the interval after push and before GitHub Actions starts.
