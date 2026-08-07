@@ -78,6 +78,11 @@ Supporting scripts are implementation details of that entrypoint:
 - `verify_principal_migration.py` upgrades a populated first-slice schema and
   proves that documents, jobs, outbox rows, and result receipts retain their
   identities while receiving only the controlled legacy-system principal.
+- `prepare_browser_legacy_evidence.py` idempotently installs one deterministic,
+  API-readable legacy result for the production-path owner of a real browser
+  submission inside the isolated Compose database. It exists only to prove the
+  Web `legacy-unmeasured` experience and is removed with project-scoped
+  teardown.
 - `verify_identity_runtime.py` follows Dex Authorization Code flow with PKCE,
   validates the real access token and capabilities both host-side and inside
   the API container through its backchannel, resolves one stable API principal,
@@ -109,12 +114,14 @@ Supporting scripts are implementation details of that entrypoint:
   expired-lease recovery, dispatcher restart, RabbitMQ restart, persistent
   delivery, and the queued-state transition.
 - `tests/e2e/document-classification.spec.ts` proves browser-visible OIDC
-  sign-in without browser token storage, private-source integrity, approval,
-  synthetic correction, audit order, idempotent replay, stale/CSRF rejection,
-  sign-out denial, failed processing, correlation propagation, and non-PDF
-  rejection while Playwright retains trace, screenshot, video, and HTML output
-  only under `artifacts/private-verification/`; sanitized JUnit and structured
-  proof remain in `artifacts/verification/`.
+  sign-in without browser token storage, private-source integrity, exact
+  promoted-model evidence, API-backed legacy evidence without fabricated
+  lineage, approval, synthetic correction, audit order, idempotent replay,
+  stale/CSRF rejection, sign-out denial, failed processing, correlation
+  propagation, and non-PDF rejection while Playwright retains trace,
+  screenshot, video, and HTML output only under
+  `artifacts/private-verification/`; sanitized JUnit and structured proof remain
+  in `artifacts/verification/`.
 - `sanitize_verification_artifacts.py` redacts then re-scans ordinary evidence
   and ZIP members for private-key, JWT, Web-session-cookie, CSRF-token,
   authorization-code, and bearer material. The browser proof also registers

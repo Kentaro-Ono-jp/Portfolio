@@ -914,6 +914,13 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
         "completed": {
             "documentId": "44444444-4444-4444-8444-444444444444",
             "classification": "invoice",
+            "modelVersion": "document-type-candidate-v1",
+            "modelEvidence": verifier.EXPECTED_BROWSER_MODEL_EVIDENCE,
+            "visibleEvidence": {
+                "status": "measured",
+                "exactLineage": True,
+                "boundedQualityClaim": True,
+            },
             "source": source,
             "decision": {
                 "status": "approved",
@@ -941,6 +948,7 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
         "correction": {
             "documentId": "55555555-5555-4555-8555-555555555555",
             "classification": "invoice",
+            "modelEvidence": verifier.EXPECTED_BROWSER_MODEL_EVIDENCE,
             "humanGroundTruth": "report",
             "fixturePurpose": "synthetic correction proof, not model quality",
             "source": source,
@@ -964,6 +972,24 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
                 "response": correction_correlation,
             },
         },
+        "legacy": {
+            "modelVersion": "document-type-v1",
+            "modelEvidence": {"status": "legacy-unmeasured"},
+            "visibleEvidence": {
+                "status": "legacy-unmeasured",
+                "fabricatedMeasuredFields": False,
+            },
+            "decision": {
+                "status": "approved",
+                "finalClassification": "report",
+                "reviewVersion": 1,
+            },
+            "auditActions": [
+                "document.submitted",
+                "processing.completed",
+                "review.approved",
+            ],
+        },
         "failed": {
             "status": "failed",
             "failureCode": "INVALID_PDF",
@@ -975,7 +1001,7 @@ def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(
         "invalidFile": {"apiRequestCreated": False},
         "security": {
             "anonymousReviewStatus": 401,
-            "postSignOutStatuses": [401, 401, 401],
+            "postSignOutStatuses": [401, 401, 401, 401, 401],
             "browserTokenStorage": False,
         },
     }

@@ -15,6 +15,8 @@ import {
   STARTED_AT,
   completedStatus,
   failedStatus,
+  legacyCompletedStatus,
+  measuredModelEvidence,
   processingStatus,
   queuedStatus,
 } from "@/test/fixtures";
@@ -29,6 +31,7 @@ describe("generated contract runtime schemas", () => {
       queuedStatus,
       processingStatus,
       completedStatus,
+      legacyCompletedStatus,
       failedStatus,
       { ...failedStatus, startedAt: STARTED_AT },
     ]) {
@@ -68,6 +71,27 @@ describe("generated contract runtime schemas", () => {
     expect(
       problemSchema.safeParse({ ...canonicalProblem, status: 200 }).success,
     ).toBe(false);
+  });
+
+  it("rejects partial, mixed, or malformed measured evidence", () => {
+    const partialEvidence: Record<string, unknown> = {
+      ...measuredModelEvidence,
+    };
+    delete partialEvidence.datasetSha256;
+    for (const modelEvidence of [
+      partialEvidence,
+      {
+        status: "legacy-unmeasured",
+        datasetVersion: measuredModelEvidence.datasetVersion,
+      },
+      { ...measuredModelEvidence, artifactSha256: "g".repeat(64) },
+      { ...measuredModelEvidence, unexpected: true },
+    ]) {
+      expect(
+        documentStatusSchema.safeParse({ ...completedStatus, modelEvidence })
+          .success,
+      ).toBe(false);
+    }
   });
 
   it("orders offset audit timestamps by instant and event identity", () => {

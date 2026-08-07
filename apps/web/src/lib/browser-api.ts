@@ -277,6 +277,8 @@ const PROBLEM_GUIDANCE: Readonly<Record<string, string>> = {
     "The processing service is unavailable. Please retry shortly.",
   WEB_NETWORK_ERROR:
     "The request could not be sent. Check your connection and retry.",
+  WEB_INVALID_RESPONSE:
+    "The service response could not be verified. Retry the request; if it persists, classify the PDF again.",
 };
 
 export function problemGuidance(problem: Problem): string {

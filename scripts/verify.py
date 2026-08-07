@@ -15,6 +15,25 @@ from uuid import UUID
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
+EXPECTED_BROWSER_MODEL_EVIDENCE = {
+    "status": "measured",
+    "datasetVersion": "reactorfront-synthetic-documents-v1",
+    "datasetSha256": (
+        "e82005c8ca78b7966f24e1faaf2a2b161262f1e774dc813e0c2d0743280cb046"
+    ),
+    "preprocessingVersion": "nfkc-ascii-alphanumeric-bow-v1",
+    "pipelineVersion": "pytorch-multinomial-naive-bayes-linear-v1",
+    "artifactSha256": (
+        "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09"
+    ),
+    "evaluationPolicyVersion": "document-classification-evaluation-v1",
+    "evaluationPolicySha256": (
+        "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332"
+    ),
+    "evaluationReportSha256": (
+        "83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861"
+    ),
+}
 
 VERIFICATION_GROUPS = (
     "contracts",
@@ -946,6 +965,7 @@ def _e2e_correlation_pair(value: object, label: str) -> bool:
 def prove_e2e_review_evidence(payload: dict[str, object]) -> None:
     completed = _e2e_mapping(payload.get("completed"), "completed review proof")
     correction = _e2e_mapping(payload.get("correction"), "correction proof")
+    legacy = _e2e_mapping(payload.get("legacy"), "legacy evidence proof")
     failed = _e2e_mapping(payload.get("failed"), "failed processing proof")
     invalid_file = _e2e_mapping(payload.get("invalidFile"), "invalid-file proof")
     security = _e2e_mapping(payload.get("security"), "security proof")
@@ -955,6 +975,13 @@ def prove_e2e_review_evidence(payload: dict[str, object]) -> None:
     correction_decision = _e2e_mapping(
         correction.get("decision"), "corrected decision proof"
     )
+    legacy_decision = _e2e_mapping(legacy.get("decision"), "legacy decision proof")
+    completed_visible_evidence = _e2e_mapping(
+        completed.get("visibleEvidence"), "visible measured-evidence proof"
+    )
+    legacy_visible_evidence = _e2e_mapping(
+        legacy.get("visibleEvidence"), "visible legacy-evidence proof"
+    )
     csrf = _e2e_mapping(completed.get("csrfRejection"), "CSRF rejection proof")
     stale = _e2e_mapping(completed.get("staleDecision"), "stale decision proof")
     completed_id = completed.get("documentId")
@@ -962,6 +989,17 @@ def prove_e2e_review_evidence(payload: dict[str, object]) -> None:
 
     expected = {
         "completed-machine": completed.get("classification") == "invoice",
+        "promoted-model-visible": completed.get("modelVersion")
+        == "document-type-candidate-v1",
+        "exact-measured-lineage": completed.get("modelEvidence")
+        == EXPECTED_BROWSER_MODEL_EVIDENCE
+        and correction.get("modelEvidence") == EXPECTED_BROWSER_MODEL_EVIDENCE,
+        "bounded-visible-evidence": completed_visible_evidence
+        == {
+            "status": "measured",
+            "exactLineage": True,
+            "boundedQualityClaim": True,
+        },
         "distinct-owned-documents": _e2e_uuid(completed_id)
         and _e2e_uuid(correction_id)
         and completed_id != correction_id,
@@ -984,11 +1022,24 @@ def prove_e2e_review_evidence(payload: dict[str, object]) -> None:
         and correction_decision.get("reviewVersion") == 1,
         "corrected-audit": correction.get("auditActions")
         == ["document.submitted", "processing.completed", "review.corrected"],
+        "legacy-unmeasured": legacy.get("modelVersion") == "document-type-v1"
+        and legacy.get("modelEvidence") == {"status": "legacy-unmeasured"}
+        and legacy_visible_evidence
+        == {
+            "status": "legacy-unmeasured",
+            "fabricatedMeasuredFields": False,
+        },
+        "legacy-review": legacy_decision.get("status") == "approved"
+        and legacy_decision.get("finalClassification") == "report"
+        and legacy_decision.get("reviewVersion") == 1,
+        "legacy-audit": legacy.get("auditActions")
+        == ["document.submitted", "processing.completed", "review.approved"],
         "failed-terminal": failed.get("status") == "failed"
         and failed.get("failureCode") == "INVALID_PDF",
         "local-invalid-file": invalid_file.get("apiRequestCreated") is False,
         "anonymous-denied": security.get("anonymousReviewStatus") == 401,
-        "signed-out-denied": security.get("postSignOutStatuses") == [401, 401, 401],
+        "signed-out-denied": security.get("postSignOutStatuses")
+        == [401, 401, 401, 401, 401],
         "browser-token-storage-empty": security.get("browserTokenStorage") is False,
         "stable-reviewer-principal": _e2e_uuid(
             completed_decision.get("reviewerPrincipalId")
