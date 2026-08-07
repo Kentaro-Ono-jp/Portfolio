@@ -1616,6 +1616,8 @@ def test_review_premortem_contract_rejects_each_weakened_boundary(
     for relative_path, fragments in documentation_checker.REVIEW_PREMORTEM_FRAGMENTS.items():
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
         normalized = " ".join(source.split())
+        final_fragments = documentation_checker.REQUIRED_GOVERNANCE_TEXT[relative_path]
+        assert all(fragment in final_fragments for fragment in fragments)
         target = tmp_path / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1629,7 +1631,7 @@ def test_review_premortem_contract_rejects_each_weakened_boundary(
 
             documentation_checker._validate_required_governance_text(
                 failures,
-                {relative_path: fragments},
+                {relative_path: final_fragments},
             )
 
             assert failures == [
