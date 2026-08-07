@@ -264,6 +264,46 @@ def test_github_actions_runtime_ports_avoid_linux_ephemeral_range() -> None:
     assert (
         "PORTFOLIO_WEB_PUBLIC_BASE_URL: ${PORTFOLIO_WEB_PUBLIC_BASE_URL:-http://127.0.0.1:53000}"
     ) in compose
+    dex_config = (REPOSITORY_ROOT / "infra/docker/identity/dex.yaml").read_text(encoding="utf-8")
+    assert "http://127.0.0.1:23000/api/auth/callback" in dex_config
+    assert "http://127.0.0.1:53000/api/auth/callback" in dex_config
+
+
+def test_identity_boundary_aligns_public_url_with_published_web_port() -> None:
+    checker = load_script_module("check_identity_boundary")
+
+    assert (
+        checker.expected_loopback_web_public_base(
+            {
+                "ports": [
+                    {
+                        "host_ip": "127.0.0.1",
+                        "published": "23000",
+                        "target": 3000,
+                    }
+                ]
+            }
+        )
+        == "http://127.0.0.1:23000"
+    )
+
+
+@pytest.mark.parametrize(
+    "ports",
+    [
+        [],
+        [{"host_ip": "0.0.0.0", "published": "23000", "target": 3000}],
+        [{"host_ip": "127.0.0.1", "published": "invalid", "target": 3000}],
+        [{"host_ip": "127.0.0.1", "published": "23000", "target": 8000}],
+    ],
+)
+def test_identity_boundary_rejects_invalid_web_public_ports(
+    ports: list[dict[str, object]],
+) -> None:
+    checker = load_script_module("check_identity_boundary")
+
+    with pytest.raises(RuntimeError, match="Web must"):
+        checker.expected_loopback_web_public_base({"ports": ports})
 
 
 def test_documentation_change_selects_only_documentation(verifier: ModuleType) -> None:

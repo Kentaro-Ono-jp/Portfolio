@@ -46,6 +46,13 @@ synthetic-provider fixtures.
   with reused and fresh keys; require identical not-found results and zero
   mutation for hidden targets while retaining owned-target replay coverage.
 
+### GitHub Actions PR #88 Web callback port alignment
+
+- **Origin:** Exact-head GitHub Actions run 31179942957 for PR #88.
+- **Trigger:** The identity boundary proof rejected the CI-only Web public URL even though it matched the resolved Compose port override.
+- **Mistake:** The proof and synthetic identity-provider callback fixture assumed only the default Web host port, so a valid isolated runtime mapping failed before service startup.
+- **Correction:** Derive the expected public callback base from the resolved loopback Compose port, allow the explicit local and CI callback URIs in the synthetic client, and reject malformed or non-loopback mappings in unit tests.
+
 ## Return
 
 Return to publication Gate A after repairing only the triggered identity

@@ -27,6 +27,7 @@ staticClients:
     name: ReactorFront synthetic API verifier
     redirectURIs:
       - http://127.0.0.1:5557/callback
+      - http://127.0.0.1:23000/api/auth/callback
       - http://127.0.0.1:53000/api/auth/callback
 
 staticPasswords:
