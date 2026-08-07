@@ -463,6 +463,24 @@ SHALLOW_REVIEW_DIFF_FRAGMENTS = {
     ),
 }
 
+REVIEW_PREMORTEM_FRAGMENTS = {
+    Path("ips-microkernel/review/inspect.md"): (
+        "Before running verification, conduct a bounded pre-mortem of the exact candidate",
+        "merged and caused a material failure within the focused scope and accepted design",
+        "trigger, propagation, material impact, detection, and recovery paths",
+        "inspect the exact diff and evidence against them",
+        "failure paths as inspection hypotheses, not findings",
+        "only when concrete evidence from the current candidate",
+        "unevidenced hypothesis into speculative expansion or a new requirement",
+    ),
+    Path("ips-microkernel/review/verdict.md"): (
+        "material failure paths considered and their evidence-backed outcome",
+        "record the most plausible material failure path or paths inspected",
+        "A bare attestation that the pre-mortem was performed is insufficient",
+        "pre-mortem outcome",
+    ),
+}
+
 REVIEW_ADJUDICATION_FRAGMENTS = {
     Path("ips-microkernel/work-router.md"): (
         "`Changes requested` verdict contains findings whose disposition is incomplete",
@@ -883,12 +901,14 @@ REQUIRED_GOVERNANCE_TEXT = {
     Path("ips-microkernel/review/inspect.md"): (
         *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("ips-microkernel/review/inspect.md")],
         *SHALLOW_REVIEW_DIFF_FRAGMENTS[Path("ips-microkernel/review/inspect.md")],
+        *REVIEW_PREMORTEM_FRAGMENTS[Path("ips-microkernel/review/inspect.md")],
         "candidate becomes an actionable finding only when",
     ),
     Path("ips-microkernel/review/verdict.md"): (
         "Reusable governance candidate",
         "not permission for the reviewer",
         *REVIEW_CANDIDATE_CAPTURE_FRAGMENTS[Path("ips-microkernel/review/verdict.md")],
+        *REVIEW_PREMORTEM_FRAGMENTS[Path("ips-microkernel/review/verdict.md")],
         *KNOWLEDGE_CURATION_FRAGMENTS[Path("ips-microkernel/review/verdict.md")],
     ),
     Path("ips-microkernel/review/setup.md"): (
@@ -1499,6 +1519,42 @@ def _validate_shallow_review_diff_contract(failures: list[str]) -> None:
                     f"{relative_path.as_posix()}: missing deterministic shallow-review "
                     f"diff invariant {fragment!r}"
                 )
+
+
+def _validate_review_premortem_sequence(failures: list[str]) -> None:
+    inspect_path = REPOSITORY_ROOT / "ips-microkernel/review/inspect.md"
+    if inspect_path.is_file():
+        inspect = " ".join(inspect_path.read_text(encoding="utf-8").split())
+        premortem = "Before running verification, conduct a bounded pre-mortem"
+        verification = "Run the smallest relevant non-Docker static verification"
+        if (
+            premortem in inspect
+            and verification in inspect
+            and inspect.index(premortem) > inspect.index(verification)
+        ):
+            failures.append(
+                "ips-microkernel/review/inspect.md: bounded pre-mortem must precede "
+                "local verification"
+            )
+
+    verdict_path = REPOSITORY_ROOT / "ips-microkernel/review/verdict.md"
+    if verdict_path.is_file():
+        verdict = verdict_path.read_text(encoding="utf-8")
+        findings_heading = "### Findings or approval basis"
+        premortem_entry = "Pre-mortem:"
+        candidate_heading = "### Reusable governance candidate"
+        if all(
+            fragment in verdict
+            for fragment in (findings_heading, premortem_entry, candidate_heading)
+        ) and not (
+            verdict.index(findings_heading)
+            < verdict.index(premortem_entry)
+            < verdict.index(candidate_heading)
+        ):
+            failures.append(
+                "ips-microkernel/review/verdict.md: pre-mortem outcome must remain "
+                "inside findings or approval basis"
+            )
 
 
 def _validate_inventory_and_roles(failures: list[str]) -> list[Path]:
@@ -2273,6 +2329,7 @@ def governance_failures() -> list[str]:
     _validate_governance_knowledge_selector(failures)
     _validate_review_candidate_capture(failures)
     _validate_shallow_review_diff_contract(failures)
+    _validate_review_premortem_sequence(failures)
     _validate_routing_node_budgets(failures)
     _validate_ci_failure_knowledge(failures)
     _validate_stage_a_occurrence_records(failures)

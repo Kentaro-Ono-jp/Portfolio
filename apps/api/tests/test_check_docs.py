@@ -1585,6 +1585,113 @@ def test_shallow_review_diff_contract_is_complete(
     assert failures == []
 
 
+def test_review_premortem_contract_is_complete(
+    documentation_checker: ModuleType,
+) -> None:
+    inspect = Path("ips-microkernel/review/inspect.md")
+    verdict = Path("ips-microkernel/review/verdict.md")
+    contract = documentation_checker.REVIEW_PREMORTEM_FRAGMENTS
+    required_text = documentation_checker.REQUIRED_GOVERNANCE_TEXT
+    failures: list[str] = []
+
+    assert contract.keys() == {inspect, verdict}
+    assert all(
+        fragment in required_text[relative_path]
+        for relative_path, fragments in contract.items()
+        for fragment in fragments
+    )
+
+    documentation_checker._validate_review_premortem_sequence(failures)
+
+    assert failures == []
+
+
+def test_review_premortem_contract_rejects_each_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+    for relative_path, fragments in documentation_checker.REVIEW_PREMORTEM_FRAGMENTS.items():
+        source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+        normalized = " ".join(source.split())
+        target = tmp_path / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        for fragment in fragments:
+            assert fragment in normalized
+            target.write_text(
+                normalized.replace(fragment, "weakened pre-mortem boundary", 1),
+                encoding="utf-8",
+            )
+            failures: list[str] = []
+
+            documentation_checker._validate_required_governance_text(
+                failures,
+                {relative_path: fragments},
+            )
+
+            assert failures == [
+                f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"
+            ]
+
+
+def test_review_premortem_must_precede_verification(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    inspect = tmp_path / "ips-microkernel/review/inspect.md"
+    verdict = tmp_path / "ips-microkernel/review/verdict.md"
+    inspect.parent.mkdir(parents=True)
+    inspect.write_text(
+        "Run the smallest relevant non-Docker static verification.\n"
+        "Before running verification, conduct a bounded pre-mortem.\n",
+        encoding="utf-8",
+    )
+    verdict.write_text(
+        "### Findings or approval basis\nPre-mortem:\n### Reusable governance candidate\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_review_premortem_sequence(failures)
+
+    assert failures == [
+        "ips-microkernel/review/inspect.md: bounded pre-mortem must precede local verification"
+    ]
+
+
+def test_review_premortem_outcome_must_remain_in_verdict_basis(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    inspect = tmp_path / "ips-microkernel/review/inspect.md"
+    verdict = tmp_path / "ips-microkernel/review/verdict.md"
+    inspect.parent.mkdir(parents=True)
+    inspect.write_text(
+        "Before running verification, conduct a bounded pre-mortem.\n"
+        "Run the smallest relevant non-Docker static verification.\n",
+        encoding="utf-8",
+    )
+    verdict.write_text(
+        "### Findings or approval basis\n### Reusable governance candidate\nPre-mortem:\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    failures: list[str] = []
+
+    documentation_checker._validate_review_premortem_sequence(failures)
+
+    assert failures == [
+        "ips-microkernel/review/verdict.md: pre-mortem outcome must remain "
+        "inside findings or approval basis"
+    ]
+
+
 @pytest.mark.parametrize(
     ("relative_path", "stale_directive"),
     [

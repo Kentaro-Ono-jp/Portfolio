@@ -23,25 +23,34 @@ Read this file only after review setup proves the exact isolated clone.
    mismatch is a blocking limitation and returns through live-state recovery.
 4. Judge behavior against focused scope, non-targets, failure model,
    acceptance criteria, relevant accepted design, tests, and public safety.
-5. For public guidance or evidence, read
+5. Before running verification, conduct a bounded pre-mortem of the exact
+   candidate. Assume it has been merged and caused a material failure within
+   the focused scope and accepted design. Identify the most plausible trigger,
+   propagation, material impact, detection, and recovery paths, then inspect
+   the exact diff and evidence against them.
+6. Treat those failure paths as inspection hypotheses, not findings. Promote a
+   scenario to an actionable finding only when concrete evidence from the
+   current candidate proves a defect in the accepted scope. Do not turn an
+   unevidenced hypothesis into speculative expansion or a new requirement.
+7. For public guidance or evidence, read
    [public safety](../references/public-safety.md), then return here.
-6. Run the smallest relevant non-Docker static verification. Do not start or
+8. Run the smallest relevant non-Docker static verification. Do not start or
    mutate Docker Desktop.
-7. Require PR evidence to justify selected, executed, carried, and skipped
+9. Require PR evidence to justify selected, executed, carried, and skipped
    groups with both N/NN counts. Reject a carry without successful unaffected
    evidence. Affected omissions remain skipped without evidence and require
    focused rationale plus an exact-head trailer.
-8. Apply the same evidence rule to Docker-backed groups without running them
+10. Apply the same evidence rule to Docker-backed groups without running them
    locally.
-9. Read the exact-head Actions result and limitations.
-10. Only when the exact candidate claims a qualified Markdown-only skip, read
+11. Read the exact-head Actions result and limitations.
+12. Only when the exact candidate claims a qualified Markdown-only skip, read
     the [Markdown-only exception](../ci/exceptions/markdown-only.md#independent-review),
     return here, and verify every required condition.
-11. Classify actionable findings by severity and cite exact file, line, or
-   behavioral evidence. Do not request speculative expansion.
-12. For re-review, verify every prior finding against the new code and still
+13. Classify actionable findings by severity and cite exact file, line, or
+    behavioral evidence. Do not request speculative expansion.
+14. For re-review, verify every prior finding against the new code and still
     inspect the complete current PR.
-13. Separately classify every evidenced reusable process or review candidate
+15. Separately classify every evidenced reusable process or review candidate
     discovered in this review cycle. Split compound observations into atomic
     root-cause candidates, preserve their stable discovery order, and retain
     every candidate for the verdict. Use `none` only when no reusable candidate
