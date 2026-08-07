@@ -238,6 +238,34 @@ def test_cross_cutting_or_unknown_change_fails_closed_to_every_group(
     assert "full verification" in plan.reason
 
 
+def test_github_actions_runtime_ports_avoid_linux_ephemeral_range() -> None:
+    workflow = (REPOSITORY_ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
+    compose = (REPOSITORY_ROOT / "compose.yaml").read_text(encoding="utf-8")
+    ports = {
+        "PORTFOLIO_API_PORT": 28000,
+        "PORTFOLIO_WEB_PORT": 23000,
+        "PORTFOLIO_POSTGRES_PORT": 25432,
+        "PORTFOLIO_MINIO_PORT": 29000,
+        "PORTFOLIO_RABBITMQ_PORT": 25672,
+    }
+
+    for name, port in ports.items():
+        assert f'{name}: "{port}"' in workflow
+        assert not 32768 <= port <= 60999
+
+    for value in (
+        "postgresql+psycopg://portfolio:portfolio-local-password@127.0.0.1:25432/portfolio",
+        "http://127.0.0.1:29000",
+        "amqp://portfolio:portfolio-local-password@127.0.0.1:25672/%2F",
+        "http://127.0.0.1:28000",
+        "http://127.0.0.1:23000",
+    ):
+        assert value in workflow
+    assert (
+        "PORTFOLIO_WEB_PUBLIC_BASE_URL: ${PORTFOLIO_WEB_PUBLIC_BASE_URL:-http://127.0.0.1:53000}"
+    ) in compose
+
+
 def test_documentation_change_selects_only_documentation(verifier: ModuleType) -> None:
     plan = verifier.plan_for_paths(["ips-microkernel/work-router.md"])
 

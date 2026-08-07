@@ -21,6 +21,20 @@ jobs:
     name: Web and service-boundary repository checks
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      PORTFOLIO_API_PORT: "28000"
+      PORTFOLIO_WEB_PORT: "23000"
+      PORTFOLIO_POSTGRES_PORT: "25432"
+      PORTFOLIO_MINIO_PORT: "29000"
+      PORTFOLIO_RABBITMQ_PORT: "25672"
+      PORTFOLIO_DATABASE_URL: "postgresql+psycopg://portfolio:portfolio-local-password@127.0.0.1:25432/portfolio"
+      PORTFOLIO_S3_ENDPOINT_URL: "http://127.0.0.1:29000"
+      PORTFOLIO_RABBITMQ_URL: "amqp://portfolio:portfolio-local-password@127.0.0.1:25672/%2F"
+      PORTFOLIO_API_BASE_URL: "http://127.0.0.1:28000"
+      PORTFOLIO_WEB_PUBLIC_BASE_URL: "http://127.0.0.1:23000"
+      PORTFOLIO_E2E_BASE_URL: "http://127.0.0.1:23000"
+      PORTFOLIO_ML_S3_ENDPOINT_URL: "http://127.0.0.1:29000"
+      PORTFOLIO_ML_RABBITMQ_URL: "amqp://portfolio:portfolio-local-password@127.0.0.1:25672/%2F"
     outputs:
       selected_groups: ${{ steps.plan.outputs.groups }}
 

@@ -58,6 +58,13 @@ fault records, shared queues, or state that may survive or race another actor.
   intermediate state before invoking the consumer, then assert the intended
   production outcome and retain mismatched-state coverage separately.
 
+### GitHub Actions PR #88 host-port isolation
+
+- **Origin:** Exact-head GitHub Actions run 31178874795 for PR #88.
+- **Trigger:** The API container could not bind `127.0.0.1:58000` because the port was already in use on the hosted runner.
+- **Mistake:** CI published runtime services on fixed ports inside Linux's default ephemeral port range, so unrelated runner traffic could collide with Compose startup.
+- **Correction:** Assign CI-only ports below the ephemeral range, keep host-side service URLs aligned with those overrides, and enforce the mapping with an executable regression test.
+
 ## Return
 
 Return to publication Gate A after repairing only the triggered isolation
