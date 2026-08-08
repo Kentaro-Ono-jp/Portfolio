@@ -7,11 +7,18 @@ boundary, protect the private source, record one immutable approval or
 correction, expose append-only product audit history, and carry the exact
 reviewed model lineage into the authenticated result.
 
+A fourth vertical slice is accepted but not yet implemented. It adds a
+portable managed-ephemeral AWS deployment path without replacing AWS-free
+GitHub Actions or local Docker Compose and without claiming an existing hosted
+service.
+
 The governing boundaries are
 [ADR-0007](../adr/0007-authentication-session-and-api-authorization.md),
 [ADR-0021](../adr/0021-govern-human-feedback-model-evaluation-and-promotion.md),
+[ADR-0023](../adr/0023-portable-managed-ephemeral-aws-deployment.md),
 [Delivery Specification 0002](../delivery/0002-second-vertical-slice.md), and
-[Delivery Specification 0003](../delivery/0003-third-vertical-slice.md).
+[Delivery Specification 0003](../delivery/0003-third-vertical-slice.md), and
+[Delivery Specification 0004](../delivery/0004-portable-managed-ephemeral-aws-deployment.md).
 The public HTTP surface is the
 [OpenAPI 3.1 contract](../../packages/contracts/openapi/openapi.yaml), with its
 [generated TypeScript representation](../../packages/contracts/generated/api.d.ts).
@@ -44,6 +51,86 @@ The browser reaches only the Web origin. It never receives the private API
 base URL, an object-store credential, a durable source URL, or an OAuth token.
 Health and readiness probes are intentionally anonymous but expose no document
 or identity detail.
+
+This diagram is the currently implemented local and GitHub Actions runtime.
+The accepted AWS adapter below preserves its ownership and trust boundaries.
+
+## Accepted managed-ephemeral AWS deployment profile
+
+The fourth-slice profile is an accepted target, not current runtime evidence.
+It is complete only after the focused increments in
+[Delivery Specification 0004](../delivery/0004-portable-managed-ephemeral-aws-deployment.md)
+implement and prove the lifecycle.
+
+```mermaid
+flowchart LR
+    Browser["Synthetic reviewer\nin a browser"]
+    Gateway["API Gateway HTTP API\ngenerated HTTPS"]
+    Link["VPC Link and Cloud Map"]
+    Web["ECS/Fargate Web"]
+    API["ECS/Fargate API area\nAPI, migration, outbox, events"]
+    ML["ECS/Fargate ML worker"]
+    Database[("RDS PostgreSQL")]
+    Objects[("Private S3 bucket")]
+    Broker["Amazon MQ RabbitMQ 4.2"]
+    Identity["Amazon Cognito\nmanaged OIDC adapter"]
+
+    Browser --> Gateway
+    Gateway --> Link
+    Link --> Web
+    Web --> API
+    Web <-->|"Authorization Code + PKCE"| Identity
+    API --> Database
+    API --> Objects
+    API --> Broker
+    Broker --> ML
+    ML --> Objects
+    ML --> Broker
+```
+
+| Current local/CI role | Accepted AWS adapter | Preserved boundary |
+|---|---|---|
+| Next.js Web | Web Fargate service behind API Gateway, VPC Link, and Cloud Map | Sole browser-facing session and same-origin boundary |
+| FastAPI, outbox, and result consumer | Distinct containers in one API-area Fargate task | Sole PostgreSQL owner and transactional event authority |
+| PyTorch/Celery worker | Independent ML Fargate service | No PostgreSQL credential or end-user identity |
+| PostgreSQL | RDS for PostgreSQL | API-owned application state |
+| MinIO | Environment-owned S3 bucket | Private objects; workload access uses task roles |
+| RabbitMQ | Amazon MQ for RabbitMQ 4.2 | Existing request/result and at-least-once contracts |
+| Dex fixture | Cognito user pool and managed login | OIDC deployment adapter, not product authorization authority |
+
+The initial proof uses public task subnets for outbound-only Fargate access and
+isolated service subnets for RDS and Amazon MQ. Security Groups permit no
+direct Internet task ingress. VPC Link reaches only Web, Web reaches only API,
+and API/ML reach only their required managed dependencies. An S3 gateway
+endpoint is used, and NAT Gateway, ALB, custom domain, CloudFront, and WAF are
+not initial requirements.
+
+Cognito must preserve exact issuer, resource-bound audience,
+`token_use=access`, time and signature, and reviewer-group capability checks.
+An ID token is never accepted as an API access token. S3 access uses API and ML
+task roles rather than application access keys. Database and broker secrets
+are injected through the task execution boundary and never enter public proof.
+
+Persistent low-cost bootstrap state is separated from environment-specific
+application state. The persistent layer owns the encrypted versioned state
+backend and lockfile, ECR lifecycle, bounded IAM/workload roles, and independent
+destroy controller. The ephemeral layer owns network, ingress, discovery,
+ECS, RDS, S3 application data, Amazon MQ, Cognito, secrets, and bounded logs.
+Manual and monthly environments use different names, state keys, and tags.
+
+The accepted lifecycle is preflight, immutable image selection, two-hour
+fallback registration, apply, migration, synthetic seed, health,
+authentication and asynchronous smoke, external HTTPS check, manual destroy,
+and tag plus service-specific residual sweep. The EventBridge Scheduler and
+CodeBuild fallback remain outside the state they destroy. A Budget alert,
+Terraform exit code, or schedule invocation alone cannot prove that billable
+resources are gone.
+
+Ordinary PR, fork, Dependabot, and `main` verification paths remain AWS-free
+and receive no AWS write authority. Third-party deployment binds only to the
+deploying party's account, credentials, state, resources, and cost. The public
+path never depends on a maintainer account, private state, or machine-local
+file.
 
 ## Trust boundaries and ownership
 
@@ -234,8 +321,11 @@ does not claim production readiness.
   online learning, automatic runtime-data admission, mutable model registry,
   canary, shadow traffic, A/B test, or runtime switching control.
 - Multi-tenancy, organization membership, assignment queues, administration,
-  account recovery, MFA, audit search/export/retention/legal hold, and managed
-  cloud deployment remain separate product decisions.
+  account recovery, MFA, and audit search/export/retention/legal hold remain
+  separate product decisions.
+- The managed-ephemeral AWS profile is accepted but not implemented. No public
+  hosted service, successful AWS lifecycle, production identity provider,
+  durable shared session, high availability, or stable public URL is claimed.
 
 ## Accepted records
 
@@ -245,6 +335,8 @@ does not claim production readiness.
 - [ADR-0004: Keep state ownership in the API and use a transactional outbox](../adr/0004-api-state-ownership-and-transactional-outbox.md)
 - [ADR-0007: Define the authentication, session, and API authorization boundary](../adr/0007-authentication-session-and-api-authorization.md)
 - [ADR-0021: Govern human feedback, model evaluation, and promotion](../adr/0021-govern-human-feedback-model-evaluation-and-promotion.md)
+- [ADR-0023: Adopt a portable managed-ephemeral AWS deployment profile](../adr/0023-portable-managed-ephemeral-aws-deployment.md)
 - [Delivery Specification 0001: First end-to-end vertical slice](../delivery/0001-first-vertical-slice.md)
 - [Delivery Specification 0002: Authenticated classification review and immutable audit trail](../delivery/0002-second-vertical-slice.md)
 - [Delivery Specification 0003: Human-feedback model evaluation and governed promotion](../delivery/0003-third-vertical-slice.md)
+- [Delivery Specification 0004: Portable managed-ephemeral AWS deployment proof](../delivery/0004-portable-managed-ephemeral-aws-deployment.md)
