@@ -1,6 +1,6 @@
 {
   "artifactSchemaVersion": 1,
-  "artifactSha256": "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09",
+  "artifactSha256": "970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae",
   "classes": [
     "invoice",
     "report"
@@ -15,7 +15,7 @@
   "datasetVersion": "reactorfront-synthetic-documents-v1",
   "dependency": {
     "lockPath": "apps/ml/uv.lock",
-    "sha256": "4d8a69b4e99d9545f375a3999ecb002ead2739ae68ba0e0e7380a34a48b6092e"
+    "sha256": "145d0462bebcba6b5cd540d8fd81d31259ae697ada916e9fff929c679ff5541d"
   },
   "modelName": "reactorfront-document-type",
   "modelVersion": "document-type-candidate-v1",
