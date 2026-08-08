@@ -31,6 +31,7 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0020: Authorize an owner-controlled focus scratchpad](0020-authorize-owner-controlled-focus-scratchpad.md)
 - [ADR-0021: Govern human feedback, model evaluation, and promotion](0021-govern-human-feedback-model-evaluation-and-promotion.md)
 - [ADR-0022: Allow Stage B after a qualified no-run candidate](0022-allow-stage-b-after-qualified-no-run.md)
+- [ADR-0023: Adopt a portable managed-ephemeral AWS deployment profile](0023-portable-managed-ephemeral-aws-deployment.md)
 
 ## Superseded records
 

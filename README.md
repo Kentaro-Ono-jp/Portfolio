@@ -1,7 +1,7 @@
 # ReactorFront Portfolio
 
-> Status: third vertical slice completed with governed human-feedback model
-> evaluation, reviewed promotion, runtime lineage, and public proof — 2026-08-08
+> Status: three vertical slices completed; fourth portable managed-ephemeral
+> AWS deployment slice accepted but not yet implemented — 2026-08-09
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -30,6 +30,12 @@ explicitly curated synthetic dataset, leakage-aware champion/candidate
 evaluation, one reviewed promoted-model manifest, and traceable runtime ML
 lineage. Review outcomes never become training data automatically.
 
+The accepted fourth vertical slice adds an explicit managed AWS deployment
+path while preserving AWS-free GitHub Actions and local Docker Compose. A
+third-party clone deploys only into the third party's AWS account. Terraform,
+managed-service adapters, deployment roles and automation, and a proved AWS
+lifecycle are accepted design work and are not yet implemented.
+
 ## Engineering evidence
 
 The three completed vertical slices demonstrate:
@@ -52,6 +58,11 @@ The three completed vertical slices demonstrate:
 - reviewed model promotion, rollback identity, and immutable runtime lineage
 - an authenticated model-evidence experience that separates model score,
   measured corpus evidence, and the human final decision
+
+The accepted fourth-slice direction will add portable Terraform,
+ECS/Fargate, RDS PostgreSQL, S3, Amazon MQ, Cognito, bounded automation,
+destroy fallback, and residual-resource proof without weakening those three
+completed slices or granting ordinary CI AWS write authority.
 
 ## Repository structure
 
@@ -93,6 +104,7 @@ Portfolio/
 - [ADR-0008: Route AI guidance through progressive disclosure](ips-microkernel/adr/0008-progressive-disclosure-ai-guidance.md)
 - [ADR-0013: Name the document governance architecture iPS Microkernel](ips-microkernel/adr/0013-name-ips-microkernel.md)
 - [ADR-0021: Govern human feedback, model evaluation, and promotion](ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md)
+- [ADR-0023: Adopt a portable managed-ephemeral AWS deployment profile](ips-microkernel/adr/0023-portable-managed-ephemeral-aws-deployment.md)
 
 Superseded decisions remain under the
 [ADR index](ips-microkernel/adr/index.md) as design history.
@@ -106,7 +118,11 @@ together.
 The completed model-evaluation boundary is governed by
 [Delivery Specification 0003](ips-microkernel/delivery/0003-third-vertical-slice.md)
 and its umbrella [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72).
-The complete implemented system is explained in the
+The accepted, not-yet-implemented managed AWS boundary is governed by
+[Delivery Specification 0004](ips-microkernel/delivery/0004-portable-managed-ephemeral-aws-deployment.md)
+and its umbrella [Issue #95](https://github.com/Kentaro-Ono-jp/Portfolio/issues/95).
+The currently implemented three-slice system and accepted deployment direction
+are explained in the
 [architecture documentation](ips-microkernel/architecture/index.md). Its
 public HTTP operations and generated Web types are inspectable in the
 [OpenAPI 3.1 contract](packages/contracts/openapi/openapi.yaml) and
@@ -204,6 +220,33 @@ valid bearer token and capability. Required development ports bind only to
 loopback and can be changed with the safe examples in
 [`.env.example`](.env.example). The MinIO console is intentionally not
 published to the host.
+
+## Accepted fourth vertical slice
+
+The portable managed-ephemeral AWS slice is accepted through
+[ADR-0023](ips-microkernel/adr/0023-portable-managed-ephemeral-aws-deployment.md),
+[Delivery Specification 0004](ips-microkernel/delivery/0004-portable-managed-ephemeral-aws-deployment.md),
+and umbrella [Issue #95](https://github.com/Kentaro-Ono-jp/Portfolio/issues/95).
+
+The selected profile maps Web, API-area, and ML to separate ECS/Fargate
+services; PostgreSQL to RDS; object storage to S3 task roles; RabbitMQ to
+Amazon MQ; and the OIDC deployment adapter to Cognito. API Gateway HTTP API,
+VPC Link, and Cloud Map provide the initial generated HTTPS and private
+service-discovery path. The cost-bounded proof is NAT-free, permits no direct
+Internet task ingress, and separates persistent bootstrap state from ephemeral
+application resources.
+
+Deployment remains an explicit manual action or bounded monthly schedule.
+Before billable application creation, the lifecycle must register an
+independent two-hour destroy fallback. A green cycle requires migration,
+synthetic seed, health, authenticated asynchronous document proof, external
+HTTPS, destroy, and tag plus service-specific residual inventory. Ordinary PR,
+fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
+authority.
+
+This section records an accepted implementation contract, not a successful
+deployment claim. No Terraform module, deployment IAM role, AWS automation, or
+managed application environment is introduced by the planning increment.
 
 ## Completed third vertical slice
 
