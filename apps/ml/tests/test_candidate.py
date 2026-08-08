@@ -97,7 +97,7 @@ def test_candidate_build_is_reproducible_and_uses_only_training_split() -> None:
     assert first.artifact.sha256 == second.artifact.sha256
     assert first.manifest == second.manifest
     assert first.artifact.sha256 == (
-        "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09"
+        "970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae"
     )
     expected_ids = [sample.sample_id for sample in snapshot.samples_for("train")]
     assert first.manifest["training"]["sampleIds"] == expected_ids

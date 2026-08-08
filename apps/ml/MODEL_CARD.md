@@ -7,7 +7,7 @@
 - Artifact schema: deterministic JSON containing vocabulary, linear weights,
   bias, and training metadata
 - Expected SHA-256:
-  `17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09`
+  `970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae`
 - Selection: reviewed [`promoted-model-v1.json`](evaluation/promoted-model-v1.json)
 - Runtime: pinned CPU PyTorch in the `ml-worker` image
 
@@ -65,7 +65,7 @@ per-class precision/recall/F1 `1.0`, and mean true-label model score
 [`candidate-report-v1.json`](evaluation/candidate-report-v1.json) records one
 sanitized accepted outcome per held-out sample so every published aggregate
 and gate can be recomputed independently. Its SHA-256 is
-`83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`.
+`4562e0cda501400a8e1988bb0463bac4b9c12537da9b985ebe31e0c897e4fa18`.
 Runtime CI separately retains real PyTorch inference through repository-
 generated invoice and report PDFs.
 
@@ -76,13 +76,13 @@ from exactly the accepted 12-sample training split rather than from validation
 or test data. Its reviewed build identity binds the dataset and split digests,
 training sample IDs, preprocessing and pipeline versions, fixed seed, pinned
 `uv.lock` digest, and artifact SHA-256
-`17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09`.
+`970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae`.
 The artifact remains generated outside Git history.
 
 The model processes all four held-out samples correctly with macro F1
 `1.0`, per-class recall `1.0`, and mean true-label model score `0.99982216`.
 Its canonical report SHA-256 is
-`83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`.
+`4562e0cda501400a8e1988bb0463bac4b9c12537da9b985ebe31e0c897e4fa18`.
 The canonical
 [`candidate-comparison-v1.json`](evaluation/candidate-comparison-v1.json)
 independently recomputes every absolute and champion-relative gate and records
