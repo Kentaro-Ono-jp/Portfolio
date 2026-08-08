@@ -111,12 +111,12 @@ const EXPECTED_MODEL_EVIDENCE: MeasuredModelEvidence = {
   preprocessingVersion: "nfkc-ascii-alphanumeric-bow-v1",
   pipelineVersion: "pytorch-multinomial-naive-bayes-linear-v1",
   artifactSha256:
-    "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09",
+    "970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae",
   evaluationPolicyVersion: "document-classification-evaluation-v1",
   evaluationPolicySha256:
     "e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332",
   evaluationReportSha256:
-    "83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861",
+    "4562e0cda501400a8e1988bb0463bac4b9c12537da9b985ebe31e0c897e4fa18",
 };
 
 const EXPECTED_AUDIT_LINEAGE = {

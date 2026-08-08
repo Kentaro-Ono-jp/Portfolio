@@ -31,10 +31,10 @@ the held-out test membership and numeric policy were accepted first in
 | Preprocessing | `nfkc-ascii-alphanumeric-bow-v1` | [`policy-v1.json`](evaluation/policy-v1.json) |
 | Pipeline | `pytorch-multinomial-naive-bayes-linear-v1` | [`candidate-build-v1.json`](evaluation/candidate-build-v1.json) |
 | Evaluation policy | `document-classification-evaluation-v1` / `e3431c6d4e9094b8bd88b77a4ba4abc860641d7f83eaf71a5ee71c8f46bae332` | [`policy-v1.json`](evaluation/policy-v1.json) |
-| Promoted artifact | `document-type-candidate-v1` / `17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09` | [`candidate-build-v1.json`](evaluation/candidate-build-v1.json) |
-| Candidate report | `83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861` | [`candidate-report-v1.json`](evaluation/candidate-report-v1.json) |
-| Comparison | `92d8878c37a2c39a25f5d5241e54b1acaff7fbc2012d975d4b659f6fb72db041` | [`candidate-comparison-v1.json`](evaluation/candidate-comparison-v1.json) |
-| Promotion manifest | `4f87aaa11cbecd25b0a68466df32dc1dc1510fb465ff73d32e30b1a7551a36fc` | [`promoted-model-v1.json`](evaluation/promoted-model-v1.json) |
+| Promoted artifact | `document-type-candidate-v1` / `970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae` | [`candidate-build-v1.json`](evaluation/candidate-build-v1.json) |
+| Candidate report | `4562e0cda501400a8e1988bb0463bac4b9c12537da9b985ebe31e0c897e4fa18` | [`candidate-report-v1.json`](evaluation/candidate-report-v1.json) |
+| Comparison | `0a19deef4081cd4ff8ee974c9a0b584fcfb3a37d77753a3dd7fd3348c923bfca` | [`candidate-comparison-v1.json`](evaluation/candidate-comparison-v1.json) |
+| Promotion manifest | `f4a4f68d93fdc04c75c4ad624a5004319a53aad41e514061a9b6675254cd308c` | [`promoted-model-v1.json`](evaluation/promoted-model-v1.json) |
 | Rollback artifact | `document-type-v1` / `82996b9d7a715ee8aee3b9b291cb9538346d84f5398c6b4448c1c79725e9c2ac` | [`champion-baseline-v1.json`](evaluation/champion-baseline-v1.json) |
 
 Canonical verification reconstructs the promoted artifact from the fixed 12

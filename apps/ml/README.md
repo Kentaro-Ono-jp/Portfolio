@@ -178,15 +178,15 @@ The snapshot-driven `document-type-candidate-v1` build consumes exactly the 12
 declared training samples and records the dataset, split, preprocessing,
 pipeline, fixed seed, `uv.lock`, training membership, and generated artifact
 identity. Two clean builds produce artifact SHA-256
-`17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09`.
+`970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae`.
 The generated artifact remains outside normal Git history.
 
 On the unchanged four-sample test split, the candidate also processes 4/4 with
 macro F1 `1.0`, per-class recall `1.0`, and mean true-label model score
 `0.99982216`. Its canonical report SHA-256 is
-`83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861`;
+`4562e0cda501400a8e1988bb0463bac4b9c12537da9b985ebe31e0c897e4fa18`;
 the independently recomputed comparison SHA-256 is
-`92d8878c37a2c39a25f5d5241e54b1acaff7fbc2012d975d4b659f6fb72db041`.
+`0a19deef4081cd4ff8ee974c9a0b584fcfb3a37d77753a3dd7fd3348c923bfca`.
 All frozen absolute and champion-relative gates pass. The reviewed
 `promoted-model-v1.json` now selects this exact candidate and binds its
 artifact, dataset, preprocessing, pipeline, policy, report, comparison, and

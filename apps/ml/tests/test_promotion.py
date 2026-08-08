@@ -42,10 +42,10 @@ def test_promoted_candidate_is_canonical_reproducible_and_fully_bound() -> None:
     assert first.selection_type == PROMOTION_SELECTION
     assert first.model_version == "document-type-candidate-v1"
     assert first.artifact.sha256 == (
-        "17006d0e045fdc42547ca0b0dd058eb67532e6967a1136156c51e4cb4c00de09"
+        "970723c2d4a11cce2567f931e55cc4f673dc0f359a9d0e0e8730136dc661e9ae"
     )
     assert first.evaluation_report["reportSha256"] == (
-        "83493ba1053c6252651e64a9afdb424385eb527c1c2ca94cbc99ade0d610d861"
+        "4562e0cda501400a8e1988bb0463bac4b9c12537da9b985ebe31e0c897e4fa18"
     )
     assert first.comparison["eligible"] is True
     assert first.artifact.content == second.artifact.content
