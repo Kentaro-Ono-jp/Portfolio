@@ -55,12 +55,38 @@ Use the non-container path when Docker is intentionally unavailable:
 python scripts/verify.py --static-only
 ```
 
+For implementation preflight in a complete local checkout, plan from the
+ordinary merge-base comparison without executing checks:
+
+```console
+python scripts/verify.py --plan --base <comparison-endpoint>
+```
+
+For independent review in the required depth-one clone, fetch and validate the
+exact base and head commit objects, then use the explicit two-endpoint mode:
+
+```console
+python scripts/verify.py --plan --endpoints <base-sha> <head-sha>
+```
+
+This mode uses a direct `git diff <base-sha> <head-sha> --`; it neither searches
+for nor requires a merge base. Both arguments must be full lowercase commit
+SHAs whose commit objects exist locally, otherwise the planner fails closed to
+all verification groups. The ordinary `--base` mode retains its three-dot
+merge-base behavior for implementation preflight.
+
+When a plan carries unaffected groups, its human summary and machine outputs
+identify the exact successful source SHA, Actions run ID, and run URL. The
+three provenance values are an indivisible input: missing, malformed,
+unsuccessful, or SHA-mismatched evidence cannot be labelled as carried.
+
 Supporting scripts are implementation details of that entrypoint:
 
 - `plan_ci.py` converts trusted GitHub event state into the canonical selective
   plan. It keeps baseline and current-head trust separate, closes inherited
   evidence gaps for external PRs, and routes tree-identical merges through the
-  same skip-lineage rules as changed trees.
+  same skip-lineage rules as changed trees. When it carries groups, it resolves
+  and publishes the exact successful source run and SHA used by the verifier.
 - `check_docs.py` rejects broken local Markdown links and drift in the routed
   AI-governance inventory, roles, canonical rule ownership, reachability,
   thin-router budgets, review boundaries, CI failure evidence, and public-safe

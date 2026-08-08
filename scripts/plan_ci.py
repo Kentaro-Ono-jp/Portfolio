@@ -57,6 +57,7 @@ class CIPlanRequest:
     baseline_skipped_groups: str = ""
     current_skipped_groups: str = ""
     close_baseline_gaps: bool = False
+    carry_provenance: verify.CarryProvenance | None = None
 
     def resolve(self) -> verify.VerificationPlan:
         return verify.resolve_selection(
@@ -65,10 +66,22 @@ class CIPlanRequest:
                 groups=None,
                 plan=True,
                 base=self.base,
+                endpoints=None,
                 staged=False,
                 full=self.full,
                 carry_all=self.carry_all,
                 baseline_proven=self.baseline_proven,
+                baseline_sha=(
+                    self.carry_provenance.baseline_sha
+                    if self.carry_provenance
+                    else None
+                ),
+                baseline_run_id=(
+                    self.carry_provenance.run_id if self.carry_provenance else None
+                ),
+                baseline_run_url=(
+                    self.carry_provenance.run_url if self.carry_provenance else None
+                ),
                 baseline_skipped_groups=self.baseline_skipped_groups or None,
                 close_baseline_gaps=self.close_baseline_gaps,
                 carried_groups=None,
@@ -105,10 +118,12 @@ def is_repository_owner(login: str, repository_owner: str) -> bool:
     return bool(login) and login.casefold() == repository_owner.casefold()
 
 
-def latest_run_succeeded(repository: str, candidate_sha: str) -> bool:
+def latest_successful_run(
+    repository: str, candidate_sha: str
+) -> verify.CarryProvenance | None:
     require_sha(candidate_sha, "Verification baseline")
     try:
-        conclusion = command_text(
+        value = command_text(
             [
                 "gh",
                 "api",
@@ -120,12 +135,26 @@ def latest_run_succeeded(repository: str, candidate_sha: str) -> bool:
                 "-f",
                 "per_page=1",
                 "--jq",
-                '.workflow_runs[0].conclusion // ""',
+                (
+                    ".workflow_runs[0] "
+                    '| if . == null then "" '
+                    "else [.id, .head_sha, .html_url, .conclusion] | @tsv end"
+                ),
             ]
         )
     except (OSError, subprocess.CalledProcessError):
-        return False
-    return conclusion == "success"
+        return None
+    fields = value.split("\t") if value else []
+    if len(fields) != 4 or fields[1] != candidate_sha or fields[3] != "success":
+        return None
+    try:
+        return verify.CarryProvenance(
+            baseline_sha=fields[1],
+            run_id=fields[0],
+            run_url=fields[2],
+        )
+    except ValueError:
+        return None
 
 
 def commit_message(repository: str, candidate_sha: str) -> str:
@@ -225,7 +254,8 @@ def pull_request_plan(context: CIContext) -> CIPlanRequest:
     base = context.before_sha if synchronize else context.pr_base_sha
     reason = "previous owner PR head" if synchronize else "PR base"
 
-    if latest_run_succeeded(context.repository, base):
+    carry_provenance = latest_successful_run(context.repository, base)
+    if carry_provenance is not None:
         baseline_skips = trailer_value(context.repository, base, "Verification-Skip")
         current_skips = (
             trailer_value(context.repository, context.pr_head_sha, "Verification-Skip")
@@ -239,6 +269,7 @@ def pull_request_plan(context: CIContext) -> CIPlanRequest:
             baseline_skipped_groups=baseline_skips,
             current_skipped_groups=current_skips,
             close_baseline_gaps=bool(baseline_skips) and not owner_pr,
+            carry_provenance=carry_provenance,
         )
 
     if not owner_pr:
@@ -267,7 +298,8 @@ def push_plan(context: CIContext) -> CIPlanRequest:
             is_repository_owner(pr_author, context.repository_owner)
             and pr_tree is not None
             and local_commit_tree(context.current_sha) == pr_tree
-            and latest_run_succeeded(context.repository, pr_head)
+            and (carry_provenance := latest_successful_run(context.repository, pr_head))
+            is not None
         ):
             baseline_skips = trailer_value(
                 context.repository, pr_head, "Verification-Skip"
@@ -281,13 +313,15 @@ def push_plan(context: CIContext) -> CIPlanRequest:
                 baseline_proven=True,
                 baseline_skipped_groups=baseline_skips,
                 current_skipped_groups=current_skips,
+                carry_provenance=carry_provenance,
             )
 
     if not usable_before_sha(context.before_sha):
         raise RuntimeError(
             "main push has no usable baseline; no checks or Docker were started."
         )
-    if not latest_run_succeeded(context.repository, context.before_sha):
+    carry_provenance = latest_successful_run(context.repository, context.before_sha)
+    if carry_provenance is None:
         raise RuntimeError(
             f"main baseline {context.before_sha} lacks a latest successful Verify run; "
             "no checks or Docker were started."
@@ -304,6 +338,7 @@ def push_plan(context: CIContext) -> CIPlanRequest:
         baseline_proven=True,
         baseline_skipped_groups=baseline_skips,
         current_skipped_groups=current_skips,
+        carry_provenance=carry_provenance,
     )
 
 

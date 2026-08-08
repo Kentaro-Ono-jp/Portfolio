@@ -50,10 +50,14 @@ def verifier_args(**overrides: object) -> argparse.Namespace:
         "groups": None,
         "plan": False,
         "base": None,
+        "endpoints": None,
         "staged": False,
         "full": False,
         "carry_all": False,
         "baseline_proven": False,
+        "baseline_sha": None,
+        "baseline_run_id": None,
+        "baseline_run_url": None,
         "baseline_skipped_groups": None,
         "close_baseline_gaps": False,
         "carried_groups": None,
@@ -63,6 +67,26 @@ def verifier_args(**overrides: object) -> argparse.Namespace:
     }
     values.update(overrides)
     return argparse.Namespace(**values)
+
+
+def provenance_args(sha: str = "1" * 40, run_id: str = "12345") -> dict[str, str]:
+    return {
+        "baseline_sha": sha,
+        "baseline_run_id": run_id,
+        "baseline_run_url": (f"https://github.com/owner/repository/actions/runs/{run_id}"),
+    }
+
+
+def carry_provenance(verifier: ModuleType, sha: str = "1" * 40) -> object:
+    return verifier.CarryProvenance(
+        baseline_sha=sha,
+        run_id="12345",
+        run_url="https://github.com/owner/repository/actions/runs/12345",
+    )
+
+
+def ci_provenance(ci_planner: ModuleType, sha: str) -> object:
+    return carry_provenance(ci_planner.verify, sha)
 
 
 @pytest.fixture
@@ -269,6 +293,15 @@ def test_github_actions_runtime_ports_avoid_linux_ephemeral_range() -> None:
     assert "http://127.0.0.1:53000/api/auth/callback" in dex_config
 
 
+def test_github_actions_passes_exact_carry_provenance_to_verifier() -> None:
+    workflow = (REPOSITORY_ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
+
+    for output_name in ("baseline_sha", "baseline_run_id", "baseline_run_url"):
+        assert f"steps.plan.outputs.{output_name}" in workflow
+    for argument in ("--baseline-sha", "--baseline-run-id", "--baseline-run-url"):
+        assert argument in workflow
+
+
 def test_identity_boundary_aligns_public_url_with_published_web_port() -> None:
     checker = load_script_module("check_identity_boundary")
 
@@ -319,8 +352,9 @@ def test_successful_baseline_marks_unaffected_groups_as_carried(
 ) -> None:
     plan = verifier.plan_for_paths(
         ["ips-microkernel/work-router.md"],
-        base="successful-head",
+        base="1" * 40,
         baseline_proven=True,
+        carry_provenance=carry_provenance(verifier),
     )
 
     assert plan.groups == {"docs"}
@@ -331,10 +365,59 @@ def test_successful_baseline_marks_unaffected_groups_as_carried(
         for line in verifier.plan_lines(plan)
     )
     assert "Skipped without evidence: none" in verifier.plan_lines(plan)
+    assert f"Carry source SHA: {'1' * 40}" in verifier.plan_lines(plan)
+    assert (
+        "Carry source run: 12345 (https://github.com/owner/repository/actions/runs/12345)"
+    ) in verifier.plan_lines(plan)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"baseline_sha": "1" * 40}, "must be supplied together"),
+        (
+            provenance_args() | {"baseline_proven": False},
+            "requires --baseline-proven",
+        ),
+    ],
+)
+def test_incomplete_or_unproven_carry_provenance_is_rejected(
+    verifier: ModuleType,
+    overrides: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(RuntimeError, match=message):
+        verifier.resolve_selection(verifier_args(groups="docs", **overrides))
+
+
+def test_carried_groups_require_exact_run_provenance(verifier: ModuleType) -> None:
+    with pytest.raises(ValueError, match="require exact baseline run provenance"):
+        verifier.resolve_selection(
+            verifier_args(
+                groups="docs",
+                carried_groups="contracts",
+                baseline_proven=True,
+            )
+        )
+
+
+def test_carry_source_sha_must_match_baseline_endpoint(verifier: ModuleType) -> None:
+    with pytest.raises(ValueError, match="match the exact baseline endpoint"):
+        verifier.plan_for_paths(
+            ["ips-microkernel/work-router.md"],
+            base="2" * 40,
+            baseline_proven=True,
+            carry_provenance=carry_provenance(verifier, "1" * 40),
+        )
 
 
 def test_identical_tree_can_carry_every_group(verifier: ModuleType) -> None:
-    args = verifier_args(plan=True, carry_all=True, baseline_proven=True)
+    args = verifier_args(
+        plan=True,
+        carry_all=True,
+        baseline_proven=True,
+        **provenance_args(),
+    )
 
     plan = verifier.resolve_selection(args)
 
@@ -382,6 +465,7 @@ def test_carried_runtime_group_requires_covered_dependencies(
                 groups="docs",
                 carried_groups="api-runtime",
                 baseline_proven=True,
+                **provenance_args(),
             )
         )
 
@@ -394,7 +478,11 @@ def test_static_only_rejects_silently_ignored_skip_input(verifier: ModuleType) -
 def test_selected_docker_groups_can_be_reported_as_skipped(
     verifier: ModuleType,
 ) -> None:
-    plan = verifier.plan_for_paths(["scripts/verify.py"], baseline_proven=True)
+    plan = verifier.plan_for_paths(
+        ["scripts/verify.py"],
+        baseline_proven=True,
+        carry_provenance=carry_provenance(verifier),
+    )
 
     plan = verifier.move_groups_to_skipped(plan, verifier.DOCKER_GROUPS)
 
@@ -406,13 +494,19 @@ def test_selected_docker_groups_can_be_reported_as_skipped(
 def test_docs_follow_up_preserves_groups_skipped_by_successful_baseline(
     verifier: ModuleType,
 ) -> None:
-    initial = verifier.plan_for_paths(["scripts/verify.py"], baseline_proven=True)
+    provenance = carry_provenance(verifier)
+    initial = verifier.plan_for_paths(
+        ["scripts/verify.py"],
+        baseline_proven=True,
+        carry_provenance=provenance,
+    )
     initial = verifier.move_groups_to_skipped(initial, verifier.DOCKER_GROUPS)
 
     follow_up = verifier.plan_for_paths(
         ["ips-microkernel/work-router.md"],
         baseline_proven=True,
         baseline_skipped_groups=initial.skipped_groups,
+        carry_provenance=provenance,
     )
     follow_up = verifier.apply_skip_lineage(
         follow_up,
@@ -434,10 +528,12 @@ def test_second_docs_follow_up_rejects_missing_inherited_skip_trailer(
     verifier: ModuleType,
 ) -> None:
     inherited_skips = verifier.DOCKER_GROUPS
+    provenance = carry_provenance(verifier)
     first_follow_up = verifier.plan_for_paths(
         ["ips-microkernel/work-router.md"],
         baseline_proven=True,
         baseline_skipped_groups=inherited_skips,
+        carry_provenance=provenance,
     )
     first_follow_up = verifier.apply_skip_lineage(
         first_follow_up,
@@ -448,6 +544,7 @@ def test_second_docs_follow_up_rejects_missing_inherited_skip_trailer(
         ["ips-microkernel/review/router.md"],
         baseline_proven=True,
         baseline_skipped_groups=first_follow_up.skipped_groups,
+        carry_provenance=provenance,
     )
 
     with pytest.raises(RuntimeError, match="Current Verification-Skip omits"):
@@ -464,6 +561,7 @@ def test_current_skip_cannot_replace_carried_baseline_evidence(
     plan = verifier.plan_for_paths(
         ["ips-microkernel/work-router.md"],
         baseline_proven=True,
+        carry_provenance=carry_provenance(verifier),
     )
 
     with pytest.raises(RuntimeError, match="Cannot relabel carried baseline evidence"):
@@ -473,7 +571,11 @@ def test_current_skip_cannot_replace_carried_baseline_evidence(
 def test_current_skip_cannot_break_selected_group_dependencies(
     verifier: ModuleType,
 ) -> None:
-    plan = verifier.plan_for_paths(["scripts/verify.py"], baseline_proven=True)
+    plan = verifier.plan_for_paths(
+        ["scripts/verify.py"],
+        baseline_proven=True,
+        carry_provenance=carry_provenance(verifier),
+    )
 
     with pytest.raises(RuntimeError, match="Skipped groups break selected dependencies"):
         verifier.move_groups_to_skipped(plan, frozenset({"compose"}))
@@ -488,6 +590,7 @@ def test_cross_boundary_rename_selects_old_and_new_path_groups(
         assert "--find-renames" in command
         assert "--find-copies" in command
         assert "--find-copies-harder" in command
+        assert "baseline...HEAD" in command
         return subprocess.CompletedProcess(
             args=command,
             returncode=0,
@@ -503,6 +606,139 @@ def test_cross_boundary_rename_selects_old_and_new_path_groups(
         "ips-microkernel/legacy.md",
     )
     assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
+
+
+def test_exact_endpoints_use_direct_two_point_diff(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = "1" * 40
+    head = "2" * 40
+    observed: list[list[str]] = []
+
+    def completed(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed.append(command)
+        if command[:3] == ["git", "cat-file", "-e"]:
+            return subprocess.CompletedProcess(args=command, returncode=0)
+        assert command[-3:] == [base, head, "--"]
+        assert f"{base}...HEAD" not in command
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout=b"M\0ips-microkernel/review/setup.md\0",
+        )
+
+    monkeypatch.setattr(verifier.subprocess, "run", completed)
+
+    plan = verifier.plan_from_git(endpoints=(base, head))
+
+    assert len(observed) == 3
+    assert plan.base == base
+    assert plan.head == head
+    assert plan.groups == {"docs"}
+
+
+def test_invalid_exact_endpoint_fails_closed_without_diff(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        verifier.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("invalid SHA must stop before Git"),
+    )
+
+    plan = verifier.plan_from_git(endpoints=("main", "2" * 40))
+
+    assert plan.groups == verifier.ALL_GROUPS
+    assert "full lowercase commit SHA" in plan.reason
+
+
+def test_unavailable_exact_endpoint_fails_closed(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        verifier.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            args=command,
+            returncode=1,
+        ),
+    )
+
+    plan = verifier.plan_from_git(endpoints=("1" * 40, "2" * 40))
+
+    assert plan.groups == verifier.ALL_GROUPS
+    assert "commit object is unavailable" in plan.reason
+
+
+def test_exact_endpoints_work_in_a_depth_one_review_clone(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_repository = tmp_path / "source"
+    source_repository.mkdir()
+
+    def source_git(*arguments: str) -> str:
+        result = subprocess.run(
+            ["git", *arguments],
+            cwd=source_repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    source_git("init", "-b", "main")
+    source_git("config", "user.name", "Verification Test")
+    source_git("config", "user.email", "verification@example.invalid")
+    document = source_repository / "ips-microkernel/review/setup.md"
+    document.parent.mkdir(parents=True)
+    document.write_text("initial\n", encoding="utf-8")
+    source_git("add", ".")
+    source_git("commit", "-m", "Add review setup")
+    base = source_git("rev-parse", "HEAD")
+    document.write_text("initial\nupdated\n", encoding="utf-8")
+    source_git("add", ".")
+    source_git("commit", "-m", "Update review setup")
+    head = source_git("rev-parse", "HEAD")
+
+    review_clone = tmp_path / "review-clone"
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "--depth=1",
+            "--branch=main",
+            source_repository.as_uri(),
+            str(review_clone),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "fetch", "--depth=1", "origin", base],
+        cwd=review_clone,
+        check=True,
+        capture_output=True,
+    )
+    merge_base = subprocess.run(
+        ["git", "merge-base", base, head],
+        cwd=review_clone,
+        check=False,
+        capture_output=True,
+    )
+    assert merge_base.returncode != 0
+
+    monkeypatch.setattr(verifier, "REPOSITORY_ROOT", review_clone)
+    plan = verifier.plan_from_git(endpoints=(base, head))
+
+    assert plan.changed_files == ("ips-microkernel/review/setup.md",)
+    assert plan.groups == {"docs"}
+    assert plan.base == base
+    assert plan.head == head
 
 
 def test_real_git_cross_boundary_copy_selects_source_and_destination_groups(
@@ -550,7 +786,7 @@ def test_real_git_cross_boundary_copy_selects_source_and_destination_groups(
 
 
 def test_baseline_skips_require_a_diff_plan(verifier: ModuleType) -> None:
-    with pytest.raises(RuntimeError, match="only valid with --base, --staged"):
+    with pytest.raises(RuntimeError, match="only valid with --base, --endpoints, --staged"):
         verifier.resolve_selection(
             verifier_args(
                 groups="docs",
@@ -614,6 +850,40 @@ def test_plan_output_drives_conditional_dependency_setup(
     assert values["skipped_groups"] != ""
 
 
+def test_plan_outputs_bind_exact_endpoints_and_carry_run(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    summary = tmp_path / "summary.md"
+    base = "1" * 40
+    head = "2" * 40
+    plan = verifier.plan_for_paths(
+        ["ips-microkernel/work-router.md"],
+        base=base,
+        head=head,
+        baseline_proven=True,
+        carry_provenance=carry_provenance(verifier, base),
+    )
+
+    verifier.write_plan_outputs(plan, output)
+    verifier.write_plan_summary(plan, summary)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert values["endpoint_base"] == base
+    assert values["endpoint_head"] == head
+    assert values["baseline_sha"] == base
+    assert values["baseline_run_id"] == "12345"
+    assert values["baseline_run_url"].endswith("/actions/runs/12345")
+    summary_text = summary.read_text(encoding="utf-8")
+    assert f"Base endpoint: {base}" in summary_text
+    assert f"Head endpoint: {head}" in summary_text
+    assert f"Carry source SHA: {base}" in summary_text
+    assert "Carry source run: 12345" in summary_text
+
+
 def test_skipped_docker_groups_do_not_request_docker_setup(
     verifier: ModuleType,
     tmp_path: Path,
@@ -622,6 +892,7 @@ def test_skipped_docker_groups_do_not_request_docker_setup(
     plan = verifier.plan_for_paths(
         ["scripts/verify.py"],
         baseline_proven=True,
+        carry_provenance=carry_provenance(verifier),
     )
     plan = verifier.move_groups_to_skipped(plan, verifier.DOCKER_GROUPS)
 
@@ -645,7 +916,12 @@ def test_identical_tree_carry_requests_no_setup(
 ) -> None:
     output = tmp_path / "github-output.txt"
     plan = verifier.resolve_selection(
-        verifier_args(plan=True, carry_all=True, baseline_proven=True)
+        verifier_args(
+            plan=True,
+            carry_all=True,
+            baseline_proven=True,
+            **provenance_args(),
+        )
     )
 
     verifier.write_plan_outputs(plan, output)
@@ -676,6 +952,7 @@ def test_identical_tree_preserves_intentional_docker_skips(
             baseline_proven=True,
             baseline_skipped_groups="compose,web-runtime,api-runtime,ml-runtime",
             skipped_groups="compose,web-runtime,api-runtime,ml-runtime",
+            **provenance_args(),
         )
     )
 
@@ -701,6 +978,7 @@ def test_identical_tree_rejects_missing_current_skip_restatement(
                 carry_all=True,
                 baseline_proven=True,
                 baseline_skipped_groups=("compose,web-runtime,api-runtime,ml-runtime"),
+                **provenance_args(),
             )
         )
 
@@ -715,6 +993,7 @@ def test_identical_tree_rejects_new_skip_without_baseline_gap(
                 carry_all=True,
                 baseline_proven=True,
                 skipped_groups="compose",
+                **provenance_args(),
             )
         )
 
@@ -738,6 +1017,7 @@ def test_closing_partial_baseline_gap_reruns_dependent_evidence(
             base=kwargs["base"],
             baseline_proven=kwargs["baseline_proven"],
             baseline_skipped_groups=kwargs["baseline_skipped_groups"],
+            carry_provenance=kwargs["carry_provenance"],
         ),
     )
 
@@ -747,6 +1027,7 @@ def test_closing_partial_baseline_gap_reruns_dependent_evidence(
             baseline_proven=True,
             baseline_skipped_groups="compose",
             close_baseline_gaps=True,
+            **provenance_args(),
         )
     )
 
@@ -829,6 +1110,7 @@ def test_invalid_carried_evidence_is_reported_without_traceback(
             groups="docs",
             carried_groups="api-runtime",
             baseline_proven=True,
+            **provenance_args(),
         ),
     )
 
@@ -1247,12 +1529,55 @@ def test_verifier_returns_failure_when_cleanup_command_is_missing(
     assert verifier.main() == 1
 
 
+def test_latest_successful_run_returns_exact_provenance(
+    ci_planner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sha = "1" * 40
+    run_url = "https://github.com/owner/repository/actions/runs/12345"
+    monkeypatch.setattr(
+        ci_planner,
+        "command_text",
+        lambda _command: f"12345\t{sha}\t{run_url}\tsuccess",
+    )
+
+    provenance = ci_planner.latest_successful_run("owner/repository", sha)
+
+    assert provenance is not None
+    assert provenance.baseline_sha == sha
+    assert provenance.run_id == "12345"
+    assert provenance.run_url == run_url
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "",
+        f"12345\t{'2' * 40}\thttps://github.com/owner/repository/actions/runs/12345\tsuccess",
+        f"12345\t{'1' * 40}\thttps://github.com/owner/repository/actions/runs/12345\tfailure",
+        f"invalid\t{'1' * 40}\thttps://github.com/owner/repository/actions/runs/invalid\tsuccess",
+    ],
+)
+def test_ineligible_latest_run_cannot_be_carried(
+    ci_planner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    response: str,
+) -> None:
+    monkeypatch.setattr(ci_planner, "command_text", lambda _command: response)
+
+    assert ci_planner.latest_successful_run("owner/repository", "1" * 40) is None
+
+
 def test_external_pr_executes_trusted_base_gaps_and_ignores_current_skip(
     ci_planner: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     inherited = "compose,web-runtime,api-runtime,ml-runtime"
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
     monkeypatch.setattr(
         ci_planner,
         "trailer_value",
@@ -1275,6 +1600,7 @@ def test_external_pr_executes_trusted_base_gaps_and_ignores_current_skip(
             base=kwargs["base"],
             baseline_proven=kwargs["baseline_proven"],
             baseline_skipped_groups=kwargs["baseline_skipped_groups"],
+            carry_provenance=kwargs["carry_provenance"],
         ),
     )
     plan = request.resolve()
@@ -1287,7 +1613,11 @@ def test_external_pr_synchronize_replans_from_trusted_pr_base(
     ci_planner: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
     observed: list[str] = []
 
     def trailer(_repository: str, sha: str, _key: str) -> str:
@@ -1315,7 +1645,7 @@ def test_external_pr_stops_before_setup_without_successful_base(
     ci_planner: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: False)
+    monkeypatch.setattr(ci_planner, "latest_successful_run", lambda *_args: None)
 
     with pytest.raises(RuntimeError, match="no checks or Docker were started"):
         ci_planner.select_ci_plan(ci_context(ci_planner))
@@ -1325,7 +1655,7 @@ def test_owner_pr_without_successful_base_uses_cold_full_and_current_skip(
     ci_planner: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: False)
+    monkeypatch.setattr(ci_planner, "latest_successful_run", lambda *_args: None)
     inherited = "compose,web-runtime,api-runtime,ml-runtime"
     monkeypatch.setattr(ci_planner, "trailer_value", lambda *_args: inherited)
 
@@ -1341,7 +1671,11 @@ def test_owner_pr_synchronize_reads_baseline_and_current_trailers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     observed: list[str] = []
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
 
     def trailer(_repository: str, sha: str, _key: str) -> str:
         observed.append(sha)
@@ -1378,7 +1712,11 @@ def test_tree_identical_merge_requires_current_skip_restatement(
     monkeypatch.setattr(ci_planner, "merged_pr_for_commit", lambda *_args: ("2" * 40, "owner"))
     monkeypatch.setattr(ci_planner, "remote_commit_tree", lambda *_args: "a" * 40)
     monkeypatch.setattr(ci_planner, "local_commit_tree", lambda *_args: "a" * 40)
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
     monkeypatch.setattr(
         ci_planner,
         "trailer_value",
@@ -1411,7 +1749,11 @@ def test_failed_tree_identical_lineage_cannot_seed_the_next_push(
     monkeypatch.setattr(ci_planner, "merged_pr_for_commit", lambda *_args: ("2" * 40, "owner"))
     monkeypatch.setattr(ci_planner, "remote_commit_tree", lambda *_args: "a" * 40)
     monkeypatch.setattr(ci_planner, "local_commit_tree", lambda *_args: "a" * 40)
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
     monkeypatch.setattr(
         ci_planner,
         "trailer_value",
@@ -1430,7 +1772,7 @@ def test_failed_tree_identical_lineage_cannot_seed_the_next_push(
         actor="owner",
     )
     monkeypatch.setattr(ci_planner, "merged_pr_for_commit", lambda *_args: None)
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: False)
+    monkeypatch.setattr(ci_planner, "latest_successful_run", lambda *_args: None)
 
     with pytest.raises(RuntimeError, match="lacks a latest successful Verify run"):
         ci_planner.select_ci_plan(next_context)
@@ -1452,7 +1794,11 @@ def test_tree_identical_merge_preserves_repeated_skip_lineage(
     monkeypatch.setattr(ci_planner, "merged_pr_for_commit", lambda *_args: ("2" * 40, "owner"))
     monkeypatch.setattr(ci_planner, "remote_commit_tree", lambda *_args: "a" * 40)
     monkeypatch.setattr(ci_planner, "local_commit_tree", lambda *_args: "a" * 40)
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
     monkeypatch.setattr(ci_planner, "trailer_value", lambda *_args: inherited)
 
     plan = ci_planner.select_ci_plan(context).resolve()
@@ -1476,7 +1822,11 @@ def test_normal_main_push_preserves_baseline_skip_lineage(
         actor="OWNER",
     )
     monkeypatch.setattr(ci_planner, "merged_pr_for_commit", lambda *_args: None)
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
     monkeypatch.setattr(
         ci_planner,
         "trailer_value",
@@ -1490,6 +1840,7 @@ def test_normal_main_push_preserves_baseline_skip_lineage(
             base=kwargs["base"],
             baseline_proven=kwargs["baseline_proven"],
             baseline_skipped_groups=kwargs["baseline_skipped_groups"],
+            carry_provenance=kwargs["carry_provenance"],
         ),
     )
 
@@ -1517,7 +1868,11 @@ def test_external_merged_pr_uses_main_baseline_instead_of_carry_all(
         lambda *_args: ("2" * 40, "contributor"),
     )
     monkeypatch.setattr(ci_planner, "remote_commit_tree", lambda *_args: "a" * 40)
-    monkeypatch.setattr(ci_planner, "latest_run_succeeded", lambda *_args: True)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
     monkeypatch.setattr(ci_planner, "trailer_value", lambda *_args: "")
 
     request = ci_planner.select_ci_plan(context)
@@ -1594,3 +1949,57 @@ def test_ci_planner_main_writes_complete_dispatch_plan(
     summary_text = summary.read_text(encoding="utf-8")
     assert "Verification groups: 9/9 selected" in summary_text
     assert "Selection baseline: owner-dispatched full verification" in summary_text
+
+
+def test_ci_planner_main_publishes_carry_source_identity(
+    ci_planner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "output.txt"
+    summary = tmp_path / "summary.md"
+    base = "1" * 40
+    head = "2" * 40
+    environment = {
+        "EVENT_NAME": "pull_request",
+        "EVENT_ACTION": "opened",
+        "PR_BASE_SHA": base,
+        "PR_HEAD_SHA": head,
+        "PR_AUTHOR": "contributor",
+        "BEFORE_SHA": "0" * 40,
+        "CURRENT_SHA": head,
+        "ACTOR": "contributor",
+        "REPOSITORY_OWNER": "owner",
+        "REPOSITORY": "owner/repository",
+        "GITHUB_OUTPUT": str(output),
+        "GITHUB_STEP_SUMMARY": str(summary),
+    }
+    for key, value in environment.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(
+        ci_planner,
+        "latest_successful_run",
+        lambda _repository, sha: ci_provenance(ci_planner, sha),
+    )
+    monkeypatch.setattr(ci_planner, "trailer_value", lambda *_args: "")
+    monkeypatch.setattr(
+        ci_planner.verify,
+        "plan_from_git",
+        lambda **kwargs: ci_planner.verify.plan_for_paths(
+            ["ips-microkernel/work-router.md"],
+            base=kwargs["base"],
+            baseline_proven=kwargs["baseline_proven"],
+            carry_provenance=kwargs["carry_provenance"],
+        ),
+    )
+
+    assert ci_planner.main() == 0
+    output_values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert output_values["baseline_sha"] == base
+    assert output_values["baseline_run_id"] == "12345"
+    assert output_values["baseline_run_url"].endswith("/actions/runs/12345")
+    summary_text = summary.read_text(encoding="utf-8")
+    assert f"Carry source SHA: {base}" in summary_text
+    assert "Carry source run: 12345" in summary_text
