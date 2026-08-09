@@ -285,6 +285,26 @@
       "expected": "denied"
     },
     {
+      "name": "operator cannot add an undeclared Cloud Map ownership tag key",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository",
+          "PortfolioOwner"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
       "name": "operator cannot create a cross-environment Cloud Map namespace",
       "role": "manual/operator-deployment",
       "action": "servicediscovery:CreateHttpNamespace",

@@ -74,6 +74,18 @@ diagnostics, artifacts, leakage scanning, failure ordering, or teardown.
   production structure verifier, requiring the exact fail-closed class before
   publishing evidence.
 
+### Exercise ownership tag-key ceilings
+
+- **Origin:** PR #107 follow-up Gate A after re-review correction
+- **Trigger:** AWS-free policy proof adds an exact `aws:TagKeys` allowlist to a
+  generated identity policy.
+- **Mistake:** Positive and cross-environment tag cases did not execute the
+  evaluator branch that rejects an otherwise exact request with an additional
+  undeclared tag key.
+- **Correction:** Add one canonical tag request containing the complete allowed
+  ownership tuple plus one extra key, and require the effective policy to deny
+  it before publishing evidence.
+
 ## Return
 
 Return to publication Gate A after repairing the triggered evidence and
