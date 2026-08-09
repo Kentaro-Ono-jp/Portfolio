@@ -1155,7 +1155,7 @@ def main() -> int:
         "awsApiCalls": 0,
         "awsWrites": 0,
         "awsResourcesCreated": 0,
-        "realEvaluationAttempts": "0/3",
+        "realEvaluationAttempts": "3/3",
     }
     ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
     ARTIFACT_PATH.write_text(

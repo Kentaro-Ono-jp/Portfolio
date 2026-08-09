@@ -1484,7 +1484,7 @@ def main() -> int:
         "maxAcceptedPrefixPolicySizes": max_prefix_payload["policy_sizes"],
         "awsApiCalls": 0,
         "awsWrites": 0,
-        "constructionAttempts": "0/3",
+        "constructionAttempts": "3/3",
     }
     ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
     ARTIFACT_PATH.write_text(
