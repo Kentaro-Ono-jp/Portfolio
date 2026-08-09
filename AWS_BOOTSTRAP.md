@@ -99,14 +99,16 @@ request tags and exact tag-key set. Wrong, missing, or additional ownership
 tags fail the immutable identity layer and effective intersection; workload
 roles fail the boundary as well.
 
-AWS Cloud Map does not expose resource-tag conditions for its standalone
-`TagResource` authorization. The operator can therefore submit only the exact
-four accepted ownership key/value pairs, but IAM cannot distinguish its
-create-time dependent check from a direct call against an existing Cloud Map
-resource. Treat the operator as the account owner's trusted deployment
-authority; do not delegate it to untrusted repositories. Exact namespace
-ownership still gates `CreateService`, exact ownership gates destroy, and the
-later lifecycle/residual proof must follow up any real-AWS service limitation.
+AWS Cloud Map does not expose resource-level authorization or resource-tag
+conditions for standalone `TagResource`. Granting it with request tags would let
+the operator overwrite the ownership tuple of an unrelated existing namespace
+or service. The operator and its boundary therefore omit that action entirely.
+Provider 6.58.0 passes the four ownership tags directly in
+`CreatePrivateDnsNamespace` and `CreateService`; those create-time tags are the
+only supported Cloud Map ownership path and remain immutable afterward. Exact
+namespace ownership gates `CreateService`, exact ownership gates destroy, and
+static proof rejects direct retagging of foreign namespaces and services at the
+identity, boundary, and effective layers.
 
 The future GitHub workflow and repository OIDC customization are Step 6
 non-targets. Before that workflow requests a token, the repository owner must

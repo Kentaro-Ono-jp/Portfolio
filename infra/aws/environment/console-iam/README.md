@@ -72,6 +72,13 @@ environment ARN patterns. Their inverse proof rejects cross-environment,
 cross-repository, unmanaged, persistent, missing/additional-tag, and foreign
 resource cases at both the identity and effective layers.
 
+Cloud Map ownership tags are creation-time-only and immutable. Provider 6.58.0
+passes them directly in `CreatePrivateDnsNamespace` and `CreateService`; neither
+the operator identity nor its boundary grants standalone
+`servicediscovery:TagResource`, because AWS cannot scope that existing-resource
+mutation by ARN or prior resource tags. Foreign namespace and service retagging
+must remain denied at the identity, boundary, and effective layers.
+
 `DestroyPolicy` binds generated network, API Gateway, Cognito, and Cloud Map
 identifiers to the complete four-tag ownership tuple. Exact-name services use
 environment-encoded ARN patterns, and Cloud Map's Route 53 creation dependencies

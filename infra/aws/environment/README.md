@@ -34,6 +34,12 @@ proof pairs each owned allow
 with cross-environment, cross-repository, unmanaged, persistent, direct-call,
 and wrong-delegating-service negatives and also enforces rendered IAM quotas.
 
+Cloud Map ownership tags are immutable after creation. AWS provider 6.58.0
+places them directly on `CreatePrivateDnsNamespace` and `CreateService`, while
+the static operator identity and boundary intentionally omit standalone
+`TagResource`; AWS exposes no resource-level or prior-resource-tag condition
+that could prevent that API from relabeling an unrelated namespace or service.
+
 All taggable environment resources receive exactly these provider default
 tags:
 

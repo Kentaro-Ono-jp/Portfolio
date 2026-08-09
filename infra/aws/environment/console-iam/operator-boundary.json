@@ -18,7 +18,14 @@
         "route53:ListTagsForResource",
         "scheduler:*",
         "secretsmanager:*",
-        "servicediscovery:*",
+        "servicediscovery:CreatePrivateDnsNamespace",
+        "servicediscovery:CreateService",
+        "servicediscovery:DeleteNamespace",
+        "servicediscovery:DeleteService",
+        "servicediscovery:GetNamespace",
+        "servicediscovery:GetOperation",
+        "servicediscovery:GetService",
+        "servicediscovery:ListTagsForResource",
         "sts:GetCallerIdentity"
       ],
       "Resource": "*"

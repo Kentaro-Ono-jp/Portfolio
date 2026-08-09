@@ -720,6 +720,35 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             not (identity_allows and boundary_allows),
         )
 
+    cloud_map_foreign_resources = {
+        "Namespace": (
+            "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-foreign"
+        ),
+        "Service": (
+            "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-foreign"
+        ),
+    }
+    cloud_map_retag_context = {
+        f"aws:RequestTag/{key}": value for key, value in OWNERSHIP_TAGS.items()
+    }
+    cloud_map_retag_context["aws:TagKeys"] = list(OWNERSHIP_TAGS)
+    for label, resource in cloud_map_foreign_resources.items():
+        record_operator_denial(
+            f"ForeignCloudMap{label}Retag",
+            "servicediscovery:TagResource",
+            resource,
+            cloud_map_retag_context,
+        )
+        record(
+            f"operatorBoundaryRejectsForeignCloudMap{label}Retag",
+            not policy_allows(
+                boundary,
+                "servicediscovery:TagResource",
+                resource,
+                cloud_map_retag_context,
+            ),
+        )
+
     for (
         resource_type,
         row_index,
@@ -1256,6 +1285,10 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 action not in CLOUD_MAP_DELEGATED_ACTIONS
             ):
                 raise RuntimeError(f"Unexpected service-delegated action: {row}")
+            if action == "servicediscovery:TagResource":
+                raise RuntimeError(
+                    "Standalone Cloud Map TagResource cannot establish ownership"
+                )
             if len(row) == 4 and not isinstance(row[3], dict):
                 raise RuntimeError(f"Operator action context must be an object: {row}")
             if ownership == "service-delegated" and (

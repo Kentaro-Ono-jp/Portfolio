@@ -188,15 +188,13 @@
       ["route53:ListHostedZonesByName", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
       ["servicediscovery:GetOperation", "*", "global-read"],
       ["servicediscovery:GetNamespace", "cloudmap-namespace", "global-read"],
-      ["servicediscovery:ListTagsForResource", "cloudmap-namespace", "global-read"],
-      ["servicediscovery:TagResource", "cloudmap-namespace", "request-tags"]
+      ["servicediscovery:ListTagsForResource", "cloudmap-namespace", "global-read"]
     ],
     "aws_service_discovery_service": [
       ["servicediscovery:CreateService", "cloudmap-namespace", "resource-tags"],
       ["servicediscovery:CreateService", "cloudmap-service", "request-tags"],
       ["servicediscovery:GetService", "cloudmap-service", "global-read"],
-      ["servicediscovery:ListTagsForResource", "cloudmap-service", "global-read"],
-      ["servicediscovery:TagResource", "cloudmap-service", "request-tags"]
+      ["servicediscovery:ListTagsForResource", "cloudmap-service", "global-read"]
     ],
     "aws_subnet": [
       ["ec2:CreateSubnet", "*", "request-tags"],

@@ -511,31 +511,41 @@ proved/unproved classification, or permanence claim.
 - **HEAD effect:** `moving`
 - **Problem:** A synthetic positive supplies a resource ARN or condition key
   that the real cloud action does not expose, while the accepted create,
-  inventory, mutation, or dependent tagging request is denied.
+  inventory, mutation, or dependent tagging request is denied; or a standalone
+  tag mutation can overwrite ownership on a foreign existing resource.
 - **Detect:** From the target service's authorization reference, construct each
   required positive with its real create-time resource form and only the
   request, resource, or principal context keys available to that action;
   enumerate every rendered write action/resource form, execute each request
   independently against identity, boundary, and their effective intersection,
-  then change only the ownership environment and repository.
+  then change only the ownership environment and repository. For every tag API
+  that can target an existing resource, also execute the accepted request-tag
+  tuple against a foreign target.
 - **Pass:** Every required real-context positive is allowed by identity,
   boundary, and their intersection; each ownership inverse is denied by the
   declared immutable enforcement layer and effective intersection; inventory
   succeeds without fabricated request tags; every required resource in a
   multi-resource authorization is exercised independently; and every dependent
-  tagging action has its own passing case with an exact ownership-key ceiling.
-  No rendered write verb or resource form is omitted from the inverse matrix.
+  tagging action has its own passing case with an exact ownership-key ceiling
+  and cannot relabel a foreign target. If AWS exposes neither resource-level
+  authorization nor prior resource-tag conditions, that existing-resource tag
+  action cannot establish ownership. No rendered write verb or resource form is
+  omitted from the inverse matrix.
 - **Repair:** Split creation-time request-tag, unconditioned inventory, and
   existing-resource ownership-tag statements; use actual collection or
   resource-less create forms; grant the exact dependent tagging actions;
   require existing ownership for retagging where the service exposes resource
-  tags; exercise every required parent/new resource separately; and retain the
-  layer-by-layer positive, unowned, and inverse-negative matrix with explicit
+  tags; when existing-resource tagging cannot be scoped, pass tags in the create
+  request and omit the standalone tag action; exercise every required
+  parent/new resource separately; and retain the layer-by-layer positive,
+  unowned, foreign-target, and inverse-negative matrix with explicit
   expectations for the enforcing layer and effective intersection.
 - **Origins:** PR #107
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500),
   PR #111
-  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233003435).
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233003435),
+  PR #111
+  [corrected re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233197383).
 
 ### Bind topology edges to resource identities
 
