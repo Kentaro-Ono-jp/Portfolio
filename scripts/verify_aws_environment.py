@@ -232,6 +232,27 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
                 f"Console IAM policy must not contain explicit Deny: {key}"
             )
 
+    expected_service_linked_roles = {
+        "apiGateway": {
+            "roleName": "AWSServiceRoleForAPIGateway",
+            "serviceName": "ops.apigateway.amazonaws.com",
+        },
+        "ecs": {
+            "roleName": "AWSServiceRoleForECS",
+            "serviceName": "ecs.amazonaws.com",
+        },
+        "mq": {
+            "roleName": "AWSServiceRoleForAmazonMQ",
+            "serviceName": "mq.amazonaws.com",
+        },
+        "rds": {
+            "roleName": "AWSServiceRoleForRDS",
+            "serviceName": "rds.amazonaws.com",
+        },
+    }
+    if manifest.get("serviceLinkedRoles") != expected_service_linked_roles:
+        raise RuntimeError("Console IAM service-linked role inventory drifted")
+
     expected_roles = {
         "operator_deployment",
         "task_execution",
@@ -371,6 +392,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         digest.update(path.read_bytes())
     return {
         "managedPolicies": len(policies),
+        "serviceLinkedRoles": len(expected_service_linked_roles),
         "roles": len(roles),
         "trustPolicies": len(trust_files),
         "operatorActionRows": rows,

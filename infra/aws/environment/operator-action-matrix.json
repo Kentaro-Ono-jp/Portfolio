@@ -30,7 +30,8 @@
       ["logs:CreateLogGroup", "log-group", "exact-resource"],
       ["logs:PutRetentionPolicy", "log-group", "exact-resource"],
       ["logs:DescribeLogGroups", "*", "global-read"],
-      ["logs:ListTagsForResource", "log-group", "exact-resource"]
+      ["logs:ListTagsForResource", "log-group", "exact-resource"],
+      ["logs:TagResource", "log-group", "exact-resource"]
     ],
     "aws_cognito_managed_login_branding": [
       ["cognito-idp:CreateManagedLoginBranding", "cognito-user-pool", "resource-tags"],
@@ -49,7 +50,8 @@
       ["cognito-idp:CreateUserPool", "*", "request-tags"],
       ["cognito-idp:DescribeUserPool", "cognito-user-pool", "resource-tags"],
       ["cognito-idp:GetUserPoolMfaConfig", "cognito-user-pool", "resource-tags"],
-      ["cognito-idp:ListTagsForResource", "cognito-user-pool", "resource-tags"]
+      ["cognito-idp:ListTagsForResource", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:TagResource", "cognito-user-pool", "resource-tags"]
     ],
     "aws_cognito_user_pool_client": [
       ["cognito-idp:CreateUserPoolClient", "cognito-user-pool", "resource-tags"],
@@ -62,27 +64,32 @@
     "aws_db_instance": [
       ["rds:CreateDBInstance", "rds-db", "exact-resource"],
       ["rds:DescribeDBInstances", "rds-db", "exact-resource"],
-      ["rds:ListTagsForResource", "rds-db", "exact-resource"]
+      ["rds:ListTagsForResource", "rds-db", "exact-resource"],
+      ["rds:AddTagsToResource", "rds-db", "exact-resource"]
     ],
     "aws_db_subnet_group": [
       ["rds:CreateDBSubnetGroup", "rds-subnet-group", "exact-resource"],
       ["rds:DescribeDBSubnetGroups", "rds-subnet-group", "exact-resource"],
-      ["rds:ListTagsForResource", "rds-subnet-group", "exact-resource"]
+      ["rds:ListTagsForResource", "rds-subnet-group", "exact-resource"],
+      ["rds:AddTagsToResource", "rds-subnet-group", "exact-resource"]
     ],
     "aws_ecs_cluster": [
       ["ecs:CreateCluster", "ecs-cluster", "exact-resource"],
       ["ecs:DescribeClusters", "ecs-cluster", "exact-resource"],
-      ["ecs:ListTagsForResource", "ecs-cluster", "exact-resource"]
+      ["ecs:ListTagsForResource", "ecs-cluster", "exact-resource"],
+      ["ecs:TagResource", "ecs-cluster", "exact-resource"]
     ],
     "aws_ecs_service": [
       ["ecs:CreateService", "ecs-service", "exact-resource"],
       ["ecs:DescribeServices", "ecs-service", "exact-resource"],
-      ["ecs:ListTagsForResource", "ecs-service", "exact-resource"]
+      ["ecs:ListTagsForResource", "ecs-service", "exact-resource"],
+      ["ecs:TagResource", "ecs-service", "exact-resource"]
     ],
     "aws_ecs_task_definition": [
       ["ecs:RegisterTaskDefinition", "ecs-task-definition", "exact-resource"],
       ["ecs:DescribeTaskDefinition", "ecs-task-definition", "exact-resource"],
       ["ecs:ListTagsForResource", "ecs-task-definition", "exact-resource"],
+      ["ecs:TagResource", "ecs-task-definition", "exact-resource"],
       ["iam:PassRole", "iam-task-execution-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}],
       ["iam:PassRole", "iam-web-workload-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}],
       ["iam:PassRole", "iam-api-workload-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}],
@@ -96,6 +103,7 @@
     ],
     "aws_mq_broker": [
       ["mq:CreateBroker", "*", "request-tags"],
+      ["mq:CreateTags", "mq-broker", "exact-resource"],
       ["mq:DescribeBroker", "mq-broker", "exact-resource"],
       ["mq:ListTags", "mq-broker", "exact-resource"]
     ],
@@ -153,7 +161,8 @@
     ],
     "aws_secretsmanager_secret": [
       ["secretsmanager:CreateSecret", "secret", "exact-resource"],
-      ["secretsmanager:DescribeSecret", "secret", "exact-resource"]
+      ["secretsmanager:DescribeSecret", "secret", "exact-resource"],
+      ["secretsmanager:TagResource", "secret", "exact-resource"]
     ],
     "aws_secretsmanager_secret_version": [
       ["secretsmanager:PutSecretValue", "secret", "exact-resource"],
@@ -169,13 +178,15 @@
       ["servicediscovery:CreatePrivateDnsNamespace", "*", "request-tags"],
       ["servicediscovery:GetOperation", "*", "global-read"],
       ["servicediscovery:GetNamespace", "cloudmap-namespace", "global-read"],
-      ["servicediscovery:ListTagsForResource", "cloudmap-namespace", "global-read"]
+      ["servicediscovery:ListTagsForResource", "cloudmap-namespace", "global-read"],
+      ["servicediscovery:TagResource", "cloudmap-namespace", "resource-tags"]
     ],
     "aws_service_discovery_service": [
       ["servicediscovery:CreateService", "cloudmap-namespace", "resource-tags"],
       ["servicediscovery:CreateService", "cloudmap-service", "request-tags"],
       ["servicediscovery:GetService", "cloudmap-service", "global-read"],
-      ["servicediscovery:ListTagsForResource", "cloudmap-service", "global-read"]
+      ["servicediscovery:ListTagsForResource", "cloudmap-service", "global-read"],
+      ["servicediscovery:TagResource", "cloudmap-service", "resource-tags"]
     ],
     "aws_subnet": [
       ["ec2:CreateSubnet", "*", "request-tags"],
@@ -195,7 +206,8 @@
     "aws_vpc_endpoint": [
       ["ec2:CreateVpcEndpoint", "*", "request-tags"],
       ["ec2:CreateTags", "ec2-vpc-endpoint", "request-tags", {"ec2:CreateAction": "CreateVpcEndpoint"}],
-      ["ec2:DescribeVpcEndpoints", "*", "global-read"]
+      ["ec2:DescribeVpcEndpoints", "*", "global-read"],
+      ["ec2:DescribePrefixLists", "*", "global-read"]
     ],
     "aws_vpc_security_group_egress_rule": [
       ["ec2:AuthorizeSecurityGroupEgress", "ec2-security-group", "resource-tags"],

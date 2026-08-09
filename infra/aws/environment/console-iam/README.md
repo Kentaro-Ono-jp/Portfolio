@@ -25,17 +25,21 @@ For the maintained proof, the stable names are `reactorfront`, `manual`, and
 
 ## Console procedure
 
-1. In IAM **Policies**, create the six customer-managed policies named by
+1. In IAM **Roles**, create the four service-linked roles listed in
+   `manifest.json` if the account does not already contain them. This is a
+   one-time account prerequisite; the operator role never receives
+   `iam:CreateServiceLinkedRole`.
+2. In IAM **Policies**, create the six customer-managed policies named by
    `manifest.json`, pasting the corresponding rendered JSON document.
-2. Create the six roles named by the manifest and paste each rendered trust
+3. Create the six roles named by the manifest and paste each rendered trust
    policy. Require MFA for the human operator trust.
-3. Set `ReactorFrontPortfolioOperatorBoundary` as the permissions boundary of
+4. Set `ReactorFrontPortfolioOperatorBoundary` as the permissions boundary of
    every role.
-4. Attach only the policies listed for that role. The Web workload role has no
+5. Attach only the policies listed for that role. The Web workload role has no
    identity policy. Its empty authority is intentional.
-5. Add the four ownership tags from the manifest and set
+6. Add the four ownership tags from the manifest and set
    `PortfolioPurpose` to the role purpose.
-6. Verify that the operator has exactly one identity policy, exactly one
+7. Verify that the operator has exactly one identity policy, exactly one
    separately named boundary, and no inline policy. Verify that the old
    combined policy has zero attachments and zero boundary usages before
    deleting it.

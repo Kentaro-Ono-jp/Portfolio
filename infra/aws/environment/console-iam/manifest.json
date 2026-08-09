@@ -6,6 +6,24 @@
     "PortfolioPersistent": "true",
     "PortfolioRepository": "${REPOSITORY_IDENTITY}"
   },
+  "serviceLinkedRoles": {
+    "apiGateway": {
+      "roleName": "AWSServiceRoleForAPIGateway",
+      "serviceName": "ops.apigateway.amazonaws.com"
+    },
+    "ecs": {
+      "roleName": "AWSServiceRoleForECS",
+      "serviceName": "ecs.amazonaws.com"
+    },
+    "mq": {
+      "roleName": "AWSServiceRoleForAmazonMQ",
+      "serviceName": "mq.amazonaws.com"
+    },
+    "rds": {
+      "roleName": "AWSServiceRoleForRDS",
+      "serviceName": "rds.amazonaws.com"
+    }
+  },
   "managedPolicies": {
     "operatorPermissions": {
       "name": "ReactorFrontPortfolioOperatorPermissions",
