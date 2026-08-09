@@ -36,7 +36,8 @@
     "aws_cognito_managed_login_branding": [
       ["cognito-idp:CreateManagedLoginBranding", "cognito-user-pool", "resource-tags"],
       ["cognito-idp:DescribeManagedLoginBranding", "cognito-user-pool", "resource-tags"],
-      ["cognito-idp:DescribeManagedLoginBrandingByClient", "cognito-user-pool", "resource-tags"]
+      ["cognito-idp:DescribeManagedLoginBrandingByClient", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:ListUserPoolClients", "cognito-user-pool", "resource-tags"]
     ],
     "aws_cognito_resource_server": [
       ["cognito-idp:CreateResourceServer", "cognito-user-pool", "resource-tags"],
@@ -105,6 +106,7 @@
       ["mq:CreateBroker", "*", "request-tags"],
       ["mq:CreateTags", "mq-broker", "exact-resource"],
       ["mq:DescribeBroker", "mq-broker", "exact-resource"],
+      ["mq:DescribeSharedResources", "mq-broker", "exact-resource"],
       ["mq:ListTags", "mq-broker", "exact-resource"]
     ],
     "aws_route": [
@@ -162,6 +164,7 @@
     "aws_secretsmanager_secret": [
       ["secretsmanager:CreateSecret", "secret", "exact-resource"],
       ["secretsmanager:DescribeSecret", "secret", "exact-resource"],
+      ["secretsmanager:GetResourcePolicy", "secret", "exact-resource"],
       ["secretsmanager:TagResource", "secret", "exact-resource"]
     ],
     "aws_secretsmanager_secret_version": [
