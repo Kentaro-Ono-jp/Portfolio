@@ -213,13 +213,15 @@
       ["ec2:AuthorizeSecurityGroupEgress", "ec2-security-group", "resource-tags"],
       ["ec2:AuthorizeSecurityGroupEgress", "ec2-security-group-rule", "request-tags"],
       ["ec2:CreateTags", "ec2-security-group-rule", "request-tags", {"ec2:CreateAction": "AuthorizeSecurityGroupEgress"}],
-      ["ec2:DescribeSecurityGroupRules", "*", "global-read"]
+      ["ec2:DescribeSecurityGroupRules", "*", "global-read"],
+      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"]
     ],
     "aws_vpc_security_group_ingress_rule": [
       ["ec2:AuthorizeSecurityGroupIngress", "ec2-security-group", "resource-tags"],
       ["ec2:AuthorizeSecurityGroupIngress", "ec2-security-group-rule", "request-tags"],
       ["ec2:CreateTags", "ec2-security-group-rule", "request-tags", {"ec2:CreateAction": "AuthorizeSecurityGroupIngress"}],
-      ["ec2:DescribeSecurityGroupRules", "*", "global-read"]
+      ["ec2:DescribeSecurityGroupRules", "*", "global-read"],
+      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"]
     ]
   }
 }

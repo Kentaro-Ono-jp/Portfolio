@@ -45,6 +45,7 @@
         "ec2:DescribeVpcAttribute",
         "ec2:DescribeVpcEndpoints",
         "ec2:DescribeVpcs",
+        "ec2:ModifySecurityGroupRules",
         "ec2:ModifyVpcAttribute",
         "ec2:RevokeSecurityGroupEgress",
         "ecs:CreateCluster",
