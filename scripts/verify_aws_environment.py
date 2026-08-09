@@ -86,6 +86,7 @@ OPERATOR_ACTION_OWNERSHIP_MODES = {
     "global-read",
     "request-tags",
     "resource-tags",
+    "service-delegated",
 }
 CONSOLE_IAM_TOKENS = {
     "AWS_ACCOUNT_ID": "111122223333",
@@ -296,6 +297,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
 
     permissions = policies["operatorPermissions"]
     boundary = policies["operatorBoundary"]
+    destroy = policies["destroy"]
     rows = 0
     allowed_layer_decisions = 0
     for resource_type, action_rows in sorted(matrix["resourceActions"].items()):
@@ -371,6 +373,12 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "boundaryHasIndependentSchedulerCeiling": (
             policy_allows(boundary, "scheduler:CreateSchedule", "*")
             and not policy_allows(permissions, "scheduler:CreateSchedule", "*")
+        ),
+        "destroyCanDeleteCloudMapHostedZone": policy_allows(
+            destroy, "route53:DeleteHostedZone", "*"
+        ),
+        "boundaryCanDeleteCloudMapHostedZone": policy_allows(
+            boundary, "route53:DeleteHostedZone", "*"
         ),
     }
     failed = [
@@ -462,6 +470,11 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 raise RuntimeError(
                     f"Exact-resource action cannot use Resource '*': {row}"
                 )
+            if (
+                ownership == "service-delegated"
+                and action != "route53:CreateHostedZone"
+            ):
+                raise RuntimeError(f"Unexpected service-delegated action: {row}")
             if len(row) == 4 and not isinstance(row[3], dict):
                 raise RuntimeError(f"Operator action context must be an object: {row}")
             rows.append(json.dumps([resource_type, *row], sort_keys=True))

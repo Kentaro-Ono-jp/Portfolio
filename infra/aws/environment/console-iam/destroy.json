@@ -25,6 +25,7 @@
         "mq:DeleteBroker",
         "rds:DeleteDBInstance",
         "rds:DeleteDBSubnetGroup",
+        "route53:DeleteHostedZone",
         "secretsmanager:DeleteSecret",
         "servicediscovery:DeleteNamespace",
         "servicediscovery:DeleteService"

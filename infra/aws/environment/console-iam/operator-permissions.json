@@ -7,6 +7,7 @@
       "Action": [
         "apigateway:GET",
         "apigateway:POST",
+        "apigateway:TagResource",
         "cognito-idp:CreateGroup",
         "cognito-idp:CreateManagedLoginBranding",
         "cognito-idp:CreateResourceServer",
@@ -73,6 +74,7 @@
         "rds:DescribeDBInstances",
         "rds:DescribeDBSubnetGroups",
         "rds:ListTagsForResource",
+        "route53:CreateHostedZone",
         "secretsmanager:CreateSecret",
         "secretsmanager:DescribeSecret",
         "secretsmanager:GetResourcePolicy",

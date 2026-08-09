@@ -8,7 +8,8 @@
   "resourceActions": {
     "aws_apigatewayv2_api": [
       ["apigateway:POST", "api-gateway-api-collection", "request-tags"],
-      ["apigateway:GET", "api-gateway-api", "resource-tags"]
+      ["apigateway:GET", "api-gateway-api", "resource-tags"],
+      ["apigateway:TagResource", "api-gateway-api", "resource-tags"]
     ],
     "aws_apigatewayv2_integration": [
       ["apigateway:POST", "api-gateway-integration-collection", "resource-tags"],
@@ -20,11 +21,13 @@
     ],
     "aws_apigatewayv2_stage": [
       ["apigateway:POST", "api-gateway-stage-collection", "resource-tags"],
-      ["apigateway:GET", "api-gateway-stage", "resource-tags"]
+      ["apigateway:GET", "api-gateway-stage", "resource-tags"],
+      ["apigateway:TagResource", "api-gateway-stage", "resource-tags"]
     ],
     "aws_apigatewayv2_vpc_link": [
       ["apigateway:POST", "api-gateway-vpc-link-collection", "request-tags"],
-      ["apigateway:GET", "api-gateway-vpc-link", "resource-tags"]
+      ["apigateway:GET", "api-gateway-vpc-link", "resource-tags"],
+      ["apigateway:TagResource", "api-gateway-vpc-link", "resource-tags"]
     ],
     "aws_cloudwatch_log_group": [
       ["logs:CreateLogGroup", "log-group", "exact-resource"],
@@ -179,6 +182,7 @@
     ],
     "aws_service_discovery_private_dns_namespace": [
       ["servicediscovery:CreatePrivateDnsNamespace", "*", "request-tags"],
+      ["route53:CreateHostedZone", "*", "service-delegated"],
       ["servicediscovery:GetOperation", "*", "global-read"],
       ["servicediscovery:GetNamespace", "cloudmap-namespace", "global-read"],
       ["servicediscovery:ListTagsForResource", "cloudmap-namespace", "global-read"],
