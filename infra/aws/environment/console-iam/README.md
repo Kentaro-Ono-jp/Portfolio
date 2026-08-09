@@ -37,7 +37,9 @@ For the maintained proof, the stable names are `reactorfront`, `manual`, and
 2. In IAM **Policies**, create the eight customer-managed policies named by
    `manifest.json`, pasting the corresponding rendered JSON document.
 3. Create the six roles named by the manifest and paste each rendered trust
-   policy. Require MFA for the human operator trust.
+   policy. The operator trust accepts only the exact account-owner principal
+   in the same account; it does not require MFA. Source access keys and login
+   material remain external to Terraform and the public repository.
 4. Set `ReactorFrontPortfolioOperatorBoundary` as the permissions boundary of
    every role.
 5. Attach only the policies listed for that role. The Web workload role has no

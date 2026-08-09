@@ -419,6 +419,27 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             raise RuntimeError(
                 f"Console IAM trust must not contain explicit Deny: {trust_file}"
             )
+    expected_operator_trust = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "ExactOwnerPrincipal",
+                "Effect": "Allow",
+                "Principal": {"AWS": CONSOLE_IAM_TOKENS["OWNER_PRINCIPAL_ARN"]},
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                    "StringEquals": {
+                        "aws:PrincipalAccount": CONSOLE_IAM_TOKENS["AWS_ACCOUNT_ID"]
+                    }
+                },
+            }
+        ],
+    }
+    if trusts.get("operator-trust.json") != expected_operator_trust:
+        raise RuntimeError(
+            "Console operator trust must allow only the exact same-account owner "
+            "principal without an MFA condition"
+        )
     trust_policy_sizes = enforce_policy_character_reserve(
         trusts,
         limit=TRUST_POLICY_CHARACTER_LIMIT,

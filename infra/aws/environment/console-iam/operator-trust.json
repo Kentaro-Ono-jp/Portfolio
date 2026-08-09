@@ -2,12 +2,11 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ExactMfaOwner",
+      "Sid": "ExactOwnerPrincipal",
       "Effect": "Allow",
       "Principal": {"AWS": "${OWNER_PRINCIPAL_ARN}"},
       "Action": "sts:AssumeRole",
       "Condition": {
-        "Bool": {"aws:MultiFactorAuthPresent": "true"},
         "StringEquals": {"aws:PrincipalAccount": "${AWS_ACCOUNT_ID}"}
       }
     }
