@@ -1,8 +1,9 @@
 # ADR-0016: Adjudicate review findings before correction
 
-- Status: Accepted
+- Status: Superseded
 - Date: 2026-07-30
 - Deciders: ReactorFront
+- Superseded by: ADR-0024
 - Amends: ADR-0014 review-outcome authority and the ADR-0008 lifecycle
 - Related: ADR-0008, ADR-0009, ADR-0010, ADR-0014, Issue #48
 

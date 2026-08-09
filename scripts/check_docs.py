@@ -129,6 +129,7 @@ REQUIRED_GOVERNANCE_FILES = (
         "ips-microkernel/adr/0021-govern-human-feedback-model-evaluation-and-promotion.md"
     ),
     Path("ips-microkernel/adr/0022-allow-stage-b-after-qualified-no-run.md"),
+    Path("ips-microkernel/adr/0024-adjudicate-correction-loop-convergence.md"),
     Path("ips-microkernel/adr/index.md"),
     Path("ips-microkernel/architecture/index.md"),
     Path("ips-microkernel/delivery/index.md"),
@@ -484,51 +485,70 @@ REVIEW_PREMORTEM_FRAGMENTS = {
 
 REVIEW_ADJUDICATION_FRAGMENTS = {
     Path("ips-microkernel/work-router.md"): (
-        "`Changes requested` verdict contains findings whose disposition is incomplete",
+        "`Changes requested` verdict has incomplete finding disposition or correction-loop decision",
         "[review finding adjudication](procedures/adjudicate.md)",
-        "fully adjudicated exact head with zero required corrections",
+        "`continue-correction`",
+        "approved, adjudicated `converge`, or owner-waived exact head",
     ),
     Path("ips-microkernel/references/authority.md"): (
         "Review Adjudicator",
         "distinct runtime role",
         "does not silently adjudicate while implementing",
-        "fully adjudicated",
+        "ordered correction chain",
+        "`continue-correction` or `converge`",
+        "no convergence actor exists",
+        "known regression risk without owner waiver",
+        "creates no follow-up Issue",
     ),
     Path("ips-microkernel/references/live-state.md"): (
         "| Adjudication | Verdict SHA and URL",
-        "complete zero-required-correction adjudication",
+        "ordered correction-chain identity",
+        "required-corrections-retained `converge`",
+        "owner waiver over `continue-correction`",
     ),
     Path("ips-microkernel/procedures/publish.md"): (
-        "`Changes requested` with incomplete finding disposition",
+        "`Changes requested` with incomplete finding disposition or aggregate correction-loop decision",
         "[adjudicate](adjudicate.md)",
-        "fully adjudicated exact head with zero required corrections",
+        "aggregate adjudication decision",
+        "ordered correction-chain links",
+        "adjudicated `converge`",
     ),
     Path("ips-microkernel/procedures/adjudicate.md"): (
         "distinct runtime role",
+        "No Convergence Adjudicator",
         "Do not modify implementation",
-        "materially breaks the Issue-defined accepted product design at Critical or High impact",
+        "applicable ordered chain",
+        "Assign exactly one individual disposition",
         "human discoverability and bounded recoverability",
         "external technical explanation cost",
         "material product-quality effect",
-        "Do not use a numeric score",
+        "mandatory veto, numeric score",
+        "assign exactly one aggregate decision",
+        "`continue-correction`",
+        "`converge`",
+        "even when required corrections, Critical or High reviewer severity",
         "append one adjudication checkpoint to the focused Issue",
         "exact reviewed head and stable real-verdict URL",
-        "reviewer severity and adjudicated actual impact",
+        "known regression risk",
         "`required-correction`",
         "`accepted-residual`",
         "`non-material`",
-        "Complete adjudication with zero required corrections",
+        "creates no follow-up Issue",
         "real RC remains visible",
+        "expire when the PR head or recorded correction-chain identity changes",
     ),
     Path("ips-microkernel/procedures/correct.md"): (
-        "only after a complete exact-head adjudication",
+        "complete exact-head adjudication records `continue-correction`",
         "Implement only findings recorded as `required-correction`",
         "Preserve `accepted-residual` and `non-material` dispositions",
-        "[adjudication](adjudicate.md) before any further correction",
+        "updated ordered chain before any further correction",
+        "A `converge` decision does not enter this workflow",
     ),
     Path("ips-microkernel/procedures/merge.md"): (
         "complete focused-Issue adjudication",
-        "records zero required corrections",
+        "zero required corrections plus `converge`",
+        "names every unresolved required correction and known regression risk",
+        "overrides a recorded `continue-correction` decision",
         "never relabel RC as Approved",
         "[adjudication](adjudicate.md)",
     ),
@@ -540,8 +560,8 @@ REVIEW_ADJUDICATION_FRAGMENTS = {
 
 KNOWLEDGE_CURATION_FRAGMENTS = {
     Path("ips-microkernel/work-router.md"): (
-        "Stable reusable candidates have complete disposition for every associated "
-        "actionable finding and successful proof for every required correction",
+        "Stable reusable candidates have complete finding disposition and either "
+        "proved required corrections or exact `converge` acceptance",
         "[knowledge curation](procedures/curate-knowledge.md)",
         "complete candidate curation",
     ),
@@ -563,8 +583,8 @@ KNOWLEDGE_CURATION_FRAGMENTS = {
         "selected canonical target",
     ),
     Path("ips-microkernel/procedures/publish.md"): (
-        "A proved reusable candidate with complete disposition for every associated "
-        "actionable finding and proof for every required correction",
+        "A proved reusable candidate with complete finding disposition and either "
+        "proved required corrections or exact `converge` acceptance",
         "[knowledge curation](curate-knowledge.md)",
         "after every candidate has complete curation",
     ),
@@ -581,6 +601,9 @@ KNOWLEDGE_CURATION_FRAGMENTS = {
         "Freeze the candidate queue",
         "Do not review, modify implementation or guidance",
         "complete disposition for every associated actionable finding, if any",
+        "successful proof of every required correction or a complete exact-head "
+        "`converge` checkpoint",
+        "names unresolved corrections and known regression risk",
         "A candidate with no associated actionable finding or required correction "
         "remains eligible",
         "Critical or High product impact alone never forces promotion",
@@ -671,6 +694,27 @@ ADR_0022_SUPERSESSION_FRAGMENTS = {
         "- Supersedes: ADR-0019",
         "Preserve ADR-0019's separation",
         "ADR-0022 changes only the Stage B entry and re-entry authority",
+    ),
+}
+
+ADR_0024_SUPERSESSION_FRAGMENTS = {
+    Path("ips-microkernel/adr/0016-adjudicate-review-findings-before-correction.md"): (
+        "- Status: Superseded",
+        "- Superseded by: ADR-0024",
+    ),
+    Path("ips-microkernel/adr/0024-adjudicate-correction-loop-convergence.md"): (
+        "- Status: Accepted",
+        "- Supersedes: ADR-0016",
+        "Preserve one Review Adjudicator role and independent review",
+        "Judge the applicable correction chain",
+        "Allow convergence without a quality veto",
+        "Route convergence separately from owner waiver",
+        "revisitable operational experiment",
+        "creates no follow-up Issue",
+    ),
+    Path("ips-microkernel/adr/index.md"): (
+        "[ADR-0024: Adjudicate correction-loop convergence]",
+        "[ADR-0016: Adjudicate review findings before correction]",
     ),
 }
 
@@ -1154,6 +1198,12 @@ REQUIRED_GOVERNANCE_TEXT = {
 }
 
 for relative_path, required_fragments in ADR_0022_SUPERSESSION_FRAGMENTS.items():
+    REQUIRED_GOVERNANCE_TEXT[relative_path] = (
+        *REQUIRED_GOVERNANCE_TEXT.get(relative_path, ()),
+        *required_fragments,
+    )
+
+for relative_path, required_fragments in ADR_0024_SUPERSESSION_FRAGMENTS.items():
     REQUIRED_GOVERNANCE_TEXT[relative_path] = (
         *REQUIRED_GOVERNANCE_TEXT.get(relative_path, ()),
         *required_fragments,

@@ -26,17 +26,18 @@ add a new ADR and mark the old one as superseded.
 - [ADR-0013: Name the document governance architecture iPS Microkernel](0013-name-ips-microkernel.md)
 - [ADR-0014: Adopt revisitable-state and non-prohibitive change governance](0014-adopt-revisitable-state-governance.md)
 - [ADR-0015: Keep the human origin narrative unlinked](0015-hide-the-human-origin-narrative.md)
-- [ADR-0016: Adjudicate review findings before correction](0016-adjudicate-review-findings-before-correction.md)
 - [ADR-0017: Delegate evidence-bound knowledge curation](0017-delegate-evidence-bound-knowledge-curation.md)
 - [ADR-0020: Authorize an owner-controlled focus scratchpad](0020-authorize-owner-controlled-focus-scratchpad.md)
 - [ADR-0021: Govern human feedback, model evaluation, and promotion](0021-govern-human-feedback-model-evaluation-and-promotion.md)
 - [ADR-0022: Allow Stage B after a qualified no-run candidate](0022-allow-stage-b-after-qualified-no-run.md)
 - [ADR-0023: Adopt a portable managed-ephemeral AWS deployment profile](0023-portable-managed-ephemeral-aws-deployment.md)
+- [ADR-0024: Adjudicate correction-loop convergence](0024-adjudicate-correction-loop-convergence.md)
 
 ## Superseded records
 
 - [ADR-0005: Make AI collaboration guidance repository-owned](0005-repository-owned-ai-collaboration.md)
 - [ADR-0006: Consolidate repository-owned AI guidance](0006-consolidate-ai-guidance.md)
 - [ADR-0012: Name AIOS nodes by runtime role](0012-name-aios-nodes-by-runtime-role.md)
+- [ADR-0016: Adjudicate review findings before correction](0016-adjudicate-review-findings-before-correction.md)
 - [ADR-0018: Bound post-correction careless-mistake write-back](0018-bound-post-correction-careless-mistake-writeback.md)
 - [ADR-0019: Separate correction records, Stage B checks, and the pre-push CI Playbook](0019-separate-correction-records-from-pre-review-checks.md)

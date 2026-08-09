@@ -27,9 +27,9 @@ solely to detect an unknown writer while the trusted baseline is consistent.
 | Branch | Clean workspace, fetched `origin/main`, and intended base SHA |
 | Push | Intended diff, local branch, remote branch, and full head SHA |
 | Verdict reliance | Verdict SHA, current PR head, relevant Actions conclusion, and finding evidence |
-| Adjudication | Verdict SHA and URL, current PR head, complete finding inventory, focused-Issue checkpoint, and unchanged candidate |
+| Adjudication | Verdict SHA and URL, current PR head, complete finding inventory, ordered correction-chain identity, focused-Issue checkpoint, aggregate decision, and unchanged candidate |
 | Knowledge curation | Candidate source and ordinal, verdict and adjudication URLs, correction and current heads, required proof, selected signal key, focused-Issue checkpoint, and frozen queue |
-| Merge | Reviewed head, `Approved` verdict, complete zero-required-correction adjudication, or exact recorded owner waiver; complete curation for every reusable candidate; passing exact-head proof or qualified exception; and established merge method |
+| Merge | Reviewed head; `Approved`, complete zero-required `converge`, required-corrections-retained `converge`, or exact owner waiver over `continue-correction`; complete curation for every reusable candidate; passing proof or qualified exception; and established merge method |
 | Checklist update | Exact merge commit, successful main run or qualified exception, and criterion-by-criterion proof or named owner acceptance |
 | Cleanup | Identified task-owned target, exact tip or root, and recoverable scope |
 

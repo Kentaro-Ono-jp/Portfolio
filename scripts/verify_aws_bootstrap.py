@@ -154,7 +154,9 @@ def condition_matches(condition: dict[str, Any], context: dict[str, Any]) -> boo
             actual = context.get(key)
             actual_values = [] if actual is None else values(actual)
             if operator in {"StringEquals", "ArnEquals", "Bool"}:
-                if not actual_values or not any(item in expected for item in actual_values):
+                if not actual_values or not any(
+                    item in expected for item in actual_values
+                ):
                     return False
             elif operator in {"StringLike", "ArnLike"}:
                 if actual is None or not any(
@@ -508,8 +510,7 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
     }
     if inline_without_reserve:
         raise RuntimeError(
-            "Role inline-policy headroom reserve consumed: "
-            f"{inline_without_reserve}"
+            f"Role inline-policy headroom reserve consumed: {inline_without_reserve}"
         )
     oversized_trust = {
         name: size
@@ -782,13 +783,11 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
         ("apigateway:PATCH", "/apis/api-example/routes/route-example"),
         (
             "apigateway:PATCH",
-            "/apis/api-example/routes/route-example/"
-            "requestparameters/param-example",
+            "/apis/api-example/routes/route-example/requestparameters/param-example",
         ),
         (
             "apigateway:PATCH",
-            "/apis/api-example/routes/route-example/"
-            "routeresponses/resp-example",
+            "/apis/api-example/routes/route-example/routeresponses/resp-example",
         ),
         ("apigateway:PATCH", "/apis/api-example/stages/stage-example"),
         ("apigateway:POST", "/apis/api-example/authorizers"),
@@ -819,9 +818,9 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
     )
     rendered_http_write_actions = {
         action
-        for statement in payload["environment_identity"][
-            "manual/operator-deployment"
-        ]["Statement"]
+        for statement in payload["environment_identity"]["manual/operator-deployment"][
+            "Statement"
+        ]
         if any(
             fnmatch.fnmatchcase(
                 "arn:aws:apigateway:us-east-1::/apis/api-example",
@@ -832,9 +831,7 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
         for action in values(statement.get("Action", []))
         if action.startswith("apigateway:") and action != "apigateway:GET"
     }
-    enumerated_http_write_actions = {
-        action for action, _ in http_api_write_resources
-    }
+    enumerated_http_write_actions = {action for action, _ in http_api_write_resources}
     if rendered_http_write_actions != enumerated_http_write_actions:
         raise RuntimeError(
             "HTTP API write-form inventory does not match rendered actions: "
@@ -889,10 +886,7 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
         (
             "EC2 tagged security-group rule creation",
             "ec2:AuthorizeSecurityGroupIngress",
-            (
-                "arn:aws:ec2:us-east-1:111122223333:"
-                "security-group-rule/sgr-example"
-            ),
+            ("arn:aws:ec2:us-east-1:111122223333:security-group-rule/sgr-example"),
             request_tags,
             "request",
             all_allowed,
@@ -900,10 +894,7 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
         (
             "EC2 tagged security-group rule dependent tagging",
             "ec2:CreateTags",
-            (
-                "arn:aws:ec2:us-east-1:111122223333:"
-                "security-group-rule/sgr-example"
-            ),
+            ("arn:aws:ec2:us-east-1:111122223333:security-group-rule/sgr-example"),
             {
                 **request_tags,
                 "ec2:CreateAction": "AuthorizeSecurityGroupIngress",
@@ -989,9 +980,7 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
             )
             cross_environment = dict(raw_context)
             cross_environment[f"{ownership_prefix}PortfolioEnvironment"] = "monthly"
-            variants.append(
-                ("cross-environment", cross_environment, ownership_denied)
-            )
+            variants.append(("cross-environment", cross_environment, ownership_denied))
             cross_repository = dict(raw_context)
             cross_repository[f"{ownership_prefix}PortfolioRepository"] = (
                 "other-owner/other-repository"
@@ -1147,9 +1136,7 @@ def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
                 "aws:ResourceTag/PortfolioEnvironment": "manual",
                 "aws:ResourceTag/PortfolioManaged": "true",
                 "aws:ResourceTag/PortfolioPersistent": "false",
-                "aws:ResourceTag/PortfolioRepository": (
-                    "other-owner/other-repository"
-                ),
+                "aws:ResourceTag/PortfolioRepository": ("other-owner/other-repository"),
             },
             {
                 "effective": "denied",
@@ -1345,17 +1332,13 @@ def main() -> int:
         terraform,
         {
             "name_prefix": "abcdefghijklmnopqrst",
-            "state_bucket_name": (
-                "abcdefghijklmnopqrst-111122223333-us-east-1-state"
-            ),
+            "state_bucket_name": ("abcdefghijklmnopqrst-111122223333-us-east-1-state"),
         },
     )
     verify_policy_structure(max_prefix_payload)
     policy_structure_mutation_cases = verify_policy_structure_mutations(payload)
     delegated_pass_role_cases = verify_delegated_pass_role_ceiling(payload)
-    delegated_policy_mutation_cases = verify_delegated_policy_mutation_ceiling(
-        payload
-    )
+    delegated_policy_mutation_cases = verify_delegated_policy_mutation_ceiling(payload)
     tagged_destroy_cases = verify_tagged_destroy_ceiling(payload)
     operator_control_plane_cases = verify_operator_control_plane(payload)
     counts = verify_matrix(payload)

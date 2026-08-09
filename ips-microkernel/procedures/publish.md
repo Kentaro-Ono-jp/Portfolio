@@ -86,8 +86,9 @@ For every repository correction:
     exact base and head to match live endpoints.
 13. Supply a refreshed initial-review prompt when no verdict exists; otherwise
     supply a re-review prompt with expected full base and head SHAs, the real
-    previous-verdict URL, every finding disposition, correction links, and
-    current exact-head workflow evidence.
+    previous-verdict URL, every finding disposition, aggregate adjudication
+    decision, ordered correction-chain links, and current exact-head workflow
+    evidence.
 
 A pushed checkpoint is incomplete without the applicable populated prompt.
 
@@ -132,15 +133,15 @@ required exception field. An absent run is never passing proof.
 
 ## Next
 
-- A proved reusable candidate with complete disposition for every associated
-  actionable finding and proof for every required correction, but no complete
+- A proved reusable candidate with complete finding disposition and either
+  proved required corrections or exact `converge` acceptance, but no complete
   curation: open [knowledge curation](curate-knowledge.md).
 - No verdict and no pending eligible candidate: start the independent review
   task at the [review router](../review/router.md).
-- `Changes requested` with incomplete finding disposition: open
+- `Changes requested` with incomplete finding disposition or aggregate
+  correction-loop decision: open
   [adjudicate](adjudicate.md).
-- Complete adjudication with required corrections: open [correct](correct.md).
-- Approved exact head, fully adjudicated exact head with zero required
-  corrections, or exact reviewed head with a recorded owner waiver and
-  required proof, after every candidate has complete curation: open
+- Complete adjudication with `continue-correction`: open [correct](correct.md).
+- Approved, adjudicated `converge`, or owner-waived exact head with required
+  proof, after every candidate has complete curation: open
   [merge](merge.md).
