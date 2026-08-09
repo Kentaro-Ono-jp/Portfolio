@@ -148,6 +148,27 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #76
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/76#issuecomment-5167941319).
 
+### Bind carried-forward ADR semantics to live procedures
+
+- **Trigger:** An accepted ADR supersedes a predecessor while explicitly
+  carrying an existing decision semantic into a current runtime procedure.
+- **HEAD effect:** `moving`
+- **Problem:** The historical ADR still states the semantic and the successor
+  preserves its labels, but the live procedure omits the classification rule,
+  so a later aggregate decision can truthfully name the wrong input state.
+- **Detect:** Enumerate each semantic that the accepted successor explicitly
+  carries forward, require its operational fragments in the live procedure's
+  production governance mapping, then remove each fragment independently while
+  leaving the successor ADR and later aggregate route unchanged.
+- **Pass:** Every carried-forward semantic is explicit in the accepted
+  successor and live procedure, every fragment is composed into the final
+  production mapping, and each one-fragment mutation fails before review.
+- **Repair:** Restore the semantic in the current procedure and successor ADR,
+  compose its fragments into the production checker, and retain independent
+  mutation proof without weakening the later aggregate decision.
+- **Origins:** PR #109
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/109#issuecomment-5231114290).
+
 ### Guard both boundaries of ordered workflow invariants
 
 - **Trigger:** A required governance procedure adds or changes an action that

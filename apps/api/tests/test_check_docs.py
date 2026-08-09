@@ -782,6 +782,9 @@ def test_adr_0016_is_superseded_by_0024_with_one_convergence_adjudicator(
     assert "Preserve one Review Adjudicator role and independent review" in successor
     assert "`continue-correction`" in successor
     assert "`converge`" in successor
+    assert "Carry forward ADR-0016's individual classification semantics" in successor
+    assert "three holistic lenses" in successor
+    assert "they do not prohibit a later aggregate `converge` decision" in successor
     assert "known regression risk" in successor
     assert "not required for ordinary adjudicator convergence" in " ".join(successor.split())
     assert "creates no follow-up Issue" in " ".join(successor.split())
@@ -963,6 +966,20 @@ def test_review_adjudication_contract_is_complete(
         (
             Path("ips-microkernel/procedures/adjudicate.md"),
             "applicable ordered chain",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "materially breaks Issue-defined accepted product design at Critical or High "
+            "actual impact",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "record the lower actual impact and rationale",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "human discoverability and bounded recoverability, external technical "
+            "explanation cost, and material product-quality effect as three holistic lenses",
         ),
         (
             Path("ips-microkernel/procedures/adjudicate.md"),

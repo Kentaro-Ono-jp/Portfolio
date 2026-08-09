@@ -47,17 +47,33 @@ It does not become the independent reviewer or reduce review sensitivity.
 3. Judge each current finding against its exact evidence, focused Issue,
    accepted design, and applicable chain. Reviewer severity is evidence, not
    binding outcome authority.
-4. Assign exactly one individual disposition to every current finding:
+4. Apply the carried-forward individual classification semantics before
+   aggregate judgment:
+   - a finding is `required-correction` when its proved effect materially
+     breaks Issue-defined accepted product design at Critical or High actual
+     impact;
+   - when a reviewer-labelled Critical or High finding does not prove that
+     threshold, record the lower actual impact and rationale before applying
+     the remaining model; and
+   - below that threshold, explicitly address human discoverability and
+     bounded recoverability, external technical explanation cost, and material
+     product-quality effect as three holistic lenses, never as a numeric score,
+     vote, or mechanical all-or-nothing rule.
+5. Assign exactly one individual disposition to every current finding:
    - `required-correction`;
    - `accepted-residual`;
    - `non-material`.
-5. Consider accepted scope and design, finding materiality, human
+   A required correction meets the individual correction threshold; an
+   accepted residual is real but current product judgment does not select
+   correction; non-material evidence does not establish a material defect in
+   the accepted slice.
+6. Consider accepted scope and design, finding materiality, human
    discoverability and bounded recoverability, external technical explanation
    cost, material product-quality effect, marginal quality gain, added
    complexity, regression exposure, quota pressure, future flexibility, and
    present acceptance holistically. None is a mandatory veto, numeric score,
    vote, cycle cap, or mechanical threshold.
-6. After every finding has a disposition, assign exactly one aggregate
+7. After every finding has a disposition, assign exactly one aggregate
    decision:
    - `continue-correction`: select one or more current
      `required-correction` findings for another ordinary correction and
@@ -65,7 +81,7 @@ It does not become the independent reviewer or reduce review sensitivity.
    - `converge`: accept the current exact head for curation and merge routing,
      even when required corrections, Critical or High reviewer severity,
      possible quality improvement, or known regression risk remains.
-7. Before any implementation mutation or merge, append one adjudication
+8. Before any implementation mutation or merge, append one adjudication
    checkpoint to the focused Issue containing:
    - exact reviewed head and stable real-verdict URL;
    - applicable ordered review, adjudication, and correction-chain summary;
@@ -75,10 +91,10 @@ It does not become the independent reviewer or reduce review sensitivity.
      risk;
    - exactly one `continue-correction` or `converge` decision; and
    - concise reason why another correction is or is not selected.
-8. Read the focused Issue back and require the complete checkpoint to match the
+9. Read the focused Issue back and require the complete checkpoint to match the
    exact reviewed head, finding inventory, chain identity, and aggregate
    decision.
-9. If outcome, scope, non-targets, or accepted design itself must materially
+10. If outcome, scope, non-targets, or accepted design itself must materially
    change, route to [focus](focus.md). Recorded acceptance of a current
    residual or regression does not by itself rewrite the focused Issue.
 

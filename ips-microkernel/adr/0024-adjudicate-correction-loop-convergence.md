@@ -49,6 +49,15 @@ Continue to record every current finding as exactly one of
 `required-correction`, `accepted-residual`, or `non-material`. Reviewer
 severity remains evidence rather than outcome authority.
 
+Carry forward ADR-0016's individual classification semantics before aggregate
+judgment. Proved Critical or High actual impact that materially breaks
+Issue-defined accepted product design is `required-correction`. Below that
+threshold, explicitly address human discoverability and bounded recoverability,
+external technical explanation cost, and material product-quality effect as
+three holistic lenses. These individual semantics determine the truthful
+label; they do not prohibit a later aggregate `converge` decision from
+accepting a named required correction.
+
 ### Judge the applicable correction chain
 
 In addition to the current exact head and verdict, freeze the applicable
