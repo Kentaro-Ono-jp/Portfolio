@@ -383,9 +383,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "destroyCanCleanManagedNetworkInterfaces": (
             policy_allows(destroy, "ec2:DescribeNetworkInterfaces", "*")
             and policy_allows(destroy, "ec2:DetachNetworkInterface", "*")
-            and not policy_allows(
-                permissions, "ec2:DetachNetworkInterface", "*"
-            )
+            and not policy_allows(permissions, "ec2:DetachNetworkInterface", "*")
         ),
         "boundaryCanCleanManagedNetworkInterfaces": (
             policy_allows(boundary, "ec2:DescribeNetworkInterfaces", "*")
