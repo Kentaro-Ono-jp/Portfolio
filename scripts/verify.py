@@ -69,6 +69,23 @@ GROUP_DEPENDENCIES = {
     "api-runtime": frozenset({"compose", "api-static"}),
     "ml-runtime": frozenset({"compose", "ml-static"}),
 }
+FULL_SHA = re.compile(r"[0-9a-f]{40}")
+
+
+class CarryProvenance:
+    def __init__(self, *, baseline_sha: str, run_id: str, run_url: str) -> None:
+        if FULL_SHA.fullmatch(baseline_sha) is None:
+            raise ValueError("Carry baseline SHA must be a full lowercase commit SHA.")
+        if not run_id.isdigit() or int(run_id) <= 0:
+            raise ValueError("Carry source run ID must be a positive integer.")
+        expected_suffix = f"/actions/runs/{run_id}"
+        if not run_url.startswith("https://github.com/") or not run_url.endswith(
+            expected_suffix
+        ):
+            raise ValueError("Carry source run URL must match the exact run ID.")
+        self.baseline_sha = baseline_sha
+        self.run_id = run_id
+        self.run_url = run_url
 
 
 class VerificationPlan:
@@ -79,12 +96,24 @@ class VerificationPlan:
         changed_files: tuple[str, ...],
         reason: str,
         base: str | None = None,
+        head: str | None = None,
         carried_groups: frozenset[str] = frozenset(),
+        carry_provenance: CarryProvenance | None = None,
     ) -> None:
         if not groups <= ALL_GROUPS or not carried_groups <= ALL_GROUPS:
             raise ValueError("Verification plan contains an unknown group.")
         if groups & carried_groups:
             raise ValueError("Executed and carried groups must be disjoint.")
+        if carried_groups and carry_provenance is None:
+            raise ValueError("Carried groups require exact baseline run provenance.")
+        if carry_provenance is not None and not carried_groups:
+            raise ValueError("Carry provenance is invalid when no group is carried.")
+        if (
+            carry_provenance is not None
+            and base is not None
+            and carry_provenance.baseline_sha != base
+        ):
+            raise ValueError("Carry source SHA must match the exact baseline endpoint.")
         for group in groups:
             missing_dependencies = GROUP_DEPENDENCIES.get(group, frozenset()) - groups
             if missing_dependencies:
@@ -107,6 +136,8 @@ class VerificationPlan:
         self.changed_files = changed_files
         self.reason = reason
         self.base = base
+        self.head = head
+        self.carry_provenance = carry_provenance
 
     @property
     def skipped_groups(self) -> frozenset[str]:
@@ -118,11 +149,14 @@ def plan_with_baseline_evidence(
     *,
     baseline_proven: bool,
     baseline_skipped_groups: frozenset[str] = frozenset(),
+    carry_provenance: CarryProvenance | None = None,
 ) -> VerificationPlan:
     if not baseline_skipped_groups <= ALL_GROUPS:
         raise ValueError("Baseline evidence contains an unknown group.")
     if baseline_skipped_groups and not baseline_proven:
         raise ValueError("Baseline skips require proven baseline evidence.")
+    if carry_provenance is not None and not baseline_proven:
+        raise ValueError("Carry provenance requires proven baseline evidence.")
     carried = (
         ALL_GROUPS - plan.groups - baseline_skipped_groups
         if baseline_proven
@@ -134,6 +168,8 @@ def plan_with_baseline_evidence(
         changed_files=plan.changed_files,
         reason=plan.reason,
         base=plan.base,
+        head=plan.head,
+        carry_provenance=carry_provenance if carried else None,
     )
 
 
@@ -166,6 +202,8 @@ def move_groups_to_skipped(
         changed_files=plan.changed_files,
         reason=plan.reason,
         base=plan.base,
+        head=plan.head,
+        carry_provenance=plan.carry_provenance,
     )
 
 
@@ -192,6 +230,10 @@ def promote_groups_to_execution(
         changed_files=plan.changed_files,
         reason=f"{plan.reason} Baseline evidence gaps were promoted to execution.",
         base=plan.base,
+        head=plan.head,
+        carry_provenance=(
+            plan.carry_provenance if plan.carried_groups - promoted_groups else None
+        ),
     )
 
 
@@ -355,8 +397,10 @@ def plan_for_paths(
     changed_files: list[str] | tuple[str, ...],
     *,
     base: str | None = None,
+    head: str | None = None,
     baseline_proven: bool = False,
     baseline_skipped_groups: frozenset[str] = frozenset(),
+    carry_provenance: CarryProvenance | None = None,
 ) -> VerificationPlan:
     normalized = tuple(dict.fromkeys(path.replace("\\", "/") for path in changed_files))
     if not normalized:
@@ -366,9 +410,11 @@ def plan_for_paths(
                 changed_files=normalized,
                 reason="No changed path was available; full verification is required.",
                 base=base,
+                head=head,
             ),
             baseline_proven=baseline_proven,
             baseline_skipped_groups=baseline_skipped_groups,
+            carry_provenance=carry_provenance,
         )
 
     selected: set[str] = set()
@@ -384,9 +430,11 @@ def plan_for_paths(
                         "fail closed to full verification."
                     ),
                     base=base,
+                    head=head,
                 ),
                 baseline_proven=baseline_proven,
                 baseline_skipped_groups=baseline_skipped_groups,
+                carry_provenance=carry_provenance,
             )
         selected.update(path_groups)
 
@@ -396,9 +444,11 @@ def plan_for_paths(
             changed_files=normalized,
             reason="Selected from the changed path boundaries.",
             base=base,
+            head=head,
         ),
         baseline_proven=baseline_proven,
         baseline_skipped_groups=baseline_skipped_groups,
+        carry_provenance=carry_provenance,
     )
 
 
@@ -422,8 +472,26 @@ def paths_from_name_status(output: bytes) -> list[str]:
     return paths
 
 
+def require_exact_commit_endpoint(value: str, label: str) -> str:
+    if FULL_SHA.fullmatch(value) is None:
+        raise ValueError(f"{label} must be a full lowercase commit SHA.")
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{value}^{{commit}}"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"{label} commit object is unavailable: {value}")
+    return value
+
+
 def changed_files_from_git(
-    *, base: str | None = None, staged: bool = False
+    *,
+    base: str | None = None,
+    endpoints: tuple[str, str] | None = None,
+    staged: bool = False,
 ) -> list[str]:
     command = [
         "git",
@@ -436,11 +504,16 @@ def changed_files_from_git(
         "-z",
     ]
     if staged:
-        command.append("--cached")
+        command.extend(["--cached", "--"])
+    elif endpoints is not None:
+        endpoint_base, endpoint_head = endpoints
+        require_exact_commit_endpoint(endpoint_base, "Base endpoint")
+        require_exact_commit_endpoint(endpoint_head, "Head endpoint")
+        command.extend([endpoint_base, endpoint_head, "--"])
     elif base is not None:
-        command.append(f"{base}...HEAD")
+        command.extend([f"{base}...HEAD", "--"])
     else:
-        raise ValueError("A Git base or --staged is required.")
+        raise ValueError("A Git base, exact endpoints, or --staged is required.")
 
     result = subprocess.run(
         command,
@@ -454,24 +527,36 @@ def changed_files_from_git(
 def plan_from_git(
     *,
     base: str | None = None,
+    endpoints: tuple[str, str] | None = None,
     staged: bool = False,
     baseline_proven: bool = False,
     baseline_skipped_groups: frozenset[str] = frozenset(),
+    carry_provenance: CarryProvenance | None = None,
 ) -> VerificationPlan:
+    endpoint_base = endpoints[0] if endpoints is not None else None
+    endpoint_head = endpoints[1] if endpoints is not None else None
+    plan_base = endpoint_base or base
     try:
-        changed_files = changed_files_from_git(base=base, staged=staged)
+        changed_files = changed_files_from_git(
+            base=base,
+            endpoints=endpoints,
+            staged=staged,
+        )
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
         return VerificationPlan(
             groups=ALL_GROUPS,
             changed_files=(),
             reason=f"Git diff was unavailable ({error}); fail closed to full verification.",
-            base=base,
+            base=plan_base,
+            head=endpoint_head,
         )
     return plan_for_paths(
         changed_files,
-        base=base,
+        base=plan_base,
+        head=endpoint_head,
         baseline_proven=baseline_proven,
         baseline_skipped_groups=baseline_skipped_groups,
+        carry_provenance=carry_provenance,
     )
 
 
@@ -525,7 +610,21 @@ def plan_lines(plan: VerificationPlan) -> list[str]:
         f"Reason: {plan.reason}",
     ]
     if plan.base is not None:
-        lines.append(f"Base: {plan.base}")
+        label = "Base endpoint" if plan.head is not None else "Base"
+        lines.append(f"{label}: {plan.base}")
+    if plan.head is not None:
+        lines.append(f"Head endpoint: {plan.head}")
+    provenance = plan.carry_provenance
+    lines.extend(
+        [
+            f"Carry source SHA: {provenance.baseline_sha if provenance else 'none'}",
+            (
+                f"Carry source run: {provenance.run_id} ({provenance.run_url})"
+                if provenance
+                else "Carry source run: none"
+            ),
+        ]
+    )
     lines.append(f"Changed files: {len(plan.changed_files)}")
     return lines
 
@@ -537,6 +636,17 @@ def write_plan_outputs(plan: VerificationPlan, path: Path) -> None:
         "executed_groups": ",".join(ordered_groups(plan.groups)),
         "carried_groups": ",".join(ordered_groups(plan.carried_groups)),
         "skipped_groups": ",".join(ordered_groups(plan.skipped_groups)),
+        "baseline_sha": (
+            plan.carry_provenance.baseline_sha if plan.carry_provenance else ""
+        ),
+        "baseline_run_id": (
+            plan.carry_provenance.run_id if plan.carry_provenance else ""
+        ),
+        "baseline_run_url": (
+            plan.carry_provenance.run_url if plan.carry_provenance else ""
+        ),
+        "endpoint_base": plan.base if plan.head is not None else "",
+        "endpoint_head": plan.head or "",
         "docker_groups": ",".join(ordered_groups(plan.groups & DOCKER_GROUPS)),
         "has_execution": bool(selected),
         "needs_node": bool(selected & {"contracts", "web-static"}),
@@ -1414,6 +1524,12 @@ def parse_args() -> argparse.Namespace:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--base", help="Plan from the merge-base diff to HEAD.")
     source.add_argument(
+        "--endpoints",
+        nargs=2,
+        metavar=("BASE_SHA", "HEAD_SHA"),
+        help="Plan from the exact two-endpoint diff without requiring a merge base.",
+    )
+    source.add_argument(
         "--staged",
         action="store_true",
         help="Plan from the exact staged diff.",
@@ -1432,6 +1548,18 @@ def parse_args() -> argparse.Namespace:
         "--baseline-proven",
         action="store_true",
         help="Mark unselected groups as carried from a successful baseline.",
+    )
+    parser.add_argument(
+        "--baseline-sha",
+        help="Exact successful baseline commit SHA for carried evidence.",
+    )
+    parser.add_argument(
+        "--baseline-run-id",
+        help="Exact successful GitHub Actions run ID for carried evidence.",
+    )
+    parser.add_argument(
+        "--baseline-run-url",
+        help="Exact successful GitHub Actions run URL for carried evidence.",
     )
     parser.add_argument(
         "--baseline-skipped-groups",
@@ -1484,6 +1612,26 @@ def parse_group_selection(
 
 
 def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
+    provenance_values = (
+        args.baseline_sha,
+        args.baseline_run_id,
+        args.baseline_run_url,
+    )
+    if any(provenance_values) and not all(provenance_values):
+        raise RuntimeError(
+            "--baseline-sha, --baseline-run-id, and --baseline-run-url must be supplied together."
+        )
+    if any(provenance_values) and not args.baseline_proven:
+        raise RuntimeError("Carry provenance requires --baseline-proven.")
+    carry_provenance = (
+        CarryProvenance(
+            baseline_sha=args.baseline_sha,
+            run_id=args.baseline_run_id,
+            run_url=args.baseline_run_url,
+        )
+        if all(provenance_values)
+        else None
+    )
     if args.carried_groups and not args.groups:
         raise RuntimeError(
             "--carried-groups is only valid with --groups for explicit-run evidence."
@@ -1492,16 +1640,18 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
         raise RuntimeError("--carried-groups requires --baseline-proven.")
     if args.skipped_groups and (args.groups or args.static_only):
         raise RuntimeError(
-            "--skipped-groups is only valid with --base, --staged, --full, "
-            "or --carry-all."
+            "--skipped-groups is only valid with --base, --endpoints, --staged, "
+            "--full, or --carry-all."
         )
     if args.baseline_skipped_groups and (args.groups or args.static_only):
         raise RuntimeError(
-            "--baseline-skipped-groups is only valid with --base, --staged, "
-            "or --carry-all."
+            "--baseline-skipped-groups is only valid with --base, --endpoints, "
+            "--staged, or --carry-all."
         )
-    if args.close_baseline_gaps and not (args.base or args.staged):
-        raise RuntimeError("--close-baseline-gaps requires --base or --staged.")
+    if args.close_baseline_gaps and not (args.base or args.endpoints or args.staged):
+        raise RuntimeError(
+            "--close-baseline-gaps requires --base, --endpoints, or --staged."
+        )
     if args.close_baseline_gaps and not args.baseline_proven:
         raise RuntimeError("--close-baseline-gaps requires --baseline-proven.")
     if args.close_baseline_gaps and args.skipped_groups:
@@ -1526,6 +1676,7 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
             carried_groups=carried,
             changed_files=(),
             reason="Explicit verification group selection.",
+            carry_provenance=carry_provenance if carried else None,
         )
     if args.static_only:
         return VerificationPlan(
@@ -1556,24 +1707,27 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
             ),
             baseline_proven=True,
             baseline_skipped_groups=baseline_skipped,
+            carry_provenance=carry_provenance,
         )
         return apply_skip_lineage(
             plan,
             baseline_skipped_groups=baseline_skipped,
             current_skipped_groups=current_skipped,
         )
-    if baseline_skipped and not (args.base or args.staged):
+    if baseline_skipped and not (args.base or args.endpoints or args.staged):
         raise RuntimeError(
-            "--baseline-skipped-groups is only valid with --base or --staged."
+            "--baseline-skipped-groups is only valid with --base, --endpoints, or --staged."
         )
-    if args.base or args.staged:
+    if args.base or args.endpoints or args.staged:
         plan = plan_from_git(
             base=args.base,
+            endpoints=tuple(args.endpoints) if args.endpoints else None,
             staged=args.staged,
             baseline_proven=args.baseline_proven,
             baseline_skipped_groups=(
                 frozenset() if args.close_baseline_gaps else baseline_skipped
             ),
+            carry_provenance=carry_provenance,
         )
         if args.close_baseline_gaps and baseline_skipped:
             plan = promote_groups_to_execution(plan, baseline_skipped)
@@ -1596,7 +1750,13 @@ def main() -> int:
         (
             bool(args.groups),
             args.static_only,
-            bool(args.base or args.staged or args.full or args.carry_all),
+            bool(
+                args.base
+                or args.endpoints
+                or args.staged
+                or args.full
+                or args.carry_all
+            ),
         )
     )
     if selection_modes > 1:
@@ -1609,13 +1769,14 @@ def main() -> int:
         args.groups
         or args.static_only
         or args.base
+        or args.endpoints
         or args.staged
         or args.full
         or args.carry_all
     ):
         print(
-            "\nVerification failed: --plan requires --base, --staged, --full, "
-            "or --carry-all.",
+            "\nVerification failed: --plan requires --base, --endpoints, --staged, "
+            "--full, or --carry-all.",
             file=sys.stderr,
         )
         return 1

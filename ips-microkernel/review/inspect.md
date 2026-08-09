@@ -16,7 +16,11 @@ Read this file only after review setup proves the exact isolated clone.
    endpoint patch with
    `git diff --binary <expected-base-sha> <expected-head-sha> --`. These
    two-endpoint comparisons do not require a merge base; never rely on a
-   three-dot comparison as the only complete-diff proof.
+   three-dot comparison as the only complete-diff proof. Also run the canonical
+   selection planner with
+   `python scripts/verify.py --plan --endpoints <expected-base-sha> <expected-head-sha>`;
+   require its endpoint identities and changed-path count to match the same
+   exact comparison.
 3. Normalize paths and change statuses.
    Require the GitHub and exact endpoint inventories to agree on the complete
    focused file set before judging the diff. An unexplained file or status
@@ -37,9 +41,12 @@ Read this file only after review setup proves the exact isolated clone.
 8. Run the smallest relevant non-Docker static verification. Do not start or
    mutate Docker Desktop.
 9. Require PR evidence to justify selected, executed, carried, and skipped
-   groups with both N/NN counts. Reject a carry without successful unaffected
-   evidence. Affected omissions remain skipped without evidence and require
-   focused rationale plus an exact-head trailer.
+   groups with both N/NN counts. Whenever any group is carried, require both the
+   exact successful source SHA and its Actions run identity in the authoritative
+   exact-head evidence and require the SHA to match the stated baseline. Reject
+   missing, malformed, unsuccessful, or mismatched carry provenance. Affected
+   omissions remain skipped without evidence and require focused rationale plus
+   an exact-head trailer.
 10. Apply the same evidence rule to Docker-backed groups without running them
    locally.
 11. Read the exact-head Actions result and limitations.

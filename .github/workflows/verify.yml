@@ -111,10 +111,19 @@ jobs:
         env:
           SELECTED_GROUPS: ${{ steps.plan.outputs.groups }}
           CARRIED_GROUPS: ${{ steps.plan.outputs.carried_groups }}
+          CARRY_BASELINE_SHA: ${{ steps.plan.outputs.baseline_sha }}
+          CARRY_BASELINE_RUN_ID: ${{ steps.plan.outputs.baseline_run_id }}
+          CARRY_BASELINE_RUN_URL: ${{ steps.plan.outputs.baseline_run_url }}
         run: |
           arguments=(--groups "$SELECTED_GROUPS")
           if [[ -n "$CARRIED_GROUPS" ]]; then
-            arguments+=(--carried-groups "$CARRIED_GROUPS" --baseline-proven)
+            arguments+=(
+              --carried-groups "$CARRIED_GROUPS"
+              --baseline-proven
+              --baseline-sha "$CARRY_BASELINE_SHA"
+              --baseline-run-id "$CARRY_BASELINE_RUN_ID"
+              --baseline-run-url "$CARRY_BASELINE_RUN_URL"
+            )
           fi
           python scripts/verify.py "${arguments[@]}"
 

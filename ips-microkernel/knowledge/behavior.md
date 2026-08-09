@@ -60,7 +60,8 @@ proved/unproved classification, or permanence claim.
   and skipped group and test-file N/NN inventory differs from the applicable
   exact-head evidence source.
 - **Detect:** Read the live PR base and head full SHAs. For normal proof, read
-  the successful exact-head Actions plan and inventory. For a qualified
+  the successful exact-head Actions plan and inventory, including the exact
+  source SHA and Actions run identity whenever any group is carried. For a qualified
   Markdown-only no-run head, require the complete exception contract, confirm
   that no exact-head Actions run exists, and use the exact committed-tree Gate
   A planner and required local proof as the inventory source. Parse both
@@ -71,7 +72,9 @@ proved/unproved classification, or permanence claim.
   literal path list.
 - **Pass:** Both declared base values equal the live base, both declared head
   values equal the live head, the PR evidence inventory and every N/NN count
-  equal the applicable exact-head evidence source, and, when applicable, the
+  equal the applicable exact-head evidence source, every carried group is bound
+  to a displayed successful source run whose SHA equals the stated baseline,
+  and, when applicable, the
   declared Markdown count and literal path set exactly equal the complete live
   diff with every path ending in `.md`; any absent workflow is declared only
   as a qualified limitation, and the PR head is unchanged by metadata repair.
