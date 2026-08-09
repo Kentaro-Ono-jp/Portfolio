@@ -118,7 +118,7 @@ jobs:
           CARRY_BASELINE_SHA: ${{ steps.plan.outputs.baseline_sha }}
           CARRY_BASELINE_RUN_ID: ${{ steps.plan.outputs.baseline_run_id }}
           CARRY_BASELINE_RUN_URL: ${{ steps.plan.outputs.baseline_run_url }}
-          PORTFOLIO_VERIFICATION_HEAD_SHA: ${{ steps.plan.outputs.endpoint_head || github.sha }}
+          PORTFOLIO_VERIFICATION_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           arguments=(--groups "$SELECTED_GROUPS")
           if [[ -n "$CARRIED_GROUPS" ]]; then

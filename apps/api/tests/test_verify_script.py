@@ -312,6 +312,9 @@ def test_github_actions_passes_exact_carry_provenance_to_verifier() -> None:
         assert f"steps.plan.outputs.{output_name}" in workflow
     for argument in ("--baseline-sha", "--baseline-run-id", "--baseline-run-url"):
         assert argument in workflow
+    assert (
+        "PORTFOLIO_VERIFICATION_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
+    ) in workflow
 
 
 def test_identity_boundary_aligns_public_url_with_published_web_port() -> None:
