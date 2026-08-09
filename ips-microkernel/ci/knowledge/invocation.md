@@ -25,6 +25,14 @@ Actions.
   [`verify.py`](../../../scripts/verify.py), and lint every verification
   helper.
 
+### Supply complete fail-closed local-service configuration to CI
+
+- **Origin:** PR #104
+  [run 31289122644](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31289122644)
+- **Trigger:** GitHub Actions overrides a local service endpoint consumed by settings validation during static and runtime verification.
+- **Mistake:** The workflow supplied only the MinIO endpoint, so API and ML received partial local S3 configuration after the settings boundary began rejecting incomplete endpoint/credential tuples.
+- **Correction:** Supply the complete bounded synthetic MinIO endpoint and credential tuple for every consumer, isolate default/AWS-mode unit settings from workflow overrides, and enforce that workflow invocation contract with an executable repository test.
+
 ## Return
 
 Return to publication Gate A after repairing the triggered invocation scripts.

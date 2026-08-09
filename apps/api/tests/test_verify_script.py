@@ -285,6 +285,13 @@ def test_github_actions_runtime_ports_avoid_linux_ephemeral_range() -> None:
         "http://127.0.0.1:23000",
     ):
         assert value in workflow
+    for variable in (
+        "PORTFOLIO_S3_ACCESS_KEY_ID",
+        "PORTFOLIO_S3_SECRET_ACCESS_KEY",
+        "PORTFOLIO_ML_S3_ACCESS_KEY_ID",
+        "PORTFOLIO_ML_S3_SECRET_ACCESS_KEY",
+    ):
+        assert f'{variable}: "portfolio-local-' in workflow
     assert (
         "PORTFOLIO_WEB_PUBLIC_BASE_URL: ${PORTFOLIO_WEB_PUBLIC_BASE_URL:-http://127.0.0.1:53000}"
     ) in compose

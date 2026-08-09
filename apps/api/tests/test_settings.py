@@ -6,6 +6,16 @@ from pydantic import ValidationError
 from reactorfront_api.settings import Settings
 
 
+@pytest.fixture(autouse=True)
+def isolate_storage_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "PORTFOLIO_S3_ENDPOINT_URL",
+        "PORTFOLIO_S3_ACCESS_KEY_ID",
+        "PORTFOLIO_S3_SECRET_ACCESS_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 def test_default_settings_keep_explicit_local_storage_and_dex() -> None:
     settings = Settings()
 

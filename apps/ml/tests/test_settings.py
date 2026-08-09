@@ -6,8 +6,17 @@ from pydantic import ValidationError
 from reactorfront_ml.settings import Settings
 
 
-def test_settings_have_no_database_boundary(monkeypatch: object) -> None:
-    del monkeypatch
+@pytest.fixture(autouse=True)
+def isolate_storage_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "PORTFOLIO_ML_S3_ENDPOINT_URL",
+        "PORTFOLIO_ML_S3_ACCESS_KEY_ID",
+        "PORTFOLIO_ML_S3_SECRET_ACCESS_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_settings_have_no_database_boundary() -> None:
     settings = Settings()
 
     assert "database" not in " ".join(Settings.model_fields).lower()
