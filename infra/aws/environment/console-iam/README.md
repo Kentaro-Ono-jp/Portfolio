@@ -43,6 +43,9 @@ For the maintained proof, the stable names are `reactorfront`, `manual`, and
    separately named boundary, and no inline policy. Verify that the old
    combined policy has zero attachments and zero boundary usages before
    deleting it.
+8. When a checked-in policy document changes, create a new customer-managed
+   policy version in the Console and make it the default. Do not dynamically
+   attach an allow, attach a deny, or let Terraform mutate either policy.
 
 The documents contain no explicit `Deny`. Effective authority is the
 intersection of a role's identity policy and its static boundary. State-bucket

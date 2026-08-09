@@ -43,8 +43,10 @@ writing remote state.
   Internet-facing inbound rule.
 - `modules/ingress` owns the generated API Gateway HTTP API endpoint, VPC Link,
   private Cloud Map namespace, Web/API services, throttling, and bounded access
-  logs. There is no ALB, custom domain, certificate, Route 53, CloudFront, or
-  WAF resource.
+  logs. There is no Terraform-managed ALB, custom domain, certificate, Route
+  53, CloudFront, or WAF resource. Cloud Map delegates private hosted-zone
+  creation and deletion to Route 53 under the caller, so the Console-owned
+  operator and destroy contracts model those service-dependent actions.
 - `modules/runtime` owns independent Web, API-area, and ML Fargate services.
   API-area contains FastAPI, outbox publisher, and result consumer containers;
   migration is a separate task definition and is not run here. Task sizing is
@@ -85,3 +87,20 @@ apply requires a separately approved operator session, exact remote backend,
 immutable image digests, and account-owned rendered role ARNs. Lifecycle,
 TTL-first fallback, destroy, and residual-sweep automation remain separate
 delivery increments.
+
+## Exploratory live evaluation record
+
+An owner-authorized manual evaluation of this static root consumed all `3/3`
+governed construction attempts without reaching a successful hosted cycle. It
+was used to correct provider-dependent tag, refresh, delegated-service, enum,
+and destroy cleanup authority in the static contract; it is not Step 7 green
+proof and does not authorize a fourth construction apply.
+
+The partial environment was then destroyed through the separate destroy role.
+Terraform state returned to zero, a fresh live plan contained 81 creates and no
+updates or deletes, and a service-specific sweep found no application VPC,
+subnet, Security Group, route table, Internet Gateway, VPC endpoint, network
+interface, RDS, Amazon MQ, log, API Gateway, Cognito, Cloud Map, Route 53, active
+ECS, Secrets Manager, or application-bucket residue. Persistent state, ECR,
+Console IAM, and service-linked prerequisites remain intentionally outside this
+environment state root.

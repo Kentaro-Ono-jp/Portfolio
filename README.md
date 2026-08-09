@@ -263,9 +263,14 @@ tags, and portable outputs. Its fail-closed static plan creates no AWS
 resource. See the
 [AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md) and
 [portable AWS bootstrap guide](AWS_BOOTSTRAP.md), plus the
-[managed-environment guide](infra/aws/environment/README.md). Step 5 lifecycle,
-Step 6 automation, and live AWS proof remain unimplemented; construction
-attempts remain at `0/3`.
+[managed-environment guide](infra/aws/environment/README.md). An
+owner-authorized exploratory AWS evaluation consumed the governed `3/3`
+construction attempts without reaching a successful hosted cycle. The partial
+environment was destroyed, Terraform state returned to zero, a fresh live plan
+returned 81 create-only resources, and service-specific inventory found zero
+application residue. Step 5 lifecycle, Step 6 automation, and the successful
+Step 7 green-cycle proof remain unimplemented; no fourth construction apply is
+claimed or performed.
 
 ## Completed third vertical slice
 
