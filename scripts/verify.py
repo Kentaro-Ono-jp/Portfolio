@@ -38,6 +38,7 @@ EXPECTED_BROWSER_MODEL_EVIDENCE = {
 VERIFICATION_GROUPS = (
     "contracts",
     "docs",
+    "aws-static",
     "compose",
     "web-static",
     "api-static",
@@ -47,8 +48,18 @@ VERIFICATION_GROUPS = (
     "ml-runtime",
 )
 ALL_GROUPS = frozenset(VERIFICATION_GROUPS)
-STATIC_GROUPS = frozenset(VERIFICATION_GROUPS[:6])
-RUNTIME_GROUPS = frozenset(VERIFICATION_GROUPS[6:])
+STATIC_GROUPS = frozenset(
+    {
+        "contracts",
+        "docs",
+        "aws-static",
+        "compose",
+        "web-static",
+        "api-static",
+        "ml-static",
+    }
+)
+RUNTIME_GROUPS = frozenset({"web-runtime", "api-runtime", "ml-runtime"})
 DOCKER_GROUPS = frozenset({"compose"}) | RUNTIME_GROUPS
 LOCAL_STATIC_GROUPS = STATIC_GROUPS - DOCKER_GROUPS
 EXPECTED_COMPOSE_SERVICES = frozenset(
@@ -301,6 +312,12 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
 
     if normalized == "scripts/check_docs.py":
         return frozenset({"docs", "api-static"})
+
+    if normalized in {
+        "scripts/aws_bootstrap_backend.py",
+        "scripts/verify_aws_bootstrap.py",
+    } or normalized.startswith("infra/aws/bootstrap/"):
+        return frozenset({"aws-static"})
 
     api_runtime_helpers = {
         "scripts/prepare_integration.py",
@@ -578,6 +595,10 @@ def test_file_inventory() -> tuple[tuple[str, str], ...]:
             inventory.append((group, path.relative_to(REPOSITORY_ROOT).as_posix()))
     for path in (REPOSITORY_ROOT / "tests" / "e2e").glob("*.spec.ts"):
         inventory.append(("e2e", path.relative_to(REPOSITORY_ROOT).as_posix()))
+    for path in (REPOSITORY_ROOT / "infra" / "aws" / "bootstrap" / "tests").glob(
+        "*.tftest.hcl"
+    ):
+        inventory.append(("aws-static", path.relative_to(REPOSITORY_ROOT).as_posix()))
     return tuple(sorted(inventory))
 
 
@@ -586,6 +607,7 @@ def selected_test_files(groups: frozenset[str]) -> tuple[str, ...]:
         "web-static",
         "api-static",
         "ml-static",
+        "aws-static",
         "web-runtime",
     }
     return tuple(
@@ -652,6 +674,8 @@ def write_plan_outputs(plan: VerificationPlan, path: Path) -> None:
         "has_execution": bool(selected),
         "needs_node": bool(selected & {"contracts", "web-static"}),
         "needs_python": bool(selected),
+        "needs_terraform": "aws-static" in selected,
+        "needs_tflint": "aws-static" in selected,
         "needs_uv": bool(selected & {"api-static", "ml-static"})
         or bool(selected & RUNTIME_GROUPS),
         "needs_api": "api-static" in selected or bool(selected & RUNTIME_GROUPS),
@@ -767,6 +791,8 @@ def static_checks(
                 "scripts/check_docs.py",
                 "scripts/check_identity_boundary.py",
                 "scripts/measure_container_resources.py",
+                "scripts/aws_bootstrap_backend.py",
+                "scripts/verify_aws_bootstrap.py",
             ],
         ),
         (
@@ -794,6 +820,8 @@ def static_checks(
                 "scripts/check_docs.py",
                 "scripts/check_identity_boundary.py",
                 "scripts/measure_container_resources.py",
+                "scripts/aws_bootstrap_backend.py",
+                "scripts/verify_aws_bootstrap.py",
             ],
         ),
         (
@@ -929,6 +957,10 @@ def static_checks(
             "Validate test identity boundary",
             [sys.executable, "scripts/check_identity_boundary.py"],
         ),
+        (
+            "Prove portable AWS bootstrap and policy boundaries",
+            [sys.executable, "scripts/verify_aws_bootstrap.py"],
+        ),
     ]
     check_groups = {
         "Validate canonical contracts": "contracts",
@@ -955,6 +987,7 @@ def static_checks(
         "Prove the canonical champion evaluation baseline": "ml-static",
         "Validate deployable Compose boundaries": "compose",
         "Validate test identity boundary": "compose",
+        "Prove portable AWS bootstrap and policy boundaries": "aws-static",
     }
     filtered = [check for check in checks if check_groups[check[0]] in groups]
     if "api-static" in groups:
@@ -1862,6 +1895,9 @@ def main() -> int:
             else ""
         )
         docker = require_command("docker") if plan.groups & DOCKER_GROUPS else ""
+        if "aws-static" in plan.groups:
+            require_command("terraform")
+            require_command("tflint")
 
         for label, command in static_checks(
             pnpm=pnpm,

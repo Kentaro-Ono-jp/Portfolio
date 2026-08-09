@@ -382,6 +382,127 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #68
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152433244).
 
+### Enforce rendered cloud policy quotas
+
+- **Trigger:** Infrastructure code adds or changes a generated IAM managed,
+  inline, or trust policy.
+- **HEAD effect:** `moving`
+- **Problem:** Syntax and mock plans pass while the rendered document exceeds
+  the target cloud's creation quota.
+- **Detect:** Render every generated policy from the canonical synthetic input,
+  count characters using the provider's quota semantics, and compare each
+  document with its exact managed, aggregate inline, or trust-policy limit and
+  any declared future-change reserve.
+- **Pass:** Every rendered policy is at or below its applicable creation quota,
+  every declared reserve remains available, and the proof reports each exact
+  size, reserve, and limit before any cloud API call.
+- **Repair:** Separate stable maximum-authority guardrails from immutable exact
+  identity enforcement, reduce duplicated statements without broadening the
+  effective ceiling, add plan-time quota/reserve preconditions, and retain exact
+  rendered-size assertions in AWS-free verification.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
+### Prove delegated identity ceilings adversarially
+
+- **Trigger:** A permissions boundary or delegated-role policy adds or changes
+  IAM policy mutation, role creation, role assumption, or pass-role authority.
+- **HEAD effect:** `moving`
+- **Problem:** The intended identity policy is narrow, but a replaceable or
+  adversarial delegated identity policy can combine with the boundary to gain
+  cross-environment, wrong-service, or otherwise broader authority.
+- **Detect:** Combine the boundary with an adversarial wildcard identity grant
+  for the affected action and enumerate every source role, every declared
+  target, global and external targets, and synthesized undeclared ARNs that
+  match each resource wildcard, across every environment and relevant service;
+  also enumerate delegated policy-mutation actions on every mutable target.
+- **Pass:** Every boundary PassRole resource is exact, only declared
+  same-environment purpose and destination-service combinations are allowed,
+  every undeclared wildcard-matching target is denied, and no delegated manager
+  can replace, attach, delete, or update an owned role policy.
+- **Repair:** Move policy ownership to the persistent bootstrap, remove
+  delegated mutation grants, bind boundary resources to principal-derived
+  environment and purpose, replace target wildcards with exact role ARNs, bind
+  destination services, and retain the complete declared plus synthesized
+  adversarial matrix.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
+### Bind destructive ID resources to ownership attributes
+
+- **Trigger:** A destructive cloud action targets a resource whose generated
+  identifier or ARN does not encode the accepted environment or owner name.
+- **HEAD effect:** `moving`
+- **Problem:** An account-level wildcard or ID wildcard lets unrelated
+  resources satisfy the effective grant because no immutable enforcement layer
+  binds every ownership attribute.
+- **Detect:** For each affected resource type, evaluate one intended resource
+  carrying every required ownership attribute and the same action against one
+  unrelated or cross-environment resource with exactly one ownership attribute
+  changed.
+- **Pass:** Every correctly owned resource is allowed, while every unrelated,
+  cross-environment, cross-repository, unmanaged, or persistent variant is
+  denied by the effective intersection and its declared immutable ownership-
+  enforcement layer. Each independently evaluated layer matches the published
+  boundary architecture rather than being reported as narrower than it is.
+- **Repair:** Require environment, repository, managed, and persistence tags in
+  a bootstrap-owned policy that delegated roles cannot replace; when identity
+  policy mutation is delegated, duplicate the ceiling in the boundary. Retain
+  paired positives and one-attribute inverse negatives per ID resource type,
+  plus proof that the selected enforcement policy is immutable.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
+### Model real cloud action resources and condition contexts
+
+- **Trigger:** A generated IAM policy adds or changes a control-plane create,
+  inventory, existing-resource mutation, or tagging action.
+- **HEAD effect:** `moving`
+- **Problem:** A synthetic positive supplies a resource ARN or condition key
+  that the real cloud action does not expose, while the accepted create,
+  inventory, mutation, or dependent tagging request is denied.
+- **Detect:** From the target service's authorization reference, construct each
+  required positive with its real create-time resource form and only the
+  request, resource, or principal context keys available to that action;
+  enumerate every rendered write action/resource form, execute each request
+  independently against identity, boundary, and their effective intersection,
+  then change only the ownership environment and repository.
+- **Pass:** Every required real-context positive is allowed by identity,
+  boundary, and their intersection; each ownership inverse is denied by the
+  declared immutable enforcement layer and effective intersection; inventory
+  succeeds without fabricated request tags; every required resource in a
+  multi-resource authorization is exercised independently; and every dependent
+  tagging action has its own passing case with an exact ownership-key ceiling.
+  No rendered write verb or resource form is omitted from the inverse matrix.
+- **Repair:** Split creation-time request-tag, unconditioned inventory, and
+  existing-resource ownership-tag statements; use actual collection or
+  resource-less create forms; grant the exact dependent tagging actions;
+  require existing ownership for retagging where the service exposes resource
+  tags; exercise every required parent/new resource separately; and retain the
+  layer-by-layer positive, unowned, and inverse-negative matrix with explicit
+  expectations for the enforcing layer and effective intersection.
+- **Origins:** PR #107
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500).
+
+### Connect security allowlists to enforced trust claims
+
+- **Trigger:** An automation trust contract adds or changes an allowed event,
+  workflow, repository, environment, or other security-significant metadata
+  field.
+- **HEAD effect:** `moving`
+- **Problem:** The allowlist is emitted only as output or documentation and
+  does not participate in the actual trust decision.
+- **Detect:** For every allowed metadata value, construct an otherwise exact
+  token and require trust success; then replace only that value with one
+  disallowed alternative while keeping every other claim exact.
+- **Pass:** Every stated allowed value reaches exactly one enforceable trust
+  condition and succeeds, while each single-field disallowed mutation fails.
+- **Repair:** Encode the value into a provider-supported claim or customized
+  subject, bind the trust policy to the exact result, and retain connected
+  positive plus inverse-negative token cases.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
 ## Execution and correction
 
 A failed triggered rule blocks reviewer dispatch.

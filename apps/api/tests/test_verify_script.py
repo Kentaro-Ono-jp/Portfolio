@@ -532,6 +532,7 @@ def test_docs_follow_up_preserves_groups_skipped_by_successful_baseline(
     assert follow_up.groups == {"docs"}
     assert follow_up.carried_groups == {
         "contracts",
+        "aws-static",
         "web-static",
         "api-static",
         "ml-static",
@@ -825,10 +826,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 55
+    assert len(inventory) == 56
     assert len(verifier.selected_test_files(plan.groups)) == 17
-    assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 17/55 selected" in verifier.plan_lines(plan)
+    assert "Verification groups: 1/10 selected" in verifier.plan_lines(plan)
+    assert "Test files: 17/56 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(
@@ -863,6 +864,29 @@ def test_plan_output_drives_conditional_dependency_setup(
     assert values["executed_groups"] == "ml-static"
     assert values["carried_groups"] == ""
     assert values["skipped_groups"] != ""
+
+
+def test_aws_bootstrap_change_selects_only_aws_static_tools(
+    verifier: ModuleType,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "github-output.txt"
+    plan = verifier.plan_for_paths(["infra/aws/bootstrap/iam.tf"])
+
+    verifier.write_plan_outputs(plan, output)
+
+    values = dict(
+        line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
+    )
+    assert plan.groups == {"aws-static"}
+    assert verifier.selected_test_files(plan.groups) == (
+        "infra/aws/bootstrap/tests/bootstrap.tftest.hcl",
+    )
+    assert values["needs_terraform"] == "true"
+    assert values["needs_tflint"] == "true"
+    assert values["needs_node"] == "false"
+    assert values["needs_uv"] == "false"
+    assert values["needs_docker"] == "false"
 
 
 def test_plan_outputs_bind_exact_endpoints_and_carry_run(
@@ -916,7 +940,7 @@ def test_skipped_docker_groups_do_not_request_docker_setup(
     values = dict(
         line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
     )
-    assert values["groups"] == "contracts,docs,web-static,api-static,ml-static"
+    assert values["groups"] == ("contracts,docs,aws-static,web-static,api-static,ml-static")
     assert values["carried_groups"] == ""
     assert values["skipped_groups"] == "compose,web-runtime,api-runtime,ml-runtime"
     assert values["docker_groups"] == ""
@@ -977,7 +1001,7 @@ def test_identical_tree_preserves_intentional_docker_skips(
         line.split("=", maxsplit=1) for line in output.read_text(encoding="utf-8").splitlines()
     )
     assert values["groups"] == ""
-    assert values["carried_groups"] == ("contracts,docs,web-static,api-static,ml-static")
+    assert values["carried_groups"] == ("contracts,docs,aws-static,web-static,api-static,ml-static")
     assert values["skipped_groups"] == ("compose,web-runtime,api-runtime,ml-runtime")
     assert values["has_execution"] == "false"
     assert values["needs_docker"] == "false"
@@ -1092,7 +1116,7 @@ def test_static_only_main_never_resolves_docker(
     )
 
     assert verifier.main() == 0
-    assert required == ["pnpm", "uv"]
+    assert required == ["pnpm", "uv", "terraform", "tflint"]
 
 
 def test_plan_accepts_explicit_non_docker_groups(
@@ -1998,7 +2022,7 @@ def test_ci_planner_main_writes_complete_dispatch_plan(
     assert output_values["skipped_groups"] == ""
     assert output_values["needs_docker"] == "true"
     summary_text = summary.read_text(encoding="utf-8")
-    assert "Verification groups: 9/9 selected" in summary_text
+    assert "Verification groups: 10/10 selected" in summary_text
     assert "Selection baseline: owner-dispatched full verification" in summary_text
 
 

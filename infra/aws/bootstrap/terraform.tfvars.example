@@ -1,0 +1,21 @@
+# Visibly synthetic, non-authorizing values. Replace every value with resources
+# owned by the deploying third party. Never publish the resulting tfvars/state.
+aws_account_id  = "111122223333"
+aws_partition   = "aws"
+aws_region      = "us-east-1"
+name_prefix     = "example-portfolio"
+repository_identity = "example-owner/example-repository"
+
+state_bucket_name  = "example-portfolio-111122223333-us-east-1-state"
+bootstrap_state_key = "bootstrap/terraform.tfstate"
+environment_state_keys = {
+  manual  = "environments/manual/terraform.tfstate"
+  monthly = "environments/monthly/terraform.tfstate"
+}
+
+owner_principal_arn      = "arn:aws:iam::111122223333:role/PortfolioBootstrapOwner"
+github_oidc_provider_arn = "arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com"
+github_oidc_repository_subject = "repo:example-owner/example-repository"
+github_environment       = "aws-deployment"
+github_workflow_name     = "Deploy managed AWS proof"
+github_workflow_ref      = "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main"

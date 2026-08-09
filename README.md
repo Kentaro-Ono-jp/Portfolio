@@ -1,7 +1,8 @@
 # ReactorFront Portfolio
 
 > Status: three vertical slices completed; fourth portable managed-ephemeral
-> AWS deployment slice accepted but not yet implemented — 2026-08-09
+> AWS deployment slice in progress — runtime compatibility and persistent
+> bootstrap/least-privilege definitions implemented — 2026-08-09
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -32,9 +33,11 @@ lineage. Review outcomes never become training data automatically.
 
 The accepted fourth vertical slice adds an explicit managed AWS deployment
 path while preserving AWS-free GitHub Actions and local Docker Compose. A
-third-party clone deploys only into the third party's AWS account. Terraform,
-managed-service adapters, deployment roles and automation, and a proved AWS
-lifecycle are accepted design work and are not yet implemented.
+third-party clone deploys only into the third party's AWS account. Runtime
+adapters plus the persistent Terraform state/ECR/IAM bootstrap and static
+least-privilege proof are implemented. The managed application topology,
+lifecycle commands, deployment workflow, and real AWS green cycle remain
+separate increments.
 
 ## Engineering evidence
 
@@ -59,7 +62,7 @@ The three completed vertical slices demonstrate:
 - an authenticated model-evidence experience that separates model score,
   measured corpus evidence, and the human final decision
 
-The accepted fourth-slice direction will add portable Terraform,
+The accepted fourth-slice direction is adding portable Terraform,
 ECS/Fargate, RDS PostgreSQL, S3, Amazon MQ, Cognito, bounded automation,
 destroy fallback, and residual-resource proof without weakening those three
 completed slices or granting ordinary CI AWS write authority.
@@ -245,13 +248,16 @@ fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
 authority.
 
 This section records an accepted implementation contract, not a successful
-deployment claim. The repository now implements and verifies the managed-runtime
+deployment claim. The repository implements and verifies the managed-runtime
 compatibility boundary for task-role S3, Cognito-shaped OIDC, RabbitMQ 4.2, and
-initial measured Fargate sizing. See the
-[AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md). No
-Terraform module, deployment IAM role, AWS automation, or managed application
-environment is introduced by this increment, and AWS construction attempts
-remain at `0/3`.
+initial measured Fargate sizing. It also defines the portable persistent S3
+state backend, immutable Web/API/ML ECR repositories, fixed Permissions
+Boundary, environment-isolated purpose roles, trust/pass-role contracts, and
+AWS-free allow/deny simulation. See the
+[AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md) and
+[portable AWS bootstrap guide](AWS_BOOTSTRAP.md). The Step 4 managed
+application environment, Step 5 lifecycle, Step 6 automation, and live AWS
+proof remain unimplemented; construction attempts remain at `0/3`.
 
 ## Completed third vertical slice
 

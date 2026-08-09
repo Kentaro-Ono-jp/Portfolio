@@ -1,0 +1,1157 @@
+{
+  "schemaVersion": 1,
+  "identityCases": [
+    {
+      "name": "operator reads its exact state",
+      "role": "manual/operator-deployment",
+      "action": "s3:GetObject",
+      "resource": "state:manual",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot read another environment state",
+      "role": "manual/operator-deployment",
+      "action": "s3:GetObject",
+      "resource": "state:monthly",
+      "expected": "denied"
+    },
+    {
+      "name": "operator publishes an owned immutable image",
+      "role": "manual/operator-deployment",
+      "action": "ecr:PutImage",
+      "resource": "ecr:web",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator passes exact API role to ECS",
+      "role": "manual/operator-deployment",
+      "action": "iam:PassRole",
+      "resource": "role:manual/api-workload",
+      "context": {
+        "iam:PassedToService": "ecs-tasks.amazonaws.com"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot pass API role to CodeBuild",
+      "role": "manual/operator-deployment",
+      "action": "iam:PassRole",
+      "resource": "role:manual/api-workload",
+      "context": {
+        "iam:PassedToService": "codebuild.amazonaws.com"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot pass itself",
+      "role": "manual/operator-deployment",
+      "action": "iam:PassRole",
+      "resource": "role:manual/operator-deployment",
+      "context": {
+        "iam:PassedToService": "ecs-tasks.amazonaws.com"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot pass undeclared same-environment workload role",
+      "role": "manual/operator-deployment",
+      "action": "iam:PassRole",
+      "resource": "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-evil-workload",
+      "context": {
+        "iam:PassedToService": "ecs-tasks.amazonaws.com"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates only tagged environment network",
+      "role": "manual/operator-deployment",
+      "action": "ec2:CreateVpc",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot create cross-environment network",
+      "role": "manual/operator-deployment",
+      "action": "ec2:CreateVpc",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator tags only during declared network creation",
+      "role": "manual/operator-deployment",
+      "action": "ec2:CreateTags",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-new",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ],
+        "ec2:CreateAction": "CreateVpc"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot take ownership of an existing EC2 resource",
+      "role": "manual/operator-deployment",
+      "action": "ec2:CreateTags",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-unowned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator inventories EC2 without synthetic request tags",
+      "role": "manual/operator-deployment",
+      "action": "ec2:DescribeVpcs",
+      "resource": "*",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator mutates only a tagged environment security group",
+      "role": "manual/operator-deployment",
+      "action": "ec2:AuthorizeSecurityGroupIngress",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:security-group/sg-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot mutate another environment security group",
+      "role": "manual/operator-deployment",
+      "action": "ec2:AuthorizeSecurityGroupIngress",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:security-group/sg-unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged security group rule",
+      "role": "manual/operator-deployment",
+      "action": "ec2:AuthorizeSecurityGroupIngress",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:security-group-rule/sgr-new",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator creates a tagged HTTP API at the collection resource",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator updates an owned HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:PATCH",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/owned-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot update a cross-repository HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:PATCH",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/foreign-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "other-owner/other-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a cross-repository HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "other-owner/other-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot add an undeclared HTTP API ownership tag key",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository",
+          "PortfolioOwner"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot retag an unowned Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:TagResource",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_unowned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a cross-environment HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:CreateUserPool",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot create a cross-environment Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:CreateUserPool",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator attaches required ownership tags to a Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:TagResource",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator creates a tagged Cloud Map namespace",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateHttpNamespace",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot attach cross-environment ownership tags to Cloud Map",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-other",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot add an undeclared Cloud Map ownership tag key",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository",
+          "PortfolioOwner"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a cross-environment Cloud Map namespace",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateHttpNamespace",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator authorizes an owned Cloud Map namespace for service creation",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot create a Cloud Map service in a foreign namespace",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-foreign",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "other-owner/other-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged Cloud Map service resource",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-new",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator attaches required ownership tags to Cloud Map",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "IAM manager creates exact bounded role",
+      "role": "iam_manager",
+      "action": "iam:CreateRole",
+      "resource": "role:manual/api-workload",
+      "context": {
+        "iam:PermissionsBoundary": "boundary",
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "true",
+        "aws:RequestTag/PortfolioPurpose": "api-workload",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "IAM manager fails without boundary",
+      "role": "iam_manager",
+      "action": "iam:CreateRole",
+      "resource": "role:manual/api-workload",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "true",
+        "aws:RequestTag/PortfolioPurpose": "api-workload",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot create unbounded path role",
+      "role": "iam_manager",
+      "action": "iam:CreateRole",
+      "resource": "arbitrary-role",
+      "context": {
+        "iam:PermissionsBoundary": "boundary",
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "true",
+        "aws:RequestTag/PortfolioPurpose": "api-workload",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot remove a boundary",
+      "role": "iam_manager",
+      "action": "iam:DeleteRolePermissionsBoundary",
+      "resource": "role:manual/api-workload",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot retag a role",
+      "role": "iam_manager",
+      "action": "iam:TagRole",
+      "resource": "role:manual/api-workload",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot broaden its own trust",
+      "role": "iam_manager",
+      "action": "iam:UpdateAssumeRolePolicy",
+      "resource": "role:iam_manager",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot broaden workload trust",
+      "role": "iam_manager",
+      "action": "iam:UpdateAssumeRolePolicy",
+      "resource": "role:manual/api-workload",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot create users",
+      "role": "iam_manager",
+      "action": "iam:CreateUser",
+      "resource": "arbitrary-user",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot create access keys",
+      "role": "iam_manager",
+      "action": "iam:CreateAccessKey",
+      "resource": "arbitrary-user",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot attach AdministratorAccess",
+      "role": "iam_manager",
+      "action": "iam:AttachRolePolicy",
+      "resource": "role:manual/api-workload",
+      "context": {
+        "iam:PolicyARN": "admin-policy"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot replace an environment role policy",
+      "role": "iam_manager",
+      "action": "iam:PutRolePolicy",
+      "resource": "role:manual/api-workload",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot delete a Terraform-owned environment role",
+      "role": "iam_manager",
+      "action": "iam:DeleteRole",
+      "resource": "role:manual/api-workload",
+      "expected": "denied"
+    },
+    {
+      "name": "task execution pulls exact owned images",
+      "role": "manual/task-execution",
+      "action": "ecr:BatchGetImage",
+      "resource": "ecr:api",
+      "expected": "allowed"
+    },
+    {
+      "name": "task execution reads exact environment secret",
+      "role": "manual/task-execution",
+      "action": "secretsmanager:GetSecretValue",
+      "resource": "secret:manual/database",
+      "expected": "allowed"
+    },
+    {
+      "name": "task execution cannot read another environment secret",
+      "role": "manual/task-execution",
+      "action": "secretsmanager:GetSecretValue",
+      "resource": "secret:monthly/database",
+      "expected": "denied"
+    },
+    {
+      "name": "Web has identity proof only",
+      "role": "manual/web-workload",
+      "action": "sts:GetCallerIdentity",
+      "resource": "*",
+      "expected": "allowed"
+    },
+    {
+      "name": "Web has no application object authority",
+      "role": "manual/web-workload",
+      "action": "s3:GetObject",
+      "resource": "app-object:manual/source.pdf",
+      "expected": "denied"
+    },
+    {
+      "name": "API owns exact application objects",
+      "role": "manual/api-workload",
+      "action": "s3:DeleteObject",
+      "resource": "app-object:manual/source.pdf",
+      "expected": "allowed"
+    },
+    {
+      "name": "API cannot access another environment objects",
+      "role": "manual/api-workload",
+      "action": "s3:GetObject",
+      "resource": "app-object:monthly/source.pdf",
+      "expected": "denied"
+    },
+    {
+      "name": "API cannot read Terraform state",
+      "role": "manual/api-workload",
+      "action": "s3:GetObject",
+      "resource": "state:manual",
+      "expected": "denied"
+    },
+    {
+      "name": "ML reads exact application objects",
+      "role": "manual/ml-workload",
+      "action": "s3:GetObject",
+      "resource": "app-object:manual/source.pdf",
+      "expected": "allowed"
+    },
+    {
+      "name": "ML cannot delete application objects",
+      "role": "manual/ml-workload",
+      "action": "s3:DeleteObject",
+      "resource": "app-object:manual/source.pdf",
+      "expected": "denied"
+    },
+    {
+      "name": "ML has no database authority",
+      "role": "manual/ml-workload",
+      "action": "rds:DescribeDBInstances",
+      "resource": "rds:manual",
+      "expected": "denied"
+    },
+    {
+      "name": "ML has no end-user identity authority",
+      "role": "manual/ml-workload",
+      "action": "cognito-idp:AdminGetUser",
+      "resource": "cognito:manual",
+      "expected": "denied"
+    },
+    {
+      "name": "automation assumes exact operator",
+      "role": "automation",
+      "action": "sts:AssumeRole",
+      "resource": "role:manual/operator-deployment",
+      "expected": "allowed"
+    },
+    {
+      "name": "automation cannot assume arbitrary role",
+      "role": "automation",
+      "action": "sts:AssumeRole",
+      "resource": "arbitrary-role",
+      "expected": "denied"
+    },
+    {
+      "name": "automation cannot pass roles",
+      "role": "automation",
+      "action": "iam:PassRole",
+      "resource": "role:manual/task-execution",
+      "context": {
+        "iam:PassedToService": "ecs-tasks.amazonaws.com"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "Scheduler starts exact destroy project",
+      "role": "manual/scheduler",
+      "action": "codebuild:StartBuild",
+      "resource": "codebuild:manual",
+      "expected": "allowed"
+    },
+    {
+      "name": "Scheduler cannot start another destroy project",
+      "role": "manual/scheduler",
+      "action": "codebuild:StartBuild",
+      "resource": "codebuild:monthly",
+      "expected": "denied"
+    },
+    {
+      "name": "CodeBuild uses exact state lock",
+      "role": "manual/codebuild-destroy",
+      "action": "s3:DeleteObject",
+      "resource": "state-lock:manual",
+      "expected": "allowed"
+    },
+    {
+      "name": "CodeBuild cannot delete bootstrap state",
+      "role": "manual/codebuild-destroy",
+      "action": "s3:DeleteObject",
+      "resource": "bootstrap-state",
+      "expected": "denied"
+    },
+    {
+      "name": "CodeBuild assumes exact destroy role",
+      "role": "manual/codebuild-destroy",
+      "action": "sts:AssumeRole",
+      "resource": "role:manual/destroy",
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy deletes exact application bucket",
+      "role": "manual/destroy",
+      "action": "s3:DeleteBucket",
+      "resource": "app:manual",
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another application bucket",
+      "role": "manual/destroy",
+      "action": "s3:DeleteBucket",
+      "resource": "app:monthly",
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes only tagged environment network",
+      "role": "manual/destroy",
+      "action": "ec2:DeleteVpc",
+      "resource": "*",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete cross-environment network",
+      "role": "manual/destroy",
+      "action": "ec2:DeleteVpc",
+      "resource": "*",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes a tagged owned HTTP API",
+      "role": "manual/destroy",
+      "action": "apigateway:DELETE",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/owned-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment HTTP API",
+      "role": "manual/destroy",
+      "action": "apigateway:DELETE",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/unrelated-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes a tagged owned Cognito user pool",
+      "role": "manual/destroy",
+      "action": "cognito-idp:DeleteUserPool",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment Cognito user pool",
+      "role": "manual/destroy",
+      "action": "cognito-idp:DeleteUserPool",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes a tagged owned Cloud Map namespace",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteNamespace",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment Cloud Map namespace",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteNamespace",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes a tagged owned Cloud Map service",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment Cloud Map service",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy cannot delete persistent state bucket",
+      "role": "manual/destroy",
+      "action": "s3:DeleteBucket",
+      "resource": "state-bucket",
+      "expected": "denied"
+    },
+    {
+      "name": "destroy cannot delete persistent ECR",
+      "role": "manual/destroy",
+      "action": "ecr:DeleteRepository",
+      "resource": "ecr:web",
+      "expected": "denied"
+    },
+    {
+      "name": "destroy cannot mutate IAM",
+      "role": "manual/destroy",
+      "action": "iam:DeleteRole",
+      "resource": "role:manual/task-execution",
+      "expected": "denied"
+    },
+    {
+      "name": "no role changes Organizations",
+      "role": "manual/operator-deployment",
+      "action": "organizations:CreateAccount",
+      "resource": "*",
+      "expected": "denied"
+    },
+    {
+      "name": "no role changes Billing",
+      "role": "iam_manager",
+      "action": "billing:UpdateBillingPreferences",
+      "resource": "*",
+      "expected": "denied"
+    }
+  ],
+  "trustCases": [
+    {
+      "name": "exact owner assumes operator",
+      "role": "manual/operator-deployment",
+      "action": "sts:AssumeRole",
+      "principalType": "AWS",
+      "principal": "owner-principal",
+      "context": {
+        "aws:PrincipalAccount": "111122223333"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "unrelated account cannot assume operator",
+      "role": "manual/operator-deployment",
+      "action": "sts:AssumeRole",
+      "principalType": "AWS",
+      "principal": "arbitrary-role",
+      "context": {
+        "aws:PrincipalAccount": "999988887777"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "exact scheduled GitHub deployment workflow assumes automation",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/main",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "exact manually dispatched GitHub deployment workflow assumes automation",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:workflow_dispatch",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/main",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "push cannot assume automation even when every other claim is exact",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:push",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/main",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "fork repository cannot assume automation",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:fork-owner/example-repository:environment:aws-deployment:job_workflow_ref:fork-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
+        "token.actions.githubusercontent.com:repository": "fork-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/main",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "fork-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "ordinary pull request cannot assume automation",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:pull_request:job_workflow_ref:example-owner/example-repository/.github/workflows/verify.yml@refs/heads/main:event_name:pull_request",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/pull/106/merge",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/verify.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Verify"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "unapproved branch cannot assume automation",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/feature",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "wrong audience cannot assume automation",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "https://example.invalid",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/main",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "exact ECS account assumes API workload",
+      "role": "manual/api-workload",
+      "action": "sts:AssumeRole",
+      "principalType": "Service",
+      "principal": "ecs-tasks.amazonaws.com",
+      "context": {
+        "aws:SourceAccount": "111122223333",
+        "aws:SourceArn": "arn:aws:ecs:us-east-1:111122223333:task/example-portfolio-manual/abc"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "cross-account ECS cannot assume API workload",
+      "role": "manual/api-workload",
+      "action": "sts:AssumeRole",
+      "principalType": "Service",
+      "principal": "ecs-tasks.amazonaws.com",
+      "context": {
+        "aws:SourceAccount": "999988887777",
+        "aws:SourceArn": "arn:aws:ecs:us-east-1:999988887777:task/foreign/abc"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "exact schedule assumes Scheduler role",
+      "role": "manual/scheduler",
+      "action": "sts:AssumeRole",
+      "principalType": "Service",
+      "principal": "scheduler.amazonaws.com",
+      "context": {
+        "aws:SourceAccount": "111122223333",
+        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-manual-destroy-123"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "another environment schedule cannot assume Scheduler role",
+      "role": "manual/scheduler",
+      "action": "sts:AssumeRole",
+      "principalType": "Service",
+      "principal": "scheduler.amazonaws.com",
+      "context": {
+        "aws:SourceAccount": "111122223333",
+        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-monthly-destroy-123"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "exact CodeBuild controller assumes destroy",
+      "role": "manual/destroy",
+      "action": "sts:AssumeRole",
+      "principalType": "AWS",
+      "principal": "role:manual/codebuild-destroy",
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot assume itself",
+      "role": "manual/destroy",
+      "action": "sts:AssumeRole",
+      "principalType": "AWS",
+      "principal": "role:manual/destroy",
+      "expected": "denied"
+    }
+  ]
+}
