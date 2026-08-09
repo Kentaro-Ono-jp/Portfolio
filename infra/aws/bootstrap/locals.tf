@@ -88,7 +88,7 @@ locals {
   human_trust_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid       = "ExactOwnerRole"
+      Sid       = "ExactOwnerPrincipal"
       Effect    = "Allow"
       Principal = { AWS = var.owner_principal_arn }
       Action    = "sts:AssumeRole"

@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeExactObserverRole",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/ReactorFrontObserverRole"
+    }
+  ]
+}

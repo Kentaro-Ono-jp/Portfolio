@@ -26,6 +26,17 @@ maximum ceiling shared by all roles. The Console procedure contains no
 explicit deny, dynamic attachment, inline policy, or Terraform-managed IAM
 object.
 
+The Console-owned existing `ReactorFrontNoel` source user has no Console
+login and no AWS resource authority. Its three static identity policies permit
+only `sts:AssumeRole` on the exact operator, billing-read, and observer roles.
+The latter two preserve explicitly approved price and observation sessions;
+destroy and every other role remain unavailable. The operator role trusts only
+the same-account source user without MFA. All plan/apply calls use the resulting
+short-lived operator STS credentials.
+Local `awsinfo` may supply only that existing user's access-key material. Role
+ARNs, backend settings, ECR URLs, Terraform variables, and construction targets
+remain explicit repository or AWS-output inputs and never depend on `awsinfo`.
+
 The separate destroy identity policy enforces the full ownership tuple on
 generated identifiers, exact environment-name ARN patterns where the service
 supports them, and AWS-supplied forward-access context for Cloud Map's Route 53

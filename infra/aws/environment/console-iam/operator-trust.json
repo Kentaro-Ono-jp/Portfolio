@@ -2,9 +2,9 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ExactOwnerPrincipal",
+      "Sid": "ExactNoelDeploymentUser",
       "Effect": "Allow",
-      "Principal": {"AWS": "${OWNER_PRINCIPAL_ARN}"},
+      "Principal": {"AWS": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:user/ReactorFrontNoel"},
       "Action": "sts:AssumeRole",
       "Condition": {
         "StringEquals": {"aws:PrincipalAccount": "${AWS_ACCOUNT_ID}"}

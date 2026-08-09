@@ -25,6 +25,18 @@
     }
   },
   "managedPolicies": {
+    "noelAssumeBillingReadRole": {
+      "name": "ReactorFrontPortfolioNoelAssumeBillingReadRole",
+      "document": "noel-assume-billing-read-role.json"
+    },
+    "noelDeploymentAssumeOperator": {
+      "name": "ReactorFrontPortfolioNoelDeploymentAssumeOperator",
+      "document": "noel-deployment-assume-operator.json"
+    },
+    "noelAssumeObserverRole": {
+      "name": "ReactorFrontPortfolioNoelAssumeObserverRole",
+      "document": "noel-assume-observer-role.json"
+    },
     "operatorPermissions": {
       "name": "ReactorFrontPortfolioOperatorPermissions",
       "document": "operator-permissions.json"
@@ -56,6 +68,21 @@
     "destroy": {
       "name": "ReactorFrontPortfolioDestroyPolicy",
       "document": "destroy.json"
+    }
+  },
+  "sourceUsers": {
+    "noel_deployment": {
+      "name": "ReactorFrontNoel",
+      "permissions": [
+        "noelAssumeBillingReadRole",
+        "noelDeploymentAssumeOperator",
+        "noelAssumeObserverRole"
+      ],
+      "inlinePolicies": [],
+      "groups": [],
+      "boundary": null,
+      "consoleLogin": false,
+      "credentialMode": "existingAccessKey"
     }
   },
   "roles": {

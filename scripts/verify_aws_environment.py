@@ -109,7 +109,6 @@ CONSOLE_IAM_TOKENS = {
     "AWS_REGION": "us-east-1",
     "ENVIRONMENT": "manual",
     "NAME_PREFIX": "example-portfolio",
-    "OWNER_PRINCIPAL_ARN": "arn:aws:iam::111122223333:role/PortfolioBootstrapOwner",
     "REPOSITORY_IDENTITY": "example-owner/example-repository",
     "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
 }
@@ -298,6 +297,9 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Unknown Console IAM manifest schema")
 
     expected_policy_keys = {
+        "noelAssumeBillingReadRole",
+        "noelDeploymentAssumeOperator",
+        "noelAssumeObserverRole",
         "operatorPermissions",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions",
@@ -371,6 +373,62 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
     if manifest.get("serviceLinkedRoles") != expected_service_linked_roles:
         raise RuntimeError("Console IAM service-linked role inventory drifted")
 
+    expected_source_users = {
+        "noel_deployment": {
+            "name": "ReactorFrontNoel",
+            "permissions": [
+                "noelAssumeBillingReadRole",
+                "noelDeploymentAssumeOperator",
+                "noelAssumeObserverRole",
+            ],
+            "inlinePolicies": [],
+            "groups": [],
+            "boundary": None,
+            "consoleLogin": False,
+            "credentialMode": "existingAccessKey",
+        }
+    }
+    if manifest.get("sourceUsers") != expected_source_users:
+        raise RuntimeError("Console IAM deployment-source user contract drifted")
+
+    exact_operator_role = (
+        "arn:aws:iam::111122223333:role/example-portfolio-manual-operator-deployment"
+    )
+    exact_billing_read_role = (
+        "arn:aws:iam::111122223333:role/ReactorFrontBillingReadRole"
+    )
+    exact_observer_role = "arn:aws:iam::111122223333:role/ReactorFrontObserverRole"
+    expected_noel_policies = {
+        "noelAssumeBillingReadRole": (
+            "AssumeExactBillingReadRole",
+            exact_billing_read_role,
+        ),
+        "noelDeploymentAssumeOperator": (
+            "AssumeExactOperatorDeploymentRole",
+            exact_operator_role,
+        ),
+        "noelAssumeObserverRole": (
+            "AssumeExactObserverRole",
+            exact_observer_role,
+        ),
+    }
+    for policy_key, (sid, role_arn) in expected_noel_policies.items():
+        expected_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": sid,
+                    "Effect": "Allow",
+                    "Action": "sts:AssumeRole",
+                    "Resource": role_arn,
+                }
+            ],
+        }
+        if policies[policy_key] != expected_policy:
+            raise RuntimeError(
+                "Noel source user policies must each assume one exact approved role"
+            )
+
     expected_roles = {
         "operator_deployment",
         "task_execution",
@@ -423,9 +481,11 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "Version": "2012-10-17",
         "Statement": [
             {
-                "Sid": "ExactOwnerPrincipal",
+                "Sid": "ExactNoelDeploymentUser",
                 "Effect": "Allow",
-                "Principal": {"AWS": CONSOLE_IAM_TOKENS["OWNER_PRINCIPAL_ARN"]},
+                "Principal": {
+                    "AWS": ("arn:aws:iam::111122223333:user/ReactorFrontNoel")
+                },
                 "Action": "sts:AssumeRole",
                 "Condition": {
                     "StringEquals": {
@@ -518,6 +578,50 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         if name in invariant_cases:
             raise RuntimeError(f"Duplicate Console IAM invariant: {name}")
         invariant_cases[name] = passed
+
+    noel_identity = [policies[key] for key in expected_noel_policies]
+    for label, resource in (
+        ("ExactOperator", exact_operator_role),
+        ("ExactBillingRead", exact_billing_read_role),
+        ("ExactObserver", exact_observer_role),
+    ):
+        record(
+            f"noelCanAssume{label}",
+            any(
+                policy_allows(policy, "sts:AssumeRole", resource)
+                for policy in noel_identity
+            ),
+        )
+    for label, action, resource in (
+        (
+            "DestroyRole",
+            "sts:AssumeRole",
+            "arn:aws:iam::111122223333:role/example-portfolio-manual-destroy",
+        ),
+        (
+            "UnrelatedRole",
+            "sts:AssumeRole",
+            "arn:aws:iam::111122223333:role/unrelated-role",
+        ),
+        ("Ec2ResourceApi", "ec2:CreateVpc", "*"),
+        (
+            "S3ResourceApi",
+            "s3:CreateBucket",
+            "arn:aws:s3:::example-portfolio-manual-documents",
+        ),
+        (
+            "RdsResourceApi",
+            "rds:CreateDBInstance",
+            "arn:aws:rds:us-east-1:111122223333:db:example-portfolio-manual-postgresql",
+        ),
+        ("IamResourceApi", "iam:ListUsers", "*"),
+    ):
+        record(
+            f"noelCannotUse{label}",
+            not any(
+                policy_allows(policy, action, resource) for policy in noel_identity
+            ),
+        )
 
     oversized_policy = {
         "Version": "2012-10-17",

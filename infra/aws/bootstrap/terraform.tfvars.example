@@ -13,7 +13,7 @@ environment_state_keys = {
   monthly = "environments/monthly/terraform.tfstate"
 }
 
-owner_principal_arn      = "arn:aws:iam::111122223333:role/PortfolioBootstrapOwner"
+owner_principal_arn      = "arn:aws:iam::111122223333:user/ReactorFrontNoel"
 github_oidc_provider_arn = "arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com"
 github_oidc_repository_subject = "repo:example-owner/example-repository"
 github_environment       = "aws-deployment"

@@ -102,15 +102,15 @@ variable "environment_state_keys" {
 }
 
 variable "owner_principal_arn" {
-  description = "Existing third-party-owned IAM role ARN allowed to assume the human bootstrap roles."
+  description = "Existing third-party-owned IAM user or role ARN allowed to assume the human bootstrap roles."
   type        = string
 
   validation {
     condition = can(regex(
-      "^arn:${var.aws_partition}:iam::${var.aws_account_id}:role/[A-Za-z0-9+=,.@_/-]+$",
+      "^arn:${var.aws_partition}:iam::${var.aws_account_id}:(user|role)/[A-Za-z0-9+=,.@_/-]+$",
       var.owner_principal_arn,
     ))
-    error_message = "owner_principal_arn must be an explicit role ARN in aws_account_id and aws_partition."
+    error_message = "owner_principal_arn must be an explicit IAM user or role ARN in aws_account_id and aws_partition."
   }
 }
 

@@ -144,8 +144,10 @@ synthetic example to an ignored owner file and replace every value:
 cp infra/aws/bootstrap/terraform.tfvars.example infra/aws/bootstrap/owner.auto.tfvars
 ```
 
-The owner role and GitHub OIDC provider must already exist in the target
-account. `github_oidc_repository_subject` is an explicit trust input rather
+The exact owner principal (an IAM user or role) and GitHub OIDC provider must
+already exist in the target account. Human operator trust does not require MFA;
+deployment authority remains on the assumed role rather than the source IAM
+user. `github_oidc_repository_subject` is an explicit trust input rather
 than a value inferred from a maintainer profile. Terraform's
 `allowed_account_ids` check fails closed if the active standard AWS credential
 chain targets another account. Do not place access keys, tokens, secrets,
