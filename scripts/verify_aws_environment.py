@@ -2231,7 +2231,7 @@ def main() -> int:
 
     lock_path = ENVIRONMENT_ROOT / ".terraform.lock.hcl"
     evidence = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "sourceHead": source_head(),
         "terraformVersion": command_version(terraform, "version"),
         "tflintVersion": command_version(tflint, "--version"),
@@ -2249,10 +2249,11 @@ def main() -> int:
         "secretAndOutputAssertions": secret_assertions,
         "staticContractSha256": contract_digest,
         "forbiddenResourceTypesPresent": [],
-        "awsApiCalls": 0,
-        "awsWrites": 0,
-        "awsResourcesCreated": 0,
-        "realEvaluationAttempts": "3/3",
+        "staticVerifierAwsApiCalls": 0,
+        "staticVerifierAwsWrites": 0,
+        "staticVerifierAwsResourcesCreated": 0,
+        "liveAwsHistoryIncluded": False,
+        "historicalConstructionAttempts": "3/3",
     }
     ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
     ARTIFACT_PATH.write_text(
@@ -2264,7 +2265,7 @@ def main() -> int:
         "\nAWS environment static proof passed: "
         f"{resource_count} resources, {service_property_assertions} planned "
         f"service assertions, {security_assertions} security assertions, "
-        "AWS calls/writes/resources 0/0/0"
+        "static-verifier AWS calls/writes/resources 0/0/0; live history excluded"
     )
     print(f"Evidence: {ARTIFACT_PATH.relative_to(REPOSITORY_ROOT).as_posix()}")
     return 0

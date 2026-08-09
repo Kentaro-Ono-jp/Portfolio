@@ -1475,7 +1475,7 @@ def main() -> int:
 
     lock_path = BOOTSTRAP_ROOT / ".terraform.lock.hcl"
     evidence = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "sourceHead": source_head(),
         "terraformVersion": command_version(terraform, "version"),
         "tflintVersion": command_version(tflint, "--version"),
@@ -1490,9 +1490,10 @@ def main() -> int:
         "mqCreateBrokerCases": mq_create_broker_cases,
         "policySizes": payload["policy_sizes"],
         "maxAcceptedPrefixPolicySizes": max_prefix_payload["policy_sizes"],
-        "awsApiCalls": 0,
-        "awsWrites": 0,
-        "constructionAttempts": "3/3",
+        "staticVerifierAwsApiCalls": 0,
+        "staticVerifierAwsWrites": 0,
+        "liveAwsHistoryIncluded": False,
+        "historicalConstructionAttempts": "3/3",
     }
     ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
     ARTIFACT_PATH.write_text(

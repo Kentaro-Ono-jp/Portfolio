@@ -229,6 +229,14 @@ Canonical local and GitHub verification performs no AWS API call:
 python scripts/verify.py --groups aws-static
 ```
 
+The emitted machine fields are explicitly named `staticVerifierAwsApiCalls`,
+`staticVerifierAwsWrites`, and, for the environment proof,
+`staticVerifierAwsResourcesCreated`. They describe only that verifier process;
+`liveAwsHistoryIncluded=false` prevents those zeros from being read as Issue-
+wide totals. The real history includes persistent IAM creation, boundary and
+role configuration, operator assumption, the bounded `3/3` construction
+attempts, and cleanup.
+
 That group checks Terraform formatting, provider lock, `validate`, TFLint,
 mock-provider plans, backend-generation contracts, and the versioned
 allow/deny matrix in
