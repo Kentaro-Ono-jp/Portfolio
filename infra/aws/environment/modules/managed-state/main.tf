@@ -50,12 +50,12 @@ resource "aws_db_instance" "postgresql" {
 
 resource "aws_mq_broker" "rabbitmq" {
   broker_name                = "${var.name}-rabbitmq"
-  engine_type                = "RABBITMQ"
+  engine_type                = "RabbitMQ"
   engine_version             = "4.2"
   host_instance_type         = var.mq_instance_type
   deployment_mode            = "SINGLE_INSTANCE"
-  storage_type               = "EBS"
-  authentication_strategy    = "SIMPLE"
+  storage_type               = "ebs"
+  authentication_strategy    = "simple"
   publicly_accessible        = false
   subnet_ids                 = [var.isolated_service_subnet_ids[0]]
   security_groups            = [var.broker_security_group_id]

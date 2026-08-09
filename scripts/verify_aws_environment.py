@@ -754,11 +754,12 @@ def verify_planned_service_properties(resources: list[dict[str, Any]]) -> int:
 
     broker = "module.managed_state.aws_mq_broker.rabbitmq"
     for path, expected in (
-        (("engine_type",), "RABBITMQ"),
+        (("engine_type",), "RabbitMQ"),
         (("engine_version",), "4.2"),
         (("host_instance_type",), "mq.m7g.large"),
         (("deployment_mode",), "SINGLE_INSTANCE"),
-        (("storage_type",), "EBS"),
+        (("storage_type",), "ebs"),
+        (("authentication_strategy",), "simple"),
         (("publicly_accessible",), False),
         (("encryption_options", 0, "use_aws_owned_key"), True),
         (("user", 0, "console_access"), False),
