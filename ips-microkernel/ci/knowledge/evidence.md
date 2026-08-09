@@ -60,6 +60,20 @@ diagnostics, artifacts, leakage scanning, failure ordering, or teardown.
 - **Mistake:** Invalid promotion evidence was translated to the stable runtime-lineage failure without a focused test executing that changed error path.
 - **Correction:** Exercise runtime construction with rejected promotion evidence and require the exact `RuntimeLineageError` plus preserved `PromotionError` cause.
 
+### Exercise generated policy failure boundaries
+
+- **Origin:** PR #107 pre-push Gate A after
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+- **Trigger:** AWS-free proof adds generated IAM policy quotas, delegated-policy
+  immutability, or trust-metadata connectivity guards.
+- **Mistake:** The passing candidate reported compliant values but did not
+  execute the new rejection branches, and its trust-policy verifier used a
+  higher limit than the Terraform precondition.
+- **Correction:** Canonicalize and exercise one over-limit mutation per policy
+  class plus delegated mutation and disconnected-event mutations through the
+  production structure verifier, requiring the exact fail-closed class before
+  publishing evidence.
+
 ## Return
 
 Return to publication Gate A after repairing the triggered evidence and

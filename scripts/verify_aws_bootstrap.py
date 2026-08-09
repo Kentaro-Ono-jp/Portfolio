@@ -471,7 +471,7 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
             **sizes["global_trust"],
             **sizes["environment_trust"],
         }.items()
-        if size > 4096
+        if size > 2048
     }
     if oversized_trust:
         raise RuntimeError(f"Role trust-policy quota exceeded: {oversized_trust}")
@@ -489,6 +489,67 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
     }
     if manager_actions & forbidden_manager_actions:
         raise RuntimeError("IAM manager must not mutate environment-role policies")
+
+
+def verify_policy_structure_mutations(payload: dict[str, Any]) -> int:
+    mutations: list[tuple[str, dict[str, Any], str]] = []
+
+    boundary_oversize = json.loads(json.dumps(payload))
+    boundary_oversize["policy_sizes"]["boundary"] = 6145
+    mutations.append(
+        ("managed-policy quota", boundary_oversize, "Permissions Boundary exceeds")
+    )
+
+    inline_oversize = json.loads(json.dumps(payload))
+    inline_oversize["policy_sizes"]["global_inline"]["iam_manager"] = 10241
+    mutations.append(
+        ("inline-policy quota", inline_oversize, "Role inline-policy quota exceeded")
+    )
+
+    trust_oversize = json.loads(json.dumps(payload))
+    trust_oversize["policy_sizes"]["global_trust"]["automation"] = 2049
+    mutations.append(
+        ("trust-policy quota", trust_oversize, "Role trust-policy quota exceeded")
+    )
+
+    manager_mutation = json.loads(json.dumps(payload))
+    manager_mutation["global_identity"]["iam_manager"]["Statement"].append(
+        {
+            "Effect": "Allow",
+            "Action": "iam:PutRolePolicy",
+            "Resource": "*",
+        }
+    )
+    mutations.append(
+        (
+            "delegated policy mutation",
+            manager_mutation,
+            "IAM manager must not mutate environment-role policies",
+        )
+    )
+
+    disconnected_event = json.loads(json.dumps(payload))
+    disconnected_event["github_contract"]["allowed_events"].append("push")
+    mutations.append(
+        (
+            "disconnected event metadata",
+            disconnected_event,
+            "Future GitHub authority must stay event-class restricted",
+        )
+    )
+
+    for name, mutation, expected_error in mutations:
+        try:
+            verify_policy_structure(mutation)
+        except RuntimeError as error:
+            if expected_error not in str(error):
+                raise RuntimeError(
+                    f"Policy structure mutation {name} failed for the wrong reason: "
+                    f"{error}"
+                ) from error
+        else:
+            raise RuntimeError(f"Policy structure mutation was accepted: {name}")
+    return len(mutations)
 
 
 def verify_delegated_pass_role_ceiling(payload: dict[str, Any]) -> int:
@@ -807,6 +868,7 @@ def main() -> int:
     verify_backend_generator()
     payload = terraform_payload(terraform)
     verify_policy_structure(payload)
+    policy_structure_mutation_cases = verify_policy_structure_mutations(payload)
     delegated_pass_role_cases = verify_delegated_pass_role_ceiling(payload)
     delegated_policy_mutation_cases = verify_delegated_policy_mutation_ceiling(
         payload
@@ -823,6 +885,7 @@ def main() -> int:
         "awsProviderLockSha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
         "terraformMockPlanFiles": 1,
         "policyMatrix": counts,
+        "policyStructureMutationCases": policy_structure_mutation_cases,
         "delegatedPassRoleCases": delegated_pass_role_cases,
         "delegatedPolicyMutationCases": delegated_policy_mutation_cases,
         "taggedDestroyCases": tagged_destroy_cases,
