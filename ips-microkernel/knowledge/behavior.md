@@ -391,12 +391,15 @@ proved/unproved classification, or permanence claim.
   the target cloud's creation quota.
 - **Detect:** Render every generated policy from the canonical synthetic input,
   count characters using the provider's quota semantics, and compare each
-  document with its exact managed, aggregate inline, or trust-policy limit.
+  document with its exact managed, aggregate inline, or trust-policy limit and
+  any declared future-change reserve.
 - **Pass:** Every rendered policy is at or below its applicable creation quota,
-  and the proof reports each exact size and limit before any cloud API call.
-- **Repair:** Reduce duplicated statements without broadening the effective
-  ceiling, add plan-time quota preconditions, and retain exact rendered-size
-  assertions in AWS-free verification.
+  every declared reserve remains available, and the proof reports each exact
+  size, reserve, and limit before any cloud API call.
+- **Repair:** Separate stable maximum-authority guardrails from immutable exact
+  identity enforcement, reduce duplicated statements without broadening the
+  effective ceiling, add plan-time quota/reserve preconditions, and retain exact
+  rendered-size assertions in AWS-free verification.
 - **Origins:** PR #107
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
 
@@ -431,17 +434,22 @@ proved/unproved classification, or permanence claim.
   identifier or ARN does not encode the accepted environment or owner name.
 - **HEAD effect:** `moving`
 - **Problem:** An account-level wildcard or ID wildcard lets unrelated
-  resources satisfy both the identity policy and permissions boundary.
+  resources satisfy the effective grant because no immutable enforcement layer
+  binds every ownership attribute.
 - **Detect:** For each affected resource type, evaluate one intended resource
   carrying every required ownership attribute and the same action against one
   unrelated or cross-environment resource with exactly one ownership attribute
   changed.
 - **Pass:** Every correctly owned resource is allowed, while every unrelated,
-  cross-environment, unmanaged, or persistent variant is denied by both the
-  effective identity and boundary conditions.
-- **Repair:** Require environment, managed, and persistence resource tags in
-  both policy layers and retain paired positive/inverse-negative cases per
-  ID-based resource type.
+  cross-environment, cross-repository, unmanaged, or persistent variant is
+  denied by the effective intersection and its declared immutable ownership-
+  enforcement layer. Each independently evaluated layer matches the published
+  boundary architecture rather than being reported as narrower than it is.
+- **Repair:** Require environment, repository, managed, and persistence tags in
+  a bootstrap-owned policy that delegated roles cannot replace; when identity
+  policy mutation is delegated, duplicate the ceiling in the boundary. Retain
+  paired positives and one-attribute inverse negatives per ID resource type,
+  plus proof that the selected enforcement policy is immutable.
 - **Origins:** PR #107
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
 
@@ -459,15 +467,18 @@ proved/unproved classification, or permanence claim.
   execute the same request independently against identity, boundary, and their
   effective intersection, then change only the ownership environment.
 - **Pass:** Every required real-context positive is allowed by identity,
-  boundary, and their intersection; each cross-environment inverse is denied;
-  inventory succeeds without fabricated request tags; and every dependent
+  boundary, and their intersection; each ownership inverse is denied by the
+  declared immutable enforcement layer and effective intersection; inventory
+  succeeds without fabricated request tags; every required resource in a
+  multi-resource authorization is exercised independently; and every dependent
   tagging action has its own passing case with an exact ownership-key ceiling.
 - **Repair:** Split creation-time request-tag, unconditioned inventory, and
   existing-resource ownership-tag statements; use actual collection or
   resource-less create forms; grant the exact dependent tagging actions;
   require existing ownership for retagging where the service exposes resource
-  tags; and retain the layer-by-layer positive, unowned, and inverse-negative
-  matrix.
+  tags; exercise every required parent/new resource separately; and retain the
+  layer-by-layer positive, unowned, and inverse-negative matrix with explicit
+  expectations for the enforcing layer and effective intersection.
 - **Origins:** PR #107
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500).
 

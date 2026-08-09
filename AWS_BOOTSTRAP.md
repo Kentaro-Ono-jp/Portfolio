@@ -45,16 +45,30 @@ environment destroy authority cannot remove persistent bootstrap resources.
 | CodeBuild fallback | Uses only that environment state and lock objects, writes its exact destroy log, and assumes only that environment destroy role. |
 | Destroy | Deletes only exact environment-named or correctly tagged application resources. It cannot mutate state, ECR, IAM, the boundary, or another environment. |
 
-Every delegable role carries the same fixed boundary. Environment roles also
-carry an immutable `PortfolioEnvironment` tag; the boundary uses that principal
-tag to cap state, object, log, secret, network, and service authority. Every
-`iam:PassRole` grant names exact role ARNs and an exact
-`iam:PassedToService` value.
+Every delegable role carries the same fixed boundary. The boundary is the
+durable safety guardrail: it fixes role purposes, persistent state/ECR
+namespaces, IAM creation and mutation limits, application service families,
+and exact `iam:PassRole` role/service pairs. Bootstrap-owned inline identity
+policies are not replaceable by the delegated IAM manager; they bind generated
+application resources to the exact environment, repository, managed, and
+nonpersistent ownership tuple. The effective permission is always the
+intersection of these two layers.
+
+This separation is deliberate. Duplicating every generated-resource ownership
+predicate in the one fixed boundary consumed nearly all of AWS's managed-policy
+quota and would have made later service corrections unsafe. Required positives
+must pass identity, boundary, and their intersection. Ownership inverses must
+fail the immutable identity policy and the effective intersection; the broader
+service/purpose boundary is reported as such instead of being mistaken for the
+ownership-enforcement layer. IAM mutation and PassRole remain exact adversarial
+boundary tests because those are delegation and escalation ceilings.
 
 Terraform and the AWS-free verifier reject generated policies before any AWS
-write when the fixed managed boundary exceeds 6,144 characters, any role's
-aggregate inline policy exceeds 10,240 characters, or a trust policy exceeds
-the portable 2,048-character default. The delegated-authority proof combines
+write when the fixed managed boundary exceeds 5,632 characters, deliberately
+reserving at least 512 characters below AWS's 6,144-character quota; they also
+reserve 512 characters below the 10,240-character aggregate inline-policy
+quota and reject trust policies above the portable 2,048-character default. The
+delegated-authority proof combines
 an adversarial wildcard `iam:PassRole` identity policy with the boundary across
 every source role, declared target, synthesized undeclared same-path target,
 global/external target, and supported/wrong service. Only a same-environment
@@ -64,13 +78,27 @@ role ARNs to its exact service remains effective.
 Operator control-plane proof uses the action's real authorization context:
 creation uses supported request tags and the actual HTTP API collection or
 resource-less create resource; EC2 inventory carries no fabricated request
-tags; existing-resource mutation uses ownership resource tags; and Cognito and
-Cloud Map tagging actions are exercised separately. Cognito retagging requires
-the existing resource to carry the complete repository ownership tuple. Both
-services accept only the four required ownership keys and exact values in a tag
-request. Each request is evaluated against the identity policy, boundary, and
-their intersection, with a paired cross-environment negative where ownership
-applies.
+tags; `ec2:CreateTags` requires an approved `ec2:CreateAction` and cannot take
+ownership of an existing EC2 resource; security-group mutation proves the
+existing group resource-tag context and the optional new rule request-tag plus
+dependent-tagging contexts separately; and Cognito and Cloud Map tagging
+actions are exercised separately.
+Cloud Map `CreateService` proves both required authorizations independently:
+the existing namespace must carry the complete ownership tuple and the new
+service ARN must receive exactly the four ownership tags. Cognito retagging
+requires the existing pool to carry that tuple. Request-tagged creation rejects
+cross-environment, cross-repository, and undeclared fifth-key variants. Every
+request is evaluated independently at identity, boundary, and effective layers
+with expectations that name the actual enforcing layer.
+
+AWS Cloud Map does not expose resource-tag conditions for its standalone
+`TagResource` authorization. The operator can therefore submit only the exact
+four accepted ownership key/value pairs, but IAM cannot distinguish its
+create-time dependent check from a direct call against an existing Cloud Map
+resource. Treat the operator as the account owner's trusted deployment
+authority; do not delegate it to untrusted repositories. Exact namespace
+ownership still gates `CreateService`, exact ownership gates destroy, and the
+later lifecycle/residual proof must follow up any real-AWS service limitation.
 
 The future GitHub workflow and repository OIDC customization are Step 6
 non-targets. Before that workflow requests a token, the repository owner must
@@ -190,11 +218,12 @@ The matrix combines each identity policy with the fixed boundary and separately
 evaluates trust policies. It proves intended positives and privilege-
 escalation, cross-environment, persistent-resource, wrong-service, fork, pull-
 request, push-event, audience, repository, workflow, and ref negatives. Tagged
-REST API, Cognito user-pool, and Cloud Map namespace/service deletion is paired
-with cross-environment negatives even though those resource IDs do not encode
-the environment name. The verifier also records exact generated policy sizes
-for both the synthetic example and the maximum accepted 20-character prefix,
-the complete 1,656-case delegated `iam:PassRole` ceiling, and 54 independent
+HTTP API, Cognito user-pool, and Cloud Map namespace/service deletion is paired
+with cross-environment, cross-repository, unmanaged, and persistent negatives
+even though those resource IDs do not encode the environment name. The verifier
+also records exact generated policy sizes for both the synthetic example and
+the maximum accepted 20-character prefix, the complete 1,656-case delegated
+`iam:PassRole` ceiling, 60 tagged-destroy layer/context decisions, and 147
 operator control-plane layer/context decisions.
 
 This repository-owned evaluator is static contract proof, not AWS IAM Access

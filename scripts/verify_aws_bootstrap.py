@@ -483,6 +483,11 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
         raise RuntimeError(
             f"Permissions Boundary exceeds 6144 characters: {sizes['boundary']}"
         )
+    if sizes["boundary"] > 5632:
+        raise RuntimeError(
+            "Permissions Boundary consumes its 512-character headroom reserve: "
+            f"{sizes['boundary']}/6144"
+        )
     oversized_inline = {
         name: size
         for name, size in {
@@ -493,6 +498,19 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
     }
     if oversized_inline:
         raise RuntimeError(f"Role inline-policy quota exceeded: {oversized_inline}")
+    inline_without_reserve = {
+        name: size
+        for name, size in {
+            **sizes["global_inline"],
+            **sizes["environment_inline"],
+        }.items()
+        if size > 9728
+    }
+    if inline_without_reserve:
+        raise RuntimeError(
+            "Role inline-policy headroom reserve consumed: "
+            f"{inline_without_reserve}"
+        )
     oversized_trust = {
         name: size
         for name, size in {
@@ -530,10 +548,30 @@ def verify_policy_structure_mutations(payload: dict[str, Any]) -> int:
         ("managed-policy quota", boundary_oversize, "Permissions Boundary exceeds")
     )
 
+    boundary_headroom = json.loads(json.dumps(payload))
+    boundary_headroom["policy_sizes"]["boundary"] = 5633
+    mutations.append(
+        (
+            "managed-policy headroom",
+            boundary_headroom,
+            "Permissions Boundary consumes its 512-character headroom reserve",
+        )
+    )
+
     inline_oversize = json.loads(json.dumps(payload))
     inline_oversize["policy_sizes"]["global_inline"]["iam_manager"] = 10241
     mutations.append(
         ("inline-policy quota", inline_oversize, "Role inline-policy quota exceeded")
+    )
+
+    inline_headroom = json.loads(json.dumps(payload))
+    inline_headroom["policy_sizes"]["global_inline"]["iam_manager"] = 9729
+    mutations.append(
+        (
+            "inline-policy headroom",
+            inline_headroom,
+            "Role inline-policy headroom reserve consumed",
+        )
     )
 
     trust_oversize = json.loads(json.dumps(payload))
@@ -720,47 +758,98 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
         "aws:ResourceTag/PortfolioPersistent": "false",
         "aws:ResourceTag/PortfolioRepository": payload["github_contract"]["repository"],
     }
+    all_allowed = {
+        "effective": "allowed",
+        "identity": "allowed",
+        "boundary": "allowed",
+    }
+    ownership_denied = {
+        "effective": "denied",
+        "identity": "denied",
+        "boundary": "allowed",
+    }
     cases = (
-        ("EC2 inventory", "ec2:DescribeVpcs", "*", {}, None, "allowed"),
+        ("EC2 inventory", "ec2:DescribeVpcs", "*", {}, None, all_allowed),
         (
             "EC2 creation",
             "ec2:CreateVpc",
             "*",
             request_tags,
-            "aws:RequestTag/PortfolioEnvironment",
-            "allowed",
+            "request",
+            all_allowed,
+        ),
+        (
+            "EC2 dependent creation tagging",
+            "ec2:CreateTags",
+            "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-new",
+            {**request_tags, "ec2:CreateAction": "CreateVpc"},
+            "request",
+            all_allowed,
+        ),
+        (
+            "EC2 direct retagging",
+            "ec2:CreateTags",
+            "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-unowned",
+            request_tags,
+            None,
+            ownership_denied,
         ),
         (
             "EC2 mutation",
-            "ec2:ModifyVpcAttribute",
-            "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-example",
+            "ec2:AuthorizeSecurityGroupIngress",
+            "arn:aws:ec2:us-east-1:111122223333:security-group/sg-example",
             resource_tags,
-            "aws:ResourceTag/PortfolioEnvironment",
-            "allowed",
+            "resource",
+            all_allowed,
+        ),
+        (
+            "EC2 tagged security-group rule creation",
+            "ec2:AuthorizeSecurityGroupIngress",
+            (
+                "arn:aws:ec2:us-east-1:111122223333:"
+                "security-group-rule/sgr-example"
+            ),
+            request_tags,
+            "request",
+            all_allowed,
+        ),
+        (
+            "EC2 tagged security-group rule dependent tagging",
+            "ec2:CreateTags",
+            (
+                "arn:aws:ec2:us-east-1:111122223333:"
+                "security-group-rule/sgr-example"
+            ),
+            {
+                **request_tags,
+                "ec2:CreateAction": "AuthorizeSecurityGroupIngress",
+            },
+            "request",
+            all_allowed,
         ),
         (
             "HTTP API creation",
             "apigateway:POST",
             "arn:aws:apigateway:us-east-1::/apis",
             request_tags,
-            "aws:RequestTag/PortfolioEnvironment",
-            "allowed",
+            "request",
+            all_allowed,
         ),
         (
             "Cognito user-pool creation",
             "cognito-idp:CreateUserPool",
             "*",
             request_tags,
-            "aws:RequestTag/PortfolioEnvironment",
-            "allowed",
+            "request",
+            all_allowed,
         ),
         (
             "Cognito tagging",
             "cognito-idp:TagResource",
             "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_example",
             {**request_tags, **resource_tags},
-            "aws:ResourceTag/PortfolioEnvironment",
-            "allowed",
+            "both",
+            all_allowed,
         ),
         (
             "Cognito unowned-resource tagging",
@@ -768,42 +857,69 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
             "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_unowned",
             request_tags,
             None,
-            "denied",
+            ownership_denied,
         ),
         (
             "Cloud Map namespace creation",
             "servicediscovery:CreateHttpNamespace",
             "*",
             request_tags,
-            "aws:RequestTag/PortfolioEnvironment",
-            "allowed",
+            "request",
+            all_allowed,
         ),
         (
-            "Cloud Map service creation",
+            "Cloud Map service creation against owned namespace",
             "servicediscovery:CreateService",
-            "*",
+            "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-example",
+            resource_tags,
+            "resource",
+            all_allowed,
+        ),
+        (
+            "Cloud Map service creation for new service",
+            "servicediscovery:CreateService",
+            "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-new",
             request_tags,
-            "aws:RequestTag/PortfolioEnvironment",
-            "allowed",
+            "request",
+            all_allowed,
         ),
         (
             "Cloud Map tagging",
             "servicediscovery:TagResource",
             "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-example",
             request_tags,
-            "aws:RequestTag/PortfolioEnvironment",
-            "allowed",
+            "request",
+            all_allowed,
         ),
     )
     operator_identity = payload["environment_identity"]["manual/operator-deployment"]
     checked = 0
-    for name, action, resource, raw_context, environment_key, base_expected in cases:
+    for name, action, resource, raw_context, ownership_context, base_expected in cases:
         variants = [("base", raw_context, base_expected)]
-        if environment_key is not None and base_expected == "allowed":
+        if ownership_context is not None and base_expected == all_allowed:
+            ownership_prefix = (
+                "aws:ResourceTag/"
+                if ownership_context in {"resource", "both"}
+                else "aws:RequestTag/"
+            )
             cross_environment = dict(raw_context)
-            cross_environment[environment_key] = "monthly"
-            variants.append(("cross-environment", cross_environment, "denied"))
-        for variant, variant_context, expected in variants:
+            cross_environment[f"{ownership_prefix}PortfolioEnvironment"] = "monthly"
+            variants.append(
+                ("cross-environment", cross_environment, ownership_denied)
+            )
+            cross_repository = dict(raw_context)
+            cross_repository[f"{ownership_prefix}PortfolioRepository"] = (
+                "other-owner/other-repository"
+            )
+            variants.append(("cross-repository", cross_repository, ownership_denied))
+            if ownership_context in {"request", "both"}:
+                extra_tag_key = dict(raw_context)
+                extra_tag_key["aws:TagKeys"] = [
+                    *values(raw_context["aws:TagKeys"]),
+                    "PortfolioOwner",
+                ]
+                variants.append(("extra-tag-key", extra_tag_key, ownership_denied))
+        for variant, variant_context, expected_by_layer in variants:
             context = resolved_context(
                 variant_context, "manual/operator-deployment", payload
             )
@@ -833,12 +949,12 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
             failures = {
                 layer: decision
                 for layer, decision in decisions.items()
-                if decision != expected
+                if decision != expected_by_layer[layer]
             }
             if failures:
                 raise RuntimeError(
                     "Operator control-plane ceiling failed: "
-                    f"{name} {variant} expected {expected}, got {failures}"
+                    f"{name} {variant} expected {expected_by_layer}, got {failures}"
                 )
             checked += len(decisions)
     return checked
@@ -893,7 +1009,7 @@ def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
         "Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}],
     }
     resources = (
-        ("apigateway:DELETE", "arn:aws:apigateway:us-east-1::/restapis/example"),
+        ("apigateway:DELETE", "arn:aws:apigateway:us-east-1::/apis/example"),
         (
             "cognito-idp:DeleteUserPool",
             "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_example",
@@ -914,8 +1030,15 @@ def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
                 "aws:ResourceTag/PortfolioEnvironment": "manual",
                 "aws:ResourceTag/PortfolioManaged": "true",
                 "aws:ResourceTag/PortfolioPersistent": "false",
+                "aws:ResourceTag/PortfolioRepository": (
+                    payload["github_contract"]["repository"]
+                ),
             },
-            "allowed",
+            {
+                "effective": "allowed",
+                "identity": "allowed",
+                "boundary": "allowed",
+            },
         ),
         (
             "cross-environment",
@@ -923,8 +1046,31 @@ def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
                 "aws:ResourceTag/PortfolioEnvironment": "monthly",
                 "aws:ResourceTag/PortfolioManaged": "true",
                 "aws:ResourceTag/PortfolioPersistent": "false",
+                "aws:ResourceTag/PortfolioRepository": (
+                    payload["github_contract"]["repository"]
+                ),
             },
-            "denied",
+            {
+                "effective": "denied",
+                "identity": "denied",
+                "boundary": "allowed",
+            },
+        ),
+        (
+            "cross-repository",
+            {
+                "aws:ResourceTag/PortfolioEnvironment": "manual",
+                "aws:ResourceTag/PortfolioManaged": "true",
+                "aws:ResourceTag/PortfolioPersistent": "false",
+                "aws:ResourceTag/PortfolioRepository": (
+                    "other-owner/other-repository"
+                ),
+            },
+            {
+                "effective": "denied",
+                "identity": "denied",
+                "boundary": "allowed",
+            },
         ),
         (
             "unmanaged",
@@ -932,8 +1078,15 @@ def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
                 "aws:ResourceTag/PortfolioEnvironment": "manual",
                 "aws:ResourceTag/PortfolioManaged": "false",
                 "aws:ResourceTag/PortfolioPersistent": "false",
+                "aws:ResourceTag/PortfolioRepository": (
+                    payload["github_contract"]["repository"]
+                ),
             },
-            "denied",
+            {
+                "effective": "denied",
+                "identity": "denied",
+                "boundary": "allowed",
+            },
         ),
         (
             "persistent",
@@ -941,14 +1094,21 @@ def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
                 "aws:ResourceTag/PortfolioEnvironment": "manual",
                 "aws:ResourceTag/PortfolioManaged": "true",
                 "aws:ResourceTag/PortfolioPersistent": "true",
+                "aws:ResourceTag/PortfolioRepository": (
+                    payload["github_contract"]["repository"]
+                ),
             },
-            "denied",
+            {
+                "effective": "denied",
+                "identity": "denied",
+                "boundary": "allowed",
+            },
         ),
     )
     destroy_identity = payload["environment_identity"]["manual/destroy"]
     checked = 0
     for action, resource in resources:
-        for variant, raw_context, expected in tag_variants:
+        for variant, raw_context, expected_by_layer in tag_variants:
             context = resolved_context(raw_context, "manual/destroy", payload)
             decisions = {
                 "effective": identity_decision(
@@ -976,12 +1136,12 @@ def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
             failures = {
                 layer: decision
                 for layer, decision in decisions.items()
-                if decision != expected
+                if decision != expected_by_layer[layer]
             }
             if failures:
                 raise RuntimeError(
                     "Tagged destroy ceiling failed: "
-                    f"{action} {variant} expected {expected}, got {failures}"
+                    f"{action} {variant} expected {expected_by_layer}, got {failures}"
                 )
             checked += len(decisions)
     return checked

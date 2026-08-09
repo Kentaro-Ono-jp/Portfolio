@@ -101,6 +101,45 @@
       "expected": "denied"
     },
     {
+      "name": "operator tags only during declared network creation",
+      "role": "manual/operator-deployment",
+      "action": "ec2:CreateTags",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-new",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ],
+        "ec2:CreateAction": "CreateVpc"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot take ownership of an existing EC2 resource",
+      "role": "manual/operator-deployment",
+      "action": "ec2:CreateTags",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-unowned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
       "name": "operator inventories EC2 without synthetic request tags",
       "role": "manual/operator-deployment",
       "action": "ec2:DescribeVpcs",
@@ -108,28 +147,49 @@
       "expected": "allowed"
     },
     {
-      "name": "operator mutates only tagged environment network",
+      "name": "operator mutates only a tagged environment security group",
       "role": "manual/operator-deployment",
-      "action": "ec2:ModifyVpcAttribute",
-      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-owned",
+      "action": "ec2:AuthorizeSecurityGroupIngress",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:security-group/sg-owned",
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "manual",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "allowed"
     },
     {
-      "name": "operator cannot mutate another environment network",
+      "name": "operator cannot mutate another environment security group",
       "role": "manual/operator-deployment",
-      "action": "ec2:ModifyVpcAttribute",
-      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-unrelated",
+      "action": "ec2:AuthorizeSecurityGroupIngress",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:security-group/sg-unrelated",
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "monthly",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged security group rule",
+      "role": "manual/operator-deployment",
+      "action": "ec2:AuthorizeSecurityGroupIngress",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:security-group-rule/sgr-new",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
     },
     {
       "name": "operator creates a tagged HTTP API at the collection resource",
@@ -141,10 +201,6 @@
         "aws:RequestTag/PortfolioManaged": "true",
         "aws:RequestTag/PortfolioPersistent": "false",
         "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
-        "aws:ResourceTag/PortfolioEnvironment": "manual",
-        "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false",
-        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository",
         "aws:TagKeys": [
           "PortfolioEnvironment",
           "PortfolioManaged",
@@ -153,6 +209,45 @@
         ]
       },
       "expected": "allowed"
+    },
+    {
+      "name": "operator cannot create a cross-repository HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "other-owner/other-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot add an undeclared HTTP API ownership tag key",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository",
+          "PortfolioOwner"
+        ]
+      },
+      "expected": "denied"
     },
     {
       "name": "operator cannot retag an unowned Cognito user pool",
@@ -181,7 +276,14 @@
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "monthly",
         "aws:RequestTag/PortfolioManaged": "true",
-        "aws:RequestTag/PortfolioPersistent": "false"
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
       },
       "expected": "denied"
     },
@@ -324,10 +426,36 @@
       "expected": "denied"
     },
     {
-      "name": "operator creates a tagged Cloud Map service",
+      "name": "operator authorizes an owned Cloud Map namespace for service creation",
       "role": "manual/operator-deployment",
       "action": "servicediscovery:CreateService",
-      "resource": "*",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot create a Cloud Map service in a foreign namespace",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-foreign",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "other-owner/other-repository"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged Cloud Map service resource",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-new",
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "manual",
         "aws:RequestTag/PortfolioManaged": "true",
@@ -636,7 +764,8 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "manual",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "allowed"
     },
@@ -648,31 +777,34 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "monthly",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "denied"
     },
     {
-      "name": "destroy deletes a tagged owned REST API",
+      "name": "destroy deletes a tagged owned HTTP API",
       "role": "manual/destroy",
       "action": "apigateway:DELETE",
-      "resource": "arn:aws:apigateway:us-east-1::/restapis/owned-api",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/owned-api",
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "manual",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "allowed"
     },
     {
-      "name": "destroy cannot delete another environment REST API",
+      "name": "destroy cannot delete another environment HTTP API",
       "role": "manual/destroy",
       "action": "apigateway:DELETE",
-      "resource": "arn:aws:apigateway:us-east-1::/restapis/unrelated-api",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/unrelated-api",
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "monthly",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "denied"
     },
@@ -684,7 +816,8 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "manual",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "allowed"
     },
@@ -696,7 +829,8 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "monthly",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "denied"
     },
@@ -708,7 +842,8 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "manual",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "allowed"
     },
@@ -720,7 +855,8 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "monthly",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "denied"
     },
@@ -732,7 +868,8 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "manual",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "allowed"
     },
@@ -744,7 +881,8 @@
       "context": {
         "aws:ResourceTag/PortfolioEnvironment": "monthly",
         "aws:ResourceTag/PortfolioManaged": "true",
-        "aws:ResourceTag/PortfolioPersistent": "false"
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "denied"
     },

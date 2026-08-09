@@ -8,8 +8,8 @@ resource "aws_iam_policy" "permissions_boundary" {
     prevent_destroy = true
 
     precondition {
-      condition     = length(local.permissions_boundary_policy) <= 6144
-      error_message = "The permissions boundary exceeds the AWS 6,144-character managed-policy quota."
+      condition     = length(local.permissions_boundary_policy) <= 5632
+      error_message = "The permissions boundary must reserve at least 512 characters below the AWS 6,144-character managed-policy quota."
     }
   }
 }
@@ -50,8 +50,8 @@ resource "aws_iam_role_policy" "global" {
 
   lifecycle {
     precondition {
-      condition     = length(each.value) <= 10240
-      error_message = "A global role inline policy exceeds the AWS 10,240-character aggregate role quota."
+      condition     = length(each.value) <= 9728
+      error_message = "A global role inline policy must reserve at least 512 characters below the AWS 10,240-character aggregate role quota."
     }
   }
 }
@@ -88,8 +88,8 @@ resource "aws_iam_role_policy" "environment" {
 
   lifecycle {
     precondition {
-      condition     = length(each.value) <= 10240
-      error_message = "An environment role inline policy exceeds the AWS 10,240-character aggregate role quota."
+      condition     = length(each.value) <= 9728
+      error_message = "An environment role inline policy must reserve at least 512 characters below the AWS 10,240-character aggregate role quota."
     }
   }
 }

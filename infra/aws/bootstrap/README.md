@@ -12,10 +12,14 @@ in the [portable AWS bootstrap guide](../../../AWS_BOOTSTRAP.md).
 - `iam.tf`, `iam-policies.tf`, and `locals.tf` own the fixed boundary,
   purpose roles, policies, quota preconditions, and trust documents.
 - `policy-matrix.json` is the versioned positive/negative simulation contract.
+- The fixed boundary keeps durable service/purpose, persistent-resource, IAM,
+  and exact PassRole guardrails. Bootstrap-owned non-replaceable identity
+  policies enforce generated-resource ownership, leaving quota headroom for
+  later application-service follow-up without broadening effective authority.
 - Operator control-plane proof uses actual create, inventory, mutation, and
-  tagging resource/condition contexts, restricts ownership tag keys, and
-  rejects Cognito retagging of an unowned pool; PassRole proof also synthesizes
-  undeclared wildcard-matching targets.
+  multi-resource Cloud Map contexts, restricts ownership tag keys, and rejects
+  cross-environment/repository plus unowned Cognito cases; PassRole proof also
+  synthesizes undeclared wildcard-matching targets.
 - GitHub trust requires the documented repository-level customized OIDC
   subject before the future Step 6 workflow can assume the automation role.
 - `tests/bootstrap.tftest.hcl` uses a mocked AWS provider and creates no

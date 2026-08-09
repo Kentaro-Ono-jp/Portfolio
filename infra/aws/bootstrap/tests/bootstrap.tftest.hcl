@@ -78,11 +78,11 @@ run "portable_bootstrap_contract" {
 
   assert {
     condition = (
-      length(local.permissions_boundary_policy) <= 6144 &&
-      alltrue([for policy in values(local.global_identity_policies) : length(policy) <= 10240]) &&
-      alltrue([for policy in values(local.environment_identity_policies) : length(policy) <= 10240])
+      length(local.permissions_boundary_policy) <= 5632 &&
+      alltrue([for policy in values(local.global_identity_policies) : length(policy) <= 9728]) &&
+      alltrue([for policy in values(local.environment_identity_policies) : length(policy) <= 9728])
     )
-    error_message = "Every generated IAM policy must fit its AWS managed or inline policy quota."
+    error_message = "Every generated IAM policy must fit its quota and preserve the boundary headroom reserve."
   }
 
   assert {
