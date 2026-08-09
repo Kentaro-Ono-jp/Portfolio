@@ -57,8 +57,8 @@ The accepted AWS adapter below preserves its ownership and trust boundaries.
 
 ## Accepted managed-ephemeral AWS deployment profile
 
-The fourth-slice profile is an accepted target, not current runtime evidence.
-It is complete only after the focused increments in
+The fourth-slice profile is an implemented Terraform definition, not live AWS
+runtime evidence. It is complete only after the focused increments in
 [Delivery Specification 0004](../delivery/0004-portable-managed-ephemeral-aws-deployment.md)
 implement and prove the lifecycle.
 
@@ -323,9 +323,11 @@ does not claim production readiness.
 - Multi-tenancy, organization membership, assignment queues, administration,
   account recovery, MFA, and audit search/export/retention/legal hold remain
   separate product decisions.
-- The managed-ephemeral AWS profile is accepted but not implemented. No public
-  hosted service, successful AWS lifecycle, production identity provider,
-  durable shared session, high availability, or stable public URL is claimed.
+- The managed-ephemeral AWS topology is implemented and inspected through an
+  AWS-free deterministic Terraform plan, but its lifecycle and automation are
+  not implemented and it has not been applied. No public hosted service,
+  successful AWS lifecycle, production identity provider, durable shared
+  session, high availability, or stable public URL is claimed.
 
 ## Accepted records
 

@@ -1,8 +1,9 @@
 # ReactorFront Portfolio
 
 > Status: three vertical slices completed; fourth portable managed-ephemeral
-> AWS deployment slice in progress — runtime compatibility and persistent
-> bootstrap/least-privilege definitions implemented — 2026-08-09
+> AWS deployment slice in progress — runtime compatibility, persistent
+> bootstrap/least privilege, and managed-environment Terraform implemented —
+> 2026-08-09
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -35,8 +36,9 @@ The accepted fourth vertical slice adds an explicit managed AWS deployment
 path while preserving AWS-free GitHub Actions and local Docker Compose. A
 third-party clone deploys only into the third party's AWS account. Runtime
 adapters plus the persistent Terraform state/ECR/IAM bootstrap and static
-least-privilege proof are implemented. The managed application topology,
-lifecycle commands, deployment workflow, and real AWS green cycle remain
+least-privilege proof are implemented. The NAT-free managed application
+topology is also defined and proven through an AWS-free deterministic plan.
+Lifecycle commands, deployment workflow, and a real AWS green cycle remain
 separate increments.
 
 ## Engineering evidence
@@ -121,7 +123,7 @@ together.
 The completed model-evaluation boundary is governed by
 [Delivery Specification 0003](ips-microkernel/delivery/0003-third-vertical-slice.md)
 and its umbrella [Issue #72](https://github.com/Kentaro-Ono-jp/Portfolio/issues/72).
-The accepted, not-yet-implemented managed AWS boundary is governed by
+The in-progress managed AWS boundary is governed by
 [Delivery Specification 0004](ips-microkernel/delivery/0004-portable-managed-ephemeral-aws-deployment.md)
 and its umbrella [Issue #95](https://github.com/Kentaro-Ono-jp/Portfolio/issues/95).
 The currently implemented three-slice system and accepted deployment direction
@@ -247,17 +249,23 @@ HTTPS, destroy, and tag plus service-specific residual inventory. Ordinary PR,
 fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
 authority.
 
-This section records an accepted implementation contract, not a successful
-deployment claim. The repository implements and verifies the managed-runtime
+This section records an implementation contract, not a successful deployment
+claim. The repository implements and verifies the managed-runtime
 compatibility boundary for task-role S3, Cognito-shaped OIDC, RabbitMQ 4.2, and
 initial measured Fargate sizing. It also defines the portable persistent S3
 state backend, immutable Web/API/ML ECR repositories, fixed Permissions
 Boundary, environment-isolated purpose roles, trust/pass-role contracts, and
-AWS-free allow/deny simulation. See the
+AWS-free allow/deny simulation. Step 4 adds an independent environment state
+root for the NAT-free VPC, generated API Gateway endpoint, VPC Link and Cloud
+Map ingress, three Fargate services, RDS PostgreSQL 18, S3, Amazon MQ RabbitMQ
+4.2, Cognito managed login, injected secrets, bounded logs, exact ownership
+tags, and portable outputs. Its fail-closed static plan creates no AWS
+resource. See the
 [AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md) and
-[portable AWS bootstrap guide](AWS_BOOTSTRAP.md). The Step 4 managed
-application environment, Step 5 lifecycle, Step 6 automation, and live AWS
-proof remain unimplemented; construction attempts remain at `0/3`.
+[portable AWS bootstrap guide](AWS_BOOTSTRAP.md), plus the
+[managed-environment guide](infra/aws/environment/README.md). Step 5 lifecycle,
+Step 6 automation, and live AWS proof remain unimplemented; construction
+attempts remain at `0/3`.
 
 ## Completed third vertical slice
 

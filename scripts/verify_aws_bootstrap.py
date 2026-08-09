@@ -936,8 +936,8 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
             ownership_denied,
         ),
         (
-            "Cloud Map namespace creation",
-            "servicediscovery:CreateHttpNamespace",
+            "Cloud Map private DNS namespace creation",
+            "servicediscovery:CreatePrivateDnsNamespace",
             "*",
             request_tags,
             "request",
@@ -1032,6 +1032,127 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
                 )
             checked += len(decisions)
     return checked
+
+
+def verify_mq_create_broker_ceiling(payload: dict[str, Any]) -> int:
+    operator_identity = payload["environment_identity"]["manual/operator-deployment"]
+    allow_all = {
+        "Version": "2012-10-17",
+        "Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}],
+    }
+    exact_context = {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": payload["github_contract"]["repository"],
+        "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository",
+        ],
+    }
+
+    for layer, policy in (
+        ("identity", operator_identity),
+        ("boundary", payload["boundary"]),
+    ):
+        resource_less_statements = [
+            statement
+            for statement in policy["Statement"]
+            if statement.get("Resource") == "*"
+            and action_matches("mq:CreateBroker", statement.get("Action", []))
+        ]
+        if len(resource_less_statements) != 1:
+            raise RuntimeError(
+                f"{layer} must have exactly one resource-less MQ create statement"
+            )
+        mq_actions = [
+            action
+            for action in values(resource_less_statements[0]["Action"])
+            if action.lower().startswith("mq:")
+        ]
+        if mq_actions != ["mq:CreateBroker"]:
+            raise RuntimeError(
+                f"{layer} resource-less MQ statement may allow only mq:CreateBroker"
+            )
+
+    variants: list[tuple[str, dict[str, Any], str]] = [
+        ("exact", exact_context, "allowed"),
+    ]
+    wrong_values = {
+        "PortfolioEnvironment": "monthly",
+        "PortfolioManaged": "false",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "other-owner/other-repository",
+    }
+    for key, wrong_value in wrong_values.items():
+        context = dict(exact_context)
+        context[f"aws:RequestTag/{key}"] = wrong_value
+        variants.append((f"wrong-{key}", context, "denied"))
+    for key in wrong_values:
+        context = dict(exact_context)
+        del context[f"aws:RequestTag/{key}"]
+        context["aws:TagKeys"] = [
+            item for item in values(context["aws:TagKeys"]) if item != key
+        ]
+        variants.append((f"missing-{key}", context, "denied"))
+    extra_key = dict(exact_context)
+    extra_key["aws:TagKeys"] = [*values(exact_context["aws:TagKeys"]), "Owner"]
+    variants.append(("extra-ownership-key", extra_key, "denied"))
+
+    checked = 0
+    for name, raw_context, expected_effective in variants:
+        context = resolved_context(raw_context, "manual/operator-deployment", payload)
+        decisions = {
+            "identity": identity_decision(
+                operator_identity,
+                allow_all,
+                action="mq:CreateBroker",
+                resource="*",
+                context=context,
+            ),
+            "boundary": identity_decision(
+                allow_all,
+                payload["boundary"],
+                action="mq:CreateBroker",
+                resource="*",
+                context=context,
+            ),
+            "effective": identity_decision(
+                operator_identity,
+                payload["boundary"],
+                action="mq:CreateBroker",
+                resource="*",
+                context=context,
+            ),
+        }
+        expected = {
+            "identity": expected_effective,
+            "boundary": "allowed",
+            "effective": expected_effective,
+        }
+        if decisions != expected:
+            raise RuntimeError(
+                f"MQ CreateBroker {name} expected {expected}, got {decisions}"
+            )
+        checked += len(decisions)
+
+    wrong_purpose_context = resolved_context(
+        exact_context, "manual/api-workload", payload
+    )
+    wrong_purpose = identity_decision(
+        allow_all,
+        payload["boundary"],
+        action="mq:CreateBroker",
+        resource="*",
+        context=wrong_purpose_context,
+    )
+    if wrong_purpose != "denied":
+        raise RuntimeError(
+            "The fixed boundary allowed MQ creation from a workload role"
+        )
+    return checked + 1
 
 
 def verify_delegated_policy_mutation_ceiling(payload: dict[str, Any]) -> int:
@@ -1341,6 +1462,7 @@ def main() -> int:
     delegated_policy_mutation_cases = verify_delegated_policy_mutation_ceiling(payload)
     tagged_destroy_cases = verify_tagged_destroy_ceiling(payload)
     operator_control_plane_cases = verify_operator_control_plane(payload)
+    mq_create_broker_cases = verify_mq_create_broker_ceiling(payload)
     counts = verify_matrix(payload)
 
     lock_path = BOOTSTRAP_ROOT / ".terraform.lock.hcl"
@@ -1357,6 +1479,7 @@ def main() -> int:
         "delegatedPolicyMutationCases": delegated_policy_mutation_cases,
         "taggedDestroyCases": tagged_destroy_cases,
         "operatorControlPlaneCases": operator_control_plane_cases,
+        "mqCreateBrokerCases": mq_create_broker_cases,
         "policySizes": payload["policy_sizes"],
         "maxAcceptedPrefixPolicySizes": max_prefix_payload["policy_sizes"],
         "awsApiCalls": 0,

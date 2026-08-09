@@ -37,8 +37,11 @@ variable "name_prefix" {
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z][a-z0-9-]{2,19}$", var.name_prefix))
-    error_message = "name_prefix must be 3-20 lowercase alphanumeric or hyphen characters and start with a letter."
+    condition = (
+      can(regex("^[a-z][a-z0-9-]{1,18}[a-z0-9]$", var.name_prefix)) &&
+      !strcontains(var.name_prefix, "--")
+    )
+    error_message = "name_prefix must be 3-20 lowercase alphanumeric or hyphen characters, start with a letter, end alphanumeric, and contain no consecutive hyphens."
   }
 }
 
@@ -88,12 +91,13 @@ variable "environment_state_keys" {
       length(var.environment_state_keys) > 0 &&
       alltrue([
         for environment, key in var.environment_state_keys :
-        can(regex("^[a-z][a-z0-9-]{1,15}$", environment)) &&
+        can(regex("^[a-z][a-z0-9-]{0,14}[a-z0-9]$", environment)) &&
+        !strcontains(environment, "--") &&
         key == "environments/${environment}/terraform.tfstate"
       ]) &&
       length(distinct(values(var.environment_state_keys))) == length(var.environment_state_keys)
     )
-    error_message = "Each environment must be a portable 2-16 character name with the exact key environments/<name>/terraform.tfstate, and keys must be unique."
+    error_message = "Each environment must be a portable 2-16 character name without trailing/consecutive hyphens, use the exact key environments/<name>/terraform.tfstate, and have a unique key."
   }
 }
 

@@ -92,6 +92,13 @@ cross-environment, cross-repository, and undeclared fifth-key variants. Every
 request is evaluated independently at identity, boundary, and effective layers
 with expectations that name the actual enforcing layer.
 
+Amazon MQ `CreateBroker` is resource-less at authorization time. The fixed
+boundary therefore permits only that action for the environment-operator
+purpose, while its bootstrap-owned identity policy requires the complete four
+request tags and exact tag-key set. Wrong, missing, or additional ownership
+tags fail the immutable identity layer and effective intersection; workload
+roles fail the boundary as well.
+
 AWS Cloud Map does not expose resource-tag conditions for its standalone
 `TagResource` authorization. The operator can therefore submit only the exact
 four accepted ownership key/value pairs, but IAM cannot distinguish its
@@ -230,5 +237,8 @@ operator control-plane layer/context decisions.
 This repository-owned evaluator is static contract proof, not AWS IAM Access
 Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS
 simulation may add read-only sanitized evidence, but it must not mutate IAM or
-create a resource. Static proof does not claim that the Step 4 topology, Step 5
-lifecycle, Step 6 automation, or Step 7 real-AWS cycle exists.
+create a resource. Static proof now covers both this persistent bootstrap and
+the Step 4
+[managed-environment definition](infra/aws/environment/README.md). It does not
+claim that either root has been applied, or that the Step 5 lifecycle, Step 6
+automation, or Step 7 real-AWS cycle exists.

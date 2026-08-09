@@ -100,6 +100,7 @@ locals {
           "apigateway:*",
           "cognito-idp:*UserPool*",
           "cognito-idp:TagResource",
+          "mq:CreateBroker",
           "servicediscovery:*",
         ]
         Resource = "*"
@@ -394,7 +395,8 @@ locals {
           Effect = "Allow"
           Action = [
             "cognito-idp:CreateUserPool",
-            "servicediscovery:CreateHttpNamespace",
+            "mq:CreateBroker",
+            "servicediscovery:CreatePrivateDnsNamespace",
           ]
           Resource = "*"
           Condition = {
@@ -521,7 +523,7 @@ locals {
             "ecs:CreateCluster", "ecs:CreateService", "ecs:DescribeClusters", "ecs:DescribeServices",
             "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UpdateService",
             "logs:CreateLogGroup", "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents",
-            "mq:CreateBroker", "mq:DescribeBroker",
+            "mq:DescribeBroker",
             "rds:CreateDBInstance", "rds:DescribeDBInstances", "rds:ModifyDBInstance",
             "scheduler:CreateSchedule", "scheduler:GetSchedule", "scheduler:UpdateSchedule",
             "secretsmanager:CreateSecret", "secretsmanager:DescribeSecret", "secretsmanager:PutSecretValue",

@@ -27,7 +27,11 @@ This specification is an implementation contract, not a disposable AI prompt. It
 
 The planning baseline and Step 2 runtime-compatibility boundary are implemented: explicit local/AWS S3 modes preserve MinIO while proving the boto3 task-role credential path; Cognito-shaped Web/API OIDC retains Dex while requiring access-token purpose and group mapping; a digest-pinned RabbitMQ 4.2 route repeats the complete API/ML runtime proof; and exact-head Actions records measured container evidence against bounded initial Fargate candidates.
 
-Step 3 now defines the persistent portable bootstrap: an encrypted, versioned, public-blocked S3 backend with S3 lockfile and deterministic local-to-remote state adoption; independent immutable Web/API/ML ECR repositories with bounded cleanup; one quota-checked fixed Permissions Boundary; environment-isolated operator, IAM-manager, automation, task-execution, Web/API/ML workload, Scheduler, CodeBuild, and destroy authorities; exact trust and pass-role contracts including an event-bound customized GitHub OIDC subject; and repository-owned AWS-free mock-plan plus allowed/denied and delegated-authority simulation proof. The fixed boundary is a durable service/purpose, persistent-resource, IAM-mutation, and exact-PassRole guardrail. Bootstrap-owned inline identity policies, which delegated roles cannot replace, enforce exact generated-resource ownership; static proof reports identity, boundary, and their effective intersection without pretending that the deliberately wider boundary duplicates every ownership predicate. This owner-selected rule is recorded in [umbrella #95](https://github.com/Kentaro-Ono-jp/Portfolio/issues/95#issuecomment-5230632458). These are definitions and static evidence, not a live AWS apply, GitHub OIDC configuration, or IAM Policy Simulator result. The Step 4 managed application environment, Step 5 lifecycle, Step 6 deployment workflows and OIDC configuration, Step 7 real-AWS cycle, and Step 8 completion record remain unimplemented. No billable application-deployment attempt begins in this increment, so attempts remain `0/3`.
+Step 3 now defines the persistent portable bootstrap: an encrypted, versioned, public-blocked S3 backend with S3 lockfile and deterministic local-to-remote state adoption; independent immutable Web/API/ML ECR repositories with bounded cleanup; one quota-checked fixed Permissions Boundary; environment-isolated operator, IAM-manager, automation, task-execution, Web/API/ML workload, Scheduler, CodeBuild, and destroy authorities; exact trust and pass-role contracts including an event-bound customized GitHub OIDC subject; and repository-owned AWS-free mock-plan plus allowed/denied and delegated-authority simulation proof. The fixed boundary is a durable service/purpose, persistent-resource, IAM-mutation, and exact-PassRole guardrail. Bootstrap-owned inline identity policies, which delegated roles cannot replace, enforce exact generated-resource ownership; static proof reports identity, boundary, and their effective intersection without pretending that the deliberately wider boundary duplicates every ownership predicate. This owner-selected rule is recorded in [umbrella #95](https://github.com/Kentaro-Ono-jp/Portfolio/issues/95#issuecomment-5230632458).
+
+Step 4 now defines the independent environment state root and its NAT-free VPC, generated API Gateway HTTP API plus VPC Link and Cloud Map ingress, distinct Web/API-area/ML Fargate services, RDS PostgreSQL 18, encrypted application S3 bucket, Amazon MQ RabbitMQ 4.2, Cognito Authorization Code/PKCE managed login, generated Secrets Manager values, bounded CloudWatch logs, exact ownership tags, and portable outputs. The root consumes only explicit persistent-bootstrap references, pins every image by digest, gives no database or end-user identity to ML, and is validated by mock-provider tests plus a fail-closed sanitized plan against an unreachable endpoint. The plan proves 81 create-only resources, 60 exactly tagged resources, and zero AWS API calls, writes, resources, or billable attempts.
+
+These are definitions and static evidence, not a live AWS apply, GitHub OIDC configuration, IAM Policy Simulator result, or successful hosted lifecycle. Step 5 lifecycle, Step 6 deployment workflows and OIDC configuration, Step 7 real-AWS cycle, and Step 8 completion record remain unimplemented. No billable application-deployment attempt begins in this increment, so attempts remain `0/3`.
 
 ## Outcome
 
@@ -215,6 +219,13 @@ Deliver Terraform modules for the NAT-free VPC, API Gateway/VPC Link/Cloud Map, 
 
 Acceptance requires deterministic validation/plan, no default NAT/ALB/custom-domain dependency, private application-service ingress, outbound-only task public IP use, encrypted state/data, bounded retention, and complete destroyability by environment state key.
 
+Implemented in `infra/aws/environment/`. Its repository-owned verifier checks
+formatting, provider locks, validation, lint, three mocked-plan contracts, the
+exact resource and ownership-tag inventory, service-aware security boundaries,
+secret redaction, digest pinning, and a create-only fail-closed plan without
+calling AWS. Step 4 performs no apply and leaves lifecycle/destroy execution to
+Step 5.
+
 ### Step 5: Implement the lifecycle and destroy safety system
 
 Deliver preflight, image publication, schedule-first two-hour TTL, apply, status, seed, smoke, extend, manual destroy, automatic CodeBuild destroy fallback, and service-specific residual sweep.
@@ -304,7 +315,7 @@ changing the proof path.
 - [ ] AWS workloads use task roles and secret injection, not long-term access keys.
 - [ ] Cognito access tokens preserve the accepted issuer, audience, purpose, capability, session, and API authorization boundary.
 - [ ] RabbitMQ 4.2 preserves request/result durability, retry, redelivery, idempotency, and recovery behavior.
-- [ ] Terraform defines the accepted managed topology, immutable image identities, bounded retention, complete tags, and portable outputs.
+- [x] Terraform defines the accepted managed topology, immutable image identities, bounded retention, complete tags, and portable outputs.
 - [ ] Deployment and IAM roles remain within exact resource, path, trust, pass-role, and Permissions Boundary constraints.
 - [ ] Ordinary CI, fork PRs, and unapproved actors cannot obtain AWS write authority.
 - [ ] A two-hour fallback is registered before billable apply and remains independent of the environment state.
