@@ -73,18 +73,25 @@ def run(label: str, command: list[str]) -> None:
     subprocess.run(command, cwd=REPOSITORY_ROOT, check=True)
 
 
-def terraform_payload(terraform: str) -> dict[str, Any]:
+def terraform_payload(
+    terraform: str, variable_overrides: dict[str, str] | None = None
+) -> dict[str, Any]:
     expression = " ".join(
         line.strip() for line in POLICY_EXPRESSION.splitlines() if line.strip()
     )
+    command = [
+        terraform,
+        f"-chdir={BOOTSTRAP_ROOT}",
+        "console",
+        "-no-color",
+        f"-var-file={TFVARS_PATH}",
+    ]
+    command.extend(
+        f"-var={name}={value}"
+        for name, value in sorted((variable_overrides or {}).items())
+    )
     completed = subprocess.run(
-        [
-            terraform,
-            f"-chdir={BOOTSTRAP_ROOT}",
-            "console",
-            "-no-color",
-            f"-var-file={TFVARS_PATH}",
-        ],
+        command,
         cwd=REPOSITORY_ROOT,
         input=f"{expression}\n",
         text=True,
@@ -117,10 +124,11 @@ def values(value: Any) -> list[str]:
     return [str(value)]
 
 
-def substitute(value: str, context: dict[str, str]) -> str:
+def substitute(value: str, context: dict[str, Any]) -> str:
     rendered = value
     for key, replacement in context.items():
-        rendered = rendered.replace(f"${{{key}}}", replacement)
+        if isinstance(replacement, str):
+            rendered = rendered.replace(f"${{{key}}}", replacement)
     return rendered
 
 
@@ -132,20 +140,21 @@ def action_matches(requested: str, configured: Any) -> bool:
     )
 
 
-def resource_matches(requested: str, configured: Any, context: dict[str, str]) -> bool:
+def resource_matches(requested: str, configured: Any, context: dict[str, Any]) -> bool:
     return any(
         fnmatch.fnmatchcase(requested, substitute(pattern, context))
         for pattern in values(configured)
     )
 
 
-def condition_matches(condition: dict[str, Any], context: dict[str, str]) -> bool:
+def condition_matches(condition: dict[str, Any], context: dict[str, Any]) -> bool:
     for operator, clauses in condition.items():
         for key, expected_value in clauses.items():
             expected = [substitute(item, context) for item in values(expected_value)]
             actual = context.get(key)
+            actual_values = [] if actual is None else values(actual)
             if operator in {"StringEquals", "ArnEquals", "Bool"}:
-                if actual is None or actual not in expected:
+                if not actual_values or not any(item in expected for item in actual_values):
                     return False
             elif operator in {"StringLike", "ArnLike"}:
                 if actual is None or not any(
@@ -153,7 +162,10 @@ def condition_matches(condition: dict[str, Any], context: dict[str, str]) -> boo
                 ):
                     return False
             elif operator in {"StringNotEquals", "ArnNotEquals"}:
-                if actual is not None and actual in expected:
+                if any(item in expected for item in actual_values):
+                    return False
+            elif operator == "ForAllValues:StringEquals":
+                if any(item not in expected for item in actual_values):
                     return False
             else:
                 raise RuntimeError(f"Unsupported policy condition operator: {operator}")
@@ -165,7 +177,7 @@ def matching_effects(
     *,
     action: str,
     resource: str,
-    context: dict[str, str],
+    context: dict[str, Any],
 ) -> set[str]:
     effects: set[str] = set()
     for statement in policy.get("Statement", []):
@@ -189,8 +201,12 @@ def identity_decision(
     *,
     action: str,
     resource: str,
-    context: dict[str, str],
+    context: dict[str, Any],
 ) -> str:
+    # AWS STS documents GetCallerIdentity as permissionless, including when an
+    # applicable identity policy explicitly denies it.
+    if action.lower() == "sts:getcalleridentity":
+        return "allowed"
     identity_effects = matching_effects(
         identity, action=action, resource=resource, context=context
     )
@@ -315,11 +331,11 @@ def trust_policy(role: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def resolved_context(
-    raw: dict[str, str], role: str, payload: dict[str, Any]
-) -> dict[str, str]:
+    raw: dict[str, Any], role: str, payload: dict[str, Any]
+) -> dict[str, Any]:
     context = {
         key: resolve_symbol(value, payload)
-        if value in {"boundary", "admin-policy"}
+        if isinstance(value, str) and value in {"boundary", "admin-policy"}
         else value
         for key, value in raw.items()
     }
@@ -420,6 +436,18 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
                 if "iam:PassedToService" not in condition:
                     raise RuntimeError("iam:PassRole must bind iam:PassedToService")
 
+    for statement in payload["boundary"]["Statement"]:
+        if not action_matches("iam:PassRole", statement.get("Action", [])):
+            continue
+        if any(
+            wildcard in resource
+            for resource in values(statement.get("Resource", []))
+            for wildcard in ("*", "?")
+        ):
+            raise RuntimeError(
+                "Permissions Boundary iam:PassRole must name exact role resources"
+            )
+
     if sorted(payload["github_contract"]["allowed_events"]) != [
         "schedule",
         "workflow_dispatch",
@@ -489,6 +517,8 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
     }
     if manager_actions & forbidden_manager_actions:
         raise RuntimeError("IAM manager must not mutate environment-role policies")
+    if "iam:deleterole" in manager_actions:
+        raise RuntimeError("IAM manager must not delete Terraform-owned roles")
 
 
 def verify_policy_structure_mutations(payload: dict[str, Any]) -> int:
@@ -538,6 +568,35 @@ def verify_policy_structure_mutations(payload: dict[str, Any]) -> int:
         )
     )
 
+    wildcard_pass_role = json.loads(json.dumps(payload))
+    for statement in wildcard_pass_role["boundary"]["Statement"]:
+        if action_matches("iam:PassRole", statement.get("Action", [])):
+            statement["Resource"] = "*"
+            break
+    mutations.append(
+        (
+            "wildcard boundary PassRole",
+            wildcard_pass_role,
+            "Permissions Boundary iam:PassRole must name exact role resources",
+        )
+    )
+
+    manager_delete = json.loads(json.dumps(payload))
+    manager_delete["global_identity"]["iam_manager"]["Statement"].append(
+        {
+            "Effect": "Allow",
+            "Action": "iam:DeleteRole",
+            "Resource": "*",
+        }
+    )
+    mutations.append(
+        (
+            "delegated role deletion",
+            manager_delete,
+            "IAM manager must not delete Terraform-owned roles",
+        )
+    )
+
     for name, mutation, expected_error in mutations:
         try:
             verify_policy_structure(mutation)
@@ -577,13 +636,34 @@ def verify_delegated_pass_role_ceiling(payload: dict[str, Any]) -> int:
         "scheduler": "scheduler.amazonaws.com",
         "codebuild-destroy": "codebuild.amazonaws.com",
     }
+    target_roles = {
+        **payload["role_arns"],
+        "manual/evil-workload": (
+            "arn:aws:iam::111122223333:role/example-portfolio/"
+            "example-portfolio-manual-evil-workload"
+        ),
+        "monthly/evil-workload": (
+            "arn:aws:iam::111122223333:role/example-portfolio/"
+            "example-portfolio-monthly-evil-workload"
+        ),
+        "manual/web-workload-copy": (
+            "arn:aws:iam::111122223333:role/example-portfolio/"
+            "example-portfolio-manual-web-workload-copy"
+        ),
+        "monthly/task-execution-copy": (
+            "arn:aws:iam::111122223333:role/example-portfolio/"
+            "example-portfolio-monthly-task-execution-copy"
+        ),
+        "external/administrator": (
+            "arn:aws:iam::999988887777:role/UnrelatedAdministrator"
+        ),
+    }
+    declared_environment_targets = set(payload["environment_identity"])
     checked = 0
-    for source_role in sorted(payload["environment_identity"]):
+    for source_role in sorted(payload["role_arns"]):
         source_environment = role_environment(source_role)
         source_purpose = role_purpose(source_role)
-        for target_role, target_arn in sorted(payload["role_arns"].items()):
-            if "/" not in target_role:
-                continue
+        for target_role, target_arn in sorted(target_roles.items()):
             target_environment = role_environment(target_role)
             target_purpose = role_purpose(target_role)
             for passed_to_service in passed_to_services:
@@ -602,6 +682,7 @@ def verify_delegated_pass_role_ceiling(payload: dict[str, Any]) -> int:
                 expected = (
                     "allowed"
                     if source_purpose == "operator-deployment"
+                    and target_role in declared_environment_targets
                     and source_environment == target_environment
                     and expected_service.get(target_purpose) == passed_to_service
                     else "denied"
@@ -613,6 +694,153 @@ def verify_delegated_pass_role_ceiling(payload: dict[str, Any]) -> int:
                         f"expected {expected}, got {actual}"
                     )
                 checked += 1
+    return checked
+
+
+def verify_operator_control_plane(payload: dict[str, Any]) -> int:
+    allow_all = {
+        "Version": "2012-10-17",
+        "Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}],
+    }
+    request_tags = {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": payload["github_contract"]["repository"],
+        "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository",
+        ],
+    }
+    resource_tags = {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": payload["github_contract"]["repository"],
+    }
+    cases = (
+        ("EC2 inventory", "ec2:DescribeVpcs", "*", {}, None, "allowed"),
+        (
+            "EC2 creation",
+            "ec2:CreateVpc",
+            "*",
+            request_tags,
+            "aws:RequestTag/PortfolioEnvironment",
+            "allowed",
+        ),
+        (
+            "EC2 mutation",
+            "ec2:ModifyVpcAttribute",
+            "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-example",
+            resource_tags,
+            "aws:ResourceTag/PortfolioEnvironment",
+            "allowed",
+        ),
+        (
+            "HTTP API creation",
+            "apigateway:POST",
+            "arn:aws:apigateway:us-east-1::/apis",
+            request_tags,
+            "aws:RequestTag/PortfolioEnvironment",
+            "allowed",
+        ),
+        (
+            "Cognito user-pool creation",
+            "cognito-idp:CreateUserPool",
+            "*",
+            request_tags,
+            "aws:RequestTag/PortfolioEnvironment",
+            "allowed",
+        ),
+        (
+            "Cognito tagging",
+            "cognito-idp:TagResource",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_example",
+            {**request_tags, **resource_tags},
+            "aws:ResourceTag/PortfolioEnvironment",
+            "allowed",
+        ),
+        (
+            "Cognito unowned-resource tagging",
+            "cognito-idp:TagResource",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_unowned",
+            request_tags,
+            None,
+            "denied",
+        ),
+        (
+            "Cloud Map namespace creation",
+            "servicediscovery:CreateHttpNamespace",
+            "*",
+            request_tags,
+            "aws:RequestTag/PortfolioEnvironment",
+            "allowed",
+        ),
+        (
+            "Cloud Map service creation",
+            "servicediscovery:CreateService",
+            "*",
+            request_tags,
+            "aws:RequestTag/PortfolioEnvironment",
+            "allowed",
+        ),
+        (
+            "Cloud Map tagging",
+            "servicediscovery:TagResource",
+            "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-example",
+            request_tags,
+            "aws:RequestTag/PortfolioEnvironment",
+            "allowed",
+        ),
+    )
+    operator_identity = payload["environment_identity"]["manual/operator-deployment"]
+    checked = 0
+    for name, action, resource, raw_context, environment_key, base_expected in cases:
+        variants = [("base", raw_context, base_expected)]
+        if environment_key is not None and base_expected == "allowed":
+            cross_environment = dict(raw_context)
+            cross_environment[environment_key] = "monthly"
+            variants.append(("cross-environment", cross_environment, "denied"))
+        for variant, variant_context, expected in variants:
+            context = resolved_context(
+                variant_context, "manual/operator-deployment", payload
+            )
+            decisions = {
+                "effective": identity_decision(
+                    operator_identity,
+                    payload["boundary"],
+                    action=action,
+                    resource=resource,
+                    context=context,
+                ),
+                "identity": identity_decision(
+                    operator_identity,
+                    allow_all,
+                    action=action,
+                    resource=resource,
+                    context=context,
+                ),
+                "boundary": identity_decision(
+                    allow_all,
+                    payload["boundary"],
+                    action=action,
+                    resource=resource,
+                    context=context,
+                ),
+            }
+            failures = {
+                layer: decision
+                for layer, decision in decisions.items()
+                if decision != expected
+            }
+            if failures:
+                raise RuntimeError(
+                    "Operator control-plane ceiling failed: "
+                    f"{name} {variant} expected {expected}, got {failures}"
+                )
+            checked += len(decisions)
     return checked
 
 
@@ -868,12 +1096,23 @@ def main() -> int:
     verify_backend_generator()
     payload = terraform_payload(terraform)
     verify_policy_structure(payload)
+    max_prefix_payload = terraform_payload(
+        terraform,
+        {
+            "name_prefix": "abcdefghijklmnopqrst",
+            "state_bucket_name": (
+                "abcdefghijklmnopqrst-111122223333-us-east-1-state"
+            ),
+        },
+    )
+    verify_policy_structure(max_prefix_payload)
     policy_structure_mutation_cases = verify_policy_structure_mutations(payload)
     delegated_pass_role_cases = verify_delegated_pass_role_ceiling(payload)
     delegated_policy_mutation_cases = verify_delegated_policy_mutation_ceiling(
         payload
     )
     tagged_destroy_cases = verify_tagged_destroy_ceiling(payload)
+    operator_control_plane_cases = verify_operator_control_plane(payload)
     counts = verify_matrix(payload)
 
     lock_path = BOOTSTRAP_ROOT / ".terraform.lock.hcl"
@@ -889,7 +1128,9 @@ def main() -> int:
         "delegatedPassRoleCases": delegated_pass_role_cases,
         "delegatedPolicyMutationCases": delegated_policy_mutation_cases,
         "taggedDestroyCases": tagged_destroy_cases,
+        "operatorControlPlaneCases": operator_control_plane_cases,
         "policySizes": payload["policy_sizes"],
+        "maxAcceptedPrefixPolicySizes": max_prefix_payload["policy_sizes"],
         "awsApiCalls": 0,
         "awsWrites": 0,
         "constructionAttempts": "0/3",

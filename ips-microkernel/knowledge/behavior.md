@@ -409,15 +409,18 @@ proved/unproved classification, or permanence claim.
   adversarial delegated identity policy can combine with the boundary to gain
   cross-environment, wrong-service, or otherwise broader authority.
 - **Detect:** Combine the boundary with an adversarial wildcard identity grant
-  for the affected action and enumerate every source role, target role,
-  environment, and relevant service; also enumerate delegated policy-mutation
-  actions on every mutable target role.
-- **Pass:** Only the exact same-environment purpose and destination-service
-  combinations are allowed, and no delegated manager can replace, attach,
-  delete, or update an owned role policy.
+  for the affected action and enumerate every source role, every declared
+  target, global and external targets, and synthesized undeclared ARNs that
+  match each resource wildcard, across every environment and relevant service;
+  also enumerate delegated policy-mutation actions on every mutable target.
+- **Pass:** Every boundary PassRole resource is exact, only declared
+  same-environment purpose and destination-service combinations are allowed,
+  every undeclared wildcard-matching target is denied, and no delegated manager
+  can replace, attach, delete, or update an owned role policy.
 - **Repair:** Move policy ownership to the persistent bootstrap, remove
   delegated mutation grants, bind boundary resources to principal-derived
-  environment and purpose, bind destination services, and retain the complete
+  environment and purpose, replace target wildcards with exact role ARNs, bind
+  destination services, and retain the complete declared plus synthesized
   adversarial matrix.
 - **Origins:** PR #107
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
@@ -441,6 +444,32 @@ proved/unproved classification, or permanence claim.
   ID-based resource type.
 - **Origins:** PR #107
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
+### Model real cloud action resources and condition contexts
+
+- **Trigger:** A generated IAM policy adds or changes a control-plane create,
+  inventory, existing-resource mutation, or tagging action.
+- **HEAD effect:** `moving`
+- **Problem:** A synthetic positive supplies a resource ARN or condition key
+  that the real cloud action does not expose, while the accepted create,
+  inventory, mutation, or dependent tagging request is denied.
+- **Detect:** From the target service's authorization reference, construct each
+  required positive with its real create-time resource form and only the
+  request, resource, or principal context keys available to that action;
+  execute the same request independently against identity, boundary, and their
+  effective intersection, then change only the ownership environment.
+- **Pass:** Every required real-context positive is allowed by identity,
+  boundary, and their intersection; each cross-environment inverse is denied;
+  inventory succeeds without fabricated request tags; and every dependent
+  tagging action has its own passing case with an exact ownership-key ceiling.
+- **Repair:** Split creation-time request-tag, unconditioned inventory, and
+  existing-resource ownership-tag statements; use actual collection or
+  resource-less create forms; grant the exact dependent tagging actions;
+  require existing ownership for retagging where the service exposes resource
+  tags; and retain the layer-by-layer positive, unowned, and inverse-negative
+  matrix.
+- **Origins:** PR #107
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500).
 
 ### Connect security allowlists to enforced trust claims
 

@@ -53,6 +53,16 @@
       "expected": "denied"
     },
     {
+      "name": "operator cannot pass undeclared same-environment workload role",
+      "role": "manual/operator-deployment",
+      "action": "iam:PassRole",
+      "resource": "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-evil-workload",
+      "context": {
+        "iam:PassedToService": "ecs-tasks.amazonaws.com"
+      },
+      "expected": "denied"
+    },
+    {
       "name": "operator creates only tagged environment network",
       "role": "manual/operator-deployment",
       "action": "ec2:CreateVpc",
@@ -60,7 +70,14 @@
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "manual",
         "aws:RequestTag/PortfolioManaged": "true",
-        "aws:RequestTag/PortfolioPersistent": "false"
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
       },
       "expected": "allowed"
     },
@@ -72,9 +89,257 @@
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "monthly",
         "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator inventories EC2 without synthetic request tags",
+      "role": "manual/operator-deployment",
+      "action": "ec2:DescribeVpcs",
+      "resource": "*",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator mutates only tagged environment network",
+      "role": "manual/operator-deployment",
+      "action": "ec2:ModifyVpcAttribute",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot mutate another environment network",
+      "role": "manual/operator-deployment",
+      "action": "ec2:ModifyVpcAttribute",
+      "resource": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged HTTP API at the collection resource",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot retag an unowned Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:TagResource",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_unowned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a cross-environment HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:POST",
+      "resource": "arn:aws:apigateway:us-east-1::/apis",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
         "aws:RequestTag/PortfolioPersistent": "false"
       },
       "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:CreateUserPool",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot create a cross-environment Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:CreateUserPool",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator attaches required ownership tags to a Cognito user pool",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:TagResource",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator creates a tagged Cloud Map namespace",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateHttpNamespace",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot attach cross-environment ownership tags to Cloud Map",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-other",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a cross-environment Cloud Map namespace",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateHttpNamespace",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates a tagged Cloud Map service",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:CreateService",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator attaches required ownership tags to Cloud Map",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
     },
     {
       "name": "IAM manager creates exact bounded role",
@@ -176,6 +441,13 @@
       "name": "IAM manager cannot replace an environment role policy",
       "role": "iam_manager",
       "action": "iam:PutRolePolicy",
+      "resource": "role:manual/api-workload",
+      "expected": "denied"
+    },
+    {
+      "name": "IAM manager cannot delete a Terraform-owned environment role",
+      "role": "iam_manager",
+      "action": "iam:DeleteRole",
       "resource": "role:manual/api-workload",
       "expected": "denied"
     },

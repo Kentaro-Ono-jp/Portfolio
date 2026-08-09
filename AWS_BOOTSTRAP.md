@@ -34,8 +34,8 @@ environment destroy authority cannot remove persistent bootstrap resources.
 
 | Authority | Scope |
 |---|---|
-| IAM manager | Creates or deletes only the exact declared, tagged environment roles with the fixed boundary. It cannot attach, replace, or delete their repository-owned inline policies; create users, groups, access keys, login profiles, arbitrary managed policies, or global roles; or remove/replace a boundary. |
-| Environment operator/deployment | Uses only that environment state key, publishes to the three owned ECR repositories, passes exact task/fallback roles to exact AWS services, and manages only bounded environment resources. |
+| IAM manager | Creates only the exact declared, tagged environment roles with the fixed boundary. Terraform retains role deletion and inline-policy ownership. The manager cannot attach, replace, or delete policies; create users, groups, access keys, login profiles, arbitrary managed policies, or global roles; or remove/replace a boundary. |
+| Environment operator/deployment | Uses only that environment state key, publishes to the three owned ECR repositories, passes exact task/fallback role ARNs to exact AWS services, inventories EC2 without fabricated tags, and creates or mutates only request-tagged/resource-tagged environment resources. |
 | Task execution | Pulls owned images, writes the environment log groups, and reads only environment-prefixed injected secrets. |
 | Web workload | Has caller-identity proof only and no application-data authority. |
 | API workload | Owns only the exact environment application bucket objects. PostgreSQL remains an application connection boundary, not an IAM administration grant. |
@@ -54,11 +54,23 @@ tag to cap state, object, log, secret, network, and service authority. Every
 Terraform and the AWS-free verifier reject generated policies before any AWS
 write when the fixed managed boundary exceeds 6,144 characters, any role's
 aggregate inline policy exceeds 10,240 characters, or a trust policy exceeds
-the portable 2,048-character default. The delegated-authority proof also
-combines an adversarial wildcard `iam:PassRole` identity policy with the
-boundary across every source role, target role, and supported/wrong service.
-Only a same-environment operator passing the intended workload, Scheduler, or
-CodeBuild role to its exact service remains effective.
+the portable 2,048-character default. The delegated-authority proof combines
+an adversarial wildcard `iam:PassRole` identity policy with the boundary across
+every source role, declared target, synthesized undeclared same-path target,
+global/external target, and supported/wrong service. Only a same-environment
+operator passing one of the exact declared workload, Scheduler, or CodeBuild
+role ARNs to its exact service remains effective.
+
+Operator control-plane proof uses the action's real authorization context:
+creation uses supported request tags and the actual HTTP API collection or
+resource-less create resource; EC2 inventory carries no fabricated request
+tags; existing-resource mutation uses ownership resource tags; and Cognito and
+Cloud Map tagging actions are exercised separately. Cognito retagging requires
+the existing resource to carry the complete repository ownership tuple. Both
+services accept only the four required ownership keys and exact values in a tag
+request. Each request is evaluated against the identity policy, boundary, and
+their intersection, with a paired cross-environment negative where ownership
+applies.
 
 The future GitHub workflow and repository OIDC customization are Step 6
 non-targets. Before that workflow requests a token, the repository owner must
@@ -181,7 +193,9 @@ request, push-event, audience, repository, workflow, and ref negatives. Tagged
 REST API, Cognito user-pool, and Cloud Map namespace/service deletion is paired
 with cross-environment negatives even though those resource IDs do not encode
 the environment name. The verifier also records exact generated policy sizes
-and the complete 1,024-case delegated `iam:PassRole` ceiling.
+for both the synthetic example and the maximum accepted 20-character prefix,
+the complete 1,656-case delegated `iam:PassRole` ceiling, and 54 independent
+operator control-plane layer/context decisions.
 
 This repository-owned evaluator is static contract proof, not AWS IAM Access
 Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS

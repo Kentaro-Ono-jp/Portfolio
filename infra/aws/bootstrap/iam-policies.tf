@@ -1,21 +1,19 @@
 locals {
-  boundary_environment_token        = "$${aws:PrincipalTag/PortfolioEnvironment}"
-  boundary_environment_role_pattern = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-*-*"
+  boundary_environment_token = "$${aws:PrincipalTag/PortfolioEnvironment}"
   boundary_requested_role_arn = (
     "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-$${aws:RequestTag/PortfolioEnvironment}-$${aws:RequestTag/PortfolioPurpose}"
   )
   boundary_same_environment_scheduler_role_arn = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-scheduler"
   boundary_same_environment_codebuild_role_arn = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-codebuild-destroy"
   boundary_same_environment_destroy_role_arn   = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-destroy"
+  boundary_same_environment_ecs_role_arns = [
+    for purpose in ["task-execution", "web-workload", "api-workload", "ml-workload"] :
+    "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-${purpose}"
+  ]
 
   permissions_boundary_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Effect   = "Allow"
-        Action   = "sts:GetCallerIdentity"
-        Resource = "*"
-      },
       {
         Effect = "Allow"
         Action = "s3:*Object"
@@ -104,7 +102,7 @@ locals {
         Action = [
           "apigateway:POST",
           "cognito-idp:CreateUserPool",
-          "servicediscovery:Create*",
+          "servicediscovery:*",
         ]
         Resource = "*"
         Condition = {
@@ -121,6 +119,7 @@ locals {
         Action = [
           "apigateway:*",
           "cognito-idp:*UserPool*",
+          "cognito-idp:TagResource",
           "servicediscovery:*",
         ]
         Resource = "*"
@@ -173,12 +172,9 @@ locals {
         }
       },
       {
-        Effect = "Allow"
-        Action = "iam:PassRole"
-        Resource = [
-          "arn:${var.aws_partition}:iam::${var.aws_account_id}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-task-execution",
-          "arn:${var.aws_partition}:iam::${var.aws_account_id}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-*-workload",
-        ]
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = local.boundary_same_environment_ecs_role_arns
         Condition = {
           StringEquals = {
             "aws:PrincipalTag/PortfolioPurpose" = "operator-deployment"
@@ -245,11 +241,6 @@ locals {
           }
         }
       },
-      {
-        Effect   = "Allow"
-        Action   = "iam:DeleteRole"
-        Resource = local.boundary_environment_role_pattern
-      },
     ]
   })
 
@@ -276,30 +267,6 @@ locals {
             "destroy",
           ]
           "aws:RequestTag/PortfolioRepository" = var.repository_identity
-        }
-      }
-    },
-    {
-      Sid      = "DeleteOnlyTaggedEnvironmentRoles"
-      Effect   = "Allow"
-      Action   = "iam:DeleteRole"
-      Resource = local.boundary_environment_role_pattern
-      Condition = {
-        StringEquals = {
-          "aws:ResourceTag/PortfolioEnvironment" = sort(keys(var.environment_state_keys))
-          "aws:ResourceTag/PortfolioManaged"     = "true"
-          "aws:ResourceTag/PortfolioPersistent"  = "true"
-          "aws:ResourceTag/PortfolioPurpose" = [
-            "operator-deployment",
-            "task-execution",
-            "web-workload",
-            "api-workload",
-            "ml-workload",
-            "scheduler",
-            "codebuild-destroy",
-            "destroy",
-          ]
-          "aws:ResourceTag/PortfolioRepository" = var.repository_identity
         }
       }
     },
@@ -392,11 +359,98 @@ locals {
           Condition = { StringEquals = { "iam:PassedToService" = local.codebuild_service_principal } }
         },
         {
+          Sid      = "CreateTaggedHttpApi"
+          Effect   = "Allow"
+          Action   = "apigateway:POST"
+          Resource = "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis"
+          Condition = {
+            StringEquals = {
+              "aws:RequestTag/PortfolioEnvironment" = environment
+              "aws:RequestTag/PortfolioManaged"     = "true"
+              "aws:RequestTag/PortfolioPersistent"  = "false"
+            }
+          }
+        },
+        {
+          Sid    = "CreateTaggedIdEnvironmentServices"
+          Effect = "Allow"
+          Action = [
+            "cognito-idp:CreateUserPool",
+            "servicediscovery:CreateHttpNamespace",
+            "servicediscovery:CreateService",
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "aws:RequestTag/PortfolioEnvironment" = environment
+              "aws:RequestTag/PortfolioManaged"     = "true"
+              "aws:RequestTag/PortfolioPersistent"  = "false"
+              "aws:RequestTag/PortfolioRepository"  = var.repository_identity
+            }
+            "ForAllValues:StringEquals" = {
+              "aws:TagKeys" = [
+                "PortfolioEnvironment",
+                "PortfolioManaged",
+                "PortfolioPersistent",
+                "PortfolioRepository",
+              ]
+            }
+          }
+        },
+        {
+          Sid      = "TagOwnedCognitoUserPool"
+          Effect   = "Allow"
+          Action   = "cognito-idp:TagResource"
+          Resource = "arn:${var.aws_partition}:cognito-idp:${var.aws_region}:${var.aws_account_id}:userpool/*"
+          Condition = {
+            StringEquals = {
+              "aws:RequestTag/PortfolioEnvironment"  = environment
+              "aws:RequestTag/PortfolioManaged"      = "true"
+              "aws:RequestTag/PortfolioPersistent"   = "false"
+              "aws:RequestTag/PortfolioRepository"   = var.repository_identity
+              "aws:ResourceTag/PortfolioEnvironment" = environment
+              "aws:ResourceTag/PortfolioManaged"     = "true"
+              "aws:ResourceTag/PortfolioPersistent"  = "false"
+              "aws:ResourceTag/PortfolioRepository"  = var.repository_identity
+            }
+            "ForAllValues:StringEquals" = {
+              "aws:TagKeys" = [
+                "PortfolioEnvironment",
+                "PortfolioManaged",
+                "PortfolioPersistent",
+                "PortfolioRepository",
+              ]
+            }
+          }
+        },
+        {
+          Sid      = "TagCloudMapOwnershipKeys"
+          Effect   = "Allow"
+          Action   = "servicediscovery:TagResource"
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "aws:RequestTag/PortfolioEnvironment" = environment
+              "aws:RequestTag/PortfolioManaged"     = "true"
+              "aws:RequestTag/PortfolioPersistent"  = "false"
+              "aws:RequestTag/PortfolioRepository"  = var.repository_identity
+            }
+            "ForAllValues:StringEquals" = {
+              "aws:TagKeys" = [
+                "PortfolioEnvironment",
+                "PortfolioManaged",
+                "PortfolioPersistent",
+                "PortfolioRepository",
+              ]
+            }
+          }
+        },
+        {
           Sid    = "ManageExactEnvironmentServices"
           Effect = "Allow"
           Action = [
             "apigateway:GET", "apigateway:PATCH", "apigateway:POST", "apigateway:PUT",
-            "cognito-idp:CreateUserPool", "cognito-idp:DescribeUserPool",
+            "cognito-idp:DescribeUserPool",
             "ecs:CreateCluster", "ecs:CreateService", "ecs:DescribeClusters", "ecs:DescribeServices",
             "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UpdateService",
             "logs:CreateLogGroup", "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents",
@@ -405,7 +459,6 @@ locals {
             "scheduler:CreateSchedule", "scheduler:GetSchedule", "scheduler:UpdateSchedule",
             "secretsmanager:CreateSecret", "secretsmanager:DescribeSecret", "secretsmanager:PutSecretValue",
             "secretsmanager:TagResource", "secretsmanager:UpdateSecret",
-            "servicediscovery:CreateHttpNamespace", "servicediscovery:CreateService",
             "servicediscovery:GetNamespace", "servicediscovery:GetService",
           ]
           Resource = [
@@ -427,13 +480,39 @@ locals {
         {
           Sid      = "CreateTaggedEnvironmentNetwork"
           Effect   = "Allow"
-          Action   = ["ec2:Create*", "ec2:Describe*", "ec2:Modify*", "ec2:AssociateRouteTable", "ec2:AttachInternetGateway"]
+          Action   = ["ec2:AllocateAddress", "ec2:Create*"]
           Resource = "*"
           Condition = {
             StringEquals = {
               "aws:RequestTag/PortfolioEnvironment" = environment
               "aws:RequestTag/PortfolioManaged"     = "true"
               "aws:RequestTag/PortfolioPersistent"  = "false"
+            }
+          }
+        },
+        {
+          Sid      = "InspectEnvironmentNetwork"
+          Effect   = "Allow"
+          Action   = "ec2:Describe*"
+          Resource = "*"
+        },
+        {
+          Sid    = "ManageTaggedEnvironmentNetwork"
+          Effect = "Allow"
+          Action = [
+            "ec2:AssociateRouteTable",
+            "ec2:AttachInternetGateway",
+            "ec2:AuthorizeSecurityGroupEgress",
+            "ec2:AuthorizeSecurityGroupIngress",
+            "ec2:CreateRoute",
+            "ec2:Modify*",
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "aws:ResourceTag/PortfolioEnvironment" = environment
+              "aws:ResourceTag/PortfolioManaged"     = "true"
+              "aws:ResourceTag/PortfolioPersistent"  = "false"
             }
           }
         },
