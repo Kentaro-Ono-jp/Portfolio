@@ -1023,6 +1023,54 @@ def test_review_adjudication_rejects_each_weakened_boundary(
     assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
 
 
+def test_review_adjudication_aggregate_decision_is_guarded_on_both_sides(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("ips-microkernel/procedures/adjudicate.md")
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    individual = "Assign exactly one individual disposition"
+    aggregate = "After every finding has a disposition, assign exactly one aggregate"
+    checkpoint = (
+        "Before any implementation mutation or merge, append one adjudication\n   checkpoint"
+    )
+
+    target.write_text(source, encoding="utf-8")
+    failures: list[str] = []
+    documentation_checker._validate_review_adjudication_sequence(failures)
+    assert failures == []
+
+    target.write_text(
+        source.replace(individual, "individual placeholder", 1)
+        .replace(aggregate, individual, 1)
+        .replace("individual placeholder", aggregate, 1),
+        encoding="utf-8",
+    )
+    failures = []
+    documentation_checker._validate_review_adjudication_sequence(failures)
+    assert failures == [
+        f"{relative_path.as_posix()}: aggregate correction-loop decision must follow "
+        "individual finding disposition"
+    ]
+
+    target.write_text(
+        source.replace(aggregate, "aggregate placeholder", 1)
+        .replace(checkpoint, aggregate, 1)
+        .replace("aggregate placeholder", checkpoint, 1),
+        encoding="utf-8",
+    )
+    failures = []
+    documentation_checker._validate_review_adjudication_sequence(failures)
+    assert failures == [
+        f"{relative_path.as_posix()}: aggregate correction-loop decision must precede "
+        "the focused-Issue checkpoint"
+    ]
+
+
 def test_knowledge_curation_contract_is_complete(
     documentation_checker: ModuleType,
 ) -> None:

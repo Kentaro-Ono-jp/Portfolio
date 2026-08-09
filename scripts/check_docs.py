@@ -2357,6 +2357,31 @@ def _validate_required_governance_files(
             )
 
 
+def _validate_review_adjudication_sequence(failures: list[str]) -> None:
+    relative_path = Path("ips-microkernel/procedures/adjudicate.md")
+    path = REPOSITORY_ROOT / relative_path
+    if not path.is_file():
+        return
+
+    content = " ".join(path.read_text(encoding="utf-8").split())
+    individual = "Assign exactly one individual disposition"
+    aggregate = "After every finding has a disposition, assign exactly one aggregate"
+    checkpoint = "Before any implementation mutation or merge, append one adjudication checkpoint"
+    if not all(marker in content for marker in (individual, aggregate, checkpoint)):
+        return
+
+    if content.index(aggregate) < content.index(individual):
+        failures.append(
+            f"{relative_path.as_posix()}: aggregate correction-loop decision must follow "
+            "individual finding disposition"
+        )
+    if content.index(aggregate) > content.index(checkpoint):
+        failures.append(
+            f"{relative_path.as_posix()}: aggregate correction-loop decision must precede "
+            "the focused-Issue checkpoint"
+        )
+
+
 def governance_failures() -> list[str]:
     failures: list[str] = []
 
@@ -2365,6 +2390,7 @@ def governance_failures() -> list[str]:
     _validate_required_governance_files(failures)
 
     _validate_required_governance_text(failures, REQUIRED_GOVERNANCE_TEXT)
+    _validate_review_adjudication_sequence(failures)
 
     for relative_path, forbidden_fragments in FORBIDDEN_STALE_ROUTING_TEXT.items():
         path = REPOSITORY_ROOT / relative_path
