@@ -317,10 +317,41 @@ def resolved_context(
     return context
 
 
-def verify_matrix(payload: dict[str, Any]) -> dict[str, int]:
-    matrix = json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
-    if matrix.get("schemaVersion") != 1:
+def validate_policy_matrix_document(matrix: Any) -> dict[str, Any]:
+    if not isinstance(matrix, dict):
+        raise RuntimeError("Policy matrix must be a JSON object")
+    schema_version = matrix.get("schemaVersion")
+    if type(schema_version) is not int or schema_version != 1:
         raise RuntimeError("Unknown policy matrix schema")
+    return matrix
+
+
+def load_policy_matrix() -> dict[str, Any]:
+    return validate_policy_matrix_document(
+        json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
+    )
+
+
+def verify_policy_matrix_schema_contract() -> dict[str, Any]:
+    matrix = load_policy_matrix()
+    for boolean_version in (True, False):
+        mutation = json.loads(
+            json.dumps({**matrix, "schemaVersion": boolean_version}, sort_keys=True)
+        )
+        try:
+            validate_policy_matrix_document(mutation)
+        except RuntimeError as error:
+            if str(error) != "Unknown policy matrix schema":
+                raise
+        else:
+            raise RuntimeError(
+                "Policy matrix accepted a JSON boolean schema discriminator"
+            )
+    return matrix
+
+
+def verify_matrix(payload: dict[str, Any]) -> dict[str, int]:
+    matrix = verify_policy_matrix_schema_contract()
     counts = {
         "identityAllowed": 0,
         "identityDenied": 0,
