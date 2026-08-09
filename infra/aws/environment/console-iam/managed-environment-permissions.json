@@ -138,6 +138,28 @@
       }
     },
     {
+      "Sid": "TagCloudMapForRequiredCreateAuthorization",
+      "Effect": "Allow",
+      "Action": "servicediscovery:TagResource",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
       "Sid": "TagOwnedCognitoUserPool",
       "Effect": "Allow",
       "Action": "cognito-idp:TagResource",

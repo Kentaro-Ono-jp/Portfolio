@@ -497,10 +497,29 @@
       "expected": "allowed"
     },
     {
-      "name": "operator attaches required ownership tags to Cloud Map",
+      "name": "owner accepts exact Cloud Map tags on an arbitrary namespace target",
       "role": "manual/operator-deployment",
       "action": "servicediscovery:TagResource",
-      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-foreign",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "owner accepts exact Cloud Map tags on an arbitrary service target",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-foreign",
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "manual",
         "aws:RequestTag/PortfolioManaged": "true",

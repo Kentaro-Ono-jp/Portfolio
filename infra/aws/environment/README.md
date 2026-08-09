@@ -34,11 +34,17 @@ proof pairs each owned allow
 with cross-environment, cross-repository, unmanaged, persistent, direct-call,
 and wrong-delegating-service negatives and also enforces rendered IAM quotas.
 
-Cloud Map ownership tags are immutable after creation. AWS provider 6.58.0
-places them directly on `CreatePrivateDnsNamespace` and `CreateService`, while
-the static operator identity and boundary intentionally omit standalone
-`TagResource`; AWS exposes no resource-level or prior-resource-tag condition
-that could prevent that API from relabeling an unrelated namespace or service.
+AWS maps both Cloud Map create operations to their create action plus
+`servicediscovery:TagResource`, even though provider 6.58.0 places the tags in
+the create payload. The static operator identity and its separate boundary
+therefore grant that companion action at `Resource: "*"`, limited to the exact
+four request tags and tag-key set. AWS exposes neither resource-level nor prior
+resource-tag conditions for it, so the same exact request can relabel an
+unrelated Cloud Map namespace or service. The account owner accepts that
+service limitation only for this dedicated deployment account and trusted
+human operator. Cloud Map inventory must be empty of unrelated resources
+before and after use; any unrelated target stops the procedure for owner
+review. Environment Terraform still consumes role ARNs and never mutates IAM.
 
 All taggable environment resources receive exactly these provider default
 tags:

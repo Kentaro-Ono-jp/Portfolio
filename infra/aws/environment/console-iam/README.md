@@ -72,12 +72,18 @@ environment ARN patterns. Their inverse proof rejects cross-environment,
 cross-repository, unmanaged, persistent, missing/additional-tag, and foreign
 resource cases at both the identity and effective layers.
 
-Cloud Map ownership tags are creation-time-only and immutable. Provider 6.58.0
-passes them directly in `CreatePrivateDnsNamespace` and `CreateService`; neither
-the operator identity nor its boundary grants standalone
-`servicediscovery:TagResource`, because AWS cannot scope that existing-resource
-mutation by ARN or prior resource tags. Foreign namespace and service retagging
-must remain denied at the identity, boundary, and effective layers.
+AWS's operation-to-IAM mapping requires `servicediscovery:TagResource` alongside
+both Cloud Map create actions, although provider 6.58.0 sends the tags in each
+create payload. `ManagedEnvironmentPermissions` and the separately managed
+`OperatorBoundary` therefore grant that companion action at `Resource: "*"`
+with exactly the four request tags and no additional tag key. AWS exposes no
+resource-level or prior-resource-tag condition for this API: an exact request
+can also relabel an unrelated namespace or service. This is an owner-accepted
+static exception, not an ownership-isolation claim. It is usable only by the
+trusted account-owner operator in the dedicated deployment account. Inventory
+Cloud Map immediately before and after use, proceed only when no unrelated
+namespace or service exists, and stop for owner review otherwise. Do not add a
+dynamic allow, dynamic deny, inline policy, or Terraform IAM mutation.
 
 `DestroyPolicy` binds generated network, API Gateway, Cognito, and Cloud Map
 identifiers to the complete four-tag ownership tuple. Exact-name services use

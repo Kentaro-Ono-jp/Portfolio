@@ -182,6 +182,7 @@
     ],
     "aws_service_discovery_private_dns_namespace": [
       ["servicediscovery:CreatePrivateDnsNamespace", "*", "request-tags"],
+      ["servicediscovery:TagResource", "cloudmap-namespace", "owner-accepted-global-tagging"],
       ["ec2:DescribeRegions", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
       ["route53:CreateHostedZone", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
       ["route53:GetHostedZone", "route53-hosted-zone", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
@@ -193,6 +194,7 @@
     "aws_service_discovery_service": [
       ["servicediscovery:CreateService", "cloudmap-namespace", "resource-tags"],
       ["servicediscovery:CreateService", "cloudmap-service", "request-tags"],
+      ["servicediscovery:TagResource", "cloudmap-service", "owner-accepted-global-tagging"],
       ["servicediscovery:GetService", "cloudmap-service", "global-read"],
       ["servicediscovery:ListTagsForResource", "cloudmap-service", "global-read"]
     ],

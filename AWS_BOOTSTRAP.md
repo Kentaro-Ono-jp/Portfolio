@@ -99,16 +99,25 @@ request tags and exact tag-key set. Wrong, missing, or additional ownership
 tags fail the immutable identity layer and effective intersection; workload
 roles fail the boundary as well.
 
-AWS Cloud Map does not expose resource-level authorization or resource-tag
-conditions for standalone `TagResource`. Granting it with request tags would let
-the operator overwrite the ownership tuple of an unrelated existing namespace
-or service. The operator and its boundary therefore omit that action entirely.
-Provider 6.58.0 passes the four ownership tags directly in
-`CreatePrivateDnsNamespace` and `CreateService`; those create-time tags are the
-only supported Cloud Map ownership path and remain immutable afterward. Exact
-namespace ownership gates `CreateService`, exact ownership gates destroy, and
-static proof rejects direct retagging of foreign namespaces and services at the
-identity, boundary, and effective layers.
+AWS maps `CreatePrivateDnsNamespace` and `CreateService` to each create action
+plus `servicediscovery:TagResource`; provider 6.58.0 passing tags directly in
+the create payload does not remove that dependent authorization. The operator
+identity and its separately generated boundary therefore both permit
+`TagResource` at `Resource: "*"`, with the identity limited to the exact four
+request tags and tag-key set. AWS exposes no resource-level or prior-resource-
+tag condition for that API, so the same exact request can overwrite the tuple
+on an unrelated existing namespace or service. Static proof records that
+foreign-target allow rather than claiming isolation, while rejecting wrong,
+missing, or additional ownership tags.
+
+The selected live path is the persistent Console-owned IAM contract; it is not
+reset or replaced by this bootstrap root. The bootstrap-generated equivalent
+retains the same accepted Cloud Map exception so both implementations describe
+the same authority. The exception is limited to a dedicated deployment account
+and trusted account-owner operator. Inventory Cloud Map before and after use,
+proceed only when unrelated namespaces and services are absent, and stop for
+owner review otherwise. Exact namespace ownership still gates service creation
+and exact ownership still gates destroy.
 
 The future GitHub workflow and repository OIDC customization are Step 6
 non-targets. Before that workflow requests a token, the repository owner must

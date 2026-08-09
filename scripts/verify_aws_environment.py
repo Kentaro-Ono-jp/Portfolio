@@ -85,6 +85,7 @@ OPERATOR_ACTION_OWNERSHIP_MODES = {
     "exact-resource",
     "exact-resource-and-request-tags",
     "global-read",
+    "owner-accepted-global-tagging",
     "request-tags",
     "resource-and-request-tags",
     "resource-tags",
@@ -447,6 +448,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             context: dict[str, Any] = {}
             if ownership in {
                 "exact-resource-and-request-tags",
+                "owner-accepted-global-tagging",
                 "request-tags",
                 "resource-and-request-tags",
             }:
@@ -732,21 +734,59 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         f"aws:RequestTag/{key}": value for key, value in OWNERSHIP_TAGS.items()
     }
     cloud_map_retag_context["aws:TagKeys"] = list(OWNERSHIP_TAGS)
+    cloud_map_tag_identity_statements = [
+        statement
+        for statement in permissions["Statement"]
+        if "servicediscovery:TagResource" in string_values(statement.get("Action", []))
+    ]
+    expected_cloud_map_tag_condition = {
+        "StringEquals": {
+            f"aws:RequestTag/{key}": value for key, value in OWNERSHIP_TAGS.items()
+        },
+        "ForAllValues:StringEquals": {"aws:TagKeys": list(OWNERSHIP_TAGS)},
+    }
+    record(
+        "operatorCloudMapTaggingUsesOneExactGlobalIdentityGrant",
+        len(cloud_map_tag_identity_statements) == 1
+        and cloud_map_tag_identity_statements[0].get("Resource") == "*"
+        and cloud_map_tag_identity_statements[0].get("Condition")
+        == expected_cloud_map_tag_condition,
+    )
+    cloud_map_tag_boundary_statements = [
+        statement
+        for statement in boundary["Statement"]
+        if "servicediscovery:TagResource" in string_values(statement.get("Action", []))
+    ]
+    record(
+        "operatorCloudMapTaggingUsesSeparateGlobalBoundaryCeiling",
+        len(cloud_map_tag_boundary_statements) == 1
+        and cloud_map_tag_boundary_statements[0].get("Resource") == "*"
+        and "Condition" not in cloud_map_tag_boundary_statements[0],
+    )
     for label, resource in cloud_map_foreign_resources.items():
-        record_operator_denial(
-            f"ForeignCloudMap{label}Retag",
+        identity_allows = policy_allows(
+            permissions,
+            "servicediscovery:TagResource",
+            resource,
+            cloud_map_retag_context,
+        )
+        boundary_allows = policy_allows(
+            boundary,
             "servicediscovery:TagResource",
             resource,
             cloud_map_retag_context,
         )
         record(
-            f"operatorBoundaryRejectsForeignCloudMap{label}Retag",
-            not policy_allows(
-                boundary,
-                "servicediscovery:TagResource",
-                resource,
-                cloud_map_retag_context,
-            ),
+            f"operatorIdentityAllowsOwnerAcceptedForeignCloudMap{label}Retag",
+            identity_allows,
+        )
+        record(
+            f"operatorBoundaryAllowsOwnerAcceptedForeignCloudMap{label}Retag",
+            boundary_allows,
+        )
+        record(
+            f"operatorEffectiveAllowsOwnerAcceptedForeignCloudMap{label}Retag",
+            identity_allows and boundary_allows,
         )
 
     for (
@@ -772,6 +812,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
                 )
         if ownership in {
             "exact-resource-and-request-tags",
+            "owner-accepted-global-tagging",
             "request-tags",
             "resource-and-request-tags",
         } or any(key.startswith("aws:RequestTag/") for key in context):
@@ -1285,9 +1326,20 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 action not in CLOUD_MAP_DELEGATED_ACTIONS
             ):
                 raise RuntimeError(f"Unexpected service-delegated action: {row}")
-            if action == "servicediscovery:TagResource":
+            if ownership == "owner-accepted-global-tagging" and (
+                action != "servicediscovery:TagResource"
+                or resource not in {"cloudmap-namespace", "cloudmap-service"}
+            ):
                 raise RuntimeError(
-                    "Standalone Cloud Map TagResource cannot establish ownership"
+                    "Owner-accepted global tagging is limited to the two exact "
+                    f"Cloud Map authorization targets: {row}"
+                )
+            if action == "servicediscovery:TagResource" and (
+                ownership != "owner-accepted-global-tagging"
+            ):
+                raise RuntimeError(
+                    "Cloud Map TagResource must disclose its owner-accepted "
+                    f"global-target limitation: {row}"
                 )
             if len(row) == 4 and not isinstance(row[3], dict):
                 raise RuntimeError(f"Operator action context must be an object: {row}")
@@ -1304,10 +1356,72 @@ def verify_operator_action_matrix() -> dict[str, Any]:
         raise RuntimeError(
             "Operator action matrix contains duplicate resource/action rows"
         )
+    required_cloud_map_authorizations = {
+        "aws_service_discovery_private_dns_namespace": {
+            (
+                "servicediscovery:CreatePrivateDnsNamespace",
+                "*",
+                "request-tags",
+            ),
+            (
+                "servicediscovery:TagResource",
+                "cloudmap-namespace",
+                "owner-accepted-global-tagging",
+            ),
+        },
+        "aws_service_discovery_service": {
+            (
+                "servicediscovery:CreateService",
+                "cloudmap-service",
+                "request-tags",
+            ),
+            (
+                "servicediscovery:TagResource",
+                "cloudmap-service",
+                "owner-accepted-global-tagging",
+            ),
+        },
+    }
+
+    def require_cloud_map_operation_authorizations(
+        candidate_actions: dict[str, Any],
+    ) -> None:
+        for resource_type, required in required_cloud_map_authorizations.items():
+            actual = {tuple(row[:3]) for row in candidate_actions[resource_type]}
+            if not required.issubset(actual):
+                raise RuntimeError(
+                    "Cloud Map create operations must include every action from "
+                    "AWS's operation-to-IAM authorization mapping: "
+                    f"{resource_type} missing={sorted(required - actual)}"
+                )
+
+    require_cloud_map_operation_authorizations(resource_actions)
+    operation_mapping_mutation_cases = 0
+    for resource_type in required_cloud_map_authorizations:
+        mutation = {key: list(value) for key, value in resource_actions.items()}
+        mutation[resource_type] = [
+            row
+            for row in mutation[resource_type]
+            if row[0] != "servicediscovery:TagResource"
+        ]
+        try:
+            require_cloud_map_operation_authorizations(mutation)
+        except RuntimeError as error:
+            if resource_type not in str(error):
+                raise RuntimeError(
+                    "Cloud Map operation-mapping mutation failed unexpectedly"
+                ) from error
+            operation_mapping_mutation_cases += 1
+        else:
+            raise RuntimeError(
+                "Cloud Map operation-mapping mutation was not rejected: "
+                f"{resource_type}"
+            )
     return {
         "provider": provider,
         "resourceTypes": len(resource_actions),
         "actionRows": len(rows),
+        "operationMappingMutationCases": operation_mapping_mutation_cases,
         "sha256": hashlib.sha256(OPERATOR_ACTION_MATRIX_PATH.read_bytes()).hexdigest(),
     }
 

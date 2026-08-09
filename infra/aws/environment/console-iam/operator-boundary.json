@@ -26,6 +26,7 @@
         "servicediscovery:GetOperation",
         "servicediscovery:GetService",
         "servicediscovery:ListTagsForResource",
+        "servicediscovery:TagResource",
         "sts:GetCallerIdentity"
       ],
       "Resource": "*"

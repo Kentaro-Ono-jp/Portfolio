@@ -526,26 +526,52 @@ proved/unproved classification, or permanence claim.
   declared immutable enforcement layer and effective intersection; inventory
   succeeds without fabricated request tags; every required resource in a
   multi-resource authorization is exercised independently; and every dependent
-  tagging action has its own passing case with an exact ownership-key ceiling
-  and cannot relabel a foreign target. If AWS exposes neither resource-level
-  authorization nor prior resource-tag conditions, that existing-resource tag
-  action cannot establish ownership. No rendered write verb or resource form is
-  omitted from the inverse matrix.
+  tagging action has its own passing case with an exact ownership-key ceiling.
+  If AWS exposes neither resource-level authorization nor prior resource-tag
+  conditions, the action either remains denied while creation still succeeds,
+  or an explicit owner-selected exception discloses that an exact request can
+  relabel a foreign target and limits use to a dedicated account, trusted
+  principal, and before/after inventory stop gate. No rendered write verb or
+  resource form is omitted from the inverse matrix.
 - **Repair:** Split creation-time request-tag, unconditioned inventory, and
   existing-resource ownership-tag statements; use actual collection or
   resource-less create forms; grant the exact dependent tagging actions;
   require existing ownership for retagging where the service exposes resource
-  tags; when existing-resource tagging cannot be scoped, pass tags in the create
-  request and omit the standalone tag action; exercise every required
-  parent/new resource separately; and retain the layer-by-layer positive,
-  unowned, foreign-target, and inverse-negative matrix with explicit
-  expectations for the enforcing layer and effective intersection.
+  tags; when existing-resource tagging cannot be scoped, either omit the action
+  only after proving the operation does not require it, or record an owner-
+  accepted exception with explicit foreign-target positive proof and an
+  operational inventory gate; exercise every required parent/new resource
+  separately; and retain layer-by-layer positive and inverse expectations.
 - **Origins:** PR #107
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500),
   PR #111
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233003435),
   PR #111
-  [corrected re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233197383).
+  [corrected re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233197383),
+  PR #111
+  [operation-mapping re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233344084).
+
+### Keep every implementation of one authority contract aligned
+
+- **Trigger:** A repository contains two or more current implementations of
+  the same role, permissions policy, boundary, trust, or action matrix, such as
+  a persistent Console path and a bootstrap-generated path.
+- **HEAD effect:** `moving`
+- **Problem:** A correction changes one implementation or its documentation
+  while another live-capable implementation retains different effective
+  authority, so the same named operator contract has incompatible behavior.
+- **Detect:** Enumerate every code, rendered policy, matrix, verifier, manifest,
+  and operator document that can create, update, or assert the authority; for
+  each changed action, compare identity, boundary, and effective decisions with
+  the same positive, inverse, and provider-operation contexts.
+- **Pass:** Every current implementation includes the complete cloud operation
+  authorization set, reports the same accepted exceptions and limitations, and
+  produces the same effective decision for each common test context.
+- **Repair:** Select the persistent authority source of truth, align every other
+  implementation and proof to it in the same correction, and remove stale
+  claims rather than treating one path as implicitly non-current.
+- **Origins:** PR #111
+  [operation-mapping re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233344084).
 
 ### Bind topology edges to resource identities
 
