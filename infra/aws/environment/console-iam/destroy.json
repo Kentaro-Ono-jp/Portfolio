@@ -1,0 +1,192 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadNetworkInterfaceCleanupState",
+      "Effect": "Allow",
+      "Action": "ec2:DescribeNetworkInterfaces",
+      "Resource": "*"
+    },
+    {
+      "Sid": "DeleteOwnedNetworkResources",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Delete*",
+        "ec2:DetachInternetGateway",
+        "ec2:DisassociateRouteTable",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "LetOwnedMqBrokerCleanItsNetworkInterfaces",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DeleteNetworkInterface",
+        "ec2:DeleteNetworkInterfacePermission",
+        "ec2:DeleteVpcEndpoints",
+        "ec2:DetachNetworkInterface"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:CalledVia": "mq.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteOwnedApiGatewayResources",
+      "Effect": "Allow",
+      "Action": "apigateway:DELETE",
+      "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*",
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteOwnedCognitoResources",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:DeleteGroup",
+        "cognito-idp:DeleteManagedLoginBranding",
+        "cognito-idp:DeleteResourceServer",
+        "cognito-idp:DeleteUserPool",
+        "cognito-idp:DeleteUserPoolClient",
+        "cognito-idp:DeleteUserPoolDomain"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:cognito-idp:${AWS_REGION}:${AWS_ACCOUNT_ID}:userpool/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteOwnedCloudMapResources",
+      "Effect": "Allow",
+      "Action": [
+        "servicediscovery:DeleteNamespace",
+        "servicediscovery:DeleteService"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:servicediscovery:${AWS_REGION}:${AWS_ACCOUNT_ID}:namespace/*",
+        "arn:${AWS_PARTITION}:servicediscovery:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteExactNamedEcsResources",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeleteCluster",
+        "ecs:DeleteService",
+        "ecs:UpdateService"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${NAME_PREFIX}-${ENVIRONMENT}",
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/${NAME_PREFIX}-${ENVIRONMENT}/${NAME_PREFIX}-${ENVIRONMENT}-*"
+      ]
+    },
+    {
+      "Sid": "DeregisterTaskDefinitionsAwsGlobalOnly",
+      "Effect": "Allow",
+      "Action": "ecs:DeregisterTaskDefinition",
+      "Resource": "*"
+    },
+    {
+      "Sid": "DeleteExactOwnedLogGroups",
+      "Effect": "Allow",
+      "Action": "logs:DeleteLogGroup",
+      "Resource": "arn:${AWS_PARTITION}:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteExactOwnedBroker",
+      "Effect": "Allow",
+      "Action": "mq:DeleteBroker",
+      "Resource": "arn:${AWS_PARTITION}:mq:${AWS_REGION}:${AWS_ACCOUNT_ID}:broker:${NAME_PREFIX}-${ENVIRONMENT}-rabbitmq:*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteExactOwnedRdsResources",
+      "Effect": "Allow",
+      "Action": ["rds:DeleteDBInstance", "rds:DeleteDBSubnetGroup"],
+      "Resource": [
+        "arn:${AWS_PARTITION}:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:db:${NAME_PREFIX}-${ENVIRONMENT}-postgresql",
+        "arn:${AWS_PARTITION}:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:subgrp:${NAME_PREFIX}-${ENVIRONMENT}"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteExactOwnedSecrets",
+      "Effect": "Allow",
+      "Action": "secretsmanager:DeleteSecret",
+      "Resource": "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteExactApplicationBucket",
+      "Effect": "Allow",
+      "Action": ["s3:DeleteBucket", "s3:DeleteObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:${AWS_PARTITION}:s3:::${NAME_PREFIX}-${ENVIRONMENT}-documents",
+        "arn:${AWS_PARTITION}:s3:::${NAME_PREFIX}-${ENVIRONMENT}-documents/*"
+      ]
+    }
+  ]
+}

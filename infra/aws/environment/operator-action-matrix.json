@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "terraformAwsProvider": {
+    "source": "hashicorp/aws",
+    "version": "6.58.0",
+    "sourceCommit": "9f8360a9295ffe4507e06d943a3b8c673a781ced"
+  },
+  "resourceActions": {
+    "aws_apigatewayv2_api": [
+      ["apigateway:POST", "api-gateway-api-collection", "request-tags"],
+      ["apigateway:GET", "api-gateway-api", "resource-tags"],
+      ["apigateway:POST", "api-gateway-api", "resource-tags"]
+    ],
+    "aws_apigatewayv2_integration": [
+      ["apigateway:POST", "api-gateway-integration-collection", "resource-tags"],
+      ["apigateway:GET", "api-gateway-integration", "resource-tags"]
+    ],
+    "aws_apigatewayv2_route": [
+      ["apigateway:POST", "api-gateway-route-collection", "resource-tags"],
+      ["apigateway:GET", "api-gateway-route", "resource-tags"]
+    ],
+    "aws_apigatewayv2_stage": [
+      ["apigateway:POST", "api-gateway-stage-collection", "resource-tags"],
+      ["apigateway:GET", "api-gateway-stage", "resource-tags"],
+      ["apigateway:POST", "api-gateway-stage", "resource-tags"]
+    ],
+    "aws_apigatewayv2_vpc_link": [
+      ["apigateway:POST", "api-gateway-vpc-link-collection", "request-tags"],
+      ["apigateway:GET", "api-gateway-vpc-link", "resource-tags"],
+      ["apigateway:POST", "api-gateway-vpc-link", "resource-tags"]
+    ],
+    "aws_cloudwatch_log_group": [
+      ["logs:CreateLogGroup", "log-group", "exact-resource-and-request-tags"],
+      ["logs:PutRetentionPolicy", "log-group", "exact-resource"],
+      ["logs:DescribeLogGroups", "*", "global-read"],
+      ["logs:ListTagsForResource", "log-group", "exact-resource"],
+      ["logs:TagResource", "log-group", "exact-resource-and-request-tags"]
+    ],
+    "aws_cognito_managed_login_branding": [
+      ["cognito-idp:CreateManagedLoginBranding", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:DescribeManagedLoginBranding", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:DescribeManagedLoginBrandingByClient", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:ListUserPoolClients", "cognito-user-pool", "resource-tags"]
+    ],
+    "aws_cognito_resource_server": [
+      ["cognito-idp:CreateResourceServer", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:DescribeResourceServer", "cognito-user-pool", "resource-tags"]
+    ],
+    "aws_cognito_user_group": [
+      ["cognito-idp:CreateGroup", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:GetGroup", "cognito-user-pool", "resource-tags"]
+    ],
+    "aws_cognito_user_pool": [
+      ["cognito-idp:CreateUserPool", "*", "request-tags"],
+      ["cognito-idp:DescribeUserPool", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:GetUserPoolMfaConfig", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:ListTagsForResource", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:TagResource", "cognito-user-pool", "resource-and-request-tags"]
+    ],
+    "aws_cognito_user_pool_client": [
+      ["cognito-idp:CreateUserPoolClient", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:DescribeUserPoolClient", "cognito-user-pool", "resource-tags"]
+    ],
+    "aws_cognito_user_pool_domain": [
+      ["cognito-idp:CreateUserPoolDomain", "cognito-user-pool", "resource-tags"],
+      ["cognito-idp:DescribeUserPoolDomain", "*", "global-read"]
+    ],
+    "aws_db_instance": [
+      ["rds:CreateDBInstance", "rds-db", "exact-resource-and-request-tags"],
+      ["rds:DescribeDBInstances", "rds-db", "exact-resource"],
+      ["rds:ListTagsForResource", "rds-db", "exact-resource"],
+      ["rds:AddTagsToResource", "rds-db", "exact-resource-and-request-tags"]
+    ],
+    "aws_db_subnet_group": [
+      ["rds:CreateDBSubnetGroup", "rds-subnet-group", "exact-resource-and-request-tags"],
+      ["rds:DescribeDBSubnetGroups", "rds-subnet-group", "exact-resource"],
+      ["rds:ListTagsForResource", "rds-subnet-group", "exact-resource"],
+      ["rds:AddTagsToResource", "rds-subnet-group", "exact-resource-and-request-tags"]
+    ],
+    "aws_ecs_cluster": [
+      ["ecs:CreateCluster", "ecs-cluster", "exact-resource-and-request-tags"],
+      ["ecs:DescribeClusters", "ecs-cluster", "exact-resource"],
+      ["ecs:ListTagsForResource", "ecs-cluster", "exact-resource"],
+      ["ecs:TagResource", "ecs-cluster", "exact-resource-and-request-tags"]
+    ],
+    "aws_ecs_service": [
+      ["ecs:CreateService", "ecs-service", "exact-resource-and-request-tags"],
+      ["ecs:DescribeServices", "ecs-service", "exact-resource"],
+      ["ecs:ListTagsForResource", "ecs-service", "exact-resource"],
+      ["ecs:TagResource", "ecs-service", "exact-resource-and-request-tags"]
+    ],
+    "aws_ecs_task_definition": [
+      ["ecs:RegisterTaskDefinition", "ecs-task-definition", "exact-resource-and-request-tags"],
+      ["ecs:DescribeTaskDefinition", "ecs-task-definition", "exact-resource"],
+      ["ecs:ListTagsForResource", "ecs-task-definition", "exact-resource"],
+      ["ecs:TagResource", "ecs-task-definition", "exact-resource-and-request-tags"],
+      ["iam:PassRole", "iam-task-execution-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}],
+      ["iam:PassRole", "iam-web-workload-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}],
+      ["iam:PassRole", "iam-api-workload-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}],
+      ["iam:PassRole", "iam-ml-workload-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}]
+    ],
+    "aws_internet_gateway": [
+      ["ec2:CreateInternetGateway", "*", "request-tags"],
+      ["ec2:CreateTags", "ec2-internet-gateway", "request-tags", {"ec2:CreateAction": "CreateInternetGateway"}],
+      ["ec2:DescribeInternetGateways", "*", "global-read"],
+      ["ec2:AttachInternetGateway", "ec2-internet-gateway", "resource-tags"]
+    ],
+    "aws_mq_broker": [
+      ["mq:CreateBroker", "*", "request-tags"],
+      ["mq:CreateTags", "mq-broker", "exact-resource-and-request-tags"],
+      ["mq:DescribeBroker", "mq-broker", "exact-resource"],
+      ["mq:DescribeSharedResources", "mq-broker", "exact-resource"],
+      ["mq:ListTags", "mq-broker", "exact-resource"]
+    ],
+    "aws_route": [
+      ["ec2:CreateRoute", "ec2-route-table", "resource-tags"],
+      ["ec2:DescribeRouteTables", "*", "global-read"]
+    ],
+    "aws_route_table": [
+      ["ec2:CreateRouteTable", "*", "request-tags"],
+      ["ec2:CreateTags", "ec2-route-table", "request-tags", {"ec2:CreateAction": "CreateRouteTable"}],
+      ["ec2:DescribeRouteTables", "*", "global-read"]
+    ],
+    "aws_route_table_association": [
+      ["ec2:AssociateRouteTable", "ec2-route-table", "resource-tags"],
+      ["ec2:DescribeRouteTables", "*", "global-read"]
+    ],
+    "aws_s3_bucket": [
+      ["s3:CreateBucket", "app-bucket", "exact-resource"],
+      ["s3:ListBucket", "app-bucket", "exact-resource"],
+      ["s3:PutBucketTagging", "app-bucket", "exact-resource"],
+      ["s3:GetBucketTagging", "app-bucket", "exact-resource"],
+      ["s3:GetBucketPolicy", "app-bucket", "exact-resource"],
+      ["s3:GetBucketAcl", "app-bucket", "exact-resource"],
+      ["s3:GetBucketCORS", "app-bucket", "exact-resource"],
+      ["s3:GetBucketWebsite", "app-bucket", "exact-resource"],
+      ["s3:GetBucketVersioning", "app-bucket", "exact-resource"],
+      ["s3:GetAccelerateConfiguration", "app-bucket", "exact-resource"],
+      ["s3:GetBucketRequestPayment", "app-bucket", "exact-resource"],
+      ["s3:GetBucketLogging", "app-bucket", "exact-resource"],
+      ["s3:GetLifecycleConfiguration", "app-bucket", "exact-resource"],
+      ["s3:GetReplicationConfiguration", "app-bucket", "exact-resource"],
+      ["s3:GetEncryptionConfiguration", "app-bucket", "exact-resource"],
+      ["s3:GetObjectLockConfiguration", "app-bucket", "exact-resource"],
+      ["s3:GetBucketLocation", "app-bucket", "exact-resource"]
+    ],
+    "aws_s3_bucket_lifecycle_configuration": [
+      ["s3:PutLifecycleConfiguration", "app-bucket", "exact-resource"],
+      ["s3:GetLifecycleConfiguration", "app-bucket", "exact-resource"]
+    ],
+    "aws_s3_bucket_ownership_controls": [
+      ["s3:PutBucketOwnershipControls", "app-bucket", "exact-resource"],
+      ["s3:GetBucketOwnershipControls", "app-bucket", "exact-resource"]
+    ],
+    "aws_s3_bucket_policy": [
+      ["s3:PutBucketPolicy", "app-bucket", "exact-resource"],
+      ["s3:GetBucketPolicy", "app-bucket", "exact-resource"]
+    ],
+    "aws_s3_bucket_public_access_block": [
+      ["s3:PutBucketPublicAccessBlock", "app-bucket", "exact-resource"],
+      ["s3:GetBucketPublicAccessBlock", "app-bucket", "exact-resource"]
+    ],
+    "aws_s3_bucket_server_side_encryption_configuration": [
+      ["s3:PutEncryptionConfiguration", "app-bucket", "exact-resource"],
+      ["s3:GetEncryptionConfiguration", "app-bucket", "exact-resource"]
+    ],
+    "aws_secretsmanager_secret": [
+      ["secretsmanager:CreateSecret", "secret", "exact-resource-and-request-tags"],
+      ["secretsmanager:DescribeSecret", "secret", "exact-resource"],
+      ["secretsmanager:GetResourcePolicy", "secret", "exact-resource"],
+      ["secretsmanager:TagResource", "secret", "exact-resource-and-request-tags"]
+    ],
+    "aws_secretsmanager_secret_version": [
+      ["secretsmanager:PutSecretValue", "secret", "exact-resource"],
+      ["secretsmanager:GetSecretValue", "secret", "exact-resource"]
+    ],
+    "aws_security_group": [
+      ["ec2:CreateSecurityGroup", "*", "request-tags"],
+      ["ec2:CreateTags", "ec2-security-group", "request-tags", {"ec2:CreateAction": "CreateSecurityGroup"}],
+      ["ec2:DescribeSecurityGroups", "*", "global-read"],
+      ["ec2:RevokeSecurityGroupEgress", "ec2-security-group", "resource-tags"]
+    ],
+    "aws_service_discovery_private_dns_namespace": [
+      ["servicediscovery:CreatePrivateDnsNamespace", "*", "request-tags"],
+      ["servicediscovery:TagResource", "cloudmap-namespace", "owner-accepted-global-tagging"],
+      ["ec2:DescribeRegions", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
+      ["route53:CreateHostedZone", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
+      ["route53:GetHostedZone", "route53-hosted-zone", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
+      ["route53:ListHostedZonesByName", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
+      ["servicediscovery:GetOperation", "*", "global-read"],
+      ["servicediscovery:GetNamespace", "cloudmap-namespace", "global-read"],
+      ["servicediscovery:ListTagsForResource", "cloudmap-namespace", "global-read"]
+    ],
+    "aws_service_discovery_service": [
+      ["servicediscovery:CreateService", "cloudmap-namespace", "resource-tags"],
+      ["servicediscovery:CreateService", "cloudmap-service", "request-tags"],
+      ["servicediscovery:TagResource", "cloudmap-service", "owner-accepted-global-tagging"],
+      ["servicediscovery:GetService", "cloudmap-service", "global-read"],
+      ["servicediscovery:ListTagsForResource", "cloudmap-service", "global-read"]
+    ],
+    "aws_subnet": [
+      ["ec2:CreateSubnet", "*", "request-tags"],
+      ["ec2:CreateTags", "ec2-subnet", "request-tags", {"ec2:CreateAction": "CreateSubnet"}],
+      ["ec2:DescribeSubnets", "*", "global-read"]
+    ],
+    "aws_vpc": [
+      ["ec2:CreateVpc", "*", "request-tags"],
+      ["ec2:CreateTags", "ec2-vpc", "request-tags", {"ec2:CreateAction": "CreateVpc"}],
+      ["ec2:DescribeVpcs", "*", "global-read"],
+      ["ec2:DescribeVpcAttribute", "*", "global-read"],
+      ["ec2:DescribeNetworkAcls", "*", "global-read"],
+      ["ec2:DescribeRouteTables", "*", "global-read"],
+      ["ec2:DescribeSecurityGroups", "*", "global-read"],
+      ["ec2:ModifyVpcAttribute", "ec2-vpc", "resource-tags"]
+    ],
+    "aws_vpc_endpoint": [
+      ["ec2:CreateVpcEndpoint", "*", "request-tags"],
+      ["ec2:CreateTags", "ec2-vpc-endpoint", "request-tags", {"ec2:CreateAction": "CreateVpcEndpoint"}],
+      ["ec2:DescribeVpcEndpoints", "*", "global-read"],
+      ["ec2:DescribePrefixLists", "*", "global-read"]
+    ],
+    "aws_vpc_security_group_egress_rule": [
+      ["ec2:AuthorizeSecurityGroupEgress", "ec2-security-group", "resource-tags"],
+      ["ec2:AuthorizeSecurityGroupEgress", "ec2-security-group-rule", "request-tags"],
+      ["ec2:CreateTags", "ec2-security-group-rule", "request-tags", {"ec2:CreateAction": "AuthorizeSecurityGroupEgress"}],
+      ["ec2:DescribeSecurityGroupRules", "*", "global-read"],
+      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"]
+    ],
+    "aws_vpc_security_group_ingress_rule": [
+      ["ec2:AuthorizeSecurityGroupIngress", "ec2-security-group", "resource-tags"],
+      ["ec2:AuthorizeSecurityGroupIngress", "ec2-security-group-rule", "request-tags"],
+      ["ec2:CreateTags", "ec2-security-group-rule", "request-tags", {"ec2:CreateAction": "AuthorizeSecurityGroupIngress"}],
+      ["ec2:DescribeSecurityGroupRules", "*", "global-read"],
+      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"]
+    ]
+  }
+}

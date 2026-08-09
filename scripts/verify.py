@@ -316,7 +316,8 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
     if normalized in {
         "scripts/aws_bootstrap_backend.py",
         "scripts/verify_aws_bootstrap.py",
-    } or normalized.startswith("infra/aws/bootstrap/"):
+        "scripts/verify_aws_environment.py",
+    } or normalized.startswith(("infra/aws/bootstrap/", "infra/aws/environment/")):
         return frozenset({"aws-static"})
 
     api_runtime_helpers = {
@@ -595,10 +596,13 @@ def test_file_inventory() -> tuple[tuple[str, str], ...]:
             inventory.append((group, path.relative_to(REPOSITORY_ROOT).as_posix()))
     for path in (REPOSITORY_ROOT / "tests" / "e2e").glob("*.spec.ts"):
         inventory.append(("e2e", path.relative_to(REPOSITORY_ROOT).as_posix()))
-    for path in (REPOSITORY_ROOT / "infra" / "aws" / "bootstrap" / "tests").glob(
-        "*.tftest.hcl"
-    ):
-        inventory.append(("aws-static", path.relative_to(REPOSITORY_ROOT).as_posix()))
+    for root in ("bootstrap", "environment"):
+        for path in (REPOSITORY_ROOT / "infra" / "aws" / root / "tests").glob(
+            "*.tftest.hcl"
+        ):
+            inventory.append(
+                ("aws-static", path.relative_to(REPOSITORY_ROOT).as_posix())
+            )
     return tuple(sorted(inventory))
 
 
@@ -793,6 +797,7 @@ def static_checks(
                 "scripts/measure_container_resources.py",
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
+                "scripts/verify_aws_environment.py",
             ],
         ),
         (
@@ -822,6 +827,7 @@ def static_checks(
                 "scripts/measure_container_resources.py",
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
+                "scripts/verify_aws_environment.py",
             ],
         ),
         (
@@ -961,6 +967,10 @@ def static_checks(
             "Prove portable AWS bootstrap and policy boundaries",
             [sys.executable, "scripts/verify_aws_bootstrap.py"],
         ),
+        (
+            "Prove the NAT-free managed AWS environment",
+            [sys.executable, "scripts/verify_aws_environment.py"],
+        ),
     ]
     check_groups = {
         "Validate canonical contracts": "contracts",
@@ -988,6 +998,7 @@ def static_checks(
         "Validate deployable Compose boundaries": "compose",
         "Validate test identity boundary": "compose",
         "Prove portable AWS bootstrap and policy boundaries": "aws-static",
+        "Prove the NAT-free managed AWS environment": "aws-static",
     }
     filtered = [check for check in checks if check_groups[check[0]] in groups]
     if "api-static" in groups:

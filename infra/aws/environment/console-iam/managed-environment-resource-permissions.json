@@ -1,0 +1,153 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadManagedEnvironmentState",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:DescribeUserPoolDomain",
+        "ec2:DescribeInternetGateways",
+        "ec2:DescribeNetworkAcls",
+        "ec2:DescribePrefixLists",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeSecurityGroupRules",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcAttribute",
+        "ec2:DescribeVpcEndpoints",
+        "ec2:DescribeVpcs",
+        "logs:DescribeLogGroups",
+        "servicediscovery:GetNamespace",
+        "servicediscovery:GetOperation",
+        "servicediscovery:GetService",
+        "servicediscovery:ListTagsForResource",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageOwnedGeneratedResources",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST",
+        "cognito-idp:CreateGroup",
+        "cognito-idp:CreateManagedLoginBranding",
+        "cognito-idp:CreateResourceServer",
+        "cognito-idp:CreateUserPoolClient",
+        "cognito-idp:CreateUserPoolDomain",
+        "cognito-idp:DescribeManagedLoginBranding",
+        "cognito-idp:DescribeManagedLoginBrandingByClient",
+        "cognito-idp:DescribeResourceServer",
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:GetGroup",
+        "cognito-idp:GetUserPoolMfaConfig",
+        "cognito-idp:ListTagsForResource",
+        "cognito-idp:ListUserPoolClients",
+        "ec2:AssociateRouteTable",
+        "ec2:AttachInternetGateway",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:CreateRoute",
+        "ec2:ModifySecurityGroupRules",
+        "ec2:ModifyVpcAttribute",
+        "ec2:RevokeSecurityGroupEgress",
+        "servicediscovery:CreateService"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*",
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks/*",
+        "arn:${AWS_PARTITION}:cognito-idp:${AWS_REGION}:${AWS_ACCOUNT_ID}:userpool/*",
+        "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:*/*",
+        "arn:${AWS_PARTITION}:servicediscovery:${AWS_REGION}:${AWS_ACCOUNT_ID}:namespace/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "ManageExactNamedResources",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:ListTagsForResource",
+        "logs:ListTagsForResource",
+        "logs:PutRetentionPolicy",
+        "mq:DescribeBroker",
+        "mq:DescribeSharedResources",
+        "mq:ListTags",
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBSubnetGroups",
+        "rds:ListTagsForResource",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${NAME_PREFIX}-${ENVIRONMENT}",
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/${NAME_PREFIX}-${ENVIRONMENT}/${NAME_PREFIX}-${ENVIRONMENT}-*",
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:task-definition/${NAME_PREFIX}-${ENVIRONMENT}-*:*",
+        "arn:${AWS_PARTITION}:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/*",
+        "arn:${AWS_PARTITION}:mq:${AWS_REGION}:${AWS_ACCOUNT_ID}:broker:${NAME_PREFIX}-${ENVIRONMENT}-rabbitmq:*",
+        "arn:${AWS_PARTITION}:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:db:${NAME_PREFIX}-${ENVIRONMENT}-postgresql",
+        "arn:${AWS_PARTITION}:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:subgrp:${NAME_PREFIX}-${ENVIRONMENT}",
+        "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-database-*",
+        "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-broker-*"
+      ]
+    },
+    {
+      "Sid": "CreateOrTagExactNamedResources",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:CreateCluster",
+        "ecs:CreateService",
+        "ecs:RegisterTaskDefinition",
+        "ecs:TagResource",
+        "logs:CreateLogGroup",
+        "logs:TagResource",
+        "mq:CreateTags",
+        "rds:AddTagsToResource",
+        "rds:CreateDBInstance",
+        "rds:CreateDBSubnetGroup",
+        "secretsmanager:CreateSecret",
+        "secretsmanager:TagResource"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${NAME_PREFIX}-${ENVIRONMENT}",
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/${NAME_PREFIX}-${ENVIRONMENT}/${NAME_PREFIX}-${ENVIRONMENT}-*",
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:task-definition/${NAME_PREFIX}-${ENVIRONMENT}-*:*",
+        "arn:${AWS_PARTITION}:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/*",
+        "arn:${AWS_PARTITION}:mq:${AWS_REGION}:${AWS_ACCOUNT_ID}:broker:${NAME_PREFIX}-${ENVIRONMENT}-rabbitmq:*",
+        "arn:${AWS_PARTITION}:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:db:${NAME_PREFIX}-${ENVIRONMENT}-postgresql",
+        "arn:${AWS_PARTITION}:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:subgrp:${NAME_PREFIX}-${ENVIRONMENT}",
+        "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-database-*",
+        "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-broker-*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    }
+  ]
+}

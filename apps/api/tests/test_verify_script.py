@@ -826,10 +826,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 56
+    assert len(inventory) == 57
     assert len(verifier.selected_test_files(plan.groups)) == 17
     assert "Verification groups: 1/10 selected" in verifier.plan_lines(plan)
-    assert "Test files: 17/56 selected" in verifier.plan_lines(plan)
+    assert "Test files: 17/57 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(
@@ -881,12 +881,22 @@ def test_aws_bootstrap_change_selects_only_aws_static_tools(
     assert plan.groups == {"aws-static"}
     assert verifier.selected_test_files(plan.groups) == (
         "infra/aws/bootstrap/tests/bootstrap.tftest.hcl",
+        "infra/aws/environment/tests/environment.tftest.hcl",
     )
     assert values["needs_terraform"] == "true"
     assert values["needs_tflint"] == "true"
     assert values["needs_node"] == "false"
     assert values["needs_uv"] == "false"
     assert values["needs_docker"] == "false"
+
+
+def test_aws_environment_change_selects_only_aws_static(
+    verifier: ModuleType,
+) -> None:
+    plan = verifier.plan_for_paths(["infra/aws/environment/modules/network/main.tf"])
+
+    assert plan.groups == {"aws-static"}
+    assert verifier.plan_for_paths(["scripts/verify_aws_environment.py"]).groups == {"aws-static"}
 
 
 def test_plan_outputs_bind_exact_endpoints_and_carry_run(

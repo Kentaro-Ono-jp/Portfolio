@@ -92,14 +92,32 @@ cross-environment, cross-repository, and undeclared fifth-key variants. Every
 request is evaluated independently at identity, boundary, and effective layers
 with expectations that name the actual enforcing layer.
 
-AWS Cloud Map does not expose resource-tag conditions for its standalone
-`TagResource` authorization. The operator can therefore submit only the exact
-four accepted ownership key/value pairs, but IAM cannot distinguish its
-create-time dependent check from a direct call against an existing Cloud Map
-resource. Treat the operator as the account owner's trusted deployment
-authority; do not delegate it to untrusted repositories. Exact namespace
-ownership still gates `CreateService`, exact ownership gates destroy, and the
-later lifecycle/residual proof must follow up any real-AWS service limitation.
+Amazon MQ `CreateBroker` is resource-less at authorization time. The fixed
+boundary therefore permits only that action for the environment-operator
+purpose, while its bootstrap-owned identity policy requires the complete four
+request tags and exact tag-key set. Wrong, missing, or additional ownership
+tags fail the immutable identity layer and effective intersection; workload
+roles fail the boundary as well.
+
+AWS maps `CreatePrivateDnsNamespace` and `CreateService` to each create action
+plus `servicediscovery:TagResource`; provider 6.58.0 passing tags directly in
+the create payload does not remove that dependent authorization. The operator
+identity and its separately generated boundary therefore both permit
+`TagResource` at `Resource: "*"`, with the identity limited to the exact four
+request tags and tag-key set. AWS exposes no resource-level or prior-resource-
+tag condition for that API, so the same exact request can overwrite the tuple
+on an unrelated existing namespace or service. Static proof records that
+foreign-target allow rather than claiming isolation, while rejecting wrong,
+missing, or additional ownership tags.
+
+The selected live path is the persistent Console-owned IAM contract; it is not
+reset or replaced by this bootstrap root. The bootstrap-generated equivalent
+retains the same accepted Cloud Map exception so both implementations describe
+the same authority. The exception is limited to a dedicated deployment account
+and trusted account-owner operator. Inventory Cloud Map before and after use,
+proceed only when unrelated namespaces and services are absent, and stop for
+owner review otherwise. Exact namespace ownership still gates service creation
+and exact ownership still gates destroy.
 
 The future GitHub workflow and repository OIDC customization are Step 6
 non-targets. Before that workflow requests a token, the repository owner must
@@ -126,8 +144,10 @@ synthetic example to an ignored owner file and replace every value:
 cp infra/aws/bootstrap/terraform.tfvars.example infra/aws/bootstrap/owner.auto.tfvars
 ```
 
-The owner role and GitHub OIDC provider must already exist in the target
-account. `github_oidc_repository_subject` is an explicit trust input rather
+The exact owner principal (an IAM user or role) and GitHub OIDC provider must
+already exist in the target account. Human operator trust does not require MFA;
+deployment authority remains on the assumed role rather than the source IAM
+user. `github_oidc_repository_subject` is an explicit trust input rather
 than a value inferred from a maintainer profile. Terraform's
 `allowed_account_ids` check fails closed if the active standard AWS credential
 chain targets another account. Do not place access keys, tokens, secrets,
@@ -211,6 +231,14 @@ Canonical local and GitHub verification performs no AWS API call:
 python scripts/verify.py --groups aws-static
 ```
 
+The emitted machine fields are explicitly named `staticVerifierAwsApiCalls`,
+`staticVerifierAwsWrites`, and, for the environment proof,
+`staticVerifierAwsResourcesCreated`. They describe only that verifier process;
+`liveAwsHistoryIncluded=false` prevents those zeros from being read as Issue-
+wide totals. The real history includes persistent IAM creation, boundary and
+role configuration, operator assumption, the bounded `3/3` construction
+attempts, and cleanup.
+
 That group checks Terraform formatting, provider lock, `validate`, TFLint,
 mock-provider plans, backend-generation contracts, and the versioned
 allow/deny matrix in
@@ -230,5 +258,8 @@ operator control-plane layer/context decisions.
 This repository-owned evaluator is static contract proof, not AWS IAM Access
 Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS
 simulation may add read-only sanitized evidence, but it must not mutate IAM or
-create a resource. Static proof does not claim that the Step 4 topology, Step 5
-lifecycle, Step 6 automation, or Step 7 real-AWS cycle exists.
+create a resource. Static proof now covers both this persistent bootstrap and
+the Step 4
+[managed-environment definition](infra/aws/environment/README.md). It does not
+claim that either root has been applied, or that the Step 5 lifecycle, Step 6
+automation, or Step 7 real-AWS cycle exists.

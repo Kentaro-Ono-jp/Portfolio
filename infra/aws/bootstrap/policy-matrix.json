@@ -377,7 +377,7 @@
     {
       "name": "operator creates a tagged Cloud Map namespace",
       "role": "manual/operator-deployment",
-      "action": "servicediscovery:CreateHttpNamespace",
+      "action": "servicediscovery:CreatePrivateDnsNamespace",
       "resource": "*",
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "manual",
@@ -435,7 +435,7 @@
     {
       "name": "operator cannot create a cross-environment Cloud Map namespace",
       "role": "manual/operator-deployment",
-      "action": "servicediscovery:CreateHttpNamespace",
+      "action": "servicediscovery:CreatePrivateDnsNamespace",
       "resource": "*",
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "monthly",
@@ -497,10 +497,29 @@
       "expected": "allowed"
     },
     {
-      "name": "operator attaches required ownership tags to Cloud Map",
+      "name": "owner accepts exact Cloud Map tags on an arbitrary namespace target",
       "role": "manual/operator-deployment",
       "action": "servicediscovery:TagResource",
-      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-foreign",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "owner accepts exact Cloud Map tags on an arbitrary service target",
+      "role": "manual/operator-deployment",
+      "action": "servicediscovery:TagResource",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-foreign",
       "context": {
         "aws:RequestTag/PortfolioEnvironment": "manual",
         "aws:RequestTag/PortfolioManaged": "true",
@@ -945,6 +964,142 @@
       "role": "iam_manager",
       "action": "billing:UpdateBillingPreferences",
       "resource": "*",
+      "expected": "denied"
+    },
+    {
+      "name": "operator creates an exact tagged RabbitMQ broker",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioPersistent", "PortfolioRepository"]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot create a cross-environment RabbitMQ broker",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "monthly",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioPersistent", "PortfolioRepository"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create an unmanaged RabbitMQ broker",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "false",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioPersistent", "PortfolioRepository"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a persistent RabbitMQ broker",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "true",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioPersistent", "PortfolioRepository"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a cross-repository RabbitMQ broker",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "other-owner/other-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioPersistent", "PortfolioRepository"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a RabbitMQ broker without environment ownership",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioManaged", "PortfolioPersistent", "PortfolioRepository"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a RabbitMQ broker without managed ownership",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioPersistent", "PortfolioRepository"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a RabbitMQ broker without ephemeral ownership",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioRepository"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot create a RabbitMQ broker without repository ownership",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioPersistent"]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot add an extra RabbitMQ ownership key",
+      "role": "manual/operator-deployment",
+      "action": "mq:CreateBroker",
+      "resource": "*",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": ["PortfolioEnvironment", "PortfolioManaged", "PortfolioPersistent", "PortfolioRepository", "Owner"]
+      },
       "expected": "denied"
     }
   ],

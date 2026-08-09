@@ -92,6 +92,11 @@ Supporting scripts are implementation details of that entrypoint:
   plans, TFLint, backend-generation contracts, and the versioned IAM
   identity/boundary/trust allow-deny matrix without calling AWS; it writes only
   a sanitized exact-source summary under `artifacts/verification/`.
+- `verify_aws_environment.py` validates and lints the independent Step 4 root,
+  runs its mocked-plan contracts, then builds a create-only plan against an
+  unreachable endpoint and scans its resource inventory, tags, ingress,
+  service boundaries, digest pins, sensitive values, and outputs without
+  calling AWS; it writes only sanitized counts and contract digests.
 - `aws_bootstrap_backend.py` validates explicit owner-selected S3 backend
   values and generates ignored partial backend files for deterministic initial
   state migration or later clone adoption; it never stores credentials.

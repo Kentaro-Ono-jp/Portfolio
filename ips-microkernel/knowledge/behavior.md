@@ -250,6 +250,28 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #57
   [approved correction](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143423042).
 
+### Reconcile superseded planning assumptions with observed history
+
+- **Trigger:** An owner-authorized live evaluation, deployment, cleanup, or
+  other external execution changes a count or state that canonical planning
+  records previously described as zero, absent, or not performed.
+- **HEAD effect:** `moving`
+- **Problem:** The implementation record is updated while an architecture
+  index, delivery step, umbrella ledger, README, or generated evidence retains
+  the old planning assumption, producing mutually incompatible public claims.
+- **Detect:** Search every canonical status surface for the superseded value or
+  state, compare each occurrence with the latest accepted live history, and
+  distinguish AWS-free verifier counters from cumulative external effects.
+- **Pass:** Every canonical status record states the same latest attempt,
+  outcome, cleanup, and limitation facts; static zero-call proof remains
+  explicitly scoped to the verifier; and no unsuccessful execution is
+  described as green or unperformed.
+- **Repair:** Reconcile all affected status surfaces in the same correction,
+  retain the prior assumption only where it is clearly historical, and rerun
+  documentation plus generated-evidence checks before review.
+- **Origins:** PR #111
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233003435).
+
 ### Authorize a target before idempotency classification
 
 - **Trigger:** A protected resource mutation combines ownership hiding with an
@@ -489,29 +511,87 @@ proved/unproved classification, or permanence claim.
 - **HEAD effect:** `moving`
 - **Problem:** A synthetic positive supplies a resource ARN or condition key
   that the real cloud action does not expose, while the accepted create,
-  inventory, mutation, or dependent tagging request is denied.
+  inventory, mutation, or dependent tagging request is denied; or a standalone
+  tag mutation can overwrite ownership on a foreign existing resource.
 - **Detect:** From the target service's authorization reference, construct each
   required positive with its real create-time resource form and only the
   request, resource, or principal context keys available to that action;
   enumerate every rendered write action/resource form, execute each request
   independently against identity, boundary, and their effective intersection,
-  then change only the ownership environment and repository.
+  then change only the ownership environment and repository. For every tag API
+  that can target an existing resource, also execute the accepted request-tag
+  tuple against a foreign target.
 - **Pass:** Every required real-context positive is allowed by identity,
   boundary, and their intersection; each ownership inverse is denied by the
   declared immutable enforcement layer and effective intersection; inventory
   succeeds without fabricated request tags; every required resource in a
   multi-resource authorization is exercised independently; and every dependent
   tagging action has its own passing case with an exact ownership-key ceiling.
-  No rendered write verb or resource form is omitted from the inverse matrix.
+  If AWS exposes neither resource-level authorization nor prior resource-tag
+  conditions, the action either remains denied while creation still succeeds,
+  or an explicit owner-selected exception discloses that an exact request can
+  relabel a foreign target and limits use to a dedicated account, trusted
+  principal, and before/after inventory stop gate. No rendered write verb or
+  resource form is omitted from the inverse matrix.
 - **Repair:** Split creation-time request-tag, unconditioned inventory, and
   existing-resource ownership-tag statements; use actual collection or
   resource-less create forms; grant the exact dependent tagging actions;
   require existing ownership for retagging where the service exposes resource
-  tags; exercise every required parent/new resource separately; and retain the
-  layer-by-layer positive, unowned, and inverse-negative matrix with explicit
-  expectations for the enforcing layer and effective intersection.
+  tags; when existing-resource tagging cannot be scoped, either omit the action
+  only after proving the operation does not require it, or record an owner-
+  accepted exception with explicit foreign-target positive proof and an
+  operational inventory gate; exercise every required parent/new resource
+  separately; and retain layer-by-layer positive and inverse expectations.
 - **Origins:** PR #107
-  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500).
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500),
+  PR #111
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233003435),
+  PR #111
+  [corrected re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233197383),
+  PR #111
+  [operation-mapping re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233344084).
+
+### Keep every implementation of one authority contract aligned
+
+- **Trigger:** A repository contains two or more current implementations of
+  the same role, permissions policy, boundary, trust, or action matrix, such as
+  a persistent Console path and a bootstrap-generated path.
+- **HEAD effect:** `moving`
+- **Problem:** A correction changes one implementation or its documentation
+  while another live-capable implementation retains different effective
+  authority, so the same named operator contract has incompatible behavior.
+- **Detect:** Enumerate every code, rendered policy, matrix, verifier, manifest,
+  and operator document that can create, update, or assert the authority; for
+  each changed action, compare identity, boundary, and effective decisions with
+  the same positive, inverse, and provider-operation contexts.
+- **Pass:** Every current implementation includes the complete cloud operation
+  authorization set, reports the same accepted exceptions and limitations, and
+  produces the same effective decision for each common test context.
+- **Repair:** Select the persistent authority source of truth, align every other
+  implementation and proof to it in the same correction, and remove stale
+  claims rather than treating one path as implicitly non-current.
+- **Origins:** PR #111
+  [operation-mapping re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233344084).
+
+### Bind topology edges to resource identities
+
+- **Trigger:** Infrastructure proof adds or changes Security Group, firewall,
+  routing, service-mesh, or other directional topology edges.
+- **HEAD effect:** `moving`
+- **Problem:** Protocol, port, CIDR, and edge-count summaries can remain equal
+  when a source or destination reference is cross-wired to the wrong resource.
+- **Detect:** Evaluate the provider configuration reference graph for every
+  directional edge, enumerate the fully expanded resource addresses, and
+  compare both with the accepted source/destination identity map independently
+  of any module-authored summary output.
+- **Pass:** Every edge names the exact accepted source and destination resource
+  references, every keyed expansion has the accepted identity set, no extra or
+  missing edge exists, and protocol/port/CIDR checks pass separately.
+- **Repair:** Bind assertions to configuration references and expanded resource
+  addresses, retain independent transport checks, and reject aggregate-only or
+  self-reported topology proof.
+- **Origins:** PR #111
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5231865997).
 
 ### Connect security allowlists to enforced trust claims
 

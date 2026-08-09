@@ -22,7 +22,7 @@ variables {
     monthly = "environments/monthly/terraform.tfstate"
   }
 
-  owner_principal_arn            = "arn:aws:iam::111122223333:role/PortfolioBootstrapOwner"
+  owner_principal_arn            = "arn:aws:iam::111122223333:user/ReactorFrontNoel"
   github_oidc_provider_arn       = "arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com"
   github_oidc_repository_subject = "repo:example-owner/example-repository"
   github_environment             = "aws-deployment"
@@ -92,6 +92,19 @@ run "portable_bootstrap_contract" {
       alltrue([for subject in output.github_trust_contract.subjects : startswith(subject, "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:")])
     )
     error_message = "GitHub trust must connect both allowed events to the customized OIDC subject."
+  }
+
+  assert {
+    condition = alltrue([
+      for key, role in aws_iam_role.environment :
+      !endswith(key, "/operator-deployment") || (
+        jsondecode(role.assume_role_policy).Statement[0].Sid == "ExactOwnerPrincipal" &&
+        jsondecode(role.assume_role_policy).Statement[0].Principal.AWS == var.owner_principal_arn &&
+        keys(jsondecode(role.assume_role_policy).Statement[0].Condition) == ["StringEquals"] &&
+        jsondecode(role.assume_role_policy).Statement[0].Condition.StringEquals["aws:PrincipalAccount"] == var.aws_account_id
+      )
+    ])
+    error_message = "Human operator trust must accept only the exact same-account owner principal without an MFA condition."
   }
 
   assert {

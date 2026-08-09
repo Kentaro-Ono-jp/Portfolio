@@ -1,0 +1,189 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CreateTaggedGeneratedResources",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:CreateUserPool",
+        "ec2:CreateInternetGateway",
+        "ec2:CreateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateSubnet",
+        "ec2:CreateVpc",
+        "ec2:CreateVpcEndpoint",
+        "mq:CreateBroker",
+        "servicediscovery:CreatePrivateDnsNamespace"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "CreateTaggedApiGatewayResources",
+      "Effect": "Allow",
+      "Action": "apigateway:POST",
+      "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis",
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "TagOnlyDuringNetworkCreation",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:*/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}",
+          "ec2:CreateAction": [
+            "AuthorizeSecurityGroupEgress",
+            "AuthorizeSecurityGroupIngress",
+            "CreateInternetGateway",
+            "CreateRouteTable",
+            "CreateSecurityGroup",
+            "CreateSubnet",
+            "CreateVpc",
+            "CreateVpcEndpoint"
+          ]
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "CreateTaggedSecurityGroupRules",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:security-group-rule/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "CreateTaggedCloudMapService",
+      "Effect": "Allow",
+      "Action": "servicediscovery:CreateService",
+      "Resource": "arn:${AWS_PARTITION}:servicediscovery:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "TagCloudMapForRequiredCreateAuthorization",
+      "Effect": "Allow",
+      "Action": "servicediscovery:TagResource",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "TagOwnedCognitoUserPool",
+      "Effect": "Allow",
+      "Action": "cognito-idp:TagResource",
+      "Resource": "arn:${AWS_PARTITION}:cognito-idp:${AWS_REGION}:${AWS_ACCOUNT_ID}:userpool/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}",
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    }
+  ]
+}

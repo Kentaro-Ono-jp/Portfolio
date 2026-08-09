@@ -1,0 +1,51 @@
+# Visibly synthetic, non-authorizing values. Replace values only in an ignored
+# tfvars file. Step 4 runs plan/test only and performs no AWS call or write.
+aws_account_id = "111122223333"
+aws_partition  = "aws"
+aws_region     = "us-east-1"
+availability_zones = [
+  "us-east-1a",
+  "us-east-1b",
+]
+
+name_prefix        = "example-portfolio"
+repository_identity = "example-owner/example-repository"
+environment         = "manual"
+environment_state_key = "environments/manual/terraform.tfstate"
+
+bootstrap_role_arns = {
+  operator_deployment = "arn:aws:iam::111122223333:role/example-portfolio-manual-operator-deployment"
+  task_execution      = "arn:aws:iam::111122223333:role/example-portfolio-manual-task-execution"
+  web_workload        = "arn:aws:iam::111122223333:role/example-portfolio-manual-web-workload"
+  api_workload        = "arn:aws:iam::111122223333:role/example-portfolio-manual-api-workload"
+  ml_workload         = "arn:aws:iam::111122223333:role/example-portfolio-manual-ml-workload"
+  destroy             = "arn:aws:iam::111122223333:role/example-portfolio-manual-destroy"
+}
+
+ecr_repository_urls = {
+  web = "111122223333.dkr.ecr.us-east-1.amazonaws.com/example-portfolio/web"
+  api = "111122223333.dkr.ecr.us-east-1.amazonaws.com/example-portfolio/api"
+  ml  = "111122223333.dkr.ecr.us-east-1.amazonaws.com/example-portfolio/ml"
+}
+image_digests = {
+  web = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  api = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  ml  = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+}
+
+vpc_cidr = "10.42.0.0/16"
+public_task_subnet_cidrs = [
+  "10.42.0.0/24",
+  "10.42.1.0/24",
+]
+isolated_service_subnet_cidrs = [
+  "10.42.10.0/24",
+  "10.42.11.0/24",
+]
+
+rds_instance_class    = "db.t4g.micro"
+mq_instance_type      = "mq.m7g.large"
+log_retention_days    = 3
+object_expiration_days = 2
+reviewer_group_name   = "reactorfront-reviewers"
+oidc_api_audience     = "https://api.example.invalid/api"

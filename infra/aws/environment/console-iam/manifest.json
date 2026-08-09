@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "ownershipTags": {
+    "PortfolioEnvironment": "${ENVIRONMENT}",
+    "PortfolioManaged": "true",
+    "PortfolioPersistent": "true",
+    "PortfolioRepository": "${REPOSITORY_IDENTITY}"
+  },
+  "serviceLinkedRoles": {
+    "apiGateway": {
+      "roleName": "AWSServiceRoleForAPIGateway",
+      "serviceName": "ops.apigateway.amazonaws.com"
+    },
+    "ecs": {
+      "roleName": "AWSServiceRoleForECS",
+      "serviceName": "ecs.amazonaws.com"
+    },
+    "mq": {
+      "roleName": "AWSServiceRoleForAmazonMQ",
+      "serviceName": "mq.amazonaws.com"
+    },
+    "rds": {
+      "roleName": "AWSServiceRoleForRDS",
+      "serviceName": "rds.amazonaws.com"
+    }
+  },
+  "managedPolicies": {
+    "noelAssumeBillingReadRole": {
+      "name": "ReactorFrontPortfolioNoelAssumeBillingReadRole",
+      "document": "noel-assume-billing-read-role.json"
+    },
+    "noelDeploymentAssumeOperator": {
+      "name": "ReactorFrontPortfolioNoelDeploymentAssumeOperator",
+      "document": "noel-deployment-assume-operator.json"
+    },
+    "noelAssumeObserverRole": {
+      "name": "ReactorFrontPortfolioNoelAssumeObserverRole",
+      "document": "noel-assume-observer-role.json"
+    },
+    "operatorPermissions": {
+      "name": "ReactorFrontPortfolioOperatorPermissions",
+      "document": "operator-permissions.json"
+    },
+    "managedEnvironmentPermissions": {
+      "name": "ReactorFrontPortfolioManagedEnvironmentPermissions",
+      "document": "managed-environment-permissions.json"
+    },
+    "managedEnvironmentResourcePermissions": {
+      "name": "ReactorFrontPortfolioManagedEnvironmentResourcePermissions",
+      "document": "managed-environment-resource-permissions.json"
+    },
+    "operatorBoundary": {
+      "name": "ReactorFrontPortfolioOperatorBoundary",
+      "document": "operator-boundary.json"
+    },
+    "taskExecution": {
+      "name": "ReactorFrontPortfolioTaskExecutionPolicy",
+      "document": "task-execution.json"
+    },
+    "apiWorkload": {
+      "name": "ReactorFrontPortfolioApiWorkloadPolicy",
+      "document": "api-workload.json"
+    },
+    "mlWorkload": {
+      "name": "ReactorFrontPortfolioMlWorkloadPolicy",
+      "document": "ml-workload.json"
+    },
+    "destroy": {
+      "name": "ReactorFrontPortfolioDestroyPolicy",
+      "document": "destroy.json"
+    }
+  },
+  "sourceUsers": {
+    "noel_deployment": {
+      "name": "ReactorFrontNoel",
+      "permissions": [
+        "noelAssumeBillingReadRole",
+        "noelDeploymentAssumeOperator",
+        "noelAssumeObserverRole"
+      ],
+      "inlinePolicies": [],
+      "groups": [],
+      "boundary": null,
+      "consoleLogin": false,
+      "credentialMode": "existingAccessKey"
+    }
+  },
+  "roles": {
+    "operator_deployment": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment",
+      "trust": "operator-trust.json",
+      "permissions": [
+        "operatorPermissions",
+        "managedEnvironmentPermissions",
+        "managedEnvironmentResourcePermissions"
+      ],
+      "boundary": "operatorBoundary"
+    },
+    "task_execution": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-task-execution",
+      "trust": "ecs-task-trust.json",
+      "permissions": ["taskExecution"],
+      "boundary": "operatorBoundary"
+    },
+    "web_workload": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-web-workload",
+      "trust": "ecs-task-trust.json",
+      "permissions": [],
+      "boundary": "operatorBoundary"
+    },
+    "api_workload": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-api-workload",
+      "trust": "ecs-task-trust.json",
+      "permissions": ["apiWorkload"],
+      "boundary": "operatorBoundary"
+    },
+    "ml_workload": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-ml-workload",
+      "trust": "ecs-task-trust.json",
+      "permissions": ["mlWorkload"],
+      "boundary": "operatorBoundary"
+    },
+    "destroy": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
+      "trust": "destroy-trust.json",
+      "permissions": ["operatorPermissions", "destroy"],
+      "boundary": "operatorBoundary"
+    }
+  }
+}
