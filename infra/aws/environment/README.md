@@ -22,6 +22,14 @@ as independently named and versioned managed policies. The former is the
 current grant; the latter is only the maximum ceiling. The Console procedure
 contains no explicit deny and no Terraform-managed IAM object.
 
+The separate destroy identity policy enforces the full ownership tuple on
+generated identifiers, exact environment-name ARN patterns where the service
+supports them, and AWS-supplied forward-access context for Cloud Map's Route 53
+creation dependencies and Amazon MQ's EC2 cleanup dependencies. The static
+proof pairs each owned allow
+with cross-environment, cross-repository, unmanaged, persistent, direct-call,
+and wrong-delegating-service negatives and also enforces rendered IAM quotas.
+
 All taggable environment resources receive exactly these provider default
 tags:
 
@@ -45,8 +53,9 @@ writing remote state.
   private Cloud Map namespace, Web/API services, throttling, and bounded access
   logs. There is no Terraform-managed ALB, custom domain, certificate, Route
   53, CloudFront, or WAF resource. Cloud Map delegates private hosted-zone
-  creation and deletion to Route 53 under the caller, so the Console-owned
-  operator and destroy contracts model those service-dependent actions.
+  creation to Route 53 under the caller, so the Console-owned operator contract
+  models the documented service-dependent create/read actions. Namespace
+  deletion requires only Cloud Map authority and grants no Route 53 delete.
 - `modules/runtime` owns independent Web, API-area, and ML Fargate services.
   API-area contains FastAPI, outbox publisher, and result consumer containers;
   migration is a separate task definition and is not run here. Task sizing is

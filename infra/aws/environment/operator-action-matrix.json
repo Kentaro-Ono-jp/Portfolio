@@ -182,7 +182,10 @@
     ],
     "aws_service_discovery_private_dns_namespace": [
       ["servicediscovery:CreatePrivateDnsNamespace", "*", "request-tags"],
-      ["route53:CreateHostedZone", "*", "service-delegated"],
+      ["ec2:DescribeRegions", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
+      ["route53:CreateHostedZone", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
+      ["route53:GetHostedZone", "route53-hosted-zone", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
+      ["route53:ListHostedZonesByName", "*", "service-delegated", {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}],
       ["servicediscovery:GetOperation", "*", "global-read"],
       ["servicediscovery:GetNamespace", "cloudmap-namespace", "global-read"],
       ["servicediscovery:ListTagsForResource", "cloudmap-namespace", "global-read"],

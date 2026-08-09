@@ -88,6 +88,12 @@ OPERATOR_ACTION_OWNERSHIP_MODES = {
     "resource-tags",
     "service-delegated",
 }
+CLOUD_MAP_DELEGATED_ACTIONS = {
+    "ec2:DescribeRegions",
+    "route53:CreateHostedZone",
+    "route53:GetHostedZone",
+    "route53:ListHostedZonesByName",
+}
 CONSOLE_IAM_TOKENS = {
     "AWS_ACCOUNT_ID": "111122223333",
     "AWS_PARTITION": "aws",
@@ -98,6 +104,10 @@ CONSOLE_IAM_TOKENS = {
     "REPOSITORY_IDENTITY": "example-owner/example-repository",
     "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
 }
+MANAGED_POLICY_CHARACTER_LIMIT = 6_144
+MANAGED_POLICY_CHARACTER_RESERVE = 512
+TRUST_POLICY_CHARACTER_LIMIT = 2_048
+TRUST_POLICY_CHARACTER_RESERVE = 256
 
 
 def string_values(value: Any) -> list[str]:
@@ -118,20 +128,49 @@ def rendered_console_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def condition_matches(statement: dict[str, Any], context: dict[str, str]) -> bool:
+def enforce_policy_character_reserve(
+    documents: dict[str, dict[str, Any]],
+    *,
+    limit: int,
+    reserve: int,
+    policy_class: str,
+) -> dict[str, int]:
+    sizes = {
+        key: len(json.dumps(document, separators=(",", ":"), ensure_ascii=False))
+        for key, document in documents.items()
+    }
+    oversized = {key: size for key, size in sizes.items() if size > limit - reserve}
+    if oversized:
+        raise RuntimeError(
+            f"Console IAM {policy_class} exhausted its required "
+            f"{reserve}-character reserve: {oversized}"
+        )
+    return sizes
+
+
+def condition_matches(statement: dict[str, Any], context: dict[str, Any]) -> bool:
     conditions = statement.get("Condition", {})
     for operator, entries in conditions.items():
-        if operator not in {"StringEquals", "StringLike"}:
+        if operator not in {
+            "ForAnyValue:StringEquals",
+            "StringEquals",
+            "StringLike",
+        }:
             return False
         for key, expected in entries.items():
             actual = context.get(key)
             if actual is None:
                 return False
-            candidates = string_values(expected)
-            if operator == "StringEquals" and actual not in candidates:
+            expected_values = string_values(expected)
+            actual_values = string_values(actual)
+            if operator in {"ForAnyValue:StringEquals", "StringEquals"} and not any(
+                value in expected_values for value in actual_values
+            ):
                 return False
             if operator == "StringLike" and not any(
-                fnmatch.fnmatchcase(actual, candidate) for candidate in candidates
+                fnmatch.fnmatchcase(value, candidate)
+                for value in actual_values
+                for candidate in expected_values
             ):
                 return False
     return True
@@ -141,7 +180,7 @@ def policy_allows(
     policy: dict[str, Any],
     action: str,
     resource: str,
-    context: dict[str, str] | None = None,
+    context: dict[str, Any] | None = None,
 ) -> bool:
     normalized_action = action.lower()
     for statement in policy.get("Statement", []):
@@ -172,6 +211,8 @@ def operator_resource(symbol: str) -> str:
         return "*"
     if symbol == "app-bucket":
         return f"arn:{partition}:s3:::{prefix}-{environment}-documents"
+    if symbol == "route53-hosted-zone":
+        return f"arn:{partition}:route53:::hostedzone/owned-zone"
     if symbol.startswith("iam-"):
         purpose = symbol.removeprefix("iam-").removesuffix("-role")
         return f"arn:{partition}:iam::{account}:role/{prefix}-{environment}-{purpose}"
@@ -232,6 +273,12 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             raise RuntimeError(
                 f"Console IAM policy must not contain explicit Deny: {key}"
             )
+    managed_policy_sizes = enforce_policy_character_reserve(
+        policies,
+        limit=MANAGED_POLICY_CHARACTER_LIMIT,
+        reserve=MANAGED_POLICY_CHARACTER_RESERVE,
+        policy_class="managed policy",
+    )
 
     expected_service_linked_roles = {
         "apiGateway": {
@@ -285,8 +332,11 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         )
 
     trust_files = {role["trust"] for role in roles.values()}
-    for trust_file in trust_files:
-        trust = rendered_console_json(CONSOLE_IAM_ROOT / trust_file)
+    trusts = {
+        trust_file: rendered_console_json(CONSOLE_IAM_ROOT / trust_file)
+        for trust_file in trust_files
+    }
+    for trust_file, trust in trusts.items():
         if any(
             statement.get("Effect") == "Deny"
             for statement in trust.get("Statement", [])
@@ -294,6 +344,12 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             raise RuntimeError(
                 f"Console IAM trust must not contain explicit Deny: {trust_file}"
             )
+    trust_policy_sizes = enforce_policy_character_reserve(
+        trusts,
+        limit=TRUST_POLICY_CHARACTER_LIMIT,
+        reserve=TRUST_POLICY_CHARACTER_RESERVE,
+        policy_class="trust policy",
+    )
 
     permissions = policies["operatorPermissions"]
     boundary = policies["operatorBoundary"]
@@ -304,10 +360,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         for row in action_rows:
             action, symbol = row[:2]
             resource = operator_resource(symbol)
-            context = {
-                key: str(value)
-                for key, value in (row[3] if len(row) == 4 else {}).items()
-            }
+            context = dict(row[3] if len(row) == 4 else {})
             decisions = (
                 policy_allows(permissions, action, resource, context),
                 policy_allows(boundary, action, resource, context),
@@ -321,80 +374,543 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             rows += 1
             allowed_layer_decisions += 2
 
+    invariant_cases: dict[str, bool] = {}
+
+    def record(name: str, passed: bool) -> None:
+        if name in invariant_cases:
+            raise RuntimeError(f"Duplicate Console IAM invariant: {name}")
+        invariant_cases[name] = passed
+
+    oversized_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "X" * MANAGED_POLICY_CHARACTER_LIMIT,
+                "Effect": "Allow",
+                "Action": "sts:GetCallerIdentity",
+                "Resource": "*",
+            }
+        ],
+    }
+    for label, limit, reserve, policy_class in (
+        (
+            "managedPolicyQuotaRejectsOverLimit",
+            MANAGED_POLICY_CHARACTER_LIMIT,
+            MANAGED_POLICY_CHARACTER_RESERVE,
+            "managed policy",
+        ),
+        (
+            "trustPolicyQuotaRejectsOverLimit",
+            TRUST_POLICY_CHARACTER_LIMIT,
+            TRUST_POLICY_CHARACTER_RESERVE,
+            "trust policy",
+        ),
+    ):
+        try:
+            enforce_policy_character_reserve(
+                {"overLimitMutation": oversized_policy},
+                limit=limit,
+                reserve=reserve,
+                policy_class=policy_class,
+            )
+        except RuntimeError as error:
+            record(
+                label,
+                f"Console IAM {policy_class} exhausted its required" in str(error),
+            )
+        else:
+            record(label, False)
+
     state_bucket = "arn:aws:s3:::example-portfolio-111122223333-us-east-1-state"
     state_object = state_bucket + "/environments/manual/terraform.tfstate"
     lock_object = state_object + ".tflock"
+    app_bucket = "arn:aws:s3:::example-portfolio-manual-documents"
     pass_context = {"iam:PassedToService": "ecs-tasks.amazonaws.com"}
-    runtime_role = (
+    runtime_roles = [
+        "task-execution",
+        "web-workload",
+        "api-workload",
+        "ml-workload",
+    ]
+    for purpose in runtime_roles:
+        role = f"arn:aws:iam::111122223333:role/example-portfolio-manual-{purpose}"
+        record(
+            f"identityCanPassExact{purpose}",
+            policy_allows(permissions, "iam:PassRole", role, pass_context),
+        )
+        record(
+            f"boundaryCanPassExact{purpose}",
+            policy_allows(boundary, "iam:PassRole", role, pass_context),
+        )
+
+    forbidden_pass_roles = {
+        "operator": "arn:aws:iam::111122223333:role/example-portfolio-manual-operator-deployment",
+        "destroy": "arn:aws:iam::111122223333:role/example-portfolio-manual-destroy",
+        "crossEnvironment": "arn:aws:iam::111122223333:role/example-portfolio-monthly-task-execution",
+        "externalAccount": "arn:aws:iam::444455556666:role/example-portfolio-manual-task-execution",
+        "synthesizedPurpose": "arn:aws:iam::111122223333:role/example-portfolio-manual-administrator",
+    }
+    for label, role in forbidden_pass_roles.items():
+        record(
+            f"identityCannotPass{label}",
+            not policy_allows(permissions, "iam:PassRole", role, pass_context),
+        )
+        record(
+            f"boundaryCannotPass{label}",
+            not policy_allows(boundary, "iam:PassRole", role, pass_context),
+        )
+    exact_runtime_role = (
         "arn:aws:iam::111122223333:role/example-portfolio-manual-task-execution"
     )
-    operator_role = (
-        "arn:aws:iam::111122223333:role/example-portfolio-manual-operator-deployment"
+    record(
+        "identityCannotPassRuntimeToWrongService",
+        not policy_allows(
+            permissions,
+            "iam:PassRole",
+            exact_runtime_role,
+            {"iam:PassedToService": "lambda.amazonaws.com"},
+        ),
     )
-    negative_cases = {
-        "identityCannotDeleteStateBucket": not policy_allows(
-            permissions, "s3:DeleteBucket", state_bucket
+    record(
+        "boundaryCannotPassRuntimeToWrongService",
+        not policy_allows(
+            boundary,
+            "iam:PassRole",
+            exact_runtime_role,
+            {"iam:PassedToService": "lambda.amazonaws.com"},
         ),
-        "boundaryCannotDeleteStateBucket": not policy_allows(
-            boundary, "s3:DeleteBucket", state_bucket
-        ),
-        "identityCannotDeleteStateObject": not policy_allows(
-            permissions, "s3:DeleteObject", state_object
-        ),
-        "boundaryCannotDeleteStateObject": not policy_allows(
-            boundary, "s3:DeleteObject", state_object
-        ),
-        "identityCannotMutateIam": not policy_allows(
-            permissions, "iam:AttachRolePolicy", runtime_role
-        ),
-        "boundaryCannotMutateIam": not policy_allows(
-            boundary, "iam:AttachRolePolicy", runtime_role
-        ),
-        "identityCannotPassOperator": not policy_allows(
-            permissions, "iam:PassRole", operator_role, pass_context
-        ),
-        "boundaryCannotPassOperator": not policy_allows(
-            boundary, "iam:PassRole", operator_role, pass_context
-        ),
+    )
+
+    destroy_role = "arn:aws:iam::111122223333:role/example-portfolio-manual-destroy"
+    record(
+        "identityCanAssumeExactDestroyRole",
+        policy_allows(permissions, "sts:AssumeRole", destroy_role),
+    )
+    record(
+        "boundaryCanAssumeExactDestroyRole",
+        policy_allows(boundary, "sts:AssumeRole", destroy_role),
+    )
+    for label, role in {
+        "operator": forbidden_pass_roles["operator"],
+        "crossEnvironment": "arn:aws:iam::111122223333:role/example-portfolio-monthly-destroy",
+        "externalAccount": "arn:aws:iam::444455556666:role/example-portfolio-manual-destroy",
+    }.items():
+        record(
+            f"identityCannotAssume{label}",
+            not policy_allows(permissions, "sts:AssumeRole", role),
+        )
+        record(
+            f"boundaryCannotAssume{label}",
+            not policy_allows(boundary, "sts:AssumeRole", role),
+        )
+
+    for action in (
+        "iam:AttachRolePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:PutRolePolicy",
+        "iam:SetDefaultPolicyVersion",
+        "iam:UpdateAssumeRolePolicy",
+    ):
+        for label, policy in (
+            ("operator", permissions),
+            ("destroy", destroy),
+            ("boundary", boundary),
+        ):
+            record(
+                f"{label}Cannot{action.replace(':', '')}",
+                not policy_allows(policy, action, destroy_role),
+            )
+
+    record(
+        "identityCannotDeleteStateBucket",
+        not policy_allows(permissions, "s3:DeleteBucket", state_bucket),
+    )
+    record(
+        "boundaryCannotDeleteStateBucket",
+        not policy_allows(boundary, "s3:DeleteBucket", state_bucket),
+    )
+    record(
+        "identityCannotDeleteStateObject",
+        not policy_allows(permissions, "s3:DeleteObject", state_object),
+    )
+    record(
+        "boundaryCannotDeleteStateObject",
+        not policy_allows(boundary, "s3:DeleteObject", state_object),
+    )
+    record(
+        "identityCanDeleteLock",
+        policy_allows(permissions, "s3:DeleteObject", lock_object),
+    )
+    record(
+        "boundaryCanDeleteLock",
+        policy_allows(boundary, "s3:DeleteObject", lock_object),
+    )
+    record(
+        "boundaryHasIndependentSchedulerCeiling",
+        policy_allows(boundary, "scheduler:CreateSchedule", "*")
+        and not policy_allows(permissions, "scheduler:CreateSchedule", "*"),
+    )
+
+    owned_context = {
+        f"aws:ResourceTag/{key}": value for key, value in OWNERSHIP_TAGS.items()
     }
-    positive_cases = {
-        "identityCanDeleteLock": policy_allows(
-            permissions, "s3:DeleteObject", lock_object
+    ownership_inverses: dict[str, dict[str, Any]] = {}
+    for label, key, value in (
+        ("crossEnvironment", "PortfolioEnvironment", "monthly"),
+        ("crossRepository", "PortfolioRepository", "other/repository"),
+        ("unmanaged", "PortfolioManaged", "false"),
+        ("persistent", "PortfolioPersistent", "true"),
+    ):
+        inverse = dict(owned_context)
+        inverse[f"aws:ResourceTag/{key}"] = value
+        ownership_inverses[label] = inverse
+
+    generated_id_actions = [
+        ("Vpc", "ec2:DeleteVpc", "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-owned"),
+        (
+            "Subnet",
+            "ec2:DeleteSubnet",
+            "arn:aws:ec2:us-east-1:111122223333:subnet/subnet-owned",
         ),
-        "boundaryCanDeleteLock": policy_allows(
-            boundary, "s3:DeleteObject", lock_object
+        (
+            "SecurityGroup",
+            "ec2:DeleteSecurityGroup",
+            "arn:aws:ec2:us-east-1:111122223333:security-group/sg-owned",
         ),
-        "identityCanPassRuntime": policy_allows(
-            permissions, "iam:PassRole", runtime_role, pass_context
+        (
+            "SecurityGroupRule",
+            "ec2:DeleteSecurityGroupRule",
+            "arn:aws:ec2:us-east-1:111122223333:security-group-rule/sgr-owned",
         ),
-        "boundaryCanPassRuntime": policy_allows(
-            boundary, "iam:PassRole", runtime_role, pass_context
+        (
+            "Route",
+            "ec2:DeleteRoute",
+            "arn:aws:ec2:us-east-1:111122223333:route-table/rtb-owned",
         ),
-        "boundaryHasIndependentSchedulerCeiling": (
-            policy_allows(boundary, "scheduler:CreateSchedule", "*")
-            and not policy_allows(permissions, "scheduler:CreateSchedule", "*")
+        (
+            "RouteTable",
+            "ec2:DeleteRouteTable",
+            "arn:aws:ec2:us-east-1:111122223333:route-table/rtb-owned",
         ),
-        "destroyCanDeleteCloudMapHostedZone": policy_allows(
-            destroy, "route53:DeleteHostedZone", "*"
+        (
+            "InternetGateway",
+            "ec2:DeleteInternetGateway",
+            "arn:aws:ec2:us-east-1:111122223333:internet-gateway/igw-owned",
         ),
-        "boundaryCanDeleteCloudMapHostedZone": policy_allows(
-            boundary, "route53:DeleteHostedZone", "*"
+        (
+            "VpcEndpoint",
+            "ec2:DeleteVpcEndpoints",
+            "arn:aws:ec2:us-east-1:111122223333:vpc-endpoint/vpce-owned",
         ),
-        "destroyCanCleanManagedNetworkInterfaces": (
-            policy_allows(destroy, "ec2:DescribeNetworkInterfaces", "*")
-            and policy_allows(destroy, "ec2:DetachNetworkInterface", "*")
-            and not policy_allows(permissions, "ec2:DetachNetworkInterface", "*")
+        (
+            "DetachInternetGateway",
+            "ec2:DetachInternetGateway",
+            "arn:aws:ec2:us-east-1:111122223333:internet-gateway/igw-owned",
         ),
-        "boundaryCanCleanManagedNetworkInterfaces": (
-            policy_allows(boundary, "ec2:DescribeNetworkInterfaces", "*")
-            and policy_allows(boundary, "ec2:DetachNetworkInterface", "*")
+        (
+            "DetachInternetGatewayVpc",
+            "ec2:DetachInternetGateway",
+            "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-owned",
         ),
-    }
-    failed = [
-        name
-        for name, passed in {**negative_cases, **positive_cases}.items()
-        if not passed
+        (
+            "DisassociateRouteTable",
+            "ec2:DisassociateRouteTable",
+            "arn:aws:ec2:us-east-1:111122223333:route-table/rtb-owned",
+        ),
+        (
+            "DisassociateRouteTableSubnet",
+            "ec2:DisassociateRouteTable",
+            "arn:aws:ec2:us-east-1:111122223333:subnet/subnet-owned",
+        ),
+        (
+            "RevokeSecurityGroupEgress",
+            "ec2:RevokeSecurityGroupEgress",
+            "arn:aws:ec2:us-east-1:111122223333:security-group/sg-owned",
+        ),
+        (
+            "RevokeSecurityGroupIngress",
+            "ec2:RevokeSecurityGroupIngress",
+            "arn:aws:ec2:us-east-1:111122223333:security-group/sg-owned",
+        ),
+        (
+            "HttpApi",
+            "apigateway:DELETE",
+            "arn:aws:apigateway:us-east-1::/apis/api-owned",
+        ),
+        (
+            "HttpApiIntegration",
+            "apigateway:DELETE",
+            "arn:aws:apigateway:us-east-1::/apis/api-owned/integrations/int-owned",
+        ),
+        (
+            "HttpApiRoute",
+            "apigateway:DELETE",
+            "arn:aws:apigateway:us-east-1::/apis/api-owned/routes/route-owned",
+        ),
+        (
+            "HttpApiStage",
+            "apigateway:DELETE",
+            "arn:aws:apigateway:us-east-1::/apis/api-owned/stages/$default",
+        ),
+        (
+            "VpcLink",
+            "apigateway:DELETE",
+            "arn:aws:apigateway:us-east-1::/vpclinks/vpclink-owned",
+        ),
+        (
+            "CognitoGroup",
+            "cognito-idp:DeleteGroup",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+        ),
+        (
+            "CognitoBranding",
+            "cognito-idp:DeleteManagedLoginBranding",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+        ),
+        (
+            "CognitoResourceServer",
+            "cognito-idp:DeleteResourceServer",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+        ),
+        (
+            "CognitoUserPool",
+            "cognito-idp:DeleteUserPool",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+        ),
+        (
+            "CognitoClient",
+            "cognito-idp:DeleteUserPoolClient",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+        ),
+        (
+            "CognitoDomain",
+            "cognito-idp:DeleteUserPoolDomain",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+        ),
+        (
+            "CloudMapNamespace",
+            "servicediscovery:DeleteNamespace",
+            "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+        ),
+        (
+            "CloudMapService",
+            "servicediscovery:DeleteService",
+            "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-owned",
+        ),
     ]
+    for label, action, resource in generated_id_actions:
+        record(
+            f"destroyAllowsOwned{label}",
+            policy_allows(destroy, action, resource, owned_context),
+        )
+        record(
+            f"boundaryAllowsOwned{label}",
+            policy_allows(boundary, action, resource, owned_context),
+        )
+        for inverse_label, inverse_context in ownership_inverses.items():
+            record(
+                f"destroyRejects{inverse_label}{label}",
+                not policy_allows(destroy, action, resource, inverse_context),
+            )
+
+    exact_name_actions = [
+        (
+            "EcsCluster",
+            "ecs:DeleteCluster",
+            "arn:aws:ecs:us-east-1:111122223333:cluster/example-portfolio-manual",
+            "arn:aws:ecs:us-east-1:111122223333:cluster/example-portfolio-monthly",
+            {},
+        ),
+        (
+            "EcsServiceDelete",
+            "ecs:DeleteService",
+            "arn:aws:ecs:us-east-1:111122223333:service/example-portfolio-manual/example-portfolio-manual-web",
+            "arn:aws:ecs:us-east-1:111122223333:service/example-portfolio-monthly/example-portfolio-monthly-web",
+            {},
+        ),
+        (
+            "EcsServiceUpdate",
+            "ecs:UpdateService",
+            "arn:aws:ecs:us-east-1:111122223333:service/example-portfolio-manual/example-portfolio-manual-api",
+            "arn:aws:ecs:us-east-1:111122223333:service/example-portfolio-monthly/example-portfolio-monthly-api",
+            {},
+        ),
+        (
+            "LogGroup",
+            "logs:DeleteLogGroup",
+            "arn:aws:logs:us-east-1:111122223333:log-group:/portfolio/example-portfolio/manual/web",
+            "arn:aws:logs:us-east-1:111122223333:log-group:/portfolio/example-portfolio/monthly/web",
+            owned_context,
+        ),
+        (
+            "MqBroker",
+            "mq:DeleteBroker",
+            "arn:aws:mq:us-east-1:111122223333:broker:example-portfolio-manual-rabbitmq:broker-id",
+            "arn:aws:mq:us-east-1:111122223333:broker:example-portfolio-monthly-rabbitmq:broker-id",
+            owned_context,
+        ),
+        (
+            "RdsInstance",
+            "rds:DeleteDBInstance",
+            "arn:aws:rds:us-east-1:111122223333:db:example-portfolio-manual-postgresql",
+            "arn:aws:rds:us-east-1:111122223333:db:example-portfolio-monthly-postgresql",
+            owned_context,
+        ),
+        (
+            "RdsSubnetGroup",
+            "rds:DeleteDBSubnetGroup",
+            "arn:aws:rds:us-east-1:111122223333:subgrp:example-portfolio-manual",
+            "arn:aws:rds:us-east-1:111122223333:subgrp:example-portfolio-monthly",
+            owned_context,
+        ),
+        (
+            "Secret",
+            "secretsmanager:DeleteSecret",
+            "arn:aws:secretsmanager:us-east-1:111122223333:secret:example-portfolio-manual-database-abcdef",
+            "arn:aws:secretsmanager:us-east-1:111122223333:secret:example-portfolio-monthly-database-abcdef",
+            owned_context,
+        ),
+        (
+            "ApplicationBucket",
+            "s3:DeleteBucket",
+            app_bucket,
+            "arn:aws:s3:::example-portfolio-monthly-documents",
+            {},
+        ),
+        (
+            "ApplicationObject",
+            "s3:DeleteObject",
+            app_bucket + "/object",
+            "arn:aws:s3:::example-portfolio-monthly-documents/object",
+            {},
+        ),
+    ]
+    for label, action, owned_resource, foreign_resource, context in exact_name_actions:
+        record(
+            f"destroyAllowsExact{label}",
+            policy_allows(destroy, action, owned_resource, context),
+        )
+        record(
+            f"boundaryAllowsExact{label}",
+            policy_allows(boundary, action, owned_resource, context),
+        )
+        record(
+            f"destroyRejectsForeign{label}",
+            not policy_allows(destroy, action, foreign_resource, context),
+        )
+
+    cloud_map_via = {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}
+    mq_via = {"aws:CalledVia": ["mq.amazonaws.com"]}
+    wrong_via = {"aws:CalledVia": ["cloudformation.amazonaws.com"]}
+    hosted_zone = "arn:aws:route53:::hostedzone/owned-zone"
+    for action, resource in (
+        ("ec2:DescribeRegions", "*"),
+        ("route53:CreateHostedZone", "*"),
+        ("route53:GetHostedZone", hosted_zone),
+        ("route53:ListHostedZonesByName", "*"),
+    ):
+        label = action.split(":", 1)[1]
+        record(
+            f"operatorAllowsCloudMap{label}",
+            policy_allows(permissions, action, resource, cloud_map_via),
+        )
+        record(
+            f"operatorRejectsDirect{label}",
+            not policy_allows(permissions, action, resource),
+        )
+        record(
+            f"operatorRejectsWrongService{label}",
+            not policy_allows(permissions, action, resource, wrong_via),
+        )
+        record(
+            f"boundaryAllowsCloudMap{label}",
+            policy_allows(boundary, action, resource, cloud_map_via),
+        )
+    for label, policy in (
+        ("operator", permissions),
+        ("destroy", destroy),
+        ("boundary", boundary),
+    ):
+        record(
+            f"{label}CannotDeleteHostedZone",
+            not policy_allows(
+                policy, "route53:DeleteHostedZone", hosted_zone, cloud_map_via
+            ),
+        )
+
+    network_interface = "arn:aws:ec2:us-east-1:111122223333:network-interface/eni-owned"
+    for action, dependent_resource in (
+        ("ec2:DeleteNetworkInterface", network_interface),
+        (
+            "ec2:DeleteNetworkInterfacePermission",
+            "arn:aws:ec2:us-east-1:111122223333:network-interface-permission/enip-owned",
+        ),
+        (
+            "ec2:DeleteVpcEndpoints",
+            "arn:aws:ec2:us-east-1:111122223333:vpc-endpoint/vpce-owned",
+        ),
+        ("ec2:DetachNetworkInterface", network_interface),
+    ):
+        label = action.split(":", 1)[1]
+        record(
+            f"destroyAllowsMq{label}",
+            policy_allows(destroy, action, dependent_resource, mq_via),
+        )
+        record(
+            f"destroyRejectsDirect{label}",
+            not policy_allows(destroy, action, dependent_resource),
+        )
+        record(
+            f"destroyRejectsWrongService{label}",
+            not policy_allows(destroy, action, dependent_resource, cloud_map_via),
+        )
+        record(
+            f"operatorRejects{label}",
+            not policy_allows(permissions, action, dependent_resource, mq_via),
+        )
+        record(
+            f"boundaryAllowsMq{label}",
+            policy_allows(boundary, action, dependent_resource, mq_via),
+        )
+    record(
+        "destroyCanReadNetworkInterfaceCleanupState",
+        policy_allows(destroy, "ec2:DescribeNetworkInterfaces", "*"),
+    )
+    record(
+        "operatorCannotReadNetworkInterfaceCleanupState",
+        not policy_allows(permissions, "ec2:DescribeNetworkInterfaces", "*"),
+    )
+
+    unconditioned_global_writes: list[str] = []
+    for statement in destroy["Statement"]:
+        if statement.get("Condition") or statement.get("Resource") != "*":
+            continue
+        for action in string_values(statement.get("Action", [])):
+            verb = action.split(":", 1)[-1].lower()
+            if not verb.startswith(("describe", "get", "head", "list")):
+                unconditioned_global_writes.append(action)
+    record(
+        "onlyAwsGlobalDestroyActionIsTaskDefinitionDeregister",
+        unconditioned_global_writes == ["ecs:DeregisterTaskDefinition"],
+    )
+    record(
+        "destroyCanDeregisterTaskDefinition",
+        policy_allows(
+            destroy,
+            "ecs:DeregisterTaskDefinition",
+            "arn:aws:ecs:us-east-1:111122223333:task-definition/example-portfolio-manual-web:1",
+        ),
+    )
+    record(
+        "operatorCannotDeregisterTaskDefinition",
+        not policy_allows(
+            permissions,
+            "ecs:DeregisterTaskDefinition",
+            "arn:aws:ecs:us-east-1:111122223333:task-definition/example-portfolio-manual-web:1",
+        ),
+    )
+
+    failed = [name for name, passed in invariant_cases.items() if not passed]
     if failed:
         raise RuntimeError(f"Console IAM invariant failed: {failed}")
 
@@ -414,7 +930,14 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "trustPolicies": len(trust_files),
         "operatorActionRows": rows,
         "allowedLayerDecisions": allowed_layer_decisions,
-        "invariantCases": len(negative_cases) + len(positive_cases),
+        "invariantCases": len(invariant_cases),
+        "managedPolicyCharacterLimit": MANAGED_POLICY_CHARACTER_LIMIT,
+        "managedPolicyCharacterReserve": MANAGED_POLICY_CHARACTER_RESERVE,
+        "managedPolicyCharacterSizes": managed_policy_sizes,
+        "trustPolicyCharacterLimit": TRUST_POLICY_CHARACTER_LIMIT,
+        "trustPolicyCharacterReserve": TRUST_POLICY_CHARACTER_RESERVE,
+        "trustPolicyCharacterSizes": trust_policy_sizes,
+        "unconditionedGlobalDestroyActions": unconditioned_global_writes,
         "sha256": digest.hexdigest(),
     }
 
@@ -479,13 +1002,20 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 raise RuntimeError(
                     f"Exact-resource action cannot use Resource '*': {row}"
                 )
-            if (
-                ownership == "service-delegated"
-                and action != "route53:CreateHostedZone"
+            if ownership == "service-delegated" and (
+                action not in CLOUD_MAP_DELEGATED_ACTIONS
             ):
                 raise RuntimeError(f"Unexpected service-delegated action: {row}")
             if len(row) == 4 and not isinstance(row[3], dict):
                 raise RuntimeError(f"Operator action context must be an object: {row}")
+            if ownership == "service-delegated" and (
+                len(row) != 4
+                or row[3] != {"aws:CalledVia": ["servicediscovery.amazonaws.com"]}
+            ):
+                raise RuntimeError(
+                    "Service-delegated action must use the exact Cloud Map "
+                    f"forward-access context: {row}"
+                )
             rows.append(json.dumps([resource_type, *row], sort_keys=True))
     if len(rows) != len(set(rows)):
         raise RuntimeError(

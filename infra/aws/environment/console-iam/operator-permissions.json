@@ -74,7 +74,6 @@
         "rds:DescribeDBInstances",
         "rds:DescribeDBSubnetGroups",
         "rds:ListTagsForResource",
-        "route53:CreateHostedZone",
         "secretsmanager:CreateSecret",
         "secretsmanager:DescribeSecret",
         "secretsmanager:GetResourcePolicy",
@@ -91,6 +90,32 @@
         "sts:GetCallerIdentity"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "LetCloudMapCreateAndListItsPrivateHostedZone",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeRegions",
+        "route53:CreateHostedZone",
+        "route53:ListHostedZonesByName"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:CalledVia": "servicediscovery.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "LetCloudMapReadItsPrivateHostedZone",
+      "Effect": "Allow",
+      "Action": "route53:GetHostedZone",
+      "Resource": "arn:${AWS_PARTITION}:route53:::hostedzone/*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:CalledVia": "servicediscovery.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "ManageExactApplicationBucket",

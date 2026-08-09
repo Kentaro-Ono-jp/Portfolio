@@ -51,3 +51,21 @@ The documents contain no explicit `Deny`. Effective authority is the
 intersection of a role's identity policy and its static boundary. State-bucket
 deletion, state-object deletion, arbitrary IAM mutation, and passing the
 operator or destroy role are absent from that intersection.
+
+The AWS-free verifier renders every document before use. Each customer-managed
+policy must remain within AWS IAM's 6,144-character limit with at least 512
+characters reserved; each role trust policy must remain within the default
+2,048-character limit with at least 256 characters reserved. Whitespace is not
+counted, matching IAM's quota semantics.
+
+`DestroyPolicy` binds generated network, API Gateway, Cognito, and Cloud Map
+identifiers to the complete four-tag ownership tuple. Exact-name services use
+environment-encoded ARN patterns, and Cloud Map's Route 53 creation dependencies
+plus Amazon MQ's EC2 cleanup dependencies are allowed only when AWS supplies the
+matching `aws:CalledVia` forward-access context. Direct calls do not satisfy
+those grants. Route 53 deletion is not granted because AWS documents
+`DeleteNamespace` as needing only Cloud Map authority. AWS documents
+`ecs:DeregisterTaskDefinition` as not supporting resource-level permissions,
+so that one action is isolated as the only unconditioned global destroy write;
+it is absent from `OperatorPermissions` and the destroy role remains unable to
+mutate IAM or its own policies.
