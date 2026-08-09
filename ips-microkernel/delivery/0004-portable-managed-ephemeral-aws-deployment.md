@@ -220,11 +220,15 @@ Deliver Terraform modules for the NAT-free VPC, API Gateway/VPC Link/Cloud Map, 
 Acceptance requires deterministic validation/plan, no default NAT/ALB/custom-domain dependency, private application-service ingress, outbound-only task public IP use, encrypted state/data, bounded retention, and complete destroyability by environment state key.
 
 Implemented in `infra/aws/environment/`. Its repository-owned verifier checks
-formatting, provider locks, validation, lint, three mocked-plan contracts, the
+formatting, provider locks, validation, lint, four mocked-plan contracts, the
 exact resource and ownership-tag inventory, service-aware security boundaries,
 secret redaction, digest pinning, and a create-only fail-closed plan without
-calling AWS. Step 4 performs no apply and leaves lifecycle/destroy execution to
-Step 5.
+calling AWS. Separately, an owner-authorized exploratory Step 4 evaluation
+consumed all `3/3` construction attempts without a green lifecycle. Its partial
+resources were destroyed, Terraform state returned to zero, and the residual
+sweep found no application resource. That bounded history is not Step 7 proof;
+no fourth apply is authorized. Repeatable lifecycle and destroy execution
+remain Step 5 work.
 
 ### Step 5: Implement the lifecycle and destroy safety system
 

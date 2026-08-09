@@ -18,9 +18,13 @@ either by `../bootstrap/` or by the static account-owner procedure in
 URLs. It has no `terraform_remote_state` or AWS discovery data source.
 
 `console-iam/manifest.json` keeps `OperatorPermissions` and `OperatorBoundary`
-as independently named and versioned managed policies. The former is the
-current grant; the latter is only the maximum ceiling. The Console procedure
-contains no explicit deny and no Terraform-managed IAM object.
+as independently named and versioned managed policies. The former holds
+backend, image, PassRole, and destroy-role-assumption authority; two additional
+static managed policies split tag-on-create operations from exact-ARN and
+ownership-tagged environment operations. The boundary remains a separate
+maximum ceiling shared by all roles. The Console procedure contains no
+explicit deny, dynamic attachment, inline policy, or Terraform-managed IAM
+object.
 
 The separate destroy identity policy enforces the full ownership tuple on
 generated identifiers, exact environment-name ARN patterns where the service

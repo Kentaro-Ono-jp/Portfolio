@@ -83,8 +83,10 @@ FORBIDDEN_RESOURCE_TYPES = {
 }
 OPERATOR_ACTION_OWNERSHIP_MODES = {
     "exact-resource",
+    "exact-resource-and-request-tags",
     "global-read",
     "request-tags",
+    "resource-and-request-tags",
     "resource-tags",
     "service-delegated",
 }
@@ -158,6 +160,7 @@ def condition_matches(statement: dict[str, Any], context: dict[str, Any]) -> boo
     conditions = statement.get("Condition", {})
     for operator, entries in conditions.items():
         if operator not in {
+            "ForAllValues:StringEquals",
             "ForAnyValue:StringEquals",
             "StringEquals",
             "StringLike",
@@ -169,6 +172,10 @@ def condition_matches(statement: dict[str, Any], context: dict[str, Any]) -> boo
                 return False
             expected_values = string_values(expected)
             actual_values = string_values(actual)
+            if operator == "ForAllValues:StringEquals" and not all(
+                value in expected_values for value in actual_values
+            ):
+                return False
             if operator in {"ForAnyValue:StringEquals", "StringEquals"} and not any(
                 value in expected_values for value in actual_values
             ):
@@ -222,18 +229,66 @@ def operator_resource(symbol: str) -> str:
     if symbol.startswith("iam-"):
         purpose = symbol.removeprefix("iam-").removesuffix("-role")
         return f"arn:{partition}:iam::{account}:role/{prefix}-{environment}-{purpose}"
-    service = {
-        "api-gateway": "apigateway",
-        "cloudmap": "servicediscovery",
-        "ec2": "ec2",
-        "ecs": "ecs",
-        "log": "logs",
-        "mq": "mq",
-        "rds": "rds",
-        "secret": "secretsmanager",
-        "cognito": "cognito-idp",
-    }.get(symbol.split("-", 1)[0], symbol.split("-", 1)[0])
-    return f"arn:{partition}:{service}:{region}:{account}:{symbol}/example"
+    resources = {
+        "api-gateway-api-collection": f"arn:{partition}:apigateway:{region}::/apis",
+        "api-gateway-api": f"arn:{partition}:apigateway:{region}::/apis/api-owned",
+        "api-gateway-integration-collection": f"arn:{partition}:apigateway:{region}::/apis/api-owned/integrations",
+        "api-gateway-integration": f"arn:{partition}:apigateway:{region}::/apis/api-owned/integrations/integration-owned",
+        "api-gateway-route-collection": f"arn:{partition}:apigateway:{region}::/apis/api-owned/routes",
+        "api-gateway-route": f"arn:{partition}:apigateway:{region}::/apis/api-owned/routes/route-owned",
+        "api-gateway-stage-collection": f"arn:{partition}:apigateway:{region}::/apis/api-owned/stages",
+        "api-gateway-stage": f"arn:{partition}:apigateway:{region}::/apis/api-owned/stages/$default",
+        "api-gateway-vpc-link-collection": f"arn:{partition}:apigateway:{region}::/vpclinks",
+        "api-gateway-vpc-link": f"arn:{partition}:apigateway:{region}::/vpclinks/vpclink-owned",
+        "cloudmap-namespace": f"arn:{partition}:servicediscovery:{region}:{account}:namespace/ns-owned",
+        "cloudmap-service": f"arn:{partition}:servicediscovery:{region}:{account}:service/srv-owned",
+        "cognito-user-pool": f"arn:{partition}:cognito-idp:{region}:{account}:userpool/{region}_owned",
+        "ec2-internet-gateway": f"arn:{partition}:ec2:{region}:{account}:internet-gateway/igw-owned",
+        "ec2-route-table": f"arn:{partition}:ec2:{region}:{account}:route-table/rtb-owned",
+        "ec2-security-group": f"arn:{partition}:ec2:{region}:{account}:security-group/sg-owned",
+        "ec2-security-group-rule": f"arn:{partition}:ec2:{region}:{account}:security-group-rule/sgr-owned",
+        "ec2-subnet": f"arn:{partition}:ec2:{region}:{account}:subnet/subnet-owned",
+        "ec2-vpc": f"arn:{partition}:ec2:{region}:{account}:vpc/vpc-owned",
+        "ec2-vpc-endpoint": f"arn:{partition}:ec2:{region}:{account}:vpc-endpoint/vpce-owned",
+        "ecs-cluster": f"arn:{partition}:ecs:{region}:{account}:cluster/{prefix}-{environment}",
+        "ecs-service": f"arn:{partition}:ecs:{region}:{account}:service/{prefix}-{environment}/{prefix}-{environment}-web",
+        "ecs-task-definition": f"arn:{partition}:ecs:{region}:{account}:task-definition/{prefix}-{environment}-web:1",
+        "log-group": f"arn:{partition}:logs:{region}:{account}:log-group:/portfolio/{prefix}/{environment}/web",
+        "mq-broker": f"arn:{partition}:mq:{region}:{account}:broker:{prefix}-{environment}-rabbitmq:broker-id",
+        "rds-db": f"arn:{partition}:rds:{region}:{account}:db:{prefix}-{environment}-postgresql",
+        "rds-subnet-group": f"arn:{partition}:rds:{region}:{account}:subgrp:{prefix}-{environment}",
+        "secret": f"arn:{partition}:secretsmanager:{region}:{account}:secret:{prefix}-{environment}-database-abcdef",
+    }
+    if symbol not in resources:
+        raise RuntimeError(f"Unknown operator resource symbol: {symbol}")
+    return resources[symbol]
+
+
+def foreign_operator_resource(symbol: str) -> str:
+    resource = operator_resource(symbol)
+    environment = CONSOLE_IAM_TOKENS["ENVIRONMENT"]
+    if environment in resource:
+        return resource.replace(environment, "monthly")
+    replacements = {
+        "/api-owned": "/api-foreign",
+        "/vpclink-owned": "/vpclink-foreign",
+        "/ns-owned": "/ns-foreign",
+        "/srv-owned": "/srv-foreign",
+        "_owned": "_foreign",
+        "/igw-owned": "/igw-foreign",
+        "/rtb-owned": "/rtb-foreign",
+        "/sg-owned": "/sg-foreign",
+        "/sgr-owned": "/sgr-foreign",
+        "/subnet-owned": "/subnet-foreign",
+        "/vpc-owned": "/vpc-foreign",
+        "/vpce-owned": "/vpce-foreign",
+        ":broker-id": ":foreign-id",
+        "-abcdef": "-uvwxyz",
+    }
+    for owned, foreign in replacements.items():
+        if owned in resource:
+            return resource.replace(owned, foreign)
+    raise RuntimeError(f"Cannot synthesize foreign operator resource: {symbol}")
 
 
 def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
@@ -243,6 +298,8 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
 
     expected_policy_keys = {
         "operatorPermissions",
+        "managedEnvironmentPermissions",
+        "managedEnvironmentResourcePermissions",
         "operatorBoundary",
         "taskExecution",
         "apiWorkload",
@@ -252,20 +309,12 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
     policy_specs = manifest.get("managedPolicies", {})
     if set(policy_specs) != expected_policy_keys:
         raise RuntimeError("Console IAM managed-policy inventory drifted")
-    if (
-        policy_specs["operatorPermissions"]["name"]
-        == policy_specs["operatorBoundary"]["name"]
-    ):
-        raise RuntimeError(
-            "Operator permissions and boundary must be different objects"
-        )
-    if (
-        policy_specs["operatorPermissions"]["document"]
-        == policy_specs["operatorBoundary"]["document"]
-    ):
-        raise RuntimeError(
-            "Operator permissions and boundary must use different documents"
-        )
+    policy_names = [spec["name"] for spec in policy_specs.values()]
+    policy_documents = [spec["document"] for spec in policy_specs.values()]
+    if len(set(policy_names)) != len(policy_names):
+        raise RuntimeError("Console IAM managed policies must be different objects")
+    if len(set(policy_documents)) != len(policy_documents):
+        raise RuntimeError("Console IAM managed policies must use different documents")
 
     policies = {
         key: rendered_console_json(CONSOLE_IAM_ROOT / spec["document"])
@@ -340,9 +389,14 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             raise RuntimeError(
                 f"Console IAM role lost the separate boundary: {purpose}"
             )
-    if roles["operator_deployment"].get("permissions") != ["operatorPermissions"]:
+    operator_permission_keys = [
+        "operatorPermissions",
+        "managedEnvironmentPermissions",
+        "managedEnvironmentResourcePermissions",
+    ]
+    if roles["operator_deployment"].get("permissions") != operator_permission_keys:
         raise RuntimeError(
-            "Operator must have exactly its separately named permissions policy"
+            "Operator must have exactly its separately named static permissions policies"
         )
     if roles["web_workload"].get("permissions") != []:
         raise RuntimeError("Web workload must remain an empty-authority role")
@@ -371,16 +425,46 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         policy_class="trust policy",
     )
 
-    permissions = policies["operatorPermissions"]
+    permissions = {
+        "Version": "2012-10-17",
+        "Statement": [
+            statement
+            for key in operator_permission_keys
+            for statement in policies[key]["Statement"]
+        ],
+    }
     boundary = policies["operatorBoundary"]
     destroy = policies["destroy"]
     rows = 0
     allowed_layer_decisions = 0
+    reviewed_operator_rows: list[
+        tuple[str, int, str, str, str, str, dict[str, Any]]
+    ] = []
     for resource_type, action_rows in sorted(matrix["resourceActions"].items()):
-        for row in action_rows:
-            action, symbol = row[:2]
+        for row_index, row in enumerate(action_rows):
+            action, symbol, ownership = row[:3]
             resource = operator_resource(symbol)
-            context = dict(row[3] if len(row) == 4 else {})
+            context: dict[str, Any] = {}
+            if ownership in {
+                "exact-resource-and-request-tags",
+                "request-tags",
+                "resource-and-request-tags",
+            }:
+                context.update(
+                    {
+                        f"aws:RequestTag/{key}": value
+                        for key, value in OWNERSHIP_TAGS.items()
+                    }
+                )
+                context["aws:TagKeys"] = list(OWNERSHIP_TAGS)
+            if ownership in {"resource-and-request-tags", "resource-tags"}:
+                context.update(
+                    {
+                        f"aws:ResourceTag/{key}": value
+                        for key, value in OWNERSHIP_TAGS.items()
+                    }
+                )
+            context.update(dict(row[3] if len(row) == 4 else {}))
             decisions = (
                 policy_allows(permissions, action, resource, context),
                 policy_allows(boundary, action, resource, context),
@@ -393,6 +477,17 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
                 )
             rows += 1
             allowed_layer_decisions += 2
+            reviewed_operator_rows.append(
+                (
+                    resource_type,
+                    row_index,
+                    action,
+                    symbol,
+                    ownership,
+                    resource,
+                    context,
+                )
+            )
 
     invariant_cases: dict[str, bool] = {}
 
@@ -584,6 +679,131 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         inverse = dict(owned_context)
         inverse[f"aws:ResourceTag/{key}"] = value
         ownership_inverses[label] = inverse
+
+    request_context = {
+        f"aws:RequestTag/{key}": value for key, value in OWNERSHIP_TAGS.items()
+    }
+    request_context["aws:TagKeys"] = list(OWNERSHIP_TAGS)
+    request_inverses: dict[str, dict[str, Any]] = {}
+    for label, key, value in (
+        ("crossEnvironment", "PortfolioEnvironment", "monthly"),
+        ("crossRepository", "PortfolioRepository", "other/repository"),
+        ("unmanaged", "PortfolioManaged", "false"),
+        ("persistent", "PortfolioPersistent", "true"),
+    ):
+        inverse = dict(request_context)
+        inverse["aws:TagKeys"] = list(OWNERSHIP_TAGS)
+        inverse[f"aws:RequestTag/{key}"] = value
+        request_inverses[label] = inverse
+    missing_request_tag = dict(request_context)
+    missing_request_tag.pop("aws:RequestTag/PortfolioRepository")
+    missing_request_tag["aws:TagKeys"] = [
+        key for key in OWNERSHIP_TAGS if key != "PortfolioRepository"
+    ]
+    request_inverses["missingOwnershipKey"] = missing_request_tag
+    additional_request_tag = dict(request_context)
+    additional_request_tag["aws:TagKeys"] = [*OWNERSHIP_TAGS, "Owner"]
+    additional_request_tag["aws:RequestTag/Owner"] = "unexpected"
+    request_inverses["additionalOwnershipKey"] = additional_request_tag
+
+    def record_operator_denial(
+        case_name: str,
+        action: str,
+        resource: str,
+        context: dict[str, Any],
+    ) -> None:
+        identity_allows = policy_allows(permissions, action, resource, context)
+        boundary_allows = policy_allows(boundary, action, resource, context)
+        record(f"operatorIdentityRejects{case_name}", not identity_allows)
+        record(
+            f"operatorEffectiveRejects{case_name}",
+            not (identity_allows and boundary_allows),
+        )
+
+    for (
+        resource_type,
+        row_index,
+        action,
+        symbol,
+        ownership,
+        resource,
+        context,
+    ) in reviewed_operator_rows:
+        case = "".join(part.title() for part in resource_type.split("_"))
+        case += str(row_index)
+        if ownership in {"resource-and-request-tags", "resource-tags"}:
+            for inverse_label, inverse_tags in ownership_inverses.items():
+                inverse_context = dict(context)
+                inverse_context.update(inverse_tags)
+                record_operator_denial(
+                    f"{inverse_label.title()}{case}",
+                    action,
+                    resource,
+                    inverse_context,
+                )
+        if ownership in {
+            "exact-resource-and-request-tags",
+            "request-tags",
+            "resource-and-request-tags",
+        } or any(key.startswith("aws:RequestTag/") for key in context):
+            for inverse_label, inverse_tags in request_inverses.items():
+                inverse_context = dict(context)
+                for key in list(inverse_context):
+                    if key.startswith("aws:RequestTag/") or key == "aws:TagKeys":
+                        inverse_context.pop(key)
+                inverse_context.update(inverse_tags)
+                record_operator_denial(
+                    f"{inverse_label.title()}{case}Request",
+                    action,
+                    resource,
+                    inverse_context,
+                )
+        if ownership in {
+            "exact-resource",
+            "exact-resource-and-request-tags",
+        } and not symbol.startswith("iam-"):
+            record_operator_denial(
+                f"ForeignResource{case}",
+                action,
+                foreign_operator_resource(symbol),
+                context,
+            )
+
+    unrelated_secret = (
+        "arn:aws:secretsmanager:us-east-1:111122223333:secret:unrelated-secret-abcdef"
+    )
+    for action in ("secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue"):
+        record_operator_denial(
+            f"UnrelatedSecret{action.split(':', 1)[1]}",
+            action,
+            unrelated_secret,
+            {},
+        )
+    cross_environment_security_group = dict(owned_context)
+    cross_environment_security_group["aws:ResourceTag/PortfolioEnvironment"] = "monthly"
+    for action in (
+        "ec2:ModifySecurityGroupRules",
+        "ec2:RevokeSecurityGroupEgress",
+    ):
+        record_operator_denial(
+            f"CrossEnvironmentSecurityGroup{action.split(':', 1)[1]}",
+            action,
+            "arn:aws:ec2:us-east-1:111122223333:security-group/sg-foreign",
+            cross_environment_security_group,
+        )
+
+    unconditioned_global_operator_writes: list[str] = []
+    for statement in permissions["Statement"]:
+        if statement.get("Condition") or statement.get("Resource") != "*":
+            continue
+        for action in string_values(statement.get("Action", [])):
+            verb = action.split(":", 1)[-1].lower()
+            if not verb.startswith(("describe", "get", "head", "list")):
+                unconditioned_global_operator_writes.append(action)
+    record(
+        "operatorHasNoUnconditionedGlobalWrite",
+        unconditioned_global_operator_writes == [],
+    )
 
     generated_id_actions = [
         ("Vpc", "ec2:DeleteVpc", "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-owned"),
@@ -957,6 +1177,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "trustPolicyCharacterLimit": TRUST_POLICY_CHARACTER_LIMIT,
         "trustPolicyCharacterReserve": TRUST_POLICY_CHARACTER_RESERVE,
         "trustPolicyCharacterSizes": trust_policy_sizes,
+        "unconditionedGlobalOperatorWrites": unconditioned_global_operator_writes,
         "unconditionedGlobalDestroyActions": unconditioned_global_writes,
         "sha256": digest.hexdigest(),
     }
@@ -1018,9 +1239,18 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                     raise RuntimeError(
                         f"Global operator action must be read-only: {row}"
                     )
-            if ownership == "exact-resource" and resource == "*":
+            if (
+                ownership
+                in {
+                    "exact-resource",
+                    "exact-resource-and-request-tags",
+                    "resource-and-request-tags",
+                    "resource-tags",
+                }
+                and resource == "*"
+            ):
                 raise RuntimeError(
-                    f"Exact-resource action cannot use Resource '*': {row}"
+                    f"Resource-bound operator action cannot use Resource '*': {row}"
                 )
             if ownership == "service-delegated" and (
                 action not in CLOUD_MAP_DELEGATED_ACTIONS

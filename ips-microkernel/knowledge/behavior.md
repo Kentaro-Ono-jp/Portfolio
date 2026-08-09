@@ -250,6 +250,28 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #57
   [approved correction](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143423042).
 
+### Reconcile superseded planning assumptions with observed history
+
+- **Trigger:** An owner-authorized live evaluation, deployment, cleanup, or
+  other external execution changes a count or state that canonical planning
+  records previously described as zero, absent, or not performed.
+- **HEAD effect:** `moving`
+- **Problem:** The implementation record is updated while an architecture
+  index, delivery step, umbrella ledger, README, or generated evidence retains
+  the old planning assumption, producing mutually incompatible public claims.
+- **Detect:** Search every canonical status surface for the superseded value or
+  state, compare each occurrence with the latest accepted live history, and
+  distinguish AWS-free verifier counters from cumulative external effects.
+- **Pass:** Every canonical status record states the same latest attempt,
+  outcome, cleanup, and limitation facts; static zero-call proof remains
+  explicitly scoped to the verifier; and no unsuccessful execution is
+  described as green or unperformed.
+- **Repair:** Reconcile all affected status surfaces in the same correction,
+  retain the prior assumption only where it is clearly historical, and rerun
+  documentation plus generated-evidence checks before review.
+- **Origins:** PR #111
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233003435).
+
 ### Authorize a target before idempotency classification
 
 - **Trigger:** A protected resource mutation combines ownership hiding with an
@@ -511,7 +533,9 @@ proved/unproved classification, or permanence claim.
   layer-by-layer positive, unowned, and inverse-negative matrix with explicit
   expectations for the enforcing layer and effective intersection.
 - **Origins:** PR #107
-  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500).
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500),
+  PR #111
+  [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5233003435).
 
 ### Bind topology edges to resource identities
 

@@ -29,6 +29,14 @@
       "name": "ReactorFrontPortfolioOperatorPermissions",
       "document": "operator-permissions.json"
     },
+    "managedEnvironmentPermissions": {
+      "name": "ReactorFrontPortfolioManagedEnvironmentPermissions",
+      "document": "managed-environment-permissions.json"
+    },
+    "managedEnvironmentResourcePermissions": {
+      "name": "ReactorFrontPortfolioManagedEnvironmentResourcePermissions",
+      "document": "managed-environment-resource-permissions.json"
+    },
     "operatorBoundary": {
       "name": "ReactorFrontPortfolioOperatorBoundary",
       "document": "operator-boundary.json"
@@ -54,7 +62,11 @@
     "operator_deployment": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment",
       "trust": "operator-trust.json",
-      "permissions": ["operatorPermissions"],
+      "permissions": [
+        "operatorPermissions",
+        "managedEnvironmentPermissions",
+        "managedEnvironmentResourcePermissions"
+      ],
       "boundary": "operatorBoundary"
     },
     "task_execution": {

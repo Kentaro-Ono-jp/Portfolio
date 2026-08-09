@@ -324,10 +324,13 @@ does not claim production readiness.
   account recovery, MFA, and audit search/export/retention/legal hold remain
   separate product decisions.
 - The managed-ephemeral AWS topology is implemented and inspected through an
-  AWS-free deterministic Terraform plan, but its lifecycle and automation are
-  not implemented and it has not been applied. No public hosted service,
-  successful AWS lifecycle, production identity provider, durable shared
-  session, high availability, or stable public URL is claimed.
+  AWS-free deterministic Terraform plan. An owner-authorized exploratory
+  evaluation consumed the bounded `3/3` construction attempts without a green
+  lifecycle; the partial environment was destroyed, state returned to zero,
+  and the residual sweep found no application resource. Lifecycle tooling and
+  automation remain unimplemented. No public hosted service, successful AWS
+  lifecycle, production identity provider, durable shared session, high
+  availability, or stable public URL is claimed.
 
 ## Accepted records
 
