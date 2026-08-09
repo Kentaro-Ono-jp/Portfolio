@@ -499,10 +499,24 @@ locals {
           }
         },
         {
+          # MutateOwnedHttpApiResources
+          Effect   = "Allow"
+          Action   = ["apigateway:PATCH", "apigateway:POST", "apigateway:PUT"]
+          Resource = "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis/*"
+          Condition = {
+            StringEquals = {
+              "aws:ResourceTag/PortfolioEnvironment" = environment
+              "aws:ResourceTag/PortfolioManaged"     = "true"
+              "aws:ResourceTag/PortfolioPersistent"  = "false"
+              "aws:ResourceTag/PortfolioRepository"  = var.repository_identity
+            }
+          }
+        },
+        {
           # ManageExactEnvironmentServices
           Effect = "Allow"
           Action = [
-            "apigateway:GET", "apigateway:PATCH", "apigateway:POST", "apigateway:PUT",
+            "apigateway:GET",
             "cognito-idp:DescribeUserPool",
             "ecs:CreateCluster", "ecs:CreateService", "ecs:DescribeClusters", "ecs:DescribeServices",
             "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UpdateService",

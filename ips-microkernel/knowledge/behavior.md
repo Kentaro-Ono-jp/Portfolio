@@ -464,14 +464,16 @@ proved/unproved classification, or permanence claim.
 - **Detect:** From the target service's authorization reference, construct each
   required positive with its real create-time resource form and only the
   request, resource, or principal context keys available to that action;
-  execute the same request independently against identity, boundary, and their
-  effective intersection, then change only the ownership environment.
+  enumerate every rendered write action/resource form, execute each request
+  independently against identity, boundary, and their effective intersection,
+  then change only the ownership environment and repository.
 - **Pass:** Every required real-context positive is allowed by identity,
   boundary, and their intersection; each ownership inverse is denied by the
   declared immutable enforcement layer and effective intersection; inventory
   succeeds without fabricated request tags; every required resource in a
   multi-resource authorization is exercised independently; and every dependent
   tagging action has its own passing case with an exact ownership-key ceiling.
+  No rendered write verb or resource form is omitted from the inverse matrix.
 - **Repair:** Split creation-time request-tag, unconditioned inventory, and
   existing-resource ownership-tag statements; use actual collection or
   resource-less create forms; grant the exact dependent tagging actions;

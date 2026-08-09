@@ -211,6 +211,32 @@
       "expected": "allowed"
     },
     {
+      "name": "operator updates an owned HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:PATCH",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/owned-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot update a cross-repository HTTP API",
+      "role": "manual/operator-deployment",
+      "action": "apigateway:PATCH",
+      "resource": "arn:aws:apigateway:us-east-1::/apis/foreign-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "other-owner/other-repository"
+      },
+      "expected": "denied"
+    },
+    {
       "name": "operator cannot create a cross-repository HTTP API",
       "role": "manual/operator-deployment",
       "action": "apigateway:POST",

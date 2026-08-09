@@ -768,6 +768,90 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
         "identity": "denied",
         "boundary": "allowed",
     }
+    http_api_write_resources = (
+        ("apigateway:PATCH", "/apis/api-example"),
+        ("apigateway:PATCH", "/apis/api-example/authorizers/auth-example"),
+        ("apigateway:PATCH", "/apis/api-example/deployments/dep-example"),
+        ("apigateway:PATCH", "/apis/api-example/integrations/int-example"),
+        (
+            "apigateway:PATCH",
+            "/apis/api-example/integrations/int-example/"
+            "integrationresponses/resp-example",
+        ),
+        ("apigateway:PATCH", "/apis/api-example/models/model-example"),
+        ("apigateway:PATCH", "/apis/api-example/routes/route-example"),
+        (
+            "apigateway:PATCH",
+            "/apis/api-example/routes/route-example/"
+            "requestparameters/param-example",
+        ),
+        (
+            "apigateway:PATCH",
+            "/apis/api-example/routes/route-example/"
+            "routeresponses/resp-example",
+        ),
+        ("apigateway:PATCH", "/apis/api-example/stages/stage-example"),
+        ("apigateway:POST", "/apis/api-example/authorizers"),
+        ("apigateway:POST", "/apis/api-example/deployments"),
+        (
+            "apigateway:POST",
+            "/apis/api-example/integrations/int-example/"
+            "integrationresponses/resp-example",
+        ),
+        (
+            "apigateway:POST",
+            "/apis/api-example/integrations/int-example/integrationresponses",
+        ),
+        ("apigateway:POST", "/apis/api-example/integrations"),
+        ("apigateway:POST", "/apis/api-example/models"),
+        (
+            "apigateway:POST",
+            "/apis/api-example/routes/route-example/routeresponses",
+        ),
+        ("apigateway:POST", "/apis/api-example/routes"),
+        ("apigateway:POST", "/apis/api-example/stages"),
+        ("apigateway:PUT", "/apis/api-example"),
+        (
+            "apigateway:PUT",
+            "/apis/api-example/integrations/int-example/"
+            "integrationresponses/resp-example",
+        ),
+    )
+    rendered_http_write_actions = {
+        action
+        for statement in payload["environment_identity"][
+            "manual/operator-deployment"
+        ]["Statement"]
+        if any(
+            fnmatch.fnmatchcase(
+                "arn:aws:apigateway:us-east-1::/apis/api-example",
+                resource,
+            )
+            for resource in values(statement.get("Resource", []))
+        )
+        for action in values(statement.get("Action", []))
+        if action.startswith("apigateway:") and action != "apigateway:GET"
+    }
+    enumerated_http_write_actions = {
+        action for action, _ in http_api_write_resources
+    }
+    if rendered_http_write_actions != enumerated_http_write_actions:
+        raise RuntimeError(
+            "HTTP API write-form inventory does not match rendered actions: "
+            f"rendered={sorted(rendered_http_write_actions)} "
+            f"enumerated={sorted(enumerated_http_write_actions)}"
+        )
+    http_api_write_cases = tuple(
+        (
+            f"HTTP API write form {action} {resource_path}",
+            action,
+            f"arn:aws:apigateway:us-east-1::{resource_path}",
+            resource_tags,
+            "resource",
+            all_allowed,
+        )
+        for action, resource_path in http_api_write_resources
+    )
     cases = (
         ("EC2 inventory", "ec2:DescribeVpcs", "*", {}, None, all_allowed),
         (
@@ -835,6 +919,7 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
             "request",
             all_allowed,
         ),
+        *http_api_write_cases,
         (
             "Cognito user-pool creation",
             "cognito-idp:CreateUserPool",

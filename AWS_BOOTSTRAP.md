@@ -81,8 +81,9 @@ resource-less create resource; EC2 inventory carries no fabricated request
 tags; `ec2:CreateTags` requires an approved `ec2:CreateAction` and cannot take
 ownership of an existing EC2 resource; security-group mutation proves the
 existing group resource-tag context and the optional new rule request-tag plus
-dependent-tagging contexts separately; and Cognito and Cloud Map tagging
-actions are exercised separately.
+dependent-tagging contexts separately; every rendered HTTP API write verb on
+an existing API or child resource requires the complete ownership resource-tag
+tuple; and Cognito and Cloud Map tagging actions are exercised separately.
 Cloud Map `CreateService` proves both required authorizations independently:
 the existing namespace must carry the complete ownership tuple and the new
 service ARN must receive exactly the four ownership tags. Cognito retagging
@@ -223,7 +224,7 @@ with cross-environment, cross-repository, unmanaged, and persistent negatives
 even though those resource IDs do not encode the environment name. The verifier
 also records exact generated policy sizes for both the synthetic example and
 the maximum accepted 20-character prefix, the complete 1,656-case delegated
-`iam:PassRole` ceiling, 60 tagged-destroy layer/context decisions, and 147
+`iam:PassRole` ceiling, 60 tagged-destroy layer/context decisions, and 336
 operator control-plane layer/context decisions.
 
 This repository-owned evaluator is static contract proof, not AWS IAM Access
