@@ -65,6 +65,14 @@ fault records, shared queues, or state that may survive or race another actor.
 - **Mistake:** CI published runtime services on fixed ports inside Linux's default ephemeral port range, so unrelated runner traffic could collide with Compose startup.
 - **Correction:** Assign CI-only ports below the ephemeral range, keep host-side service URLs aligned with those overrides, and enforce the mapping with an executable regression test.
 
+### Isolate nested verifier tests from runtime-only overrides
+
+- **Origin:** PR #104
+  [run 31290133939](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31290133939)
+- **Trigger:** A compatibility step sets a runtime-only environment override and then runs nested unit tests of the same verifier before starting its owned runtime.
+- **Mistake:** The nested partial-runtime tests inherited the RabbitMQ expected-version override and bypassed their mocked command boundary to query a real Docker service that did not yet exist.
+- **Correction:** Clear the runtime-only override for each nested verifier unit test, and let only focused version-proof tests set an explicit expected version inside their owned test scope.
+
 ## Return
 
 Return to publication Gate A after repairing only the triggered isolation

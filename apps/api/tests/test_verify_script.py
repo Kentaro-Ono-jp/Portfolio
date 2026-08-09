@@ -16,6 +16,11 @@ from alembic.script import ScriptDirectory
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
+@pytest.fixture(autouse=True)
+def isolate_runtime_version_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PORTFOLIO_EXPECTED_RABBITMQ_VERSION", raising=False)
+
+
 def load_script_module(name: str) -> ModuleType:
     path = REPOSITORY_ROOT / "scripts" / f"{name}.py"
     specification = importlib.util.spec_from_file_location(name, path)
