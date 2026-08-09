@@ -173,6 +173,13 @@
       "expected": "denied"
     },
     {
+      "name": "IAM manager cannot replace an environment role policy",
+      "role": "iam_manager",
+      "action": "iam:PutRolePolicy",
+      "resource": "role:manual/api-workload",
+      "expected": "denied"
+    },
+    {
       "name": "task execution pulls exact owned images",
       "role": "manual/task-execution",
       "action": "ecr:BatchGetImage",
@@ -354,6 +361,102 @@
       "expected": "denied"
     },
     {
+      "name": "destroy deletes a tagged owned REST API",
+      "role": "manual/destroy",
+      "action": "apigateway:DELETE",
+      "resource": "arn:aws:apigateway:us-east-1::/restapis/owned-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment REST API",
+      "role": "manual/destroy",
+      "action": "apigateway:DELETE",
+      "resource": "arn:aws:apigateway:us-east-1::/restapis/unrelated-api",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes a tagged owned Cognito user pool",
+      "role": "manual/destroy",
+      "action": "cognito-idp:DeleteUserPool",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment Cognito user pool",
+      "role": "manual/destroy",
+      "action": "cognito-idp:DeleteUserPool",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes a tagged owned Cloud Map namespace",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteNamespace",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment Cloud Map namespace",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteNamespace",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "destroy deletes a tagged owned Cloud Map service",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot delete another environment Cloud Map service",
+      "role": "manual/destroy",
+      "action": "servicediscovery:DeleteService",
+      "resource": "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-unrelated",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false"
+      },
+      "expected": "denied"
+    },
+    {
       "name": "destroy cannot delete persistent state bucket",
       "role": "manual/destroy",
       "action": "s3:DeleteBucket",
@@ -413,14 +516,14 @@
       "expected": "denied"
     },
     {
-      "name": "exact GitHub deployment workflow assumes automation",
+      "name": "exact scheduled GitHub deployment workflow assumes automation",
       "role": "automation",
       "action": "sts:AssumeRoleWithWebIdentity",
       "principalType": "Federated",
       "principal": "github-provider",
       "context": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
         "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
         "token.actions.githubusercontent.com:ref": "refs/heads/main",
         "token.actions.githubusercontent.com:environment": "aws-deployment",
@@ -430,6 +533,40 @@
       "expected": "allowed"
     },
     {
+      "name": "exact manually dispatched GitHub deployment workflow assumes automation",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:workflow_dispatch",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/main",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "push cannot assume automation even when every other claim is exact",
+      "role": "automation",
+      "action": "sts:AssumeRoleWithWebIdentity",
+      "principalType": "Federated",
+      "principal": "github-provider",
+      "context": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:push",
+        "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
+        "token.actions.githubusercontent.com:ref": "refs/heads/main",
+        "token.actions.githubusercontent.com:environment": "aws-deployment",
+        "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main",
+        "token.actions.githubusercontent.com:workflow": "Deploy managed AWS proof"
+      },
+      "expected": "denied"
+    },
+    {
       "name": "fork repository cannot assume automation",
       "role": "automation",
       "action": "sts:AssumeRoleWithWebIdentity",
@@ -437,7 +574,7 @@
       "principal": "github-provider",
       "context": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:fork-owner/example-repository:environment:aws-deployment",
+        "token.actions.githubusercontent.com:sub": "repo:fork-owner/example-repository:environment:aws-deployment:job_workflow_ref:fork-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
         "token.actions.githubusercontent.com:repository": "fork-owner/example-repository",
         "token.actions.githubusercontent.com:ref": "refs/heads/main",
         "token.actions.githubusercontent.com:environment": "aws-deployment",
@@ -454,7 +591,7 @@
       "principal": "github-provider",
       "context": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:pull_request",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:pull_request:job_workflow_ref:example-owner/example-repository/.github/workflows/verify.yml@refs/heads/main:event_name:pull_request",
         "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
         "token.actions.githubusercontent.com:ref": "refs/pull/106/merge",
         "token.actions.githubusercontent.com:job_workflow_ref": "example-owner/example-repository/.github/workflows/verify.yml@refs/heads/main",
@@ -470,7 +607,7 @@
       "principal": "github-provider",
       "context": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
         "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
         "token.actions.githubusercontent.com:ref": "refs/heads/feature",
         "token.actions.githubusercontent.com:environment": "aws-deployment",
@@ -487,7 +624,7 @@
       "principal": "github-provider",
       "context": {
         "token.actions.githubusercontent.com:aud": "https://example.invalid",
-        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment",
+        "token.actions.githubusercontent.com:sub": "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main:event_name:schedule",
         "token.actions.githubusercontent.com:repository": "example-owner/example-repository",
         "token.actions.githubusercontent.com:ref": "refs/heads/main",
         "token.actions.githubusercontent.com:environment": "aws-deployment",

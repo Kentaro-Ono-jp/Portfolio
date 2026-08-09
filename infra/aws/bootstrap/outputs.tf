@@ -38,15 +38,16 @@ output "environment_role_arns" {
 }
 
 output "github_trust_contract" {
-  description = "Future automation must also enforce only workflow_dispatch and schedule in the named workflow."
+  description = "Future automation requires the exact customized subject template before either allowed event can assume the role."
   value = {
-    allowed_events = ["schedule", "workflow_dispatch"]
-    audience       = "sts.amazonaws.com"
-    environment    = var.github_environment
-    ref            = "refs/heads/main"
-    repository     = var.repository_identity
-    subject        = local.github_oidc_subject
-    workflow       = var.github_workflow_name
-    workflow_ref   = var.github_workflow_ref
+    allowed_events        = local.github_allowed_events
+    audience              = "sts.amazonaws.com"
+    environment           = var.github_environment
+    ref                   = "refs/heads/main"
+    repository            = var.repository_identity
+    subject_template_keys = local.github_oidc_subject_template_keys
+    subjects              = local.github_oidc_subjects
+    workflow              = var.github_workflow_name
+    workflow_ref          = var.github_workflow_ref
   }
 }

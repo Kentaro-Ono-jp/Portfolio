@@ -382,6 +382,85 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #68
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/68#issuecomment-5152433244).
 
+### Enforce rendered cloud policy quotas
+
+- **Trigger:** Infrastructure code adds or changes a generated IAM managed,
+  inline, or trust policy.
+- **HEAD effect:** `moving`
+- **Problem:** Syntax and mock plans pass while the rendered document exceeds
+  the target cloud's creation quota.
+- **Detect:** Render every generated policy from the canonical synthetic input,
+  count characters using the provider's quota semantics, and compare each
+  document with its exact managed, aggregate inline, or trust-policy limit.
+- **Pass:** Every rendered policy is at or below its applicable creation quota,
+  and the proof reports each exact size and limit before any cloud API call.
+- **Repair:** Reduce duplicated statements without broadening the effective
+  ceiling, add plan-time quota preconditions, and retain exact rendered-size
+  assertions in AWS-free verification.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
+### Prove delegated identity ceilings adversarially
+
+- **Trigger:** A permissions boundary or delegated-role policy adds or changes
+  IAM policy mutation, role creation, role assumption, or pass-role authority.
+- **HEAD effect:** `moving`
+- **Problem:** The intended identity policy is narrow, but a replaceable or
+  adversarial delegated identity policy can combine with the boundary to gain
+  cross-environment, wrong-service, or otherwise broader authority.
+- **Detect:** Combine the boundary with an adversarial wildcard identity grant
+  for the affected action and enumerate every source role, target role,
+  environment, and relevant service; also enumerate delegated policy-mutation
+  actions on every mutable target role.
+- **Pass:** Only the exact same-environment purpose and destination-service
+  combinations are allowed, and no delegated manager can replace, attach,
+  delete, or update an owned role policy.
+- **Repair:** Move policy ownership to the persistent bootstrap, remove
+  delegated mutation grants, bind boundary resources to principal-derived
+  environment and purpose, bind destination services, and retain the complete
+  adversarial matrix.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
+### Bind destructive ID resources to ownership attributes
+
+- **Trigger:** A destructive cloud action targets a resource whose generated
+  identifier or ARN does not encode the accepted environment or owner name.
+- **HEAD effect:** `moving`
+- **Problem:** An account-level wildcard or ID wildcard lets unrelated
+  resources satisfy both the identity policy and permissions boundary.
+- **Detect:** For each affected resource type, evaluate one intended resource
+  carrying every required ownership attribute and the same action against one
+  unrelated or cross-environment resource with exactly one ownership attribute
+  changed.
+- **Pass:** Every correctly owned resource is allowed, while every unrelated,
+  cross-environment, unmanaged, or persistent variant is denied by both the
+  effective identity and boundary conditions.
+- **Repair:** Require environment, managed, and persistence resource tags in
+  both policy layers and retain paired positive/inverse-negative cases per
+  ID-based resource type.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
+### Connect security allowlists to enforced trust claims
+
+- **Trigger:** An automation trust contract adds or changes an allowed event,
+  workflow, repository, environment, or other security-significant metadata
+  field.
+- **HEAD effect:** `moving`
+- **Problem:** The allowlist is emitted only as output or documentation and
+  does not participate in the actual trust decision.
+- **Detect:** For every allowed metadata value, construct an otherwise exact
+  token and require trust success; then replace only that value with one
+  disallowed alternative while keeping every other claim exact.
+- **Pass:** Every stated allowed value reaches exactly one enforceable trust
+  condition and succeeds, while each single-field disallowed mutation fails.
+- **Repair:** Encode the value into a provider-supported claim or customized
+  subject, bind the trust policy to the exact result, and retain connected
+  positive plus inverse-negative token cases.
+- **Origins:** PR #107
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
+
 ## Execution and correction
 
 A failed triggered rule blocks reviewer dispatch.

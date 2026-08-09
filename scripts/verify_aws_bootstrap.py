@@ -37,13 +37,24 @@ POLICY_EXPRESSION = """jsonencode({
   github_provider_arn = var.github_oidc_provider_arn,
   owner_principal_arn = var.owner_principal_arn,
   bootstrap_state_key = var.bootstrap_state_key,
+  policy_sizes = {
+    boundary = length(local.permissions_boundary_policy),
+    global_inline = { for name, policy in local.global_identity_policies : name => length(policy) },
+    environment_inline = { for name, policy in local.environment_identity_policies : name => length(policy) },
+    global_trust = {
+      iam_manager = length(local.human_trust_policy),
+      automation = length(local.automation_trust_policy)
+    },
+    environment_trust = { for name, policy in local.environment_assume_role_policies : name => length(policy) }
+  },
   github_contract = {
-    allowed_events = ["schedule", "workflow_dispatch"],
+    allowed_events = local.github_allowed_events,
     audience = "sts.amazonaws.com",
     environment = var.github_environment,
     ref = "refs/heads/main",
     repository = var.repository_identity,
-    subject = local.github_oidc_subject,
+    subject_template_keys = local.github_oidc_subject_template_keys,
+    subjects = local.github_oidc_subjects,
     workflow = var.github_workflow_name,
     workflow_ref = var.github_workflow_ref
   }
@@ -414,12 +425,277 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
         "workflow_dispatch",
     ]:
         raise RuntimeError("Future GitHub authority must stay event-class restricted")
+    expected_template_keys = ["repo", "context", "job_workflow_ref", "event_name"]
+    if payload["github_contract"]["subject_template_keys"] != expected_template_keys:
+        raise RuntimeError("GitHub OIDC subject template must bind event_name")
+    expected_subjects = {
+        (
+            "repo:example-owner/example-repository:environment:aws-deployment:"
+            "job_workflow_ref:example-owner/example-repository/.github/workflows/"
+            f"aws-deploy.yml@refs/heads/main:event_name:{event_name}"
+        )
+        for event_name in ("schedule", "workflow_dispatch")
+    }
+    if set(payload["github_contract"]["subjects"]) != expected_subjects:
+        raise RuntimeError("GitHub OIDC subjects must encode only the allowed events")
+    trust_subjects = payload["automation_trust"]["Statement"][0]["Condition"][
+        "StringEquals"
+    ]["token.actions.githubusercontent.com:sub"]
+    if set(values(trust_subjects)) != expected_subjects:
+        raise RuntimeError("Allowed GitHub events must be connected to trust sub")
     if set(payload["ecr_arns"]) != {"api", "ml", "web"}:
         raise RuntimeError(
             "ECR contract must contain independent Web, API, and ML repositories"
         )
     if len(payload["environment_identity"]) != 16:
         raise RuntimeError("Synthetic contract must expose eight roles per environment")
+
+    sizes = payload["policy_sizes"]
+    if sizes["boundary"] > 6144:
+        raise RuntimeError(
+            f"Permissions Boundary exceeds 6144 characters: {sizes['boundary']}"
+        )
+    oversized_inline = {
+        name: size
+        for name, size in {
+            **sizes["global_inline"],
+            **sizes["environment_inline"],
+        }.items()
+        if size > 10240
+    }
+    if oversized_inline:
+        raise RuntimeError(f"Role inline-policy quota exceeded: {oversized_inline}")
+    oversized_trust = {
+        name: size
+        for name, size in {
+            **sizes["global_trust"],
+            **sizes["environment_trust"],
+        }.items()
+        if size > 4096
+    }
+    if oversized_trust:
+        raise RuntimeError(f"Role trust-policy quota exceeded: {oversized_trust}")
+
+    manager_actions = {
+        action.lower()
+        for statement in payload["global_identity"]["iam_manager"]["Statement"]
+        for action in values(statement["Action"])
+    }
+    forbidden_manager_actions = {
+        "iam:attachrolepolicy",
+        "iam:deleterolepolicy",
+        "iam:detachrolepolicy",
+        "iam:putrolepolicy",
+    }
+    if manager_actions & forbidden_manager_actions:
+        raise RuntimeError("IAM manager must not mutate environment-role policies")
+
+
+def verify_delegated_pass_role_ceiling(payload: dict[str, Any]) -> int:
+    adversarial_identity = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": "iam:PassRole",
+                "Resource": "*",
+            }
+        ],
+    }
+    passed_to_services = (
+        "ecs-tasks.amazonaws.com",
+        "scheduler.amazonaws.com",
+        "codebuild.amazonaws.com",
+        "lambda.amazonaws.com",
+    )
+    expected_service = {
+        "task-execution": "ecs-tasks.amazonaws.com",
+        "web-workload": "ecs-tasks.amazonaws.com",
+        "api-workload": "ecs-tasks.amazonaws.com",
+        "ml-workload": "ecs-tasks.amazonaws.com",
+        "scheduler": "scheduler.amazonaws.com",
+        "codebuild-destroy": "codebuild.amazonaws.com",
+    }
+    checked = 0
+    for source_role in sorted(payload["environment_identity"]):
+        source_environment = role_environment(source_role)
+        source_purpose = role_purpose(source_role)
+        for target_role, target_arn in sorted(payload["role_arns"].items()):
+            if "/" not in target_role:
+                continue
+            target_environment = role_environment(target_role)
+            target_purpose = role_purpose(target_role)
+            for passed_to_service in passed_to_services:
+                context = resolved_context(
+                    {"iam:PassedToService": passed_to_service},
+                    source_role,
+                    payload,
+                )
+                actual = identity_decision(
+                    adversarial_identity,
+                    payload["boundary"],
+                    action="iam:PassRole",
+                    resource=target_arn,
+                    context=context,
+                )
+                expected = (
+                    "allowed"
+                    if source_purpose == "operator-deployment"
+                    and source_environment == target_environment
+                    and expected_service.get(target_purpose) == passed_to_service
+                    else "denied"
+                )
+                if actual != expected:
+                    raise RuntimeError(
+                        "Delegated PassRole ceiling failed: "
+                        f"{source_role} -> {target_role} via {passed_to_service}: "
+                        f"expected {expected}, got {actual}"
+                    )
+                checked += 1
+    return checked
+
+
+def verify_delegated_policy_mutation_ceiling(payload: dict[str, Any]) -> int:
+    mutation_actions = (
+        "iam:AttachRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+    )
+    checked = 0
+    for target_role, target_arn in sorted(payload["role_arns"].items()):
+        if "/" not in target_role:
+            continue
+        target_environment = role_environment(target_role)
+        target_purpose = role_purpose(target_role)
+        context = resolved_context(
+            {
+                "aws:ResourceTag/PortfolioEnvironment": target_environment,
+                "aws:ResourceTag/PortfolioManaged": "true",
+                "aws:ResourceTag/PortfolioPersistent": "true",
+                "aws:ResourceTag/PortfolioPurpose": target_purpose,
+                "aws:ResourceTag/PortfolioRepository": (
+                    "example-owner/example-repository"
+                ),
+            },
+            "iam_manager",
+            payload,
+        )
+        for action in mutation_actions:
+            actual = identity_decision(
+                payload["global_identity"]["iam_manager"],
+                payload["boundary"],
+                action=action,
+                resource=target_arn,
+                context=context,
+            )
+            if actual != "denied":
+                raise RuntimeError(
+                    "Delegated role-policy mutation ceiling failed: "
+                    f"{action} on {target_role} was {actual}"
+                )
+            checked += 1
+    return checked
+
+
+def verify_tagged_destroy_ceiling(payload: dict[str, Any]) -> int:
+    allow_all = {
+        "Version": "2012-10-17",
+        "Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}],
+    }
+    resources = (
+        ("apigateway:DELETE", "arn:aws:apigateway:us-east-1::/restapis/example"),
+        (
+            "cognito-idp:DeleteUserPool",
+            "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_example",
+        ),
+        (
+            "servicediscovery:DeleteNamespace",
+            "arn:aws:servicediscovery:us-east-1:111122223333:namespace/ns-example",
+        ),
+        (
+            "servicediscovery:DeleteService",
+            "arn:aws:servicediscovery:us-east-1:111122223333:service/srv-example",
+        ),
+    )
+    tag_variants = (
+        (
+            "owned",
+            {
+                "aws:ResourceTag/PortfolioEnvironment": "manual",
+                "aws:ResourceTag/PortfolioManaged": "true",
+                "aws:ResourceTag/PortfolioPersistent": "false",
+            },
+            "allowed",
+        ),
+        (
+            "cross-environment",
+            {
+                "aws:ResourceTag/PortfolioEnvironment": "monthly",
+                "aws:ResourceTag/PortfolioManaged": "true",
+                "aws:ResourceTag/PortfolioPersistent": "false",
+            },
+            "denied",
+        ),
+        (
+            "unmanaged",
+            {
+                "aws:ResourceTag/PortfolioEnvironment": "manual",
+                "aws:ResourceTag/PortfolioManaged": "false",
+                "aws:ResourceTag/PortfolioPersistent": "false",
+            },
+            "denied",
+        ),
+        (
+            "persistent",
+            {
+                "aws:ResourceTag/PortfolioEnvironment": "manual",
+                "aws:ResourceTag/PortfolioManaged": "true",
+                "aws:ResourceTag/PortfolioPersistent": "true",
+            },
+            "denied",
+        ),
+    )
+    destroy_identity = payload["environment_identity"]["manual/destroy"]
+    checked = 0
+    for action, resource in resources:
+        for variant, raw_context, expected in tag_variants:
+            context = resolved_context(raw_context, "manual/destroy", payload)
+            decisions = {
+                "effective": identity_decision(
+                    destroy_identity,
+                    payload["boundary"],
+                    action=action,
+                    resource=resource,
+                    context=context,
+                ),
+                "identity": identity_decision(
+                    destroy_identity,
+                    allow_all,
+                    action=action,
+                    resource=resource,
+                    context=context,
+                ),
+                "boundary": identity_decision(
+                    allow_all,
+                    payload["boundary"],
+                    action=action,
+                    resource=resource,
+                    context=context,
+                ),
+            }
+            failures = {
+                layer: decision
+                for layer, decision in decisions.items()
+                if decision != expected
+            }
+            if failures:
+                raise RuntimeError(
+                    "Tagged destroy ceiling failed: "
+                    f"{action} {variant} expected {expected}, got {failures}"
+                )
+            checked += len(decisions)
+    return checked
 
 
 def verify_backend_generator() -> None:
@@ -531,6 +807,11 @@ def main() -> int:
     verify_backend_generator()
     payload = terraform_payload(terraform)
     verify_policy_structure(payload)
+    delegated_pass_role_cases = verify_delegated_pass_role_ceiling(payload)
+    delegated_policy_mutation_cases = verify_delegated_policy_mutation_ceiling(
+        payload
+    )
+    tagged_destroy_cases = verify_tagged_destroy_ceiling(payload)
     counts = verify_matrix(payload)
 
     lock_path = BOOTSTRAP_ROOT / ".terraform.lock.hcl"
@@ -542,6 +823,10 @@ def main() -> int:
         "awsProviderLockSha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
         "terraformMockPlanFiles": 1,
         "policyMatrix": counts,
+        "delegatedPassRoleCases": delegated_pass_role_cases,
+        "delegatedPolicyMutationCases": delegated_policy_mutation_cases,
+        "taggedDestroyCases": tagged_destroy_cases,
+        "policySizes": payload["policy_sizes"],
         "awsApiCalls": 0,
         "awsWrites": 0,
         "constructionAttempts": "0/3",

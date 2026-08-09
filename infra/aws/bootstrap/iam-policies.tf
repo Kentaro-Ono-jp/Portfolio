@@ -1,43 +1,24 @@
 locals {
-  boundary_environment_token = "$${aws:PrincipalTag/PortfolioEnvironment}"
-  boundary_environment_role_arns = [
-    for role in values(local.environment_roles) :
-    "${local.iam_prefix}:role${local.role_path}${role.name}"
-  ]
-  boundary_environment_resources = [
-    "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis/*",
-    "arn:${var.aws_partition}:codebuild:${var.aws_region}:${var.aws_account_id}:project/${var.name_prefix}-${local.boundary_environment_token}-destroy",
-    "arn:${var.aws_partition}:cognito-idp:${var.aws_region}:${var.aws_account_id}:userpool/*",
-    "arn:${var.aws_partition}:ecs:${var.aws_region}:${var.aws_account_id}:cluster/${var.name_prefix}-${local.boundary_environment_token}",
-    "arn:${var.aws_partition}:ecs:${var.aws_region}:${var.aws_account_id}:service/${var.name_prefix}-${local.boundary_environment_token}/*",
-    "arn:${var.aws_partition}:ecs:${var.aws_region}:${var.aws_account_id}:task-definition/${var.name_prefix}-${local.boundary_environment_token}-*:*",
-    "arn:${var.aws_partition}:logs:${var.aws_region}:${var.aws_account_id}:log-group:/portfolio/${var.name_prefix}/${local.boundary_environment_token}/*",
-    "arn:${var.aws_partition}:logs:${var.aws_region}:${var.aws_account_id}:log-group:/portfolio/${var.name_prefix}/${local.boundary_environment_token}/*:*",
-    "arn:${var.aws_partition}:mq:${var.aws_region}:${var.aws_account_id}:broker:${var.name_prefix}-${local.boundary_environment_token}-*:*",
-    "arn:${var.aws_partition}:rds:${var.aws_region}:${var.aws_account_id}:db:${var.name_prefix}-${local.boundary_environment_token}-*",
-    "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/*/${var.name_prefix}-${local.boundary_environment_token}-destroy-*",
-    "arn:${var.aws_partition}:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.name_prefix}-${local.boundary_environment_token}-*",
-    "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:namespace/*",
-    "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:service/*",
-  ]
+  boundary_environment_token        = "$${aws:PrincipalTag/PortfolioEnvironment}"
+  boundary_environment_role_pattern = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-*-*"
+  boundary_requested_role_arn = (
+    "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-$${aws:RequestTag/PortfolioEnvironment}-$${aws:RequestTag/PortfolioPurpose}"
+  )
+  boundary_same_environment_scheduler_role_arn = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-scheduler"
+  boundary_same_environment_codebuild_role_arn = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-codebuild-destroy"
+  boundary_same_environment_destroy_role_arn   = "${local.iam_prefix}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-destroy"
 
   permissions_boundary_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "AllowCallerIdentity"
         Effect   = "Allow"
         Action   = "sts:GetCallerIdentity"
         Resource = "*"
       },
       {
-        Sid    = "AllowEnvironmentStateObjects"
         Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-        ]
+        Action = "s3:*Object"
         Resource = [
           "${local.state_bucket_arn}/environments/${local.boundary_environment_token}/terraform.tfstate",
           "${local.state_bucket_arn}/environments/${local.boundary_environment_token}/terraform.tfstate.tflock",
@@ -49,7 +30,6 @@ locals {
         }
       },
       {
-        Sid      = "AllowEnvironmentStateListing"
         Effect   = "Allow"
         Action   = "s3:ListBucket"
         Resource = local.state_bucket_arn
@@ -58,23 +38,13 @@ locals {
             "aws:PrincipalTag/PortfolioPurpose" = ["operator-deployment", "codebuild-destroy"]
           }
           StringLike = {
-            "s3:prefix" = [
-              "environments/${local.boundary_environment_token}/terraform.tfstate",
-              "environments/${local.boundary_environment_token}/terraform.tfstate.tflock",
-            ]
+            "s3:prefix" = "environments/${local.boundary_environment_token}/terraform.tfstate*"
           }
         }
       },
       {
-        Sid    = "AllowEnvironmentApplicationObjects"
         Effect = "Allow"
-        Action = [
-          "s3:ListBucket",
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:DeleteBucket",
-        ]
+        Action = "s3:*"
         Resource = [
           "arn:${var.aws_partition}:s3:::${var.name_prefix}-${local.boundary_environment_token}-documents",
           "arn:${var.aws_partition}:s3:::${var.name_prefix}-${local.boundary_environment_token}-documents/*",
@@ -86,7 +56,6 @@ locals {
         }
       },
       {
-        Sid      = "AllowEcrAuthorization"
         Effect   = "Allow"
         Action   = "ecr:GetAuthorizationToken"
         Resource = "*"
@@ -97,19 +66,8 @@ locals {
         }
       },
       {
-        Sid    = "AllowOwnedEcrImages"
-        Effect = "Allow"
-        Action = [
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:BatchGetImage",
-          "ecr:CompleteLayerUpload",
-          "ecr:DescribeImages",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:InitiateLayerUpload",
-          "ecr:ListImages",
-          "ecr:PutImage",
-          "ecr:UploadLayerPart",
-        ]
+        Effect   = "Allow"
+        Action   = ["ecr:*Image*", "ecr:*Layer*"]
         Resource = values(local.ecr_repository_arns)
         Condition = {
           StringEquals = {
@@ -118,108 +76,80 @@ locals {
         }
       },
       {
-        Sid    = "AllowEnvironmentLogsAndSecrets"
         Effect = "Allow"
         Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:DeleteLogGroup",
-          "logs:DescribeLogStreams",
-          "logs:PutLogEvents",
-          "secretsmanager:CreateSecret",
-          "secretsmanager:DeleteSecret",
-          "secretsmanager:DescribeSecret",
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:PutSecretValue",
-          "secretsmanager:TagResource",
-          "secretsmanager:UpdateSecret",
-        ]
-        Resource = [
-          "arn:${var.aws_partition}:logs:${var.aws_region}:${var.aws_account_id}:log-group:/portfolio/${var.name_prefix}/${local.boundary_environment_token}/*",
-          "arn:${var.aws_partition}:logs:${var.aws_region}:${var.aws_account_id}:log-group:/portfolio/${var.name_prefix}/${local.boundary_environment_token}/*:*",
-          "arn:${var.aws_partition}:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.name_prefix}-${local.boundary_environment_token}-*",
-        ]
-        Condition = {
-          StringEquals = {
-            "aws:PrincipalTag/PortfolioPurpose" = ["operator-deployment", "task-execution", "codebuild-destroy", "destroy"]
-          }
-        }
-      },
-      {
-        Sid    = "AllowEnvironmentServiceLifecycle"
-        Effect = "Allow"
-        Action = [
-          "apigateway:DELETE",
-          "apigateway:GET",
-          "apigateway:PATCH",
-          "apigateway:POST",
-          "apigateway:PUT",
           "codebuild:StartBuild",
-          "cognito-idp:CreateUserPool",
-          "cognito-idp:DeleteUserPool",
-          "cognito-idp:DescribeUserPool",
-          "ecs:CreateCluster",
-          "ecs:CreateService",
-          "ecs:DeleteCluster",
-          "ecs:DeleteService",
-          "ecs:DeregisterTaskDefinition",
-          "ecs:DescribeClusters",
-          "ecs:DescribeServices",
-          "ecs:DescribeTaskDefinition",
-          "ecs:RegisterTaskDefinition",
-          "ecs:TagResource",
-          "ecs:UpdateService",
-          "mq:CreateBroker",
-          "mq:DeleteBroker",
-          "mq:DescribeBroker",
-          "rds:CreateDBInstance",
-          "rds:DeleteDBInstance",
-          "rds:DescribeDBInstances",
-          "rds:ModifyDBInstance",
-          "scheduler:CreateSchedule",
-          "scheduler:DeleteSchedule",
-          "scheduler:GetSchedule",
-          "scheduler:UpdateSchedule",
-          "servicediscovery:CreateHttpNamespace",
-          "servicediscovery:CreateService",
-          "servicediscovery:DeleteNamespace",
-          "servicediscovery:DeleteService",
-          "servicediscovery:GetNamespace",
-          "servicediscovery:GetService",
+          "ecs:*",
+          "logs:*",
+          "mq:*",
+          "rds:*",
+          "scheduler:*",
+          "secretsmanager:*",
         ]
-        Resource = local.boundary_environment_resources
+        Resource = "arn:${var.aws_partition}:*:${var.aws_region}:${var.aws_account_id}:*${var.name_prefix}-${local.boundary_environment_token}*"
         Condition = {
           StringEquals = {
-            "aws:PrincipalTag/PortfolioPurpose" = ["operator-deployment", "scheduler", "destroy"]
+            "aws:PrincipalTag/PortfolioPurpose" = [
+              "operator-deployment",
+              "task-execution",
+              "scheduler",
+              "codebuild-destroy",
+              "destroy",
+            ]
           }
         }
       },
       {
-        Sid    = "AllowTaggedEnvironmentEc2Creation"
         Effect = "Allow"
         Action = [
-          "ec2:AllocateAddress",
-          "ec2:CreateInternetGateway",
-          "ec2:CreateRoute",
-          "ec2:CreateRouteTable",
-          "ec2:CreateSecurityGroup",
-          "ec2:CreateSubnet",
-          "ec2:CreateTags",
-          "ec2:CreateVpc",
-          "ec2:CreateVpcEndpoint",
+          "apigateway:POST",
+          "cognito-idp:CreateUserPool",
+          "servicediscovery:Create*",
         ]
         Resource = "*"
         Condition = {
           StringEquals = {
             "aws:PrincipalTag/PortfolioPurpose"   = "operator-deployment"
+            "aws:RequestTag/PortfolioEnvironment" = local.boundary_environment_token
             "aws:RequestTag/PortfolioManaged"     = "true"
             "aws:RequestTag/PortfolioPersistent"  = "false"
-            "aws:RequestTag/PortfolioEnvironment" = local.boundary_environment_token
           }
         }
       },
       {
-        Sid      = "AllowEc2Inventory"
+        Effect = "Allow"
+        Action = [
+          "apigateway:*",
+          "cognito-idp:*UserPool*",
+          "servicediscovery:*",
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:PrincipalTag/PortfolioPurpose"    = ["operator-deployment", "destroy"]
+            "aws:ResourceTag/PortfolioEnvironment" = local.boundary_environment_token
+            "aws:ResourceTag/PortfolioManaged"     = "true"
+            "aws:ResourceTag/PortfolioPersistent"  = "false"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:AllocateAddress",
+          "ec2:Create*",
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:PrincipalTag/PortfolioPurpose"   = "operator-deployment"
+            "aws:RequestTag/PortfolioEnvironment" = local.boundary_environment_token
+            "aws:RequestTag/PortfolioManaged"     = "true"
+            "aws:RequestTag/PortfolioPersistent"  = "false"
+          }
+        }
+      },
+      {
         Effect   = "Allow"
         Action   = "ec2:Describe*"
         Resource = "*"
@@ -230,213 +160,150 @@ locals {
         }
       },
       {
-        Sid    = "AllowTaggedEnvironmentEc2Mutation"
-        Effect = "Allow"
-        Action = [
-          "ec2:AssociateRouteTable",
-          "ec2:AttachInternetGateway",
-          "ec2:AuthorizeSecurityGroupEgress",
-          "ec2:AuthorizeSecurityGroupIngress",
-          "ec2:DeleteInternetGateway",
-          "ec2:DeleteRoute",
-          "ec2:DeleteRouteTable",
-          "ec2:DeleteSecurityGroup",
-          "ec2:DeleteSubnet",
-          "ec2:DeleteVpc",
-          "ec2:DeleteVpcEndpoints",
-          "ec2:DetachInternetGateway",
-          "ec2:DisassociateRouteTable",
-          "ec2:ModifySubnetAttribute",
-          "ec2:ModifyVpcAttribute",
-          "ec2:ReleaseAddress",
-          "ec2:RevokeSecurityGroupEgress",
-          "ec2:RevokeSecurityGroupIngress",
-        ]
+        Effect   = "Allow"
+        Action   = "ec2:*"
         Resource = "*"
         Condition = {
           StringEquals = {
             "aws:PrincipalTag/PortfolioPurpose"    = ["operator-deployment", "destroy"]
+            "aws:ResourceTag/PortfolioEnvironment" = local.boundary_environment_token
             "aws:ResourceTag/PortfolioManaged"     = "true"
             "aws:ResourceTag/PortfolioPersistent"  = "false"
-            "aws:ResourceTag/PortfolioEnvironment" = local.boundary_environment_token
           }
         }
       },
       {
-        Sid      = "AllowExactPassRoleTargets"
-        Effect   = "Allow"
-        Action   = "iam:PassRole"
-        Resource = local.boundary_environment_role_arns
+        Effect = "Allow"
+        Action = "iam:PassRole"
+        Resource = [
+          "arn:${var.aws_partition}:iam::${var.aws_account_id}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-task-execution",
+          "arn:${var.aws_partition}:iam::${var.aws_account_id}:role${local.role_path}${var.name_prefix}-${local.boundary_environment_token}-*-workload",
+        ]
         Condition = {
           StringEquals = {
             "aws:PrincipalTag/PortfolioPurpose" = "operator-deployment"
+            "iam:PassedToService"               = local.ecs_service_principal
           }
         }
       },
       {
-        Sid    = "AllowExactRoleAssumption"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = local.boundary_same_environment_scheduler_role_arn
+        Condition = {
+          StringEquals = {
+            "aws:PrincipalTag/PortfolioPurpose" = "operator-deployment"
+            "iam:PassedToService"               = local.scheduler_service_principal
+          }
+        }
+      },
+      {
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = local.boundary_same_environment_codebuild_role_arn
+        Condition = {
+          StringEquals = {
+            "aws:PrincipalTag/PortfolioPurpose" = "operator-deployment"
+            "iam:PassedToService"               = local.codebuild_service_principal
+          }
+        }
+      },
+      {
         Effect = "Allow"
         Action = "sts:AssumeRole"
-        Resource = concat(
-          local.boundary_environment_role_arns,
-          values(local.global_role_arns),
-        )
-        Condition = {
-          StringEquals = {
-            "aws:PrincipalTag/PortfolioPurpose" = ["automation", "codebuild-destroy"]
-          }
-        }
-      },
-      {
-        Sid    = "AllowBoundedRoleCreation"
-        Effect = "Allow"
-        Action = [
-          "iam:CreateRole",
-          "iam:PutRolePermissionsBoundary",
+        Resource = [
+          "arn:${var.aws_partition}:iam::${var.aws_account_id}:role${local.role_path}${var.name_prefix}-*-operator-deployment",
+          "arn:${var.aws_partition}:iam::${var.aws_account_id}:role${local.role_path}${var.name_prefix}-*-destroy",
         ]
-        Resource = local.boundary_environment_role_arns
         Condition = {
-          ArnEquals = { "iam:PermissionsBoundary" = local.boundary_policy_arn }
           StringEquals = {
-            "aws:PrincipalTag/PortfolioPurpose"  = "iam-manager"
-            "aws:RequestTag/PortfolioManaged"    = "true"
-            "aws:RequestTag/PortfolioPersistent" = "true"
-            "aws:RequestTag/PortfolioPurpose" = [
-              "operator-deployment",
-              "task-execution",
-              "web-workload",
-              "api-workload",
-              "ml-workload",
-              "scheduler",
-              "codebuild-destroy",
-              "destroy",
-            ]
-            "aws:RequestTag/PortfolioRepository" = var.repository_identity
+            "aws:PrincipalTag/PortfolioPurpose" = "automation"
           }
         }
       },
       {
-        Sid    = "AllowBoundedRolePolicyMaintenance"
-        Effect = "Allow"
-        Action = [
-          "iam:DeleteRole",
-          "iam:DeleteRolePolicy",
-          "iam:GetRole",
-          "iam:GetRolePolicy",
-          "iam:ListRolePolicies",
-          "iam:PutRolePolicy",
-        ]
-        Resource = local.boundary_environment_role_arns
-        Condition = {
-          StringEquals = {
-            "aws:PrincipalTag/PortfolioPurpose" = "iam-manager"
-          }
-        }
-      },
-      {
-        Sid      = "AllowRoleInventory"
         Effect   = "Allow"
-        Action   = "iam:ListRoles"
-        Resource = "*"
+        Action   = "sts:AssumeRole"
+        Resource = local.boundary_same_environment_destroy_role_arn
         Condition = {
           StringEquals = {
-            "aws:PrincipalTag/PortfolioPurpose" = "iam-manager"
+            "aws:PrincipalTag/PortfolioPurpose" = "codebuild-destroy"
           }
         }
       },
       {
-        Sid    = "DenyIdentityAndAccountAdministration"
-        Effect = "Deny"
-        Action = [
-          "account:*",
-          "aws-portal:*",
-          "billing:*",
-          "iam:*AccessKey*",
-          "iam:*Group*",
-          "iam:*LoginProfile*",
-          "iam:*User*",
-          "organizations:*",
-        ]
-        Resource = "*"
+        Effect   = "Allow"
+        Action   = "iam:CreateRole"
+        Resource = local.boundary_requested_role_arn
+        Condition = {
+          ArnEquals = {
+            "iam:PermissionsBoundary" = local.boundary_policy_arn
+          }
+          StringEquals = {
+            "aws:PrincipalTag/PortfolioPurpose"   = "iam-manager"
+            "aws:RequestTag/PortfolioEnvironment" = sort(keys(var.environment_state_keys))
+          }
+        }
       },
       {
-        Sid    = "DenyBoundaryAndRoleTagWeakening"
-        Effect = "Deny"
-        Action = [
-          "iam:DeleteRolePermissionsBoundary",
-          "iam:TagRole",
-          "iam:UntagRole",
-        ]
-        Resource = local.boundary_environment_role_arns
-      },
-      {
-        Sid    = "DenyBoundaryPolicyMutation"
-        Effect = "Deny"
-        Action = [
-          "iam:CreatePolicyVersion",
-          "iam:DeletePolicy",
-          "iam:DeletePolicyVersion",
-          "iam:SetDefaultPolicyVersion",
-        ]
-        Resource = local.boundary_policy_arn
-      },
-      {
-        Sid      = "DenyPersistentStateBucketDeletion"
-        Effect   = "Deny"
-        Action   = "s3:DeleteBucket"
-        Resource = local.state_bucket_arn
-      },
-      {
-        Sid      = "DenyPersistentRepositoriesDeletion"
-        Effect   = "Deny"
-        Action   = "ecr:DeleteRepository"
-        Resource = values(local.ecr_repository_arns)
+        Effect   = "Allow"
+        Action   = "iam:DeleteRole"
+        Resource = local.boundary_environment_role_pattern
       },
     ]
   })
 
-  iam_manager_statements = concat(
-    [
-      for key in sort(keys(local.environment_roles)) : {
-        Sid    = "Create${title(replace(replace(key, "/", ""), "-", ""))}RoleWithBoundary"
-        Effect = "Allow"
-        Action = [
-          "iam:CreateRole",
-          "iam:PutRolePermissionsBoundary",
-        ]
-        Resource = local.environment_role_arns[key]
-        Condition = {
-          ArnEquals = { "iam:PermissionsBoundary" = local.boundary_policy_arn }
-          StringEquals = {
-            "aws:RequestTag/PortfolioEnvironment" = local.environment_roles[key].environment
-            "aws:RequestTag/PortfolioManaged"     = "true"
-            "aws:RequestTag/PortfolioPersistent"  = "true"
-            "aws:RequestTag/PortfolioPurpose"     = local.environment_roles[key].purpose
-            "aws:RequestTag/PortfolioRepository"  = var.repository_identity
-          }
+  iam_manager_statements = [
+    {
+      Sid      = "CreateExactTaggedRoleWithBoundary"
+      Effect   = "Allow"
+      Action   = "iam:CreateRole"
+      Resource = local.boundary_requested_role_arn
+      Condition = {
+        ArnEquals = { "iam:PermissionsBoundary" = local.boundary_policy_arn }
+        StringEquals = {
+          "aws:RequestTag/PortfolioEnvironment" = sort(keys(var.environment_state_keys))
+          "aws:RequestTag/PortfolioManaged"     = "true"
+          "aws:RequestTag/PortfolioPersistent"  = "true"
+          "aws:RequestTag/PortfolioPurpose" = [
+            "operator-deployment",
+            "task-execution",
+            "web-workload",
+            "api-workload",
+            "ml-workload",
+            "scheduler",
+            "codebuild-destroy",
+            "destroy",
+          ]
+          "aws:RequestTag/PortfolioRepository" = var.repository_identity
         }
       }
-    ],
-    [{
-      Sid    = "MaintainOnlyExactEnvironmentRoles"
-      Effect = "Allow"
-      Action = [
-        "iam:DeleteRole",
-        "iam:DeleteRolePolicy",
-        "iam:GetRole",
-        "iam:GetRolePolicy",
-        "iam:ListRolePolicies",
-        "iam:PutRolePolicy",
-      ]
-      Resource = local.boundary_environment_role_arns
-    }],
-    [{
-      Sid      = "InventoryRoles"
+    },
+    {
+      Sid      = "DeleteOnlyTaggedEnvironmentRoles"
       Effect   = "Allow"
-      Action   = "iam:ListRoles"
-      Resource = "*"
-    }],
-  )
+      Action   = "iam:DeleteRole"
+      Resource = local.boundary_environment_role_pattern
+      Condition = {
+        StringEquals = {
+          "aws:ResourceTag/PortfolioEnvironment" = sort(keys(var.environment_state_keys))
+          "aws:ResourceTag/PortfolioManaged"     = "true"
+          "aws:ResourceTag/PortfolioPersistent"  = "true"
+          "aws:ResourceTag/PortfolioPurpose" = [
+            "operator-deployment",
+            "task-execution",
+            "web-workload",
+            "api-workload",
+            "ml-workload",
+            "scheduler",
+            "codebuild-destroy",
+            "destroy",
+          ]
+          "aws:ResourceTag/PortfolioRepository" = var.repository_identity
+        }
+      }
+    },
+  ]
 
   global_identity_policies = {
     iam_manager = jsonencode({
@@ -701,14 +568,15 @@ locals {
           Sid    = "DeleteOnlyExactNamedEnvironmentResources"
           Effect = "Allow"
           Action = [
-            "apigateway:DELETE", "cognito-idp:DeleteUserPool",
-            "ecs:DeleteCluster", "ecs:DeleteService", "ecs:DeregisterTaskDefinition",
-            "logs:DeleteLogGroup", "mq:DeleteBroker", "rds:DeleteDBInstance",
-            "secretsmanager:DeleteSecret", "servicediscovery:DeleteNamespace", "servicediscovery:DeleteService",
+            "ecs:DeleteCluster",
+            "ecs:DeleteService",
+            "ecs:DeregisterTaskDefinition",
+            "logs:DeleteLogGroup",
+            "mq:DeleteBroker",
+            "rds:DeleteDBInstance",
+            "secretsmanager:DeleteSecret",
           ]
           Resource = [
-            "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis/*",
-            "arn:${var.aws_partition}:cognito-idp:${var.aws_region}:${var.aws_account_id}:userpool/*",
             "arn:${var.aws_partition}:ecs:${var.aws_region}:${var.aws_account_id}:cluster/${var.name_prefix}-${environment}",
             "arn:${var.aws_partition}:ecs:${var.aws_region}:${var.aws_account_id}:service/${var.name_prefix}-${environment}/*",
             "arn:${var.aws_partition}:ecs:${var.aws_region}:${var.aws_account_id}:task-definition/${var.name_prefix}-${environment}-*:*",
@@ -716,9 +584,25 @@ locals {
             "arn:${var.aws_partition}:mq:${var.aws_region}:${var.aws_account_id}:broker:${var.name_prefix}-${environment}-*:*",
             "arn:${var.aws_partition}:rds:${var.aws_region}:${var.aws_account_id}:db:${var.name_prefix}-${environment}-*",
             "arn:${var.aws_partition}:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.name_prefix}-${environment}-*",
-            "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:namespace/*",
-            "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:service/*",
           ]
+        },
+        {
+          Sid    = "DeleteOnlyTaggedIdEnvironmentResources"
+          Effect = "Allow"
+          Action = [
+            "apigateway:DELETE",
+            "cognito-idp:DeleteUserPool",
+            "servicediscovery:DeleteNamespace",
+            "servicediscovery:DeleteService",
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "aws:ResourceTag/PortfolioEnvironment" = environment
+              "aws:ResourceTag/PortfolioManaged"     = "true"
+              "aws:ResourceTag/PortfolioPersistent"  = "false"
+            }
+          }
         },
         {
           Sid      = "DeleteExactApplicationObjectsAndBucket"

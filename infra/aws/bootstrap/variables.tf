@@ -122,6 +122,19 @@ variable "github_oidc_provider_arn" {
   }
 }
 
+variable "github_oidc_repository_subject" {
+  description = "Explicit repo subject segment used by the customized GitHub OIDC sub claim; immutable repositories include owner and repository IDs."
+  type        = string
+
+  validation {
+    condition = can(regex(
+      "^repo:[A-Za-z0-9_.-]+(?:@[0-9]+)?/[A-Za-z0-9_.-]+(?:@[0-9]+)?$",
+      var.github_oidc_repository_subject,
+    ))
+    error_message = "github_oidc_repository_subject must be repo:<owner>/<repository> or the immutable repo:<owner>@<id>/<repository>@<id> form."
+  }
+}
+
 variable "github_environment" {
   description = "Protected GitHub environment required by the future deployment workflow."
   type        = string

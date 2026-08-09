@@ -6,6 +6,11 @@ resource "aws_iam_policy" "permissions_boundary" {
 
   lifecycle {
     prevent_destroy = true
+
+    precondition {
+      condition     = length(local.permissions_boundary_policy) <= 6144
+      error_message = "The permissions boundary exceeds the AWS 6,144-character managed-policy quota."
+    }
   }
 }
 
@@ -26,6 +31,13 @@ resource "aws_iam_role" "global" {
 
   lifecycle {
     prevent_destroy = true
+
+    precondition {
+      condition = length(
+        each.key == "automation" ? local.automation_trust_policy : local.human_trust_policy
+      ) <= 2048
+      error_message = "A global role trust policy exceeds the portable 2,048-character default quota."
+    }
   }
 }
 
@@ -35,6 +47,13 @@ resource "aws_iam_role_policy" "global" {
   name   = "${var.name_prefix}-${replace(each.key, "_", "-")}-authority"
   role   = aws_iam_role.global[each.key].name
   policy = each.value
+
+  lifecycle {
+    precondition {
+      condition     = length(each.value) <= 10240
+      error_message = "A global role inline policy exceeds the AWS 10,240-character aggregate role quota."
+    }
+  }
 }
 
 resource "aws_iam_role" "environment" {
@@ -52,6 +71,11 @@ resource "aws_iam_role" "environment" {
 
   lifecycle {
     prevent_destroy = true
+
+    precondition {
+      condition     = length(local.environment_assume_role_policies[each.key]) <= 2048
+      error_message = "An environment role trust policy exceeds the portable 2,048-character default quota."
+    }
   }
 }
 
@@ -61,4 +85,11 @@ resource "aws_iam_role_policy" "environment" {
   name   = "${var.name_prefix}-${replace(each.key, "/", "-")}-authority"
   role   = aws_iam_role.environment[each.key].name
   policy = each.value
+
+  lifecycle {
+    precondition {
+      condition     = length(each.value) <= 10240
+      error_message = "An environment role inline policy exceeds the AWS 10,240-character aggregate role quota."
+    }
+  }
 }

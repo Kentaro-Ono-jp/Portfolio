@@ -4,8 +4,18 @@ locals {
   state_bucket_arn      = "arn:${var.aws_partition}:s3:::${var.state_bucket_name}"
   boundary_name         = "${var.name_prefix}-permissions-boundary"
   boundary_policy_arn   = "${local.iam_prefix}:policy${local.role_path}${local.boundary_name}"
-  github_oidc_subject   = "repo:${var.repository_identity}:environment:${var.github_environment}"
   github_oidc_condition = "token.actions.githubusercontent.com"
+  github_allowed_events = ["schedule", "workflow_dispatch"]
+  github_oidc_subject_template_keys = [
+    "repo",
+    "context",
+    "job_workflow_ref",
+    "event_name",
+  ]
+  github_oidc_subjects = [
+    for event_name in local.github_allowed_events :
+    "${var.github_oidc_repository_subject}:environment:${var.github_environment}:job_workflow_ref:${var.github_workflow_ref}:event_name:${event_name}"
+  ]
 
   common_tags = {
     PortfolioManaged    = "true"
@@ -98,7 +108,7 @@ locals {
       Condition = {
         StringEquals = {
           "${local.github_oidc_condition}:aud"              = "sts.amazonaws.com"
-          "${local.github_oidc_condition}:sub"              = local.github_oidc_subject
+          "${local.github_oidc_condition}:sub"              = local.github_oidc_subjects
           "${local.github_oidc_condition}:repository"       = var.repository_identity
           "${local.github_oidc_condition}:ref"              = "refs/heads/main"
           "${local.github_oidc_condition}:environment"      = var.github_environment

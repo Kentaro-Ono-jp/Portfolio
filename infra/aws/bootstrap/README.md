@@ -10,8 +10,10 @@ in the [portable AWS bootstrap guide](../../../AWS_BOOTSTRAP.md).
 - `state.tf` owns the protected S3 backend bucket.
 - `ecr.tf` owns independent immutable Web/API/ML repositories and cleanup.
 - `iam.tf`, `iam-policies.tf`, and `locals.tf` own the fixed boundary,
-  purpose roles, policies, and trust documents.
+  purpose roles, policies, quota preconditions, and trust documents.
 - `policy-matrix.json` is the versioned positive/negative simulation contract.
+- GitHub trust requires the documented repository-level customized OIDC
+  subject before the future Step 6 workflow can assume the automation role.
 - `tests/bootstrap.tftest.hcl` uses a mocked AWS provider and creates no
   resource.
 - `terraform.tfvars.example` is synthetic and non-authorizing.

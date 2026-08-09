@@ -34,13 +34,13 @@ environment destroy authority cannot remove persistent bootstrap resources.
 
 | Authority | Scope |
 |---|---|
-| IAM manager | Creates or maintains only the exact declared environment roles with the fixed boundary and required ownership/environment tags. It cannot create users, groups, access keys, login profiles, arbitrary managed policies, global roles, or remove/replace a boundary. |
+| IAM manager | Creates or deletes only the exact declared, tagged environment roles with the fixed boundary. It cannot attach, replace, or delete their repository-owned inline policies; create users, groups, access keys, login profiles, arbitrary managed policies, or global roles; or remove/replace a boundary. |
 | Environment operator/deployment | Uses only that environment state key, publishes to the three owned ECR repositories, passes exact task/fallback roles to exact AWS services, and manages only bounded environment resources. |
 | Task execution | Pulls owned images, writes the environment log groups, and reads only environment-prefixed injected secrets. |
 | Web workload | Has caller-identity proof only and no application-data authority. |
 | API workload | Owns only the exact environment application bucket objects. PostgreSQL remains an application connection boundary, not an IAM administration grant. |
 | ML workload | Reads/writes only the exact environment application objects; it cannot delete them and receives no PostgreSQL or Cognito administration authority. |
-| Future automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name, workflow ref, and environment subject. It can assume only exact environment operator/destroy roles. |
+| Future automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name/ref, and a customized subject that encodes only `workflow_dispatch` or `schedule`. It can assume only exact environment operator/destroy roles. |
 | Scheduler fallback | Starts only that environment's future CodeBuild destroy project. |
 | CodeBuild fallback | Uses only that environment state and lock objects, writes its exact destroy log, and assumes only that environment destroy role. |
 | Destroy | Deletes only exact environment-named or correctly tagged application resources. It cannot mutate state, ECR, IAM, the boundary, or another environment. |
@@ -51,11 +51,29 @@ tag to cap state, object, log, secret, network, and service authority. Every
 `iam:PassRole` grant names exact role ARNs and an exact
 `iam:PassedToService` value.
 
-The future GitHub workflow is a Step 6 non-target. When implemented, its event
-surface must be only `workflow_dispatch` and `schedule`, and it must use the
-protected environment named by the bootstrap inputs. Until then, the trust
-document is a fail-closed contract, not a claim that deployment automation
-exists. Ordinary verification, pull requests, forks, Dependabot, and
+Terraform and the AWS-free verifier reject generated policies before any AWS
+write when the fixed managed boundary exceeds 6,144 characters, any role's
+aggregate inline policy exceeds 10,240 characters, or a trust policy exceeds
+the portable 2,048-character default. The delegated-authority proof also
+combines an adversarial wildcard `iam:PassRole` identity policy with the
+boundary across every source role, target role, and supported/wrong service.
+Only a same-environment operator passing the intended workload, Scheduler, or
+CodeBuild role to its exact service remains effective.
+
+The future GitHub workflow and repository OIDC customization are Step 6
+non-targets. Before that workflow requests a token, the repository owner must
+configure GitHub's OIDC subject template with `use_default: false` and the
+ordered `include_claim_keys` value `repo`, `context`, `job_workflow_ref`,
+`event_name`. The `github_oidc_repository_subject` input must match the
+resulting `repo:` segment, including owner/repository IDs when immutable GitHub
+subjects are enabled. AWS does not expose `event_name` as a direct GitHub OIDC
+condition key, so the trust document matches the two complete customized
+subjects ending in `event_name:workflow_dispatch` and `event_name:schedule`.
+
+When implemented, the workflow must use the protected environment named by
+the bootstrap inputs. Until then, the trust document is a fail-closed contract,
+not a claim that deployment automation or GitHub customization exists.
+Ordinary pushes and verification, pull requests, forks, Dependabot, and
 unapproved refs have no AWS credential or write path.
 
 ## Owner inputs and local safety
@@ -68,11 +86,12 @@ cp infra/aws/bootstrap/terraform.tfvars.example infra/aws/bootstrap/owner.auto.t
 ```
 
 The owner role and GitHub OIDC provider must already exist in the target
-account. Terraform's `allowed_account_ids` check fails closed if the active
-standard AWS credential chain targets another account. Do not place access
-keys, tokens, secrets, backend credentials, or secret values in Terraform
-variables. Do not publish a real variable file, plan, state, backend file, or
-unfiltered provider error.
+account. `github_oidc_repository_subject` is an explicit trust input rather
+than a value inferred from a maintainer profile. Terraform's
+`allowed_account_ids` check fails closed if the active standard AWS credential
+chain targets another account. Do not place access keys, tokens, secrets,
+backend credentials, or secret values in Terraform variables. Do not publish a
+real variable file, plan, state, backend file, or unfiltered provider error.
 
 Each environment key must have the exact form
 `environments/<environment>/terraform.tfstate`. The bootstrap key must remain
@@ -158,7 +177,11 @@ allow/deny matrix in
 The matrix combines each identity policy with the fixed boundary and separately
 evaluates trust policies. It proves intended positives and privilege-
 escalation, cross-environment, persistent-resource, wrong-service, fork, pull-
-request, audience, repository, workflow, and ref negatives.
+request, push-event, audience, repository, workflow, and ref negatives. Tagged
+REST API, Cognito user-pool, and Cloud Map namespace/service deletion is paired
+with cross-environment negatives even though those resource IDs do not encode
+the environment name. The verifier also records exact generated policy sizes
+and the complete 1,024-case delegated `iam:PassRole` ceiling.
 
 This repository-owned evaluator is static contract proof, not AWS IAM Access
 Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS

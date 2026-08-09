@@ -22,11 +22,12 @@ variables {
     monthly = "environments/monthly/terraform.tfstate"
   }
 
-  owner_principal_arn      = "arn:aws:iam::111122223333:role/PortfolioBootstrapOwner"
-  github_oidc_provider_arn = "arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com"
-  github_environment       = "aws-deployment"
-  github_workflow_name     = "Deploy managed AWS proof"
-  github_workflow_ref      = "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main"
+  owner_principal_arn            = "arn:aws:iam::111122223333:role/PortfolioBootstrapOwner"
+  github_oidc_provider_arn       = "arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com"
+  github_oidc_repository_subject = "repo:example-owner/example-repository"
+  github_environment             = "aws-deployment"
+  github_workflow_name           = "Deploy managed AWS proof"
+  github_workflow_ref            = "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main"
 }
 
 run "portable_bootstrap_contract" {
@@ -73,6 +74,24 @@ run "portable_bootstrap_contract" {
       [for role in aws_iam_role.environment : role.permissions_boundary == aws_iam_policy.permissions_boundary.arn],
     ))
     error_message = "Every delegable role must carry the fixed permissions boundary."
+  }
+
+  assert {
+    condition = (
+      length(local.permissions_boundary_policy) <= 6144 &&
+      alltrue([for policy in values(local.global_identity_policies) : length(policy) <= 10240]) &&
+      alltrue([for policy in values(local.environment_identity_policies) : length(policy) <= 10240])
+    )
+    error_message = "Every generated IAM policy must fit its AWS managed or inline policy quota."
+  }
+
+  assert {
+    condition = (
+      output.github_trust_contract.subject_template_keys == ["repo", "context", "job_workflow_ref", "event_name"] &&
+      length(output.github_trust_contract.subjects) == 2 &&
+      alltrue([for subject in output.github_trust_contract.subjects : startswith(subject, "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:")])
+    )
+    error_message = "GitHub trust must connect both allowed events to the customized OIDC subject."
   }
 
   assert {
