@@ -245,8 +245,13 @@ fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
 authority.
 
 This section records an accepted implementation contract, not a successful
-deployment claim. No Terraform module, deployment IAM role, AWS automation, or
-managed application environment is introduced by the planning increment.
+deployment claim. The repository now implements and verifies the managed-runtime
+compatibility boundary for task-role S3, Cognito-shaped OIDC, RabbitMQ 4.2, and
+initial measured Fargate sizing. See the
+[AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md). No
+Terraform module, deployment IAM role, AWS automation, or managed application
+environment is introduced by this increment, and AWS construction attempts
+remain at `0/3`.
 
 ## Completed third vertical slice
 

@@ -1,6 +1,6 @@
 # Delivery Specification 0004: Portable managed-ephemeral AWS deployment proof
 
-- Status: Accepted
+- Status: In Progress
 - Date: 2026-08-09
 - Accepted: 2026-08-09
 - Completed: Not yet
@@ -25,7 +25,7 @@ This specification is an implementation contract, not a disposable AI prompt. It
 
 ## Current implementation state
 
-The planning baseline is accepted. Terraform modules, IAM roles, managed-service adapters, deployment automation, and an AWS application environment are not yet implemented by this specification. No billable application-deployment attempt begins in the planning increment. The accepted profile proceeds only through the focused increments and gates below.
+The planning baseline is accepted and the Step 2 runtime-compatibility boundary is implemented: explicit local/AWS S3 modes preserve MinIO while proving the boto3 task-role credential path; Cognito-shaped Web/API OIDC retains Dex while requiring access-token purpose and group mapping; a digest-pinned RabbitMQ 4.2 route repeats the complete API/ML runtime proof; and exact-head Actions records measured container evidence against bounded initial Fargate candidates. Terraform modules, IAM roles, deployment automation, and an AWS application environment are not yet implemented. No billable application-deployment attempt begins in this increment, so attempts remain `0/3`.
 
 ## Outcome
 
@@ -192,6 +192,14 @@ Acceptance requires one coherent outcome, scope, non-targets, topology, failure 
 Deliver AWS task-role S3 access with local MinIO compatibility, Cognito-compatible Web/API OIDC validation, RabbitMQ 4.2 compatibility proof, and measured container sizing.
 
 Acceptance requires local and canonical CI paths to remain AWS-free, static credentials to be absent from AWS task configuration, ID-token substitution to fail, group capability mapping to pass, and the existing outbox/result/recovery contracts to remain intact.
+
+Implementation keeps the ordinary Compose profile on MinIO, Dex, and its
+normal RabbitMQ image. AWS mode rejects explicit S3 credentials and endpoints,
+Cognito mode requires strict resource audience, `token_use=access`, and
+`cognito:groups`, the RabbitMQ 4.2 overlay receives the complete API/ML runtime
+rehearsal, and the canonical browser workload emits exact-head sizing evidence
+for every deployable process. This compatibility proof creates no AWS resource
+and does not claim Terraform or live-AWS validation.
 
 ### Step 3: Establish portable bootstrap, state, and least privilege
 

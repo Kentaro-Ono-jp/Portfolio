@@ -114,6 +114,7 @@ jobs:
           CARRY_BASELINE_SHA: ${{ steps.plan.outputs.baseline_sha }}
           CARRY_BASELINE_RUN_ID: ${{ steps.plan.outputs.baseline_run_id }}
           CARRY_BASELINE_RUN_URL: ${{ steps.plan.outputs.baseline_run_url }}
+          PORTFOLIO_VERIFICATION_HEAD_SHA: ${{ steps.plan.outputs.endpoint_head || github.sha }}
         run: |
           arguments=(--groups "$SELECTED_GROUPS")
           if [[ -n "$CARRIED_GROUPS" ]]; then
@@ -126,6 +127,16 @@ jobs:
             )
           fi
           python scripts/verify.py "${arguments[@]}"
+
+      - name: Prove the complete RabbitMQ 4.2 compatibility route
+        if: >-
+          success() &&
+          contains(steps.plan.outputs.groups, 'api-runtime') &&
+          contains(steps.plan.outputs.groups, 'ml-runtime')
+        env:
+          COMPOSE_FILE: compose.yaml:compose.rabbitmq42.yaml
+          PORTFOLIO_EXPECTED_RABBITMQ_VERSION: "4.2.9"
+        run: python scripts/verify.py --groups compose,api-runtime,ml-runtime
 
       - name: Validate selected coverage evidence
         if: >-
@@ -173,6 +184,21 @@ jobs:
         id: artifact_safety
         if: always()
         run: python scripts/sanitize_verification_artifacts.py
+
+      - name: Upload exact-head container sizing evidence
+        if: >-
+          success() &&
+          steps.artifact_safety.outcome == 'success' &&
+          contains(steps.plan.outputs.groups, 'web-runtime') &&
+          contains(steps.plan.outputs.groups, 'api-runtime') &&
+          contains(steps.plan.outputs.groups, 'ml-runtime')
+        uses: actions/upload-artifact@v7
+        with:
+          name: container-sizing-${{ github.run_id }}
+          path: artifacts/verification/container-sizing.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
 
       - name: Upload failure evidence
         if: failure() && steps.artifact_safety.outcome == 'success'

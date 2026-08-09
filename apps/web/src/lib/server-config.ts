@@ -31,6 +31,7 @@ const serverConfigSchema = z.strictObject({
     .default(DEFAULT_TIMEOUT_MILLISECONDS),
   PORTFOLIO_WEB_PUBLIC_BASE_URL: httpUrlSchema,
   PORTFOLIO_WEB_OIDC_ISSUER: httpUrlSchema,
+  PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL: httpUrlSchema,
   PORTFOLIO_WEB_OIDC_DISCOVERY_URL: httpUrlSchema,
   PORTFOLIO_WEB_OIDC_TOKEN_URL: httpUrlSchema,
   PORTFOLIO_WEB_OIDC_JWKS_URL: httpUrlSchema,
@@ -73,6 +74,7 @@ export interface ServerConfig {
   timeoutMilliseconds: number;
   publicBaseUrl: string;
   oidcIssuer: string;
+  oidcAuthorizationUrl: string;
   oidcDiscoveryUrl: string;
   oidcTokenUrl: string;
   oidcJwksUrl: string;
@@ -110,6 +112,7 @@ function requireSafeOidcTransport(
   const issuer = new URL(values.PORTFOLIO_WEB_OIDC_ISSUER);
   const oidcUrls = [
     issuer,
+    new URL(values.PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL),
     new URL(values.PORTFOLIO_WEB_OIDC_DISCOVERY_URL),
     new URL(values.PORTFOLIO_WEB_OIDC_TOKEN_URL),
     new URL(values.PORTFOLIO_WEB_OIDC_JWKS_URL),
@@ -120,7 +123,8 @@ function requireSafeOidcTransport(
       publicBase.protocol !== "http:" ||
       issuer.protocol !== "http:" ||
       !isLoopbackUrl(publicBase.href) ||
-      !isLoopbackUrl(issuer.href)
+      !isLoopbackUrl(issuer.href) ||
+      !isLoopbackUrl(values.PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL)
     ) {
       throw new InvalidServerConfigurationError();
     }
@@ -144,6 +148,8 @@ export function readServerConfig(
       environment.PORTFOLIO_WEB_UPSTREAM_TIMEOUT_MS,
     PORTFOLIO_WEB_PUBLIC_BASE_URL: environment.PORTFOLIO_WEB_PUBLIC_BASE_URL,
     PORTFOLIO_WEB_OIDC_ISSUER: environment.PORTFOLIO_WEB_OIDC_ISSUER,
+    PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL:
+      environment.PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL,
     PORTFOLIO_WEB_OIDC_DISCOVERY_URL:
       environment.PORTFOLIO_WEB_OIDC_DISCOVERY_URL,
     PORTFOLIO_WEB_OIDC_TOKEN_URL: environment.PORTFOLIO_WEB_OIDC_TOKEN_URL,
@@ -182,6 +188,7 @@ export function readServerConfig(
     timeoutMilliseconds: parsed.data.PORTFOLIO_WEB_UPSTREAM_TIMEOUT_MS,
     publicBaseUrl,
     oidcIssuer: normalizedUrl(parsed.data.PORTFOLIO_WEB_OIDC_ISSUER),
+    oidcAuthorizationUrl: parsed.data.PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL,
     oidcDiscoveryUrl: parsed.data.PORTFOLIO_WEB_OIDC_DISCOVERY_URL,
     oidcTokenUrl: parsed.data.PORTFOLIO_WEB_OIDC_TOKEN_URL,
     oidcJwksUrl: parsed.data.PORTFOLIO_WEB_OIDC_JWKS_URL,

@@ -41,6 +41,7 @@ function settings(): ServerConfig {
     timeoutMilliseconds: 1_000,
     publicBaseUrl: "http://127.0.0.1:53000",
     oidcIssuer: "http://127.0.0.1:5556/dex",
+    oidcAuthorizationUrl: "http://127.0.0.1:5556/dex/auth",
     oidcDiscoveryUrl:
       "http://identity:5556/dex/.well-known/openid-configuration",
     oidcTokenUrl: "http://identity:5556/dex/token",
@@ -180,6 +181,9 @@ describe("OIDC client boundary", () => {
       metadata({ issuer: "http://wrong.invalid/dex" }),
       metadata({ authorization_endpoint: "http://wrong.invalid/dex/auth" }),
       metadata({ token_endpoint: "http://127.0.0.1:5556/wrong" }),
+      metadata({
+        token_endpoint: "http://127.0.0.1:5556/dex/token?wrong=true",
+      }),
       metadata({ jwks_uri: "http://127.0.0.1:5556/wrong" }),
       metadata({ response_types_supported: [] }),
       metadata({ grant_types_supported: [] }),
@@ -241,6 +245,7 @@ describe("OIDC client boundary", () => {
       ...settings(),
       publicBaseUrl: "https://portfolio.example",
       oidcIssuer: "https://identity.example/dex",
+      oidcAuthorizationUrl: "https://identity.example/dex/auth",
       oidcDiscoveryUrl:
         "https://identity.example/dex/.well-known/openid-configuration",
       oidcTokenUrl: "https://identity.example/dex/token",
@@ -262,6 +267,43 @@ describe("OIDC client boundary", () => {
       beginAuthorization(secure, { fetch: discovery(payload) }),
     ).resolves.toHaveProperty("transaction.state", "state");
     expect(client.ClientSecretPost).toHaveBeenCalledWith("secret");
+    expect(client.allowInsecureRequests).not.toHaveBeenCalled();
+  });
+
+  it("supports a Cognito public client with a distinct authorization origin", async () => {
+    const cognito = {
+      ...settings(),
+      publicBaseUrl: "https://portfolio.example",
+      oidcIssuer:
+        "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_SYNTHETIC",
+      oidcAuthorizationUrl:
+        "https://portfolio-synthetic.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      oidcDiscoveryUrl:
+        "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_SYNTHETIC/.well-known/openid-configuration",
+      oidcTokenUrl:
+        "https://portfolio-synthetic.auth.us-east-1.amazoncognito.com/oauth2/token",
+      oidcJwksUrl:
+        "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_SYNTHETIC/.well-known/jwks.json",
+      oidcScopes: "openid reactorfront-api/read",
+      redirectUri: "https://portfolio.example/api/auth/callback",
+      allowInsecureLoopback: false,
+      secureCookies: true,
+    };
+    const payload = metadata({
+      issuer: cognito.oidcIssuer,
+      authorization_endpoint: cognito.oidcAuthorizationUrl,
+      token_endpoint: cognito.oidcTokenUrl,
+      jwks_uri: cognito.oidcJwksUrl,
+    });
+
+    const result = await beginAuthorization(cognito, {
+      fetch: discovery(payload),
+    });
+
+    expect(
+      result.authorizationUrl.searchParams.get("code_challenge_method"),
+    ).toBe("S256");
+    expect(client.None).toHaveBeenCalled();
     expect(client.allowInsecureRequests).not.toHaveBeenCalled();
   });
 

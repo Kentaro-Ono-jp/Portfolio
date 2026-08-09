@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "measurement": {
+    "minimumSamples": 3,
+    "sampleIntervalSeconds": 1.0,
+    "minimumHeadroomFraction": 0.25,
+    "workload": "Canonical authenticated browser E2E: sign-in, successful and failed PDF processing, source retrieval, review, audit, replay, and rejection paths.",
+    "uncertainty": "GitHub-hosted runner observations are a bounded synthetic baseline, not production capacity evidence. Candidates retain at least 25% measured-memory headroom and must be remeasured when images, workload, or deployment topology change."
+  },
+  "tasks": {
+    "web": {
+      "cpuUnits": 256,
+      "memoryMiB": 512
+    },
+    "api-area": {
+      "cpuUnits": 512,
+      "memoryMiB": 1024
+    },
+    "ml": {
+      "cpuUnits": 1024,
+      "memoryMiB": 2048
+    }
+  },
+  "processes": {
+    "web": {
+      "task": "web",
+      "memoryCandidateMiB": 384,
+      "concurrent": true
+    },
+    "api": {
+      "task": "api-area",
+      "memoryCandidateMiB": 256,
+      "concurrent": true
+    },
+    "api-outbox": {
+      "task": "api-area",
+      "memoryCandidateMiB": 192,
+      "concurrent": true
+    },
+    "api-events": {
+      "task": "api-area",
+      "memoryCandidateMiB": 192,
+      "concurrent": true
+    },
+    "api-migration": {
+      "task": "api-area",
+      "memoryCandidateMiB": 256,
+      "concurrent": false,
+      "imageService": "api"
+    },
+    "ml-worker": {
+      "task": "ml",
+      "memoryCandidateMiB": 1536,
+      "concurrent": true
+    }
+  }
+}

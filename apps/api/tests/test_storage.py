@@ -9,6 +9,7 @@ def test_storage_uses_path_style_s3_and_integrity_metadata() -> None:
     client = MagicMock()
     with patch("reactorfront_api.storage.boto3.client", return_value=client) as create_client:
         storage = S3ObjectStorage.create(
+            mode="local",
             endpoint_url="http://minio:9000",
             access_key_id="access",
             secret_access_key="secret",
@@ -58,3 +59,49 @@ def test_storage_uses_path_style_s3_and_integrity_metadata() -> None:
     )
     assert storage.is_ready()
     client.head_bucket.assert_called_once_with(Bucket="portfolio-documents")
+
+
+def test_storage_uses_standard_credential_chain_in_aws_mode() -> None:
+    client = MagicMock()
+    with patch("reactorfront_api.storage.boto3.client", return_value=client) as create_client:
+        storage = S3ObjectStorage.create(
+            mode="aws",
+            endpoint_url=None,
+            access_key_id=None,
+            secret_access_key=None,
+            bucket="portfolio-documents",
+            region="us-east-1",
+        )
+
+    assert storage.is_ready()
+    kwargs = create_client.call_args.kwargs
+    assert kwargs["region_name"] == "us-east-1"
+    assert "endpoint_url" not in kwargs
+    assert "aws_access_key_id" not in kwargs
+    assert "aws_secret_access_key" not in kwargs
+    assert kwargs["config"].s3 is None
+
+
+def test_storage_rejects_partial_or_mixed_modes() -> None:
+    invalid = [
+        ("local", "http://minio:9000", "access", None),
+        ("local", None, "access", "secret"),
+        ("aws", "https://s3.example.invalid", None, None),
+        ("aws", None, "access", "secret"),
+    ]
+    for mode, endpoint, access_key, secret_key in invalid:
+        with patch("reactorfront_api.storage.boto3.client") as create_client:
+            try:
+                S3ObjectStorage.create(
+                    mode=mode,  # type: ignore[arg-type]
+                    endpoint_url=endpoint,
+                    access_key_id=access_key,
+                    secret_access_key=secret_key,
+                    bucket="portfolio-documents",
+                    region="us-east-1",
+                )
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("unsafe storage configuration was accepted")
+            create_client.assert_not_called()

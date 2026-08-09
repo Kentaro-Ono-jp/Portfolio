@@ -37,6 +37,7 @@ function overrides(fetchMock: typeof fetch): ProxyDependencyOverrides {
       PORTFOLIO_WEB_UPSTREAM_TIMEOUT_MS: "1200",
       PORTFOLIO_WEB_PUBLIC_BASE_URL: "http://127.0.0.1:53000",
       PORTFOLIO_WEB_OIDC_ISSUER: "http://127.0.0.1:5556/dex",
+      PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL: "http://127.0.0.1:5556/dex/auth",
       PORTFOLIO_WEB_OIDC_DISCOVERY_URL:
         "http://identity:5556/dex/.well-known/openid-configuration",
       PORTFOLIO_WEB_OIDC_TOKEN_URL: "http://identity:5556/dex/token",

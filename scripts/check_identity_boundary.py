@@ -70,6 +70,7 @@ def main() -> int:
         != "http://identity:5556/dex/.well-known/openid-configuration"
         or api_environment.get("PORTFOLIO_OIDC_JWKS_URL")
         != "http://identity:5556/dex/keys"
+        or api_environment.get("PORTFOLIO_OIDC_MODE") != "dex"
     ):
         raise RuntimeError(
             "The API must validate the public issuer through the Dex backchannel."
@@ -80,6 +81,7 @@ def main() -> int:
     required_web_environment = {
         "PORTFOLIO_WEB_PUBLIC_BASE_URL": web_public_base,
         "PORTFOLIO_WEB_OIDC_ISSUER": "http://127.0.0.1:5556/dex",
+        "PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL": "http://127.0.0.1:5556/dex/auth",
         "PORTFOLIO_WEB_OIDC_DISCOVERY_URL": (
             "http://identity:5556/dex/.well-known/openid-configuration"
         ),

@@ -36,6 +36,12 @@ result-event persistence, duplicate-delivery, restart-recovery, exact
 nine-service readiness, and Playwright browser checks. It stops that project
 afterward. AI agents never start or mutate local Docker Desktop; Docker-backed
 proof runs in GitHub Actions.
+The same exact-head workflow also reruns the API/ML runtime boundary through
+the digest-pinned RabbitMQ 4.2 overlay and records measured image/runtime
+resource evidence for every deployable process under the canonical browser
+workload. Initial Fargate candidates and uncertainty are defined in
+[`infra/aws/runtime-sizing.json`](../infra/aws/runtime-sizing.json); the
+sanitized run artifact is evidence, not a live-AWS capacity claim.
 GitHub Actions also removes
 the three project-scoped test volumes; local execution preserves them. A failed
 teardown makes verification fail, and the workflow has an unconditional
@@ -120,6 +126,10 @@ Supporting scripts are implementation details of that entrypoint:
 - `check_identity_boundary.py` constrains the pinned Dex image, loopback-only
   exposure, authorization-code-only configuration, synthetic identity, and
   pinned JWT library.
+- `measure_container_resources.py` samples the canonical E2E workload, checks
+  the bounded migration process, binds observations to exact source,
+  configuration, and image identities, and rejects the initial Fargate
+  candidates when measured-memory headroom falls below the declared boundary.
 - `pdf_fixture.py` builds deterministic, repository-owned single-page text PDFs.
 - `verify_ml_model.py` proves independent model generations, checksum metadata,
   and real CPU PyTorch inference.

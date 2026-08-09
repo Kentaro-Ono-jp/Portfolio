@@ -25,12 +25,12 @@ API image roles.
 - SQLAlchemy 2 and PostgreSQL 18 persistence
 - explicit Alembic migrations
 - PyJWT access-token validation with exact issuer, audience, algorithm, time,
-  JWKS-cache, and API-owned capability policy
+  JWKS-cache, API-owned capability policy, and Cognito access-token purpose
 - bearer authorization on every document route, with stable-principal
   ownership filtering that deliberately returns the same `404` for an absent
   document and another principal's document
 - API-owned OIDC and controlled-system principals with populated-v1 migration
-- S3-compatible source-object storage through boto3
+- explicit local MinIO or AWS task-role S3 source-object storage through boto3
 - authenticated source retrieval that checks persisted and object metadata,
   bounded size, and SHA-256 before returning a PDF
 - owner-filtered review reads and one immutable approval or correction guarded
@@ -128,6 +128,7 @@ examples and are overridden inside Compose.
 | Variable | Default |
 |---|---|
 | `PORTFOLIO_DATABASE_URL` | PostgreSQL on `127.0.0.1:55432` |
+| `PORTFOLIO_S3_MODE` | `local`; `aws` forbids endpoint and static credential settings |
 | `PORTFOLIO_S3_ENDPOINT_URL` | `http://127.0.0.1:59000` |
 | `PORTFOLIO_S3_ACCESS_KEY_ID` | `portfolio-local-access` |
 | `PORTFOLIO_S3_SECRET_ACCESS_KEY` | `portfolio-local-secret` |
@@ -151,10 +152,15 @@ examples and are overridden inside Compose.
 | `PORTFOLIO_OIDC_JWKS_CACHE_SECONDS` | `300` |
 | `PORTFOLIO_OIDC_CLOCK_SKEW_SECONDS` | `30` |
 | `PORTFOLIO_OIDC_HTTP_TIMEOUT_SECONDS` | `2` |
+| `PORTFOLIO_OIDC_MODE` | `dex`; `cognito` requires an access token and `cognito:groups` |
 | `PORTFOLIO_OIDC_CAPABILITY_CLAIM` | `groups` |
 
 These values are development-only. Required host ports bind to `127.0.0.1`,
 and the MinIO administration console is not published to the host.
+AWS mode supplies bucket and Region only; boto3 resolves short-lived task-role
+credentials through its standard provider chain. The complete public mode and
+Cognito configuration is documented in the
+[AWS runtime compatibility guide](../../AWS_RUNTIME_COMPATIBILITY.md).
 
 ## Verification
 

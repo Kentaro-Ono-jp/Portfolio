@@ -157,6 +157,7 @@ class JwtAccessTokenValidator:
         capability_mapping: Mapping[str, Sequence[str]],
         clock_skew_seconds: int,
         signing_key_client: SigningKeyClient,
+        required_token_use: str | None = None,
     ) -> None:
         if allowed_algorithm != "RS256":
             raise ValueError("The initial boundary permits only RS256.")
@@ -169,6 +170,7 @@ class JwtAccessTokenValidator:
         self._capability_mapping = _normalize_capability_mapping(capability_mapping)
         self._clock_skew_seconds = clock_skew_seconds
         self._signing_key_client = signing_key_client
+        self._required_token_use = required_token_use
 
     def validate(self, access_token: str) -> AuthenticatedPrincipal:
         if (
@@ -182,6 +184,9 @@ class JwtAccessTokenValidator:
             if header.get("alg") != self._allowed_algorithm:
                 raise AuthenticationFailed
             signing_key = self._signing_key_client.get_signing_key_from_jwt(access_token)
+            required_claims = ["iss", "sub", "aud", "iat", "exp"]
+            if self._required_token_use is not None:
+                required_claims.append("token_use")
             claims: dict[str, Any] = jwt.decode(
                 access_token,
                 signing_key,
@@ -190,7 +195,7 @@ class JwtAccessTokenValidator:
                 issuer=self._issuer,
                 leeway=self._clock_skew_seconds,
                 options={
-                    "require": ["iss", "sub", "aud", "iat", "exp"],
+                    "require": required_claims,
                     "strict_aud": True,
                 },
             )
@@ -201,6 +206,11 @@ class JwtAccessTokenValidator:
 
         subject = claims.get("sub")
         if not isinstance(subject, str) or not subject or len(subject) > 255:
+            raise AuthenticationFailed
+        if (
+            self._required_token_use is not None
+            and claims.get("token_use") != self._required_token_use
+        ):
             raise AuthenticationFailed
         external_capabilities = claims.get(self._capability_claim, [])
         if not isinstance(external_capabilities, list) or not all(
@@ -297,7 +307,12 @@ def build_access_token_validator(settings: Settings) -> JwtAccessTokenValidator:
         timeout_seconds=settings.oidc_http_timeout_seconds,
     )
     configured_jwks_uri = _require_http_url(settings.oidc_jwks_url, field="jwks_uri")
-    if urlparse(configured_jwks_uri).path != urlparse(metadata.jwks_uri).path:
+    configured_jwks = urlparse(configured_jwks_uri)
+    discovered_jwks = urlparse(metadata.jwks_uri)
+    if (configured_jwks.path, configured_jwks.query) != (
+        discovered_jwks.path,
+        discovered_jwks.query,
+    ):
         raise AuthenticationFailed
     key_client = PyJWKClient(
         configured_jwks_uri,
@@ -314,6 +329,7 @@ def build_access_token_validator(settings: Settings) -> JwtAccessTokenValidator:
         capability_mapping=settings.oidc_capability_mapping,
         clock_skew_seconds=settings.oidc_clock_skew_seconds,
         signing_key_client=key_client,
+        required_token_use="access" if settings.oidc_mode == "cognito" else None,
     )
 
 
