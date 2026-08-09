@@ -94,6 +94,12 @@ CLOUD_MAP_DELEGATED_ACTIONS = {
     "route53:GetHostedZone",
     "route53:ListHostedZonesByName",
 }
+REVIEWED_API_GATEWAY_IAM_ACTIONS = {
+    "apigateway:*",
+    "apigateway:DELETE",
+    "apigateway:GET",
+    "apigateway:POST",
+}
 CONSOLE_IAM_TOKENS = {
     "AWS_ACCOUNT_ID": "111122223333",
     "AWS_PARTITION": "aws",
@@ -272,6 +278,20 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         if any(statement.get("Effect") == "Deny" for statement in statements):
             raise RuntimeError(
                 f"Console IAM policy must not contain explicit Deny: {key}"
+            )
+        api_gateway_actions = {
+            action
+            for statement in statements
+            for action in string_values(statement.get("Action", []))
+            if action.startswith("apigateway:")
+        }
+        unknown_api_gateway_actions = (
+            api_gateway_actions - REVIEWED_API_GATEWAY_IAM_ACTIONS
+        )
+        if unknown_api_gateway_actions:
+            raise RuntimeError(
+                "Console IAM policy uses an unreviewed API Gateway IAM action: "
+                f"{key} {sorted(unknown_api_gateway_actions)}"
             )
     managed_policy_sizes = enforce_policy_character_reserve(
         policies,

@@ -7,7 +7,6 @@
       "Action": [
         "apigateway:GET",
         "apigateway:POST",
-        "apigateway:TagResource",
         "cognito-idp:CreateGroup",
         "cognito-idp:CreateManagedLoginBranding",
         "cognito-idp:CreateResourceServer",
