@@ -29,11 +29,15 @@ jobs:
       PORTFOLIO_RABBITMQ_PORT: "25672"
       PORTFOLIO_DATABASE_URL: "postgresql+psycopg://portfolio:portfolio-local-password@127.0.0.1:25432/portfolio"
       PORTFOLIO_S3_ENDPOINT_URL: "http://127.0.0.1:29000"
+      PORTFOLIO_S3_ACCESS_KEY_ID: "portfolio-local-access"
+      PORTFOLIO_S3_SECRET_ACCESS_KEY: "portfolio-local-secret"
       PORTFOLIO_RABBITMQ_URL: "amqp://portfolio:portfolio-local-password@127.0.0.1:25672/%2F"
       PORTFOLIO_API_BASE_URL: "http://127.0.0.1:28000"
       PORTFOLIO_WEB_PUBLIC_BASE_URL: "http://127.0.0.1:23000"
       PORTFOLIO_E2E_BASE_URL: "http://127.0.0.1:23000"
       PORTFOLIO_ML_S3_ENDPOINT_URL: "http://127.0.0.1:29000"
+      PORTFOLIO_ML_S3_ACCESS_KEY_ID: "portfolio-local-access"
+      PORTFOLIO_ML_S3_SECRET_ACCESS_KEY: "portfolio-local-secret"
       PORTFOLIO_ML_RABBITMQ_URL: "amqp://portfolio:portfolio-local-password@127.0.0.1:25672/%2F"
     outputs:
       selected_groups: ${{ steps.plan.outputs.groups }}
@@ -114,6 +118,7 @@ jobs:
           CARRY_BASELINE_SHA: ${{ steps.plan.outputs.baseline_sha }}
           CARRY_BASELINE_RUN_ID: ${{ steps.plan.outputs.baseline_run_id }}
           CARRY_BASELINE_RUN_URL: ${{ steps.plan.outputs.baseline_run_url }}
+          PORTFOLIO_VERIFICATION_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           arguments=(--groups "$SELECTED_GROUPS")
           if [[ -n "$CARRIED_GROUPS" ]]; then
@@ -126,6 +131,16 @@ jobs:
             )
           fi
           python scripts/verify.py "${arguments[@]}"
+
+      - name: Prove the complete RabbitMQ 4.2 compatibility route
+        if: >-
+          success() &&
+          contains(steps.plan.outputs.groups, 'api-runtime') &&
+          contains(steps.plan.outputs.groups, 'ml-runtime')
+        env:
+          COMPOSE_FILE: compose.yaml:compose.rabbitmq42.yaml
+          PORTFOLIO_EXPECTED_RABBITMQ_VERSION: "4.2.9"
+        run: python scripts/verify.py --groups compose,api-runtime,ml-runtime
 
       - name: Validate selected coverage evidence
         if: >-
@@ -173,6 +188,21 @@ jobs:
         id: artifact_safety
         if: always()
         run: python scripts/sanitize_verification_artifacts.py
+
+      - name: Upload exact-head container sizing evidence
+        if: >-
+          success() &&
+          steps.artifact_safety.outcome == 'success' &&
+          contains(steps.plan.outputs.groups, 'web-runtime') &&
+          contains(steps.plan.outputs.groups, 'api-runtime') &&
+          contains(steps.plan.outputs.groups, 'ml-runtime')
+        uses: actions/upload-artifact@v7
+        with:
+          name: container-sizing-${{ github.run_id }}
+          path: artifacts/verification/container-sizing.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
 
       - name: Upload failure evidence
         if: failure() && steps.artifact_safety.outcome == 'success'

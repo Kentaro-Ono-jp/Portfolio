@@ -107,12 +107,14 @@ def validator(
     private_key: rsa.RSAPrivateKey,
     *,
     key_error: Exception | None = None,
+    capability_claim: str = "groups",
+    required_token_use: str | None = None,
 ) -> JwtAccessTokenValidator:
     return JwtAccessTokenValidator(
         issuer=ISSUER,
         audience=AUDIENCE,
         allowed_algorithm="RS256",
-        capability_claim="groups",
+        capability_claim=capability_claim,
         capability_mapping={
             "reactorfront-reviewers": [
                 Capability.DOCUMENTS_SUBMIT.value,
@@ -124,6 +126,7 @@ def validator(
             private_key.public_key(),
             error=key_error,
         ),
+        required_token_use=required_token_use,
     )
 
 
@@ -225,6 +228,37 @@ def test_missing_required_claim_and_untrusted_algorithm_fail_closed(
 
     with pytest.raises(AuthenticationFailed):
         validator(private_key).validate(token(private_key, algorithm="HS256"))
+
+
+def test_cognito_access_token_requires_exact_purpose_and_group_claim(
+    private_key: rsa.RSAPrivateKey,
+) -> None:
+    cognito = validator(
+        private_key,
+        capability_claim="cognito:groups",
+        required_token_use="access",
+    )
+    access_token = token(
+        private_key,
+        claim_overrides={
+            "token_use": "access",
+            "cognito:groups": ["reactorfront-reviewers"],
+        },
+    )
+
+    principal = cognito.validate(access_token)
+    assert principal.capabilities == {
+        Capability.DOCUMENTS_SUBMIT,
+        Capability.DOCUMENTS_READ,
+    }
+
+    for overrides in (
+        {"cognito:groups": ["reactorfront-reviewers"]},
+        {"token_use": "id", "cognito:groups": ["reactorfront-reviewers"]},
+        {"token_use": "access", "cognito:groups": "reactorfront-reviewers"},
+    ):
+        with pytest.raises(AuthenticationFailed):
+            cognito.validate(token(private_key, claim_overrides=overrides))
 
 
 @pytest.mark.parametrize("access_token", ["", "x" * (16 * 1024 + 1), "not-a-jwt"])
@@ -433,6 +467,15 @@ def test_validator_factory_rejects_a_mismatched_jwks_backchannel(
 
     with pytest.raises(AuthenticationFailed):
         build_access_token_validator(settings)
+
+    query_settings = Settings(
+        oidc_issuer=ISSUER,
+        oidc_discovery_url=DISCOVERY_URL,
+        oidc_jwks_url="http://identity:5556/dex/keys?unrelated=true",
+        oidc_audience=AUDIENCE,
+    )
+    with pytest.raises(AuthenticationFailed):
+        build_access_token_validator(query_settings)
 
 
 def test_request_authorizer_resolves_stable_principal_after_capability_check(

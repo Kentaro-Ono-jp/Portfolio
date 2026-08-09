@@ -20,7 +20,7 @@ configuration, credential, or client driver.
   CUDA, NVIDIA, and Triton runtime packages
 - model artifact generation during the image build; generated artifacts remain
   outside normal Git history
-- source-object retrieval through the documented S3-compatible API only
+- source-object retrieval through explicit local MinIO or AWS task-role S3 mode
 - late-acknowledged Celery consumption and confirmed at-least-once result
   publication through RabbitMQ
 
@@ -119,6 +119,7 @@ local examples and Compose replaces them with service DNS names.
 
 | Variable | Default |
 |---|---|
+| `PORTFOLIO_ML_S3_MODE` | `local`; `aws` forbids endpoint and static credential settings |
 | `PORTFOLIO_ML_S3_ENDPOINT_URL` | `http://127.0.0.1:59000` |
 | `PORTFOLIO_ML_S3_ACCESS_KEY_ID` | `portfolio-local-access` |
 | `PORTFOLIO_ML_S3_SECRET_ACCESS_KEY` | `portfolio-local-secret` |
@@ -134,6 +135,9 @@ local examples and Compose replaces them with service DNS names.
 
 There is intentionally no database setting. The Compose service publishes no
 host port and runs as numeric non-root user `10002`.
+AWS mode supplies bucket and Region only and lets boto3 obtain short-lived
+task-role credentials through the standard provider chain. See the
+[AWS runtime compatibility guide](../../AWS_RUNTIME_COMPATIBILITY.md).
 
 ## Verification
 

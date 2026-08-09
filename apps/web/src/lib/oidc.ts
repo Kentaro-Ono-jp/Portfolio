@@ -49,20 +49,16 @@ const defaultDependencies: OidcDependencies = {
 };
 
 function sameEndpointPath(discovered: string, configured: string): boolean {
-  return new URL(discovered).pathname === new URL(configured).pathname;
+  const discoveredUrl = new URL(discovered);
+  const configuredUrl = new URL(configured);
+  return (
+    discoveredUrl.pathname === configuredUrl.pathname &&
+    discoveredUrl.search === configuredUrl.search
+  );
 }
 
-function requirePublicEndpoint(endpoint: string, issuer: string): void {
-  const parsed = new URL(endpoint);
-  const trustedIssuer = new URL(issuer);
-  if (
-    parsed.origin !== trustedIssuer.origin ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    parsed.hash !== ""
-  ) {
-    throw new OidcBoundaryError();
-  }
+function sameEndpoint(discovered: string, configured: string): boolean {
+  return new URL(discovered).href === new URL(configured).href;
 }
 
 async function loadConfiguration(
@@ -108,11 +104,11 @@ async function loadConfiguration(
   if (!parsed.success || parsed.data.issuer !== settings.oidcIssuer) {
     throw new OidcBoundaryError();
   }
-  requirePublicEndpoint(
-    parsed.data.authorization_endpoint,
-    settings.oidcIssuer,
-  );
   if (
+    !sameEndpoint(
+      parsed.data.authorization_endpoint,
+      settings.oidcAuthorizationUrl,
+    ) ||
     !sameEndpointPath(parsed.data.token_endpoint, settings.oidcTokenUrl) ||
     !sameEndpointPath(parsed.data.jwks_uri, settings.oidcJwksUrl) ||
     !parsed.data.response_types_supported.includes("code") ||
@@ -127,7 +123,7 @@ async function loadConfiguration(
 
   const serverMetadata: ConstructorParameters<typeof oidc.Configuration>[0] = {
     issuer: parsed.data.issuer,
-    authorization_endpoint: parsed.data.authorization_endpoint,
+    authorization_endpoint: settings.oidcAuthorizationUrl,
     token_endpoint: settings.oidcTokenUrl,
     jwks_uri: settings.oidcJwksUrl,
     response_types_supported: parsed.data.response_types_supported,

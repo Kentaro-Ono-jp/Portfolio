@@ -10,6 +10,7 @@ function loopbackEnvironment(): Record<string, string> {
     PORTFOLIO_API_BASE_URL: "http://api:8000/",
     PORTFOLIO_WEB_PUBLIC_BASE_URL: "http://127.0.0.1:53000/",
     PORTFOLIO_WEB_OIDC_ISSUER: "http://127.0.0.1:5556/dex/",
+    PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL: "http://127.0.0.1:5556/dex/auth",
     PORTFOLIO_WEB_OIDC_DISCOVERY_URL:
       "http://identity:5556/dex/.well-known/openid-configuration",
     PORTFOLIO_WEB_OIDC_TOKEN_URL: "http://identity:5556/dex/token",
@@ -26,6 +27,7 @@ describe("readServerConfig", () => {
       timeoutMilliseconds: 8_000,
       publicBaseUrl: "http://127.0.0.1:53000",
       oidcIssuer: "http://127.0.0.1:5556/dex",
+      oidcAuthorizationUrl: "http://127.0.0.1:5556/dex/auth",
       oidcDiscoveryUrl:
         "http://identity:5556/dex/.well-known/openid-configuration",
       oidcTokenUrl: "http://identity:5556/dex/token",
@@ -49,6 +51,8 @@ describe("readServerConfig", () => {
       PORTFOLIO_WEB_UPSTREAM_TIMEOUT_MS: "1500",
       PORTFOLIO_WEB_PUBLIC_BASE_URL: "https://portfolio.example.test",
       PORTFOLIO_WEB_OIDC_ISSUER: "https://identity.example.test/dex",
+      PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL:
+        "https://identity.example.test/dex/auth",
       PORTFOLIO_WEB_OIDC_DISCOVERY_URL:
         "https://identity.internal.test/dex/.well-known/openid-configuration",
       PORTFOLIO_WEB_OIDC_TOKEN_URL: "https://identity.internal.test/dex/token",
@@ -76,6 +80,11 @@ describe("readServerConfig", () => {
       {
         ...loopbackEnvironment(),
         PORTFOLIO_WEB_PUBLIC_BASE_URL: "http://public.example.test",
+      },
+      {
+        ...loopbackEnvironment(),
+        PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL:
+          "http://public.example.test/oauth2/authorize",
       },
       {
         ...loopbackEnvironment(),

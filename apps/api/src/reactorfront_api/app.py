@@ -65,9 +65,14 @@ def build_document_service(settings: Settings) -> DocumentService:
         engine=create_database_engine(settings.database_url)
     )
     object_storage = S3ObjectStorage.create(
+        mode=settings.s3_mode,
         endpoint_url=settings.s3_endpoint_url,
         access_key_id=settings.s3_access_key_id,
-        secret_access_key=settings.s3_secret_access_key.get_secret_value(),
+        secret_access_key=(
+            settings.s3_secret_access_key.get_secret_value()
+            if settings.s3_secret_access_key is not None
+            else None
+        ),
         bucket=settings.s3_bucket,
         region=settings.s3_region,
     )

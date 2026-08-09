@@ -28,8 +28,9 @@ the client bundle.
   store. The browser receives only an opaque `HttpOnly`, `SameSite=Lax` cookie.
 - Require CSRF verification for state-changing same-origin routes.
 - Derive the callback URI from the configured public base URL, validate OIDC
-  discovery and callback state/nonce/PKCE, and allow plaintext transport only
-  for the explicit loopback Compose profile.
+  discovery, explicit authorization and backchannel endpoints, and callback
+  state/nonce/PKCE, and allow plaintext transport only for the explicit
+  loopback Compose profile.
 - Stream a source PDF to the browser only after the API verifies its owner,
   metadata, size, and SHA-256 digest.
 - Preserve the API review entity tag and require CSRF, `If-Match`, and an
@@ -61,8 +62,8 @@ browser boundaries rather than belonging to Web internals.
 
 ## Configuration
 
-`PORTFOLIO_API_BASE_URL`, `PORTFOLIO_WEB_PUBLIC_BASE_URL`, the four
-`PORTFOLIO_WEB_OIDC_*_URL`/issuer values, and
+`PORTFOLIO_API_BASE_URL`, `PORTFOLIO_WEB_PUBLIC_BASE_URL`, the explicit
+OIDC issuer, authorization, discovery, token, and JWKS values, and
 `PORTFOLIO_WEB_OIDC_CLIENT_ID` are required server settings. The optional
 client secret enables a confidential client; the committed Compose fixture is
 an intentionally public loopback-only client. Session absolute, inactivity,
@@ -70,8 +71,11 @@ transaction, refresh-leeway, scopes, and upstream-timeout settings have bounded
 defaults documented in [`.env.example`](../../.env.example).
 
 Production-shaped configuration requires HTTPS for the public Web URL and all
-OIDC endpoints. `PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK=true` is accepted
-only when both the public Web URL and issuer are HTTP loopback URLs.
+OIDC endpoints. The authorization endpoint may use Cognito's distinct domain
+but must match discovery exactly. `PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK=true`
+is accepted only when the public Web URL, issuer, and authorization endpoint
+are HTTP loopback URLs. See the
+[AWS runtime compatibility guide](../../AWS_RUNTIME_COMPATIBILITY.md).
 
 Run the app from the repository root after installing the pinned workspace:
 

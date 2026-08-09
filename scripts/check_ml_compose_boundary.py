@@ -36,6 +36,10 @@ def main() -> int:
     ]
     if forbidden:
         raise RuntimeError(f"ML worker has forbidden database settings: {forbidden}")
+    if environment.get("PORTFOLIO_ML_S3_MODE") != "local":
+        raise RuntimeError(
+            "ML worker must select the explicit local S3 mode in Compose"
+        )
     if worker.get("ports"):
         raise RuntimeError("ML worker must not publish a host port")
     web = services.get("web")
@@ -63,6 +67,9 @@ def main() -> int:
         )
     if "api" not in web.get("depends_on", {}):
         raise RuntimeError("Web service does not declare its API readiness dependency")
+    api_environment = services["api"].get("environment", {})
+    if api_environment.get("PORTFOLIO_S3_MODE") != "local":
+        raise RuntimeError("API must select the explicit local S3 mode in Compose")
     events = services.get("api-events")
     if events is None:
         raise RuntimeError("API-owned result-event consumer service is missing")

@@ -279,6 +279,7 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
     if normalized in {
         "scripts/verify.py",
         "scripts/plan_ci.py",
+        "scripts/measure_container_resources.py",
     } or normalized.startswith(".github/workflows/"):
         return ALL_GROUPS
 
@@ -765,6 +766,7 @@ def static_checks(
                 "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
                 "scripts/check_identity_boundary.py",
+                "scripts/measure_container_resources.py",
             ],
         ),
         (
@@ -791,6 +793,7 @@ def static_checks(
                 "scripts/verify_result_consumer_runtime.py",
                 "scripts/check_docs.py",
                 "scripts/check_identity_boundary.py",
+                "scripts/measure_container_resources.py",
             ],
         ),
         (
@@ -1027,6 +1030,37 @@ def prove_complete_compose_readiness(docker: str) -> None:
     )
 
 
+def prove_expected_rabbitmq_version(docker: str) -> None:
+    expected = os.environ.get("PORTFOLIO_EXPECTED_RABBITMQ_VERSION")
+    if expected is None:
+        return
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", expected) is None:
+        raise RuntimeError("Expected RabbitMQ version is malformed.")
+    result = subprocess.run(
+        compose_command(
+            docker,
+            "exec",
+            "-T",
+            "rabbitmq",
+            "rabbitmq-diagnostics",
+            "-q",
+            "server_version",
+        ),
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    observed = result.stdout.decode("utf-8").strip()
+    if observed != expected:
+        raise RuntimeError("RabbitMQ compatibility route used an unexpected version.")
+    (ARTIFACT_DIRECTORY / "rabbitmq-version.txt").write_text(
+        f"RabbitMQ compatibility version: {observed}\n",
+        encoding="utf-8",
+    )
+    print(f"RabbitMQ compatibility version {observed} passed.")
+
+
 def _e2e_upload_correlation(payload: object, phase: str) -> str:
     if not isinstance(payload, dict):
         raise RuntimeError("Browser E2E evidence is not a JSON object.")
@@ -1253,6 +1287,7 @@ def run_runtime_checks(
             "identity",
         ),
     )
+    prove_expected_rabbitmq_version(docker)
     run(
         "Create the deterministic integration bucket",
         [
@@ -1400,8 +1435,20 @@ def run_runtime_checks(
         )
         prove_complete_compose_readiness(docker)
         run(
-            "Prove browser-to-ML-to-browser completed and failed workflows",
-            [pnpm, "e2e:test"],
+            "Prove browser workflows and measure deployable container resources",
+            [
+                sys.executable,
+                "scripts/measure_container_resources.py",
+                "--configuration",
+                "infra/aws/runtime-sizing.json",
+                "--output",
+                "artifacts/verification/container-sizing.json",
+                "--compose-project",
+                COMPOSE_PROJECT_NAME,
+                "--",
+                pnpm,
+                "e2e:test",
+            ],
         )
         prove_e2e_correlation(docker)
 

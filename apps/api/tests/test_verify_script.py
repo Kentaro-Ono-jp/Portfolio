@@ -16,6 +16,11 @@ from alembic.script import ScriptDirectory
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
+@pytest.fixture(autouse=True)
+def isolate_runtime_version_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PORTFOLIO_EXPECTED_RABBITMQ_VERSION", raising=False)
+
+
 def load_script_module(name: str) -> ModuleType:
     path = REPOSITORY_ROOT / "scripts" / f"{name}.py"
     specification = importlib.util.spec_from_file_location(name, path)
@@ -285,6 +290,13 @@ def test_github_actions_runtime_ports_avoid_linux_ephemeral_range() -> None:
         "http://127.0.0.1:23000",
     ):
         assert value in workflow
+    for variable in (
+        "PORTFOLIO_S3_ACCESS_KEY_ID",
+        "PORTFOLIO_S3_SECRET_ACCESS_KEY",
+        "PORTFOLIO_ML_S3_ACCESS_KEY_ID",
+        "PORTFOLIO_ML_S3_SECRET_ACCESS_KEY",
+    ):
+        assert f'{variable}: "portfolio-local-' in workflow
     assert (
         "PORTFOLIO_WEB_PUBLIC_BASE_URL: ${PORTFOLIO_WEB_PUBLIC_BASE_URL:-http://127.0.0.1:53000}"
     ) in compose
@@ -300,6 +312,9 @@ def test_github_actions_passes_exact_carry_provenance_to_verifier() -> None:
         assert f"steps.plan.outputs.{output_name}" in workflow
     for argument in ("--baseline-sha", "--baseline-run-id", "--baseline-run-url"):
         assert argument in workflow
+    assert (
+        "PORTFOLIO_VERIFICATION_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
+    ) in workflow
 
 
 def test_identity_boundary_aligns_public_url_with_published_web_port() -> None:
@@ -810,10 +825,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 53
+    assert len(inventory) == 55
     assert len(verifier.selected_test_files(plan.groups)) == 17
     assert "Verification groups: 1/9 selected" in verifier.plan_lines(plan)
-    assert "Test files: 17/53 selected" in verifier.plan_lines(plan)
+    assert "Test files: 17/55 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(
@@ -1242,6 +1257,42 @@ def test_complete_compose_readiness_requires_exactly_nine_running_services(
     verifier.prove_complete_compose_readiness("docker")
 
     assert observed_diagnostics
+
+
+def test_rabbitmq_compatibility_route_requires_the_exact_version(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("PORTFOLIO_EXPECTED_RABBITMQ_VERSION", "4.2.9")
+    monkeypatch.setattr(verifier, "ARTIFACT_DIRECTORY", tmp_path)
+    monkeypatch.setattr(
+        verifier.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["docker"],
+            returncode=0,
+            stdout=b"4.2.9\n",
+        ),
+    )
+
+    verifier.prove_expected_rabbitmq_version("docker")
+
+    assert (tmp_path / "rabbitmq-version.txt").read_text(encoding="utf-8") == (
+        "RabbitMQ compatibility version: 4.2.9\n"
+    )
+
+    monkeypatch.setattr(
+        verifier.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["docker"],
+            returncode=0,
+            stdout=b"4.3.2\n",
+        ),
+    )
+    with pytest.raises(RuntimeError, match="unexpected version"):
+        verifier.prove_expected_rabbitmq_version("docker")
 
 
 def test_e2e_correlation_and_review_proof_requires_every_path_in_every_service(

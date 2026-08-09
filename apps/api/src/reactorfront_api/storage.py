@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import boto3
 from botocore.config import Config
@@ -20,24 +20,44 @@ class S3ObjectStorage:
     def create(
         cls,
         *,
-        endpoint_url: str,
-        access_key_id: str,
-        secret_access_key: str,
+        mode: Literal["local", "aws"],
+        endpoint_url: str | None,
+        access_key_id: str | None,
+        secret_access_key: str | None,
         bucket: str,
         region: str,
     ) -> S3ObjectStorage:
-        client = boto3.client(
-            "s3",
-            endpoint_url=endpoint_url,
-            aws_access_key_id=access_key_id,
-            aws_secret_access_key=secret_access_key,
-            region_name=region,
-            config=Config(
-                signature_version="s3v4",
-                s3={"addressing_style": "path"},
-                retries={"max_attempts": 3, "mode": "standard"},
-            ),
-        )
+        local_values = (endpoint_url, access_key_id, secret_access_key)
+        if mode == "local":
+            if not all(local_values):
+                raise ValueError("Local S3 mode requires endpoint and bounded credentials.")
+            client = boto3.client(
+                "s3",
+                endpoint_url=endpoint_url,
+                aws_access_key_id=access_key_id,
+                aws_secret_access_key=secret_access_key,
+                region_name=region,
+                config=Config(
+                    signature_version="s3v4",
+                    s3={"addressing_style": "path"},
+                    retries={"max_attempts": 3, "mode": "standard"},
+                ),
+            )
+        elif mode == "aws":
+            if any(value is not None for value in local_values):
+                raise ValueError(
+                    "AWS S3 mode forbids application-supplied endpoint or credentials."
+                )
+            client = boto3.client(
+                "s3",
+                region_name=region,
+                config=Config(
+                    signature_version="s3v4",
+                    retries={"max_attempts": 3, "mode": "standard"},
+                ),
+            )
+        else:
+            raise ValueError("Unsupported S3 mode.")
         return cls(client=client, bucket=bucket)
 
     def put(
