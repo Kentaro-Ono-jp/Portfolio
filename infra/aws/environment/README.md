@@ -2,18 +2,25 @@
 
 This Terraform root implements Delivery Specification 0004 Step 4 as one
 independent, NAT-free, environment-owned state boundary. It is static
-infrastructure definition and AWS-free proof only; it does not authorize or
-perform `apply`, migration, seed, smoke, extend, or destroy operations.
+infrastructure definition with AWS-free proof. It never performs IAM mutation
+and does not automatically perform `apply`, migration, seed, smoke, extend, or
+destroy operations.
 
 ## Ownership boundary
 
 Every resource in this directory is owned by the one explicit
 `environment_state_key`, which must equal
 `environments/<environment>/terraform.tfstate`. The persistent state bucket,
-ECR repositories, Permissions Boundary, deployment roles, workload roles, and
-destroy controller remain owned by `../bootstrap/`; this root consumes only
-their explicit ARNs and repository URLs. It has no `terraform_remote_state`
-or AWS discovery data source.
+ECR repositories, operator permissions, Permissions Boundary, deployment
+roles, workload roles, and destroy controller remain persistent and are owned
+either by `../bootstrap/` or by the static account-owner procedure in
+`console-iam/`; this root consumes only their explicit ARNs and repository
+URLs. It has no `terraform_remote_state` or AWS discovery data source.
+
+`console-iam/manifest.json` keeps `OperatorPermissions` and `OperatorBoundary`
+as independently named and versioned managed policies. The former is the
+current grant; the latter is only the maximum ceiling. The Console procedure
+contains no explicit deny and no Terraform-managed IAM object.
 
 All taggable environment resources receive exactly these provider default
 tags:
@@ -73,5 +80,8 @@ Run the repository-owned entrypoint:
 python scripts/verify.py --groups aws-static
 ```
 
-Do not run `terraform apply` as part of this Issue. Step 5 must first add the
-cost, TTL-first fallback, lifecycle, destroy, and residual-sweep guards.
+An AWS-free verification run is never deployment authority. A live plan or
+apply requires a separately approved operator session, exact remote backend,
+immutable image digests, and account-owned rendered role ARNs. Lifecycle,
+TTL-first fallback, destroy, and residual-sweep automation remain separate
+delivery increments.

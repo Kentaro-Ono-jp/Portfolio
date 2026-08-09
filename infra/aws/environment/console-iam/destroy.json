@@ -1,0 +1,44 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DestroyManagedEnvironment",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:DELETE",
+        "cognito-idp:DeleteGroup",
+        "cognito-idp:DeleteManagedLoginBranding",
+        "cognito-idp:DeleteResourceServer",
+        "cognito-idp:DeleteUserPool",
+        "cognito-idp:DeleteUserPoolClient",
+        "cognito-idp:DeleteUserPoolDomain",
+        "ec2:Delete*",
+        "ec2:DetachInternetGateway",
+        "ec2:DisassociateRouteTable",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ecs:DeleteCluster",
+        "ecs:DeleteService",
+        "ecs:DeregisterTaskDefinition",
+        "ecs:UpdateService",
+        "logs:DeleteLogGroup",
+        "mq:DeleteBroker",
+        "rds:DeleteDBInstance",
+        "rds:DeleteDBSubnetGroup",
+        "secretsmanager:DeleteSecret",
+        "servicediscovery:DeleteNamespace",
+        "servicediscovery:DeleteService"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DeleteExactApplicationBucket",
+      "Effect": "Allow",
+      "Action": ["s3:DeleteBucket", "s3:DeleteObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:${AWS_PARTITION}:s3:::${NAME_PREFIX}-${ENVIRONMENT}-documents",
+        "arn:${AWS_PARTITION}:s3:::${NAME_PREFIX}-${ENVIRONMENT}-documents/*"
+      ]
+    }
+  ]
+}

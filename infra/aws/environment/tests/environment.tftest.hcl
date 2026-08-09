@@ -188,6 +188,29 @@ run "reject_mutable_image_selection" {
   expect_failures = [var.image_digests]
 }
 
+run "accept_console_owned_root_roles" {
+  command = plan
+
+  variables {
+    bootstrap_role_arns = {
+      operator_deployment = "arn:aws:iam::111122223333:role/example-portfolio-manual-operator-deployment"
+      task_execution      = "arn:aws:iam::111122223333:role/example-portfolio-manual-task-execution"
+      web_workload        = "arn:aws:iam::111122223333:role/example-portfolio-manual-web-workload"
+      api_workload        = "arn:aws:iam::111122223333:role/example-portfolio-manual-api-workload"
+      ml_workload         = "arn:aws:iam::111122223333:role/example-portfolio-manual-ml-workload"
+      destroy             = "arn:aws:iam::111122223333:role/example-portfolio-manual-destroy"
+    }
+  }
+
+  assert {
+    condition = (
+      output.bootstrap_references.role_arns.task_execution ==
+      "arn:aws:iam::111122223333:role/example-portfolio-manual-task-execution"
+    )
+    error_message = "The environment must accept the exact Console-owned root role form."
+  }
+}
+
 run "reject_cross_environment_state_key" {
   command = plan
 

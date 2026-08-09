@@ -1,0 +1,102 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EnvironmentServiceCeiling",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:*",
+        "cognito-idp:*",
+        "ec2:*",
+        "ecs:*",
+        "logs:*",
+        "mq:*",
+        "rds:*",
+        "scheduler:*",
+        "secretsmanager:*",
+        "servicediscovery:*",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ApplicationBucketCeiling",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:${AWS_PARTITION}:s3:::${NAME_PREFIX}-${ENVIRONMENT}-documents",
+        "arn:${AWS_PARTITION}:s3:::${NAME_PREFIX}-${ENVIRONMENT}-documents/*"
+      ]
+    },
+    {
+      "Sid": "StateBucketLocationCeiling",
+      "Effect": "Allow",
+      "Action": "s3:GetBucketLocation",
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}"
+    },
+    {
+      "Sid": "EnvironmentStateBucketCeiling",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "environments/${ENVIRONMENT}/terraform.tfstate",
+            "environments/${ENVIRONMENT}/terraform.tfstate.tflock"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "EnvironmentStateObjectCeiling",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/environments/${ENVIRONMENT}/terraform.tfstate"
+    },
+    {
+      "Sid": "EnvironmentLockObjectCeiling",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/environments/${ENVIRONMENT}/terraform.tfstate.tflock"
+    },
+    {
+      "Sid": "ImageRepositoryCeiling",
+      "Effect": "Allow",
+      "Action": "ecr:*",
+      "Resource": [
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/web",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/api",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/ml"
+      ]
+    },
+    {
+      "Sid": "EcrAuthenticationCeiling",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "RuntimePassRoleCeiling",
+      "Effect": "Allow",
+      "Action": ["iam:GetRole", "iam:ListRoleTags", "iam:PassRole"],
+      "Resource": [
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-task-execution",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-web-workload",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-api-workload",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-ml-workload"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "DestroyRoleAssumptionCeiling",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+    }
+  ]
+}

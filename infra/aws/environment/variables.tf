@@ -96,7 +96,7 @@ variable "environment_state_key" {
 }
 
 variable "bootstrap_role_arns" {
-  description = "Persistent role outputs consumed by reference only; this root never owns IAM roles."
+  description = "Persistent bootstrap- or Console-owned role ARNs consumed by reference only; this root never owns IAM roles."
   type = object({
     operator_deployment = string
     task_execution      = string
@@ -108,17 +108,30 @@ variable "bootstrap_role_arns" {
 
   validation {
     condition = alltrue([
-      for purpose, arn in var.bootstrap_role_arns : arn == format(
-        "arn:%s:iam::%s:role/%s/%s-%s-%s",
-        var.aws_partition,
-        var.aws_account_id,
-        var.name_prefix,
-        var.name_prefix,
-        var.environment,
-        replace(purpose, "_", "-"),
+      for purpose, arn in var.bootstrap_role_arns : contains(
+        [
+          format(
+            "arn:%s:iam::%s:role/%s/%s-%s-%s",
+            var.aws_partition,
+            var.aws_account_id,
+            var.name_prefix,
+            var.name_prefix,
+            var.environment,
+            replace(purpose, "_", "-"),
+          ),
+          format(
+            "arn:%s:iam::%s:role/%s-%s-%s",
+            var.aws_partition,
+            var.aws_account_id,
+            var.name_prefix,
+            var.environment,
+            replace(purpose, "_", "-"),
+          ),
+        ],
+        arn,
       )
     ])
-    error_message = "Every bootstrap role ARN must be the exact account/partition/prefix/environment purpose role."
+    error_message = "Every role ARN must be the exact account/partition/prefix/environment purpose role, either under the bootstrap IAM path or as the Console-owned root role."
   }
 }
 

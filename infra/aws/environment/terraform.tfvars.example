@@ -14,12 +14,12 @@ environment         = "manual"
 environment_state_key = "environments/manual/terraform.tfstate"
 
 bootstrap_role_arns = {
-  operator_deployment = "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-operator-deployment"
-  task_execution      = "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-task-execution"
-  web_workload        = "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-web-workload"
-  api_workload        = "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-api-workload"
-  ml_workload         = "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-ml-workload"
-  destroy             = "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-destroy"
+  operator_deployment = "arn:aws:iam::111122223333:role/example-portfolio-manual-operator-deployment"
+  task_execution      = "arn:aws:iam::111122223333:role/example-portfolio-manual-task-execution"
+  web_workload        = "arn:aws:iam::111122223333:role/example-portfolio-manual-web-workload"
+  api_workload        = "arn:aws:iam::111122223333:role/example-portfolio-manual-api-workload"
+  ml_workload         = "arn:aws:iam::111122223333:role/example-portfolio-manual-ml-workload"
+  destroy             = "arn:aws:iam::111122223333:role/example-portfolio-manual-destroy"
 }
 
 ecr_repository_urls = {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -14,6 +15,8 @@ from typing import Any, Iterator
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ENVIRONMENT_ROOT = REPOSITORY_ROOT / "infra" / "aws" / "environment"
+OPERATOR_ACTION_MATRIX_PATH = ENVIRONMENT_ROOT / "operator-action-matrix.json"
+CONSOLE_IAM_ROOT = ENVIRONMENT_ROOT / "console-iam"
 ARTIFACT_PATH = (
     REPOSITORY_ROOT / "artifacts" / "verification" / "aws-environment-static.json"
 )
@@ -78,6 +81,378 @@ FORBIDDEN_RESOURCE_TYPES = {
     "aws_waf_web_acl",
     "aws_wafv2_web_acl",
 }
+OPERATOR_ACTION_OWNERSHIP_MODES = {
+    "exact-resource",
+    "global-read",
+    "request-tags",
+    "resource-tags",
+}
+CONSOLE_IAM_TOKENS = {
+    "AWS_ACCOUNT_ID": "111122223333",
+    "AWS_PARTITION": "aws",
+    "AWS_REGION": "us-east-1",
+    "ENVIRONMENT": "manual",
+    "NAME_PREFIX": "example-portfolio",
+    "OWNER_PRINCIPAL_ARN": "arn:aws:iam::111122223333:role/PortfolioBootstrapOwner",
+    "REPOSITORY_IDENTITY": "example-owner/example-repository",
+    "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
+}
+
+
+def string_values(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def rendered_console_json(path: Path) -> dict[str, Any]:
+    rendered = path.read_text(encoding="utf-8")
+    for token, value in CONSOLE_IAM_TOKENS.items():
+        rendered = rendered.replace(f"${{{token}}}", value)
+    if "${" in rendered:
+        raise RuntimeError(f"Console IAM document has an unknown token: {path}")
+    payload = json.loads(rendered)
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Console IAM document must be an object: {path}")
+    return payload
+
+
+def condition_matches(statement: dict[str, Any], context: dict[str, str]) -> bool:
+    conditions = statement.get("Condition", {})
+    for operator, entries in conditions.items():
+        if operator not in {"StringEquals", "StringLike"}:
+            return False
+        for key, expected in entries.items():
+            actual = context.get(key)
+            if actual is None:
+                return False
+            candidates = string_values(expected)
+            if operator == "StringEquals" and actual not in candidates:
+                return False
+            if operator == "StringLike" and not any(
+                fnmatch.fnmatchcase(actual, candidate) for candidate in candidates
+            ):
+                return False
+    return True
+
+
+def policy_allows(
+    policy: dict[str, Any],
+    action: str,
+    resource: str,
+    context: dict[str, str] | None = None,
+) -> bool:
+    normalized_action = action.lower()
+    for statement in policy.get("Statement", []):
+        if statement.get("Effect") != "Allow":
+            continue
+        actions = [
+            value.lower() for value in string_values(statement.get("Action", []))
+        ]
+        resources = string_values(statement.get("Resource", []))
+        if not any(
+            fnmatch.fnmatchcase(normalized_action, pattern) for pattern in actions
+        ):
+            continue
+        if not any(fnmatch.fnmatchcase(resource, pattern) for pattern in resources):
+            continue
+        if condition_matches(statement, context or {}):
+            return True
+    return False
+
+
+def operator_resource(symbol: str) -> str:
+    partition = CONSOLE_IAM_TOKENS["AWS_PARTITION"]
+    account = CONSOLE_IAM_TOKENS["AWS_ACCOUNT_ID"]
+    region = CONSOLE_IAM_TOKENS["AWS_REGION"]
+    prefix = CONSOLE_IAM_TOKENS["NAME_PREFIX"]
+    environment = CONSOLE_IAM_TOKENS["ENVIRONMENT"]
+    if symbol == "*":
+        return "*"
+    if symbol == "app-bucket":
+        return f"arn:{partition}:s3:::{prefix}-{environment}-documents"
+    if symbol.startswith("iam-"):
+        purpose = symbol.removeprefix("iam-").removesuffix("-role")
+        return f"arn:{partition}:iam::{account}:role/{prefix}-{environment}-{purpose}"
+    service = {
+        "api-gateway": "apigateway",
+        "cloudmap": "servicediscovery",
+        "ec2": "ec2",
+        "ecs": "ecs",
+        "log": "logs",
+        "mq": "mq",
+        "rds": "rds",
+        "secret": "secretsmanager",
+        "cognito": "cognito-idp",
+    }.get(symbol.split("-", 1)[0], symbol.split("-", 1)[0])
+    return f"arn:{partition}:{service}:{region}:{account}:{symbol}/example"
+
+
+def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
+    manifest = rendered_console_json(CONSOLE_IAM_ROOT / "manifest.json")
+    if manifest.get("schemaVersion") != 1:
+        raise RuntimeError("Unknown Console IAM manifest schema")
+
+    expected_policy_keys = {
+        "operatorPermissions",
+        "operatorBoundary",
+        "taskExecution",
+        "apiWorkload",
+        "mlWorkload",
+        "destroy",
+    }
+    policy_specs = manifest.get("managedPolicies", {})
+    if set(policy_specs) != expected_policy_keys:
+        raise RuntimeError("Console IAM managed-policy inventory drifted")
+    if (
+        policy_specs["operatorPermissions"]["name"]
+        == policy_specs["operatorBoundary"]["name"]
+    ):
+        raise RuntimeError(
+            "Operator permissions and boundary must be different objects"
+        )
+    if (
+        policy_specs["operatorPermissions"]["document"]
+        == policy_specs["operatorBoundary"]["document"]
+    ):
+        raise RuntimeError(
+            "Operator permissions and boundary must use different documents"
+        )
+
+    policies = {
+        key: rendered_console_json(CONSOLE_IAM_ROOT / spec["document"])
+        for key, spec in policy_specs.items()
+    }
+    for key, policy in policies.items():
+        statements = policy.get("Statement")
+        if not isinstance(statements, list) or not statements:
+            raise RuntimeError(f"Console IAM policy has no statements: {key}")
+        if any(statement.get("Effect") == "Deny" for statement in statements):
+            raise RuntimeError(
+                f"Console IAM policy must not contain explicit Deny: {key}"
+            )
+
+    expected_roles = {
+        "operator_deployment",
+        "task_execution",
+        "web_workload",
+        "api_workload",
+        "ml_workload",
+        "destroy",
+    }
+    roles = manifest.get("roles", {})
+    if set(roles) != expected_roles:
+        raise RuntimeError("Console IAM role inventory drifted")
+    for purpose, role in roles.items():
+        expected_name = "example-portfolio-manual-" + purpose.replace("_", "-")
+        if role.get("name") != expected_name:
+            raise RuntimeError(f"Console IAM role name drifted: {purpose}")
+        if role.get("boundary") != "operatorBoundary":
+            raise RuntimeError(
+                f"Console IAM role lost the separate boundary: {purpose}"
+            )
+    if roles["operator_deployment"].get("permissions") != ["operatorPermissions"]:
+        raise RuntimeError(
+            "Operator must have exactly its separately named permissions policy"
+        )
+    if roles["web_workload"].get("permissions") != []:
+        raise RuntimeError("Web workload must remain an empty-authority role")
+    if roles["destroy"].get("permissions") != ["operatorPermissions", "destroy"]:
+        raise RuntimeError(
+            "Destroy must combine backend reads with separate delete authority"
+        )
+
+    trust_files = {role["trust"] for role in roles.values()}
+    for trust_file in trust_files:
+        trust = rendered_console_json(CONSOLE_IAM_ROOT / trust_file)
+        if any(
+            statement.get("Effect") == "Deny"
+            for statement in trust.get("Statement", [])
+        ):
+            raise RuntimeError(
+                f"Console IAM trust must not contain explicit Deny: {trust_file}"
+            )
+
+    permissions = policies["operatorPermissions"]
+    boundary = policies["operatorBoundary"]
+    rows = 0
+    allowed_layer_decisions = 0
+    for resource_type, action_rows in sorted(matrix["resourceActions"].items()):
+        for row in action_rows:
+            action, symbol = row[:2]
+            resource = operator_resource(symbol)
+            context = {
+                key: str(value)
+                for key, value in (row[3] if len(row) == 4 else {}).items()
+            }
+            decisions = (
+                policy_allows(permissions, action, resource, context),
+                policy_allows(boundary, action, resource, context),
+            )
+            if decisions != (True, True):
+                raise RuntimeError(
+                    "Console operator permissions × boundary cannot execute the "
+                    f"reviewed provider action: {resource_type} {action} {symbol} "
+                    f"got identity={decisions[0]} boundary={decisions[1]}"
+                )
+            rows += 1
+            allowed_layer_decisions += 2
+
+    state_bucket = "arn:aws:s3:::example-portfolio-111122223333-us-east-1-state"
+    state_object = state_bucket + "/environments/manual/terraform.tfstate"
+    lock_object = state_object + ".tflock"
+    pass_context = {"iam:PassedToService": "ecs-tasks.amazonaws.com"}
+    runtime_role = (
+        "arn:aws:iam::111122223333:role/example-portfolio-manual-task-execution"
+    )
+    operator_role = (
+        "arn:aws:iam::111122223333:role/example-portfolio-manual-operator-deployment"
+    )
+    negative_cases = {
+        "identityCannotDeleteStateBucket": not policy_allows(
+            permissions, "s3:DeleteBucket", state_bucket
+        ),
+        "boundaryCannotDeleteStateBucket": not policy_allows(
+            boundary, "s3:DeleteBucket", state_bucket
+        ),
+        "identityCannotDeleteStateObject": not policy_allows(
+            permissions, "s3:DeleteObject", state_object
+        ),
+        "boundaryCannotDeleteStateObject": not policy_allows(
+            boundary, "s3:DeleteObject", state_object
+        ),
+        "identityCannotMutateIam": not policy_allows(
+            permissions, "iam:AttachRolePolicy", runtime_role
+        ),
+        "boundaryCannotMutateIam": not policy_allows(
+            boundary, "iam:AttachRolePolicy", runtime_role
+        ),
+        "identityCannotPassOperator": not policy_allows(
+            permissions, "iam:PassRole", operator_role, pass_context
+        ),
+        "boundaryCannotPassOperator": not policy_allows(
+            boundary, "iam:PassRole", operator_role, pass_context
+        ),
+    }
+    positive_cases = {
+        "identityCanDeleteLock": policy_allows(
+            permissions, "s3:DeleteObject", lock_object
+        ),
+        "boundaryCanDeleteLock": policy_allows(
+            boundary, "s3:DeleteObject", lock_object
+        ),
+        "identityCanPassRuntime": policy_allows(
+            permissions, "iam:PassRole", runtime_role, pass_context
+        ),
+        "boundaryCanPassRuntime": policy_allows(
+            boundary, "iam:PassRole", runtime_role, pass_context
+        ),
+        "boundaryHasIndependentSchedulerCeiling": (
+            policy_allows(boundary, "scheduler:CreateSchedule", "*")
+            and not policy_allows(permissions, "scheduler:CreateSchedule", "*")
+        ),
+    }
+    failed = [
+        name
+        for name, passed in {**negative_cases, **positive_cases}.items()
+        if not passed
+    ]
+    if failed:
+        raise RuntimeError(f"Console IAM invariant failed: {failed}")
+
+    documents = sorted(
+        [CONSOLE_IAM_ROOT / "manifest.json"]
+        + [CONSOLE_IAM_ROOT / spec["document"] for spec in policy_specs.values()]
+        + [CONSOLE_IAM_ROOT / trust for trust in trust_files]
+    )
+    digest = hashlib.sha256()
+    for path in documents:
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return {
+        "managedPolicies": len(policies),
+        "roles": len(roles),
+        "trustPolicies": len(trust_files),
+        "operatorActionRows": rows,
+        "allowedLayerDecisions": allowed_layer_decisions,
+        "invariantCases": len(negative_cases) + len(positive_cases),
+        "sha256": digest.hexdigest(),
+    }
+
+
+def verify_operator_action_matrix() -> dict[str, Any]:
+    matrix = json.loads(OPERATOR_ACTION_MATRIX_PATH.read_text(encoding="utf-8"))
+    if not isinstance(matrix, dict) or type(matrix.get("schemaVersion")) is not int:
+        raise RuntimeError("Operator action matrix must use an integer schema")
+    if matrix["schemaVersion"] != 1:
+        raise RuntimeError("Unknown operator action matrix schema")
+    provider = matrix.get("terraformAwsProvider")
+    expected_provider = {
+        "source": "hashicorp/aws",
+        "version": "6.58.0",
+        "sourceCommit": "9f8360a9295ffe4507e06d943a3b8c673a781ced",
+    }
+    if provider != expected_provider:
+        raise RuntimeError(
+            "Operator action matrix must name the exact reviewed AWS provider: "
+            f"expected={expected_provider}, actual={provider}"
+        )
+    resource_actions = matrix.get("resourceActions")
+    if not isinstance(resource_actions, dict):
+        raise RuntimeError("Operator action matrix resourceActions must be an object")
+    expected_types = {
+        resource_type
+        for resource_type in EXPECTED_RESOURCE_COUNTS
+        if resource_type.startswith("aws_")
+    }
+    if set(resource_actions) != expected_types:
+        raise RuntimeError(
+            "Operator action matrix must exactly cover the planned AWS resource types: "
+            f"missing={sorted(expected_types - set(resource_actions))}, "
+            f"extra={sorted(set(resource_actions) - expected_types)}"
+        )
+
+    rows: list[str] = []
+    for resource_type, actions in sorted(resource_actions.items()):
+        if not isinstance(actions, list) or not actions:
+            raise RuntimeError(f"Operator action list is empty: {resource_type}")
+        for row in actions:
+            if not isinstance(row, list) or len(row) not in {3, 4}:
+                raise RuntimeError(
+                    f"Invalid operator action row for {resource_type}: {row}"
+                )
+            action, resource, ownership = row[:3]
+            if not all(isinstance(value, str) and value for value in row[:3]):
+                raise RuntimeError(f"Operator action row has a non-string field: {row}")
+            if ":" not in action or resource == "":
+                raise RuntimeError(
+                    f"Operator action row has an invalid action/resource: {row}"
+                )
+            if ownership not in OPERATOR_ACTION_OWNERSHIP_MODES:
+                raise RuntimeError(f"Unknown operator action ownership mode: {row}")
+            if ownership == "global-read":
+                verb = action.split(":", 1)[1].lower()
+                if not verb.startswith(("describe", "get", "head", "list")):
+                    raise RuntimeError(
+                        f"Global operator action must be read-only: {row}"
+                    )
+            if ownership == "exact-resource" and resource == "*":
+                raise RuntimeError(
+                    f"Exact-resource action cannot use Resource '*': {row}"
+                )
+            if len(row) == 4 and not isinstance(row[3], dict):
+                raise RuntimeError(f"Operator action context must be an object: {row}")
+            rows.append(json.dumps([resource_type, *row], sort_keys=True))
+    if len(rows) != len(set(rows)):
+        raise RuntimeError(
+            "Operator action matrix contains duplicate resource/action rows"
+        )
+    return {
+        "provider": provider,
+        "resourceTypes": len(resource_actions),
+        "actionRows": len(rows),
+        "sha256": hashlib.sha256(OPERATOR_ACTION_MATRIX_PATH.read_bytes()).hexdigest(),
+    }
 
 
 def require_command(name: str) -> str:
@@ -303,8 +678,7 @@ def verify_planned_service_properties(resources: list[dict[str, Any]]) -> int:
         "ml": ("1024", "2048", "ml-workload"),
     }
     execution_role = (
-        "arn:aws:iam::111122223333:role/example-portfolio/"
-        "example-portfolio-manual-task-execution"
+        "arn:aws:iam::111122223333:role/example-portfolio-manual-task-execution"
     )
     for name, (cpu, memory, workload) in task_contracts.items():
         address = f"module.runtime.aws_ecs_task_definition.{name}"
@@ -316,8 +690,7 @@ def verify_planned_service_properties(resources: list[dict[str, Any]]) -> int:
         expect(
             address,
             ("task_role_arn",),
-            "arn:aws:iam::111122223333:role/example-portfolio/"
-            f"example-portfolio-manual-{workload}",
+            f"arn:aws:iam::111122223333:role/example-portfolio-manual-{workload}",
         )
         expect(address, ("runtime_platform", 0, "cpu_architecture"), "X86_64")
         expect(
@@ -660,6 +1033,9 @@ def main() -> int:
     ARTIFACT_PATH.unlink(missing_ok=True)
     terraform = require_command("terraform")
     tflint = require_command("tflint")
+    operator_action_contract = verify_operator_action_matrix()
+    matrix = json.loads(OPERATOR_ACTION_MATRIX_PATH.read_text(encoding="utf-8"))
+    console_iam_contract = verify_console_iam_contract(matrix)
 
     run(
         "Check environment Terraform formatting",
@@ -719,9 +1095,11 @@ def main() -> int:
         "tflintVersion": command_version(tflint, "--version"),
         "providerLockSha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
         "terraformMockPlanFiles": 1,
-        "terraformMockRuns": 3,
+        "terraformMockRuns": 4,
         "plannedResourceCount": resource_count,
         "plannedResourceTypes": EXPECTED_RESOURCE_COUNTS,
+        "operatorActionContract": operator_action_contract,
+        "consoleIamContract": console_iam_contract,
         "taggedResourceCount": tagged_resource_count,
         "securityScanner": "repository-owned-plan-contract-v1",
         "servicePropertyAssertions": service_property_assertions,
