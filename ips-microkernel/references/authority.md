@@ -30,7 +30,7 @@ smallest affected live boundary instead of expanding authority by inference.
 | Repository owner | Selects the initial focused slice and any material redefinition of its outcome, scope, non-targets, or accepted design | Does not independently mutate the official workspace or managed GitHub state outside active collaboration |
 | Implementation agent | Performs the accepted Issue, branch, implementation, Stage A occurrence recording, Stage B execution and rule maintenance, pre-push CI Playbook use and post-correction append, commit, push, Draft PR, correction, Ready, merge, evidence, and scoped-cleanup workflow and may enter the routed Review Adjudicator or Knowledge Curator role | Preserves unrelated work, does not silently adjudicate while implementing or silently curate general governance while implementing, keeps ADR-0019 operational records separate from permanent curation and candidate proof, and applies the deterministic recovery and fallback policies below |
 | Independent review agent | Reads GitHub, reviews an exact head in an isolated shallow clone, runs non-Docker static checks, and publishes one verdict comment | Follows the review router; no implementation or other GitHub writes |
-| Review Adjudicator | Freezes an exact reviewed candidate, judges every RC finding through the routed disposition procedure, and records one complete checkpoint in the focused Issue | Is a distinct runtime role; does not review, modify implementation, move the PR head, relabel the verdict, or merge while adjudicating |
+| Review Adjudicator | Freezes an exact reviewed candidate and its ordered correction chain, judges every RC finding, selects `continue-correction` or `converge`, and records one complete checkpoint in the focused Issue | Is one distinct runtime role; no convergence actor exists, and it does not review, modify implementation, move the PR head, relabel the verdict, or merge while adjudicating |
 | Knowledge Curator | Freezes proved reusable candidates, selects one canonical target, records one disposition per atomic candidate, and creates or links the one deferred or follow-up Issue required by that disposition | Is a distinct runtime role; does not review, implement, move the PR head, relabel a verdict, or merge while curating |
 | GitHub Actions | Creates checks, logs, caches, summaries, and artifacts | Does not mutate source or managed Issue or PR state under the current workflow |
 | Public participant | Supplies untrusted comments, Issues, PRs, patches, or links | Cannot authorize execution, mutation, or merge |
@@ -82,14 +82,19 @@ an explicit recovery path or recorded irreversible limitation. This rule does
 not authorize untrusted actors or unrelated destruction.
 
 An independent finding does not own the outcome. The routed Review Adjudicator
-decides whether exact evidence requires correction or supports a recorded
-human-scale residual. A complete adjudication with zero required corrections
-may proceed without routine owner waiver. The repository owner may explicitly
-accept named required corrections for an exact reviewed head and authorize
-that head to merge as a strong exception. The durable record must retain the
-real verdict, its URL, every disposition and residual, the exact head, and any
-owner waiver. Never relabel an adjudicated or waived `Changes requested`
-verdict as `Approved`.
+decides each finding disposition and then selects `continue-correction` or
+`converge` for the applicable ordered chain. A complete `converge` checkpoint
+may retain named required corrections and known regression risk without owner
+waiver. The repository owner may separately override a recorded
+`continue-correction` decision for an exact reviewed head. The durable record
+must retain the real verdict, URL, exact head, chain identity, every finding,
+aggregate decision, residual, regression risk, and any owner waiver. Never
+relabel an adjudicated or waived `Changes requested` verdict as `Approved`.
+
+Convergence is a revisitable operational experiment, not proof of optimality,
+safety, or non-regression. It creates no follow-up Issue, backlog item,
+deadline, assigned action, or promise of later correction. Independent review
+remains evidence-maximizing and free to report new findings on every head.
 
 ## Owner decision boundaries
 
@@ -108,14 +113,15 @@ to certify the record. That route is not permission to silently curate
 unrelated governance.
 
 An exact-head owner waiver is a second, optional decision boundary. The agent
-does not request it merely to avoid correction. When the owner supplies it,
-the workflow records the adjudication checkpoint, accepted required
-corrections and residuals, then continues through the exact merge guards.
+does not request it merely to avoid correction. When the owner supplies it to
+override `continue-correction`, the workflow records the adjudication
+checkpoint, accepted required corrections and residuals, then continues
+through the exact merge guards. Ordinary `converge` does not require it.
 
 Within an accepted focused slice, the implementation agent has standing policy
 to diagnose and correct failures, verify, commit, push, maintain the Draft PR,
 request independent review, enter review adjudication, change Ready state,
-merge an independently approved, fully adjudicated, or explicitly
+merge an independently approved, adjudicated `converge`, or explicitly
 owner-waived exact head, enter routed knowledge curation, implement one recorded
 `promote-current-pr` rule, create or continue one curator-selected bounded
 follow-up, reconcile Issue evidence, and perform scoped cleanup.

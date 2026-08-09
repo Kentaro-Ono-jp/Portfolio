@@ -67,20 +67,28 @@ proved/unproved classification, or permanence claim.
   A planner and required local proof as the inventory source. Parse both
   declared endpoints plus selected, executed, carried, and skipped groups and
   test-file N/NN counts from the live PR description and copyable review
-  prompt. For that exception, also derive the complete live base-to-head path
-  inventory and parse the description's declared exact Markdown path count and
-  literal path list.
+  prompt. Independently derive the complete live base-to-head path inventory
+  and count from the paginated GitHub inventory, exact two-endpoint diff, and
+  endpoint planner. Never substitute the current incremental Actions changed
+  paths for that full inventory; bind each count to its displayed endpoints.
+  For the Markdown-only exception, also parse the description's declared exact
+  Markdown path count and literal path list.
 - **Pass:** Both declared base values equal the live base, both declared head
   values equal the live head, the PR evidence inventory and every N/NN count
   equal the applicable exact-head evidence source, every carried group is bound
   to a displayed successful source run whose SHA equals the stated baseline,
+  the declared full path count equals all three complete base-to-head
+  inventories, every incremental changed-path count equals its own displayed
+  comparison endpoints, the two counts are never conflated,
   and, when applicable, the
   declared Markdown count and literal path set exactly equal the complete live
   diff with every path ending in `.md`; any absent workflow is declared only
   as a qualified limitation, and the PR head is unchanged by metadata repair.
 - **Repair:** Replace every declared endpoint with the live full SHA, publish
   the selected, executed, carried, and skipped inventory plus every group and
-  test-file N/NN count from the applicable exact-head evidence source, and, for
+  test-file N/NN count from the applicable exact-head evidence source, replace
+  the full and incremental path counts from their separate exact comparisons,
+  and, for
   a Markdown-only exception, publish the exact changed-path count, every
   literal path, and the no-run limitation. Update the prompt, save the PR
   description, and read the live metadata back before dispatch.
@@ -147,6 +155,27 @@ proved/unproved classification, or permanence claim.
   final integrated tuple instead of a bespoke fragment mapping.
 - **Origins:** PR #76
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/76#issuecomment-5167941319).
+
+### Bind carried-forward ADR semantics to live procedures
+
+- **Trigger:** An accepted ADR supersedes a predecessor while explicitly
+  carrying an existing decision semantic into a current runtime procedure.
+- **HEAD effect:** `moving`
+- **Problem:** The historical ADR still states the semantic and the successor
+  preserves its labels, but the live procedure omits the classification rule,
+  so a later aggregate decision can truthfully name the wrong input state.
+- **Detect:** Enumerate each semantic that the accepted successor explicitly
+  carries forward, require its operational fragments in the live procedure's
+  production governance mapping, then remove each fragment independently while
+  leaving the successor ADR and later aggregate route unchanged.
+- **Pass:** Every carried-forward semantic is explicit in the accepted
+  successor and live procedure, every fragment is composed into the final
+  production mapping, and each one-fragment mutation fails before review.
+- **Repair:** Restore the semantic in the current procedure and successor ADR,
+  compose its fragments into the production checker, and retain independent
+  mutation proof without weakening the later aggregate decision.
+- **Origins:** PR #109
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/109#issuecomment-5231114290).
 
 ### Guard both boundaries of ordered workflow invariants
 

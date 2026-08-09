@@ -182,15 +182,17 @@ publishes one honest verdict, and does not repair the candidate it judges. A
 resolve or accept its findings, but they do not rewrite history by relabeling
 the verdict.
 
-The **Review Adjudicator**, introduced by
-[ADR-0016](adr/0016-adjudicate-review-findings-before-correction.md), is the
-decision role between review and correction. It freezes the reviewed head and
-real verdict, determines actual impact, and records each finding as
-`required-correction`, `accepted-residual`, or `non-material`. Actual Critical
-or High breakage of the Issue-defined design requires correction. Below that
-boundary, the adjudicator applies human discoverability and recoverability,
-external explanation cost, and material product-quality effect rather than a
-numeric score.
+The **Review Adjudicator**, introduced by historical
+[ADR-0016](adr/0016-adjudicate-review-findings-before-correction.md) and
+extended by
+[ADR-0024](adr/0024-adjudicate-correction-loop-convergence.md), is the decision
+role between review and correction or merge. It freezes the reviewed head,
+real verdict, and applicable ordered correction chain; records each finding as
+`required-correction`, `accepted-residual`, or `non-material`; and then selects
+`continue-correction` or `converge`. Convergence may retain named required
+corrections and known regression risk without owner waiver. It is a
+revisitable product judgment, not a numeric score or proof of optimality,
+safety, or non-regression.
 
 The **Knowledge Curator**, introduced by
 [ADR-0017](adr/0017-delegate-evidence-bound-knowledge-curation.md), answers a
@@ -203,8 +205,10 @@ review, adjudicate, implement, move the head, or merge while curating.
 The roles therefore form a deliberate sequence:
 
 1. the Reviewer maximizes evidence and publishes the real verdict;
-2. the Review Adjudicator decides what the current product change must correct;
-3. the implementation role applies only required corrections and proves them;
+2. the Review Adjudicator disposes every finding and decides whether the
+   correction chain continues or converges;
+3. the implementation role applies only a recorded continuation decision and
+   proves the changed head;
 4. the Knowledge Curator decides what reusable governance, if any, is already
    represented, should enter the current PR, should use a follow-up, or should
    remain deferred, unclassified, or discarded;
@@ -444,15 +448,15 @@ ownerは、exact-head reviewの残存findingを受容し、そのheadのmergeを
 
 独立reviewは、証拠を最大化し、懐疑的で、mutationから分離されたままである。Reviewerは分離workspaceでexact headを検査し、誠実なverdictを一件だけ公開し、自ら判定したcandidateを修正しない。`Changes requested` verdictは`Changes requested`のまま残る。後続roleはfindingを解消または受容できるが、verdictを付け替えて履歴を書き換えることはしない。
 
-[ADR-0016](adr/0016-adjudicate-review-findings-before-correction.md)で導入された**Review Adjudicator**は、reviewとcorrectionの間に置かれるdecision roleである。reviewed headと実際のverdictを凍結し、actual impactを判断し、各findingを`required-correction`、`accepted-residual`、`non-material`のいずれかとして記録する。Issueが定義した設計を実際にCriticalまたはHighで壊すfindingは必ず修正する。それ未満では数値scoreを使わず、人間による発見可能性と回復可能性、外部説明cost、material product-quality effectという三つの観点を適用する。
+[ADR-0016](adr/0016-adjudicate-review-findings-before-correction.md)で導入され、[ADR-0024](adr/0024-adjudicate-correction-loop-convergence.md)で拡張された**Review Adjudicator**は、reviewとcorrectionまたはmergeの間に置かれるdecision roleである。reviewed head、実際のverdict、適用されるordered correction chainを凍結し、各findingを`required-correction`、`accepted-residual`、`non-material`のいずれかとして記録したうえで、`continue-correction`または`converge`を選ぶ。convergenceはowner waiverなしでrequired correctionと既知の退行riskを残せる。これは数値scoreでも、最適性、安全性、非退行の証明でもなく、再検討可能なproduct judgmentである。
 
 [ADR-0017](adr/0017-delegate-evidence-bound-knowledge-curation.md)で導入された**Knowledge Curator**が答えるのは別の問いである。すなわち、証明された観測結果が将来のgovernanceを変えるべきかを判断する。candidate queueとcurrent headを凍結し、canonical targetを一つ選び、既存ruleとguardを比較し、恒久context costを判断し、六つのdispositionから一つを記録する。Curatorはcuration中にreview、adjudication、implementation、head移動、mergeを行わない。
 
 これらのroleは、意図的に次の順序を形成する。
 
 1. Reviewerが証拠を最大化し、実際のverdictを公開する。
-2. Review Adjudicatorが、現在のproduct changeで何を修正しなければならないかを決める。
-3. implementation roleがrequired correctionだけを適用し、その動作を証明する。
+2. Review Adjudicatorが各findingを裁定し、correction chainを継続するか収束するかを決める。
+3. implementation roleが記録された継続判断だけを適用し、変更後のheadを証明する。
 4. Knowledge Curatorが、再利用可能なgovernanceを既存表現済みとするか、現在のPRへ入れるか、follow-upへ送るか、deferred、unclassified、discardedのいずれにするかを決める。
 5. curationが選択したmutationでcandidate headが動いた場合、merge前に新しいexact-head proofと独立reviewを必須とする。
 

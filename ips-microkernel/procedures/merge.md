@@ -5,11 +5,11 @@
 
 ## Read when
 
-Read this file after independent review approves the current exact head,
-complete adjudication records zero required corrections, or the owner
-explicitly accepts every named required correction for the exact reviewed
-head, every reusable candidate has complete curation, and the required proof is
-successful or machine-qualified.
+Read this file after independent review approves the current exact head, a
+complete adjudication records `converge`, or the owner explicitly overrides a
+recorded `continue-correction` decision for the exact reviewed head, every
+reusable candidate has complete curation, and the required proof is successful
+or machine-qualified.
 
 ## Procedure
 
@@ -19,11 +19,16 @@ successful or machine-qualified.
    - an `Approved` verdict;
    - a complete focused-Issue adjudication that preserves the real RC URL,
      exact head, every finding and disposition, all accepted residuals, and
-     records zero required corrections;
+     records zero required corrections plus `converge`;
+   - a complete focused-Issue adjudication that preserves the same evidence,
+     names every unresolved required correction and known regression risk, and
+     records `converge` for the applicable correction chain;
    - a durable owner waiver that preserves the real verdict URL and
-     adjudication checkpoint, names every accepted required correction and
-     residual, pins the exact head, and explicitly authorizes merge.
-   Never infer or manufacture a disposition or waiver, and never relabel RC as
+     adjudication checkpoint, overrides a recorded `continue-correction`
+     decision, names every accepted required correction and residual, pins the
+     exact head, and explicitly authorizes merge.
+   Never infer or manufacture a disposition or waiver; this includes a finding
+   disposition, aggregate decision, or owner override, and never relabel RC as
    Approved.
 3. Require successful canonical exact-head GitHub Actions proof or the complete
    qualified Markdown-only exception. Canonical Actions runtime and coverage
@@ -88,7 +93,8 @@ successful or machine-qualified.
 
 - A moved head or superseded verdict returns to publication and exact-head
   review.
-- An incomplete or stale finding disposition returns to
+- An incomplete or stale finding disposition, chain identity, or aggregate
+  decision returns to
   [adjudication](adjudicate.md).
 - Pending, stale, or unimplemented candidate curation returns to
   [knowledge curation](curate-knowledge.md).
@@ -104,8 +110,8 @@ successful or machine-qualified.
 - A merge-method discrepancy uses live-state recovery and the repository's
   current established method; never guess or broaden the merge target.
 - If exact merge preconditions remain unproved, defer the merge mutation and
-  preserve the approved or owner-waived checkpoint without a confirmation
-  pause.
+  preserve the approved, converged, or owner-waived checkpoint without a
+  confirmation pause.
 
 ## Next
 

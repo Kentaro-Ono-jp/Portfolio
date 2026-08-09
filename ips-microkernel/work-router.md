@@ -31,9 +31,9 @@ Open that reference only after deciding to use it; use or non-use creates no rec
 The order below is precedence. Once a condition matches, do not inspect later
 routes until the selected route returns here with changed state.
 
-1. **Stable reusable candidates have complete disposition for every associated
-   actionable finding and successful proof for every required correction, but
-   lack complete curation:** use
+1. **Stable reusable candidates have complete finding disposition and either
+   proved required corrections or exact `converge` acceptance, but lack
+   complete curation:** use
    [knowledge curation](procedures/curate-knowledge.md).
 2. **Independent initial review or re-review:** use the dedicated
    [review router](review/router.md).
@@ -56,14 +56,13 @@ routes until the selected route returns here with changed state.
    [implement and verify](procedures/implement.md).
 9. **The verified candidate is ready to commit, enter Gate A, push, or publish as a Draft
    PR, including a follow-up push:** use [publish](procedures/publish.md).
-10. **An exact-head `Changes requested` verdict contains findings whose
-   disposition is incomplete:** use
+10. **An exact-head `Changes requested` verdict has incomplete finding
+   disposition or correction-loop decision:** use
    [review finding adjudication](procedures/adjudicate.md).
-11. **Complete adjudication records one or more required corrections and no
-    exact owner waiver accepts them:** use [correct](procedures/correct.md).
-12. **An independently approved exact head, a fully adjudicated exact head
-    with zero required corrections, or an exact reviewed head with a recorded
-    owner waiver has its required proof and complete candidate curation:** use
+11. **Complete adjudication records `continue-correction` and no exact owner
+    waiver overrides it:** use [correct](procedures/correct.md).
+12. **An approved, adjudicated `converge`, or owner-waived exact head has its
+    required proof and complete candidate curation:** use
    [merge](procedures/merge.md).
 13. **The PR is merged and evidence or cleanup remains:** use
    [reconcile](procedures/reconcile.md).

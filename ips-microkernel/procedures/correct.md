@@ -5,14 +5,15 @@
 
 ## Read when
 
-Read this file only after a complete exact-head adjudication records one or
-more `required-correction` dispositions and no exact owner waiver accepts
-them.
+Read this file only after a complete exact-head adjudication records
+`continue-correction`, selects one or more `required-correction` findings, and
+no exact owner waiver overrides that decision.
 
 ## Procedure
 
-1. Require the adjudication's exact head, verdict SHA, reviewed PR head, and
-   current expected review head to agree.
+1. Require the adjudication's exact head, verdict SHA, reviewed PR head,
+   current expected review head, applicable chain identity, and recorded
+   `continue-correction` decision to agree.
 2. Implement only findings recorded as `required-correction`. Preserve
    `accepted-residual` and `non-material` dispositions without silently
    reopening or correcting them.
@@ -46,7 +47,9 @@ them.
    When the correction chain proves a separately reusable governance candidate,
    enter [knowledge curation](curate-knowledge.md) before re-review.
 
-A verdict and its adjudication apply only to their exact reviewed head.
+A verdict and its adjudication apply only to their exact reviewed head and
+recorded correction-chain identity. A `converge` decision does not enter this
+workflow.
 
 ## HEAD-neutral correction
 
@@ -73,8 +76,8 @@ candidate. They do not assign a proof status to the rule.
 - Reject prohibited review mutation as evidence and preserve the canonical
   workspace.
 - Route a finding that requires material scope or design change to focus.
-- Correct an in-scope conflict with accepted design toward the accepted design,
-  never by weakening it.
+- Correct only the findings selected by the recorded `continue-correction`
+  decision; do not reopen a converged chain through this workflow.
 
 ## Next
 
@@ -82,7 +85,7 @@ candidate. They do not assign a proof status to the rule.
 - Corrected push required: move to [publish](publish.md).
 - Proved correction with pending reusable candidates: move to
   [knowledge curation](curate-knowledge.md).
-- New `Changes requested` verdict: enter
-  [adjudication](adjudicate.md) before any further correction.
+- New `Changes requested` verdict: enter [adjudication](adjudicate.md) with the
+  updated ordered chain before any further correction.
 - New Approved verdict: move the exact head to [merge](merge.md).
 - Exact owner waiver recorded: move the reviewed head to [merge](merge.md).

@@ -758,6 +758,73 @@ def test_final_adr_0022_supersession_contract_rejects_each_weakened_boundary(
             ]
 
 
+def test_adr_0016_is_superseded_by_0024_with_one_convergence_adjudicator(
+    documentation_checker: ModuleType,
+) -> None:
+    predecessor_path = Path(
+        "ips-microkernel/adr/0016-adjudicate-review-findings-before-correction.md"
+    )
+    successor_path = Path("ips-microkernel/adr/0024-adjudicate-correction-loop-convergence.md")
+    index_path = Path("ips-microkernel/adr/index.md")
+    predecessor = (REPOSITORY_ROOT / predecessor_path).read_text(encoding="utf-8")
+    successor = (REPOSITORY_ROOT / successor_path).read_text(encoding="utf-8")
+    index = (REPOSITORY_ROOT / index_path).read_text(encoding="utf-8")
+    accepted, superseded = index.split("## Superseded records", 1)
+
+    assert predecessor_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert successor_path in documentation_checker.REQUIRED_GOVERNANCE_FILES
+    assert "- Status: Superseded" in predecessor
+    assert "- Superseded by: ADR-0024" in predecessor
+    assert "- Status: Accepted" in successor
+    assert "- Supersedes: ADR-0016" in successor
+    assert "Add a Review Adjudicator runtime role" in predecessor
+    assert "No Convergence Adjudicator" not in predecessor
+    assert "Preserve one Review Adjudicator role and independent review" in successor
+    assert "`continue-correction`" in successor
+    assert "`converge`" in successor
+    assert "Carry forward ADR-0016's individual classification semantics" in successor
+    assert "three holistic lenses" in successor
+    assert "they do not prohibit a later aggregate `converge` decision" in successor
+    assert "known regression risk" in successor
+    assert "not required for ordinary adjudicator convergence" in " ".join(successor.split())
+    assert "creates no follow-up Issue" in " ".join(successor.split())
+    assert "ADR-0024" in accepted
+    assert "ADR-0016" not in accepted
+    assert "ADR-0016" in superseded
+
+
+def test_adr_0024_supersession_contract_rejects_each_weakened_boundary(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    for relative_path, fragments in documentation_checker.ADR_0024_SUPERSESSION_FRAGMENTS.items():
+        source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+        normalized = " ".join(source.split())
+        final_fragments = documentation_checker.REQUIRED_GOVERNANCE_TEXT[relative_path]
+        assert all(fragment in final_fragments for fragment in fragments)
+        target = tmp_path / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+
+        for fragment in fragments:
+            assert fragment in normalized
+            target.write_text(
+                normalized.replace(fragment, "weakened convergence boundary", 1),
+                encoding="utf-8",
+            )
+            failures: list[str] = []
+
+            documentation_checker._validate_required_governance_text(
+                failures,
+                {relative_path: final_fragments},
+            )
+
+            assert failures == [
+                f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"
+            ]
+
+
 def test_adr_0020_authorizes_an_unrestricted_local_focus_scratchpad(
     documentation_checker: ModuleType,
 ) -> None:
@@ -870,6 +937,10 @@ def test_review_adjudication_contract_is_complete(
     assert (
         "The only permitted GitHub write" in required_text[Path("ips-microkernel/review/router.md")]
     )
+    review_inspection = (REPOSITORY_ROOT / "ips-microkernel/review/inspect.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Do not request speculative expansion" in review_inspection
 
 
 @pytest.mark.parametrize(
@@ -877,7 +948,8 @@ def test_review_adjudication_contract_is_complete(
     (
         (
             Path("ips-microkernel/work-router.md"),
-            "`Changes requested` verdict contains findings whose disposition is incomplete",
+            "`Changes requested` verdict has incomplete finding disposition or "
+            "correction-loop decision",
         ),
         (
             Path("ips-microkernel/references/authority.md"),
@@ -889,24 +961,37 @@ def test_review_adjudication_contract_is_complete(
         ),
         (
             Path("ips-microkernel/procedures/adjudicate.md"),
-            "materially breaks the Issue-defined accepted product design "
-            "at Critical or High impact",
+            "No Convergence Adjudicator",
         ),
         (
             Path("ips-microkernel/procedures/adjudicate.md"),
-            "human discoverability and bounded recoverability",
+            "applicable ordered chain",
         ),
         (
             Path("ips-microkernel/procedures/adjudicate.md"),
-            "external technical explanation cost",
+            "materially breaks Issue-defined accepted product design at Critical or High "
+            "actual impact",
         ),
         (
             Path("ips-microkernel/procedures/adjudicate.md"),
-            "material product-quality effect",
+            "record the lower actual impact and rationale",
         ),
         (
             Path("ips-microkernel/procedures/adjudicate.md"),
-            "Do not use a numeric score",
+            "human discoverability and bounded recoverability, external technical "
+            "explanation cost, and material product-quality effect as three holistic lenses",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "Assign exactly one individual disposition",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "assign exactly one aggregate decision",
+        ),
+        (
+            Path("ips-microkernel/procedures/adjudicate.md"),
+            "even when required corrections, Critical or High reviewer severity",
         ),
         (
             Path("ips-microkernel/procedures/adjudicate.md"),
@@ -918,11 +1003,15 @@ def test_review_adjudication_contract_is_complete(
         ),
         (
             Path("ips-microkernel/procedures/correct.md"),
-            "only after a complete exact-head adjudication",
+            "complete exact-head adjudication records `continue-correction`",
         ),
         (
             Path("ips-microkernel/procedures/merge.md"),
-            "records zero required corrections",
+            "names every unresolved required correction and known regression risk",
+        ),
+        (
+            Path("ips-microkernel/references/authority.md"),
+            "creates no follow-up Issue",
         ),
     ),
 )
@@ -949,6 +1038,54 @@ def test_review_adjudication_rejects_each_weakened_boundary(
     )
 
     assert failures == [f"{relative_path.as_posix()}: missing governance invariant {fragment!r}"]
+
+
+def test_review_adjudication_aggregate_decision_is_guarded_on_both_sides(
+    documentation_checker: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("ips-microkernel/procedures/adjudicate.md")
+    source = (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    monkeypatch.setattr(documentation_checker, "REPOSITORY_ROOT", tmp_path)
+    individual = "Assign exactly one individual disposition"
+    aggregate = "After every finding has a disposition, assign exactly one aggregate"
+    checkpoint = (
+        "Before any implementation mutation or merge, append one adjudication\n   checkpoint"
+    )
+
+    target.write_text(source, encoding="utf-8")
+    failures: list[str] = []
+    documentation_checker._validate_review_adjudication_sequence(failures)
+    assert failures == []
+
+    target.write_text(
+        source.replace(individual, "individual placeholder", 1)
+        .replace(aggregate, individual, 1)
+        .replace("individual placeholder", aggregate, 1),
+        encoding="utf-8",
+    )
+    failures = []
+    documentation_checker._validate_review_adjudication_sequence(failures)
+    assert failures == [
+        f"{relative_path.as_posix()}: aggregate correction-loop decision must follow "
+        "individual finding disposition"
+    ]
+
+    target.write_text(
+        source.replace(aggregate, "aggregate placeholder", 1)
+        .replace(checkpoint, aggregate, 1)
+        .replace("aggregate placeholder", checkpoint, 1),
+        encoding="utf-8",
+    )
+    failures = []
+    documentation_checker._validate_review_adjudication_sequence(failures)
+    assert failures == [
+        f"{relative_path.as_posix()}: aggregate correction-loop decision must precede "
+        "the focused-Issue checkpoint"
+    ]
 
 
 def test_knowledge_curation_contract_is_complete(
@@ -1049,8 +1186,8 @@ def test_knowledge_curator_actor_boundary_rejects_a_weakened_boundary(
     (
         (
             Path("ips-microkernel/work-router.md"),
-            "Stable reusable candidates have complete disposition for every associated "
-            "actionable finding and successful proof for every required correction",
+            "Stable reusable candidates have complete finding disposition and either "
+            "proved required corrections or exact `converge` acceptance",
         ),
         (
             Path("ips-microkernel/references/authority.md"),
@@ -1063,6 +1200,11 @@ def test_knowledge_curator_actor_boundary_rejects_a_weakened_boundary(
         (
             Path("ips-microkernel/procedures/curate-knowledge.md"),
             "complete disposition for every associated actionable finding, if any",
+        ),
+        (
+            Path("ips-microkernel/procedures/curate-knowledge.md"),
+            "successful proof of every required correction or a complete exact-head "
+            "`converge` checkpoint",
         ),
         (
             Path("ips-microkernel/procedures/curate-knowledge.md"),

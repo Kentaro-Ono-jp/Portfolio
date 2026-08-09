@@ -7,9 +7,10 @@
 
 Read this file when one or more atomic reusable governance candidates have
 stable evidence, every associated actionable finding, if any, has complete
-adjudication, and every required correction, if any, has successful exact-head
-proof or a qualified exception. Also read it for an uncurated late candidate
-during post-merge reconciliation.
+adjudication, and either every required correction has successful exact-head
+proof or a complete exact-head `converge` checkpoint truthfully accepts the
+unresolved corrections and known regression risk. Also read it for an
+uncurated late candidate during post-merge reconciliation.
 
 Do not enter this general curation role for Implementation Prune Stage A
 occurrences, Stage B operational rules, or CI Playbook correction records.
@@ -21,7 +22,8 @@ governance candidate may return here on its own evidence-bound route.
 
 - focused Issue and exact current lifecycle state;
 - every source verdict URL, reviewed head, and numbered candidate;
-- applicable adjudication checkpoints and correction heads;
+- applicable adjudication checkpoints, aggregate decisions, and correction
+  heads;
 - current exact-head proof or exact merged-main proof for a late signal;
 - any open `[Knowledge candidate]` Issue for the same selected signal key.
 
@@ -48,10 +50,11 @@ deferred or follow-up Issue required by its disposition.
    causes, preserve stable source order, and deduplicate only identical stable
    evidence. Never stop ingestion after the first verdict item.
 3. For each queued candidate, require stable evidence, complete disposition
-   for every associated actionable finding, if any, and successful proof of
-   every required correction, if any. A candidate with no associated
-   actionable finding or required correction remains eligible; an unproved or
-   stale candidate is not eligible for curation.
+   for every associated actionable finding, if any, and either successful proof
+   of every required correction or a complete exact-head `converge` checkpoint
+   that names unresolved corrections and known regression risk. A candidate
+   with no associated actionable finding or required correction remains
+   eligible; an unproved or stale candidate is not eligible for curation.
 4. Separate CI runner and Actions signals to the [CI router](../ci/router.md).
    Do not route CI Playbook correction records here merely because they recur.
    Return material product, delivery, architecture, security, or actor-authority
@@ -122,8 +125,8 @@ deferred or follow-up Issue required by its disposition.
 ## Recovery
 
 - A moved or unproved head returns through live-state and CI recovery.
-- An incomplete associated actionable-finding disposition returns to
-  adjudication.
+- An incomplete associated finding disposition or convergence checkpoint
+  returns to adjudication.
 - A selected rule that materially changes accepted scope returns to focus.
 - A candidate with no canonical target remains `unclassified`; never copy it
   into a nearby rule.
