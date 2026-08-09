@@ -513,6 +513,26 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #107
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230364500).
 
+### Bind topology edges to resource identities
+
+- **Trigger:** Infrastructure proof adds or changes Security Group, firewall,
+  routing, service-mesh, or other directional topology edges.
+- **HEAD effect:** `moving`
+- **Problem:** Protocol, port, CIDR, and edge-count summaries can remain equal
+  when a source or destination reference is cross-wired to the wrong resource.
+- **Detect:** Evaluate the provider configuration reference graph for every
+  directional edge, enumerate the fully expanded resource addresses, and
+  compare both with the accepted source/destination identity map independently
+  of any module-authored summary output.
+- **Pass:** Every edge names the exact accepted source and destination resource
+  references, every keyed expansion has the accepted identity set, no extra or
+  missing edge exists, and protocol/port/CIDR checks pass separately.
+- **Repair:** Bind assertions to configuration references and expanded resource
+  addresses, retain independent transport checks, and reject aggregate-only or
+  self-reported topology proof.
+- **Origins:** PR #111
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/111#issuecomment-5231865997).
+
 ### Connect security allowlists to enforced trust claims
 
 - **Trigger:** An automation trust contract adds or changes an allowed event,

@@ -1447,6 +1447,175 @@ def verify_planned_service_properties(resources: list[dict[str, Any]]) -> int:
     return len(checks)
 
 
+def verify_security_group_reference_contract(
+    plan: dict[str, Any], resources: list[dict[str, Any]]
+) -> int:
+    network = plan["configuration"]["root_module"]["module_calls"]["network"]["module"]
+    configured_rules = {
+        resource["address"]: resource
+        for resource in network["resources"]
+        if resource["type"]
+        in {
+            "aws_vpc_security_group_egress_rule",
+            "aws_vpc_security_group_ingress_rule",
+        }
+    }
+    dynamic_group_reference = {"aws_security_group.environment", "each.key"}
+    expected_references = {
+        "aws_vpc_security_group_egress_rule.api_to_database": {
+            "security_group_id": {
+                'aws_security_group.environment["api"].id',
+                'aws_security_group.environment["api"]',
+                "aws_security_group.environment",
+            },
+            "referenced_security_group_id": {
+                'aws_security_group.environment["database"].id',
+                'aws_security_group.environment["database"]',
+                "aws_security_group.environment",
+            },
+        },
+        "aws_vpc_security_group_egress_rule.broker_clients": {
+            "security_group_id": dynamic_group_reference,
+            "referenced_security_group_id": {
+                'aws_security_group.environment["broker"].id',
+                'aws_security_group.environment["broker"]',
+                "aws_security_group.environment",
+            },
+        },
+        "aws_vpc_security_group_egress_rule.task_dns_tcp": {
+            "security_group_id": dynamic_group_reference,
+        },
+        "aws_vpc_security_group_egress_rule.task_dns_udp": {
+            "security_group_id": dynamic_group_reference,
+        },
+        "aws_vpc_security_group_egress_rule.task_https": {
+            "security_group_id": dynamic_group_reference,
+        },
+        "aws_vpc_security_group_egress_rule.vpc_link_to_web": {
+            "security_group_id": {
+                'aws_security_group.environment["vpc-link"].id',
+                'aws_security_group.environment["vpc-link"]',
+                "aws_security_group.environment",
+            },
+            "referenced_security_group_id": {
+                'aws_security_group.environment["web"].id',
+                'aws_security_group.environment["web"]',
+                "aws_security_group.environment",
+            },
+        },
+        "aws_vpc_security_group_egress_rule.web_to_api": {
+            "security_group_id": {
+                'aws_security_group.environment["web"].id',
+                'aws_security_group.environment["web"]',
+                "aws_security_group.environment",
+            },
+            "referenced_security_group_id": {
+                'aws_security_group.environment["api"].id',
+                'aws_security_group.environment["api"]',
+                "aws_security_group.environment",
+            },
+        },
+        "aws_vpc_security_group_ingress_rule.api_from_web": {
+            "security_group_id": {
+                'aws_security_group.environment["api"].id',
+                'aws_security_group.environment["api"]',
+                "aws_security_group.environment",
+            },
+            "referenced_security_group_id": {
+                'aws_security_group.environment["web"].id',
+                'aws_security_group.environment["web"]',
+                "aws_security_group.environment",
+            },
+        },
+        "aws_vpc_security_group_ingress_rule.broker_from_clients": {
+            "security_group_id": {
+                'aws_security_group.environment["broker"].id',
+                'aws_security_group.environment["broker"]',
+                "aws_security_group.environment",
+            },
+            "referenced_security_group_id": dynamic_group_reference,
+        },
+        "aws_vpc_security_group_ingress_rule.database_from_api": {
+            "security_group_id": {
+                'aws_security_group.environment["database"].id',
+                'aws_security_group.environment["database"]',
+                "aws_security_group.environment",
+            },
+            "referenced_security_group_id": {
+                'aws_security_group.environment["api"].id',
+                'aws_security_group.environment["api"]',
+                "aws_security_group.environment",
+            },
+        },
+        "aws_vpc_security_group_ingress_rule.web_from_vpc_link": {
+            "security_group_id": {
+                'aws_security_group.environment["web"].id',
+                'aws_security_group.environment["web"]',
+                "aws_security_group.environment",
+            },
+            "referenced_security_group_id": {
+                'aws_security_group.environment["vpc-link"].id',
+                'aws_security_group.environment["vpc-link"]',
+                "aws_security_group.environment",
+            },
+        },
+    }
+    if set(configured_rules) != set(expected_references):
+        raise RuntimeError(
+            "Security Group rule configuration inventory drifted: "
+            f"actual={sorted(configured_rules)}"
+        )
+
+    assertion_count = 1
+    for address, expected_fields in expected_references.items():
+        expressions = configured_rules[address]["expressions"]
+        for field, expected in expected_fields.items():
+            actual = set(expressions[field].get("references", []))
+            if actual != expected:
+                raise RuntimeError(
+                    "Security Group identity reference drifted: "
+                    f"{address}.{field} actual={sorted(actual)}"
+                )
+            assertion_count += 1
+
+    expected_planned_addresses = {
+        "module.network.aws_vpc_security_group_egress_rule.api_to_database",
+        'module.network.aws_vpc_security_group_egress_rule.broker_clients["api"]',
+        'module.network.aws_vpc_security_group_egress_rule.broker_clients["ml"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_dns_tcp["api"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_dns_tcp["ml"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_dns_tcp["web"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_dns_udp["api"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_dns_udp["ml"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_dns_udp["web"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_https["api"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_https["ml"]',
+        'module.network.aws_vpc_security_group_egress_rule.task_https["web"]',
+        "module.network.aws_vpc_security_group_egress_rule.vpc_link_to_web",
+        "module.network.aws_vpc_security_group_egress_rule.web_to_api",
+        "module.network.aws_vpc_security_group_ingress_rule.api_from_web",
+        'module.network.aws_vpc_security_group_ingress_rule.broker_from_clients["api"]',
+        'module.network.aws_vpc_security_group_ingress_rule.broker_from_clients["ml"]',
+        "module.network.aws_vpc_security_group_ingress_rule.database_from_api",
+        "module.network.aws_vpc_security_group_ingress_rule.web_from_vpc_link",
+    }
+    actual_planned_addresses = {
+        resource["address"]
+        for resource in resources
+        if resource["type"]
+        in {
+            "aws_vpc_security_group_egress_rule",
+            "aws_vpc_security_group_ingress_rule",
+        }
+    }
+    if actual_planned_addresses != expected_planned_addresses:
+        raise RuntimeError(
+            "Expanded Security Group rule identities drifted: "
+            f"actual={sorted(actual_planned_addresses)}"
+        )
+    return assertion_count + 1
+
+
 def verify_security_contract(
     plan: dict[str, Any], resources: list[dict[str, Any]]
 ) -> int:
@@ -1575,7 +1744,8 @@ def verify_security_contract(
         raise RuntimeError("Web, API, and ML must have three distinct workload roles")
     if contract["runtime"]["execution_role_arn"] in workload_roles:
         raise RuntimeError("Task execution and workload roles must remain distinct")
-    return len(assertions) + 6
+    reference_assertions = verify_security_group_reference_contract(plan, resources)
+    return len(assertions) + 6 + reference_assertions
 
 
 def verify_secret_and_output_contract(
