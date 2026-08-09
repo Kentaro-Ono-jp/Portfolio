@@ -33,6 +33,14 @@ Actions.
 - **Mistake:** The workflow supplied only the MinIO endpoint, so API and ML received partial local S3 configuration after the settings boundary began rejecting incomplete endpoint/credential tuples.
 - **Correction:** Supply the complete bounded synthetic MinIO endpoint and credential tuple for every consumer, isolate default/AWS-mode unit settings from workflow overrides, and enforce that workflow invocation contract with an executable repository test.
 
+### Resolve documented repository-relative measurement paths
+
+- **Origin:** PR #104
+  [run 31289454252](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31289454252)
+- **Trigger:** A directly executed verifier accepts repository-relative input and output paths and records a repository-relative evidence identity.
+- **Mistake:** The verifier compared an unresolved relative configuration path directly with the absolute repository root after the measured workload succeeded, raising an exception only in the full command path.
+- **Correction:** Resolve input and output paths from the repository root before use, reject paths outside that root, and directly test the documented relative invocation boundary.
+
 ## Return
 
 Return to publication Gate A after repairing the triggered invocation scripts.

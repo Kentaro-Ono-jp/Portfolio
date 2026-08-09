@@ -128,6 +128,19 @@ def load_configuration(path: Path) -> dict[str, Any]:
     return document
 
 
+def resolve_repository_path(path: Path) -> Path:
+    resolved = (
+        (REPOSITORY_ROOT / path).resolve() if not path.is_absolute() else path.resolve()
+    )
+    try:
+        resolved.relative_to(REPOSITORY_ROOT)
+    except ValueError as error:
+        raise ValueError(
+            "Measurement paths must stay inside the repository."
+        ) from error
+    return resolved
+
+
 @dataclass
 class Peak:
     samples: int = 0
@@ -338,13 +351,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    configuration_path = resolve_repository_path(args.configuration)
+    output_path = resolve_repository_path(args.output)
     workload = args.workload[1:] if args.workload[:1] == ["--"] else args.workload
     if not workload:
         raise ValueError("A representative workload command is required.")
     docker = shutil.which("docker")
     if docker is None:
         raise RuntimeError("Docker is required for container measurement.")
-    configuration = load_configuration(args.configuration)
+    configuration = load_configuration(configuration_path)
     process_config = configuration["processes"]
     long_running = [process for process in process_config if process != "api-migration"]
     container_ids = compose_container_ids(docker, args.compose_project, long_running)
@@ -404,12 +419,12 @@ def main() -> int:
         "samples": 1,
         "task": "api-area",
     }
-    config_bytes = args.configuration.read_bytes()
+    config_bytes = configuration_path.read_bytes()
     evidence = {
         "schemaVersion": 1,
         "sourceSha": source_sha,
         "checkoutSha": checkout_sha,
-        "configuration": args.configuration.relative_to(REPOSITORY_ROOT).as_posix(),
+        "configuration": configuration_path.relative_to(REPOSITORY_ROOT).as_posix(),
         "configurationSha256": hashlib.sha256(config_bytes).hexdigest(),
         "workload": measurement["workload"],
         "workloadCommand": [Path(workload[0]).name, *workload[1:]],
@@ -424,8 +439,8 @@ def main() -> int:
         "tasks": configuration["tasks"],
         "processes": dict(sorted(observations.items())),
     }
-    write_summary(args.output, evidence)
-    print(f"Container sizing evidence written to {args.output}.")
+    write_summary(output_path, evidence)
+    print(f"Container sizing evidence written to {output_path}.")
     return 0
 
 

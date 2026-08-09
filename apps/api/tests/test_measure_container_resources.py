@@ -7,6 +7,7 @@ import pytest
 from scripts.measure_container_resources import (
     load_configuration,
     parse_memory_bytes,
+    resolve_repository_path,
 )
 
 
@@ -36,6 +37,16 @@ def test_runtime_sizing_configuration_covers_valid_fargate_tasks() -> None:
         "ml-worker",
     }
     assert configuration["tasks"]["web"] == {"cpuUnits": 256, "memoryMiB": 512}
+
+
+def test_measurement_paths_resolve_from_the_repository_and_reject_escape() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+
+    assert resolve_repository_path(Path("infra/aws/runtime-sizing.json")) == (
+        repository_root / "infra/aws/runtime-sizing.json"
+    )
+    with pytest.raises(ValueError, match="inside the repository"):
+        resolve_repository_path(Path("../outside.json"))
 
 
 def test_runtime_sizing_configuration_rejects_invalid_task_pair(tmp_path: Path) -> None:
