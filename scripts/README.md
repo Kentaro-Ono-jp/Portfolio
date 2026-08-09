@@ -24,7 +24,7 @@ uv sync --project apps/ml --frozen
 python scripts/verify.py --static-only
 ```
 
-This static-only path selects the five non-Docker groups and does not resolve
+This static-only path selects the six non-Docker groups and does not resolve
 or invoke the Docker CLI. Compose configuration and all runtime groups remain
 GitHub Actions work for AI agents.
 
@@ -88,6 +88,13 @@ unsuccessful, or SHA-mismatched evidence cannot be labelled as carried.
 
 Supporting scripts are implementation details of that entrypoint:
 
+- `verify_aws_bootstrap.py` runs pinned Terraform formatting/validation/mock
+  plans, TFLint, backend-generation contracts, and the versioned IAM
+  identity/boundary/trust allow-deny matrix without calling AWS; it writes only
+  a sanitized exact-source summary under `artifacts/verification/`.
+- `aws_bootstrap_backend.py` validates explicit owner-selected S3 backend
+  values and generates ignored partial backend files for deterministic initial
+  state migration or later clone adoption; it never stores credentials.
 - `plan_ci.py` converts trusted GitHub event state into the canonical selective
   plan. It keeps baseline and current-head trust separate, closes inherited
   evidence gaps for external PRs, and routes tree-identical merges through the

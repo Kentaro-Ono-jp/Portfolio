@@ -25,7 +25,9 @@ This specification is an implementation contract, not a disposable AI prompt. It
 
 ## Current implementation state
 
-The planning baseline is accepted and the Step 2 runtime-compatibility boundary is implemented: explicit local/AWS S3 modes preserve MinIO while proving the boto3 task-role credential path; Cognito-shaped Web/API OIDC retains Dex while requiring access-token purpose and group mapping; a digest-pinned RabbitMQ 4.2 route repeats the complete API/ML runtime proof; and exact-head Actions records measured container evidence against bounded initial Fargate candidates. Terraform modules, IAM roles, deployment automation, and an AWS application environment are not yet implemented. No billable application-deployment attempt begins in this increment, so attempts remain `0/3`.
+The planning baseline and Step 2 runtime-compatibility boundary are implemented: explicit local/AWS S3 modes preserve MinIO while proving the boto3 task-role credential path; Cognito-shaped Web/API OIDC retains Dex while requiring access-token purpose and group mapping; a digest-pinned RabbitMQ 4.2 route repeats the complete API/ML runtime proof; and exact-head Actions records measured container evidence against bounded initial Fargate candidates.
+
+Step 3 now defines the persistent portable bootstrap: an encrypted, versioned, public-blocked S3 backend with S3 lockfile and deterministic local-to-remote state adoption; independent immutable Web/API/ML ECR repositories with bounded cleanup; one fixed Permissions Boundary; environment-isolated operator, IAM-manager, automation, task-execution, Web/API/ML workload, Scheduler, CodeBuild, and destroy authorities; exact trust and pass-role contracts; and repository-owned AWS-free mock-plan plus allowed/denied simulation proof. These are definitions and static evidence, not a live AWS apply or IAM Policy Simulator result. The Step 4 managed application environment, Step 5 lifecycle, Step 6 deployment workflows, Step 7 real-AWS cycle, and Step 8 completion record remain unimplemented. No billable application-deployment attempt begins in this increment, so attempts remain `0/3`.
 
 ## Outcome
 

@@ -83,6 +83,19 @@ jobs:
         with:
           python-version-file: .python-version
 
+      - name: Set up Terraform
+        if: steps.plan.outputs.needs_terraform == 'true'
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Set up TFLint
+        if: steps.plan.outputs.needs_tflint == 'true'
+        uses: terraform-linters/setup-tflint@v6.3.0
+        with:
+          tflint_version: v0.64.0
+
       - name: Install uv
         if: steps.plan.outputs.needs_uv == 'true'
         uses: astral-sh/setup-uv@v7

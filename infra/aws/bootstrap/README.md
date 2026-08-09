@@ -1,0 +1,21 @@
+# AWS persistent bootstrap
+
+This Terraform root implements the persistent state, ECR, Permissions
+Boundary, role, trust, pass-role, and environment-isolation contracts described
+in the [portable AWS bootstrap guide](../../../AWS_BOOTSTRAP.md).
+
+- `versions.tf` pins Terraform and the AWS provider.
+- `variables.tf` rejects ambiguous account, partition, region, name,
+  repository, state-key, principal, and workflow inputs.
+- `state.tf` owns the protected S3 backend bucket.
+- `ecr.tf` owns independent immutable Web/API/ML repositories and cleanup.
+- `iam.tf`, `iam-policies.tf`, and `locals.tf` own the fixed boundary,
+  purpose roles, policies, and trust documents.
+- `policy-matrix.json` is the versioned positive/negative simulation contract.
+- `tests/bootstrap.tftest.hcl` uses a mocked AWS provider and creates no
+  resource.
+- `terraform.tfvars.example` is synthetic and non-authorizing.
+
+Generated backend files, real variable files, provider data, plans, and state
+are ignored. Do not add application-environment resources to this root; the
+ephemeral Step 4 state is a separate Terraform ownership boundary.

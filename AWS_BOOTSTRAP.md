@@ -1,0 +1,167 @@
+# Portable AWS bootstrap and least privilege
+
+This guide covers the persistent control layer for the fourth vertical slice.
+It creates only an encrypted Terraform state bucket, three immutable ECR
+repositories, one fixed Permissions Boundary, and purpose-specific IAM roles.
+It does not create an application environment, publish an image, register a
+destroy schedule, run deployment automation, or prove a live AWS lifecycle.
+
+The deploying account owner supplies every account, region, name, repository,
+state-key, owner-principal, and GitHub trust input. The public implementation
+does not read a maintainer profile, private overlay, credential file, state
+file, or machine-local note. All AWS resources, retained versions, images, and
+cost belong to the deploying account.
+
+## Persistent resources
+
+- one owner-named S3 bucket with versioning, AES-256 server-side encryption,
+  Bucket Owner Enforced ownership, all four Block Public Access settings,
+  secure-transport and encrypted-write bucket-policy guards, bounded
+  noncurrent-version retention, and Terraform's S3 lockfile contract;
+- independent `${prefix}/web`, `${prefix}/api`, and `${prefix}/ml` ECR
+  repositories with tag immutability, encryption, scan-on-push, seven-day
+  untagged cleanup, and a maximum of twenty tagged images;
+- one `${prefix}-permissions-boundary` managed policy under the fixed
+  `/${prefix}/` path; and
+- two shared roles plus eight one-purpose roles for every explicitly declared
+  environment.
+
+The Terraform lifecycle prevents accidental deletion of the state bucket,
+ECR repositories, boundary, and roles. That protection is deliberate: later
+environment destroy authority cannot remove persistent bootstrap resources.
+
+## Authority map
+
+| Authority | Scope |
+|---|---|
+| IAM manager | Creates or maintains only the exact declared environment roles with the fixed boundary and required ownership/environment tags. It cannot create users, groups, access keys, login profiles, arbitrary managed policies, global roles, or remove/replace a boundary. |
+| Environment operator/deployment | Uses only that environment state key, publishes to the three owned ECR repositories, passes exact task/fallback roles to exact AWS services, and manages only bounded environment resources. |
+| Task execution | Pulls owned images, writes the environment log groups, and reads only environment-prefixed injected secrets. |
+| Web workload | Has caller-identity proof only and no application-data authority. |
+| API workload | Owns only the exact environment application bucket objects. PostgreSQL remains an application connection boundary, not an IAM administration grant. |
+| ML workload | Reads/writes only the exact environment application objects; it cannot delete them and receives no PostgreSQL or Cognito administration authority. |
+| Future automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name, workflow ref, and environment subject. It can assume only exact environment operator/destroy roles. |
+| Scheduler fallback | Starts only that environment's future CodeBuild destroy project. |
+| CodeBuild fallback | Uses only that environment state and lock objects, writes its exact destroy log, and assumes only that environment destroy role. |
+| Destroy | Deletes only exact environment-named or correctly tagged application resources. It cannot mutate state, ECR, IAM, the boundary, or another environment. |
+
+Every delegable role carries the same fixed boundary. Environment roles also
+carry an immutable `PortfolioEnvironment` tag; the boundary uses that principal
+tag to cap state, object, log, secret, network, and service authority. Every
+`iam:PassRole` grant names exact role ARNs and an exact
+`iam:PassedToService` value.
+
+The future GitHub workflow is a Step 6 non-target. When implemented, its event
+surface must be only `workflow_dispatch` and `schedule`, and it must use the
+protected environment named by the bootstrap inputs. Until then, the trust
+document is a fail-closed contract, not a claim that deployment automation
+exists. Ordinary verification, pull requests, forks, Dependabot, and
+unapproved refs have no AWS credential or write path.
+
+## Owner inputs and local safety
+
+Use Terraform `1.15.8` and the locked AWS provider `6.58.0`. Copy the visibly
+synthetic example to an ignored owner file and replace every value:
+
+```console
+cp infra/aws/bootstrap/terraform.tfvars.example infra/aws/bootstrap/owner.auto.tfvars
+```
+
+The owner role and GitHub OIDC provider must already exist in the target
+account. Terraform's `allowed_account_ids` check fails closed if the active
+standard AWS credential chain targets another account. Do not place access
+keys, tokens, secrets, backend credentials, or secret values in Terraform
+variables. Do not publish a real variable file, plan, state, backend file, or
+unfiltered provider error.
+
+Each environment key must have the exact form
+`environments/<environment>/terraform.tfstate`. The bootstrap key must remain
+under `bootstrap/`. Reusing a key across environments is rejected.
+
+## First initialization and backend handoff
+
+The S3 bucket cannot store Terraform state before it exists. The first apply
+therefore uses Terraform's implicit local backend, then migrates that exact
+state into the newly created bucket. Review the plan privately before the
+explicit owner-authorized apply:
+
+```console
+terraform -chdir=infra/aws/bootstrap init
+terraform -chdir=infra/aws/bootstrap plan -out=bootstrap.tfplan
+terraform -chdir=infra/aws/bootstrap apply bootstrap.tfplan
+```
+
+An apply is an AWS write and is not performed by ordinary repository
+verification. It creates only the persistent bootstrap resources; it does not
+consume one of the three billable application construction attempts.
+
+After the successful initial apply, generate the ignored partial backend
+files from the exact output values, then migrate the same state:
+
+```console
+python scripts/aws_bootstrap_backend.py \
+  --bucket example-owner-chosen-state-bucket \
+  --region us-east-1 \
+  --key bootstrap/terraform.tfstate
+cd infra/aws/bootstrap
+terraform init -migrate-state -backend-config=backend.hcl
+terraform state pull
+```
+
+On PowerShell, place the three Python arguments on one line or use PowerShell's
+normal continuation syntax. The generated `backend_override.tf` declares only
+the S3 backend type. `backend.hcl` contains only bucket, key, region,
+`encrypt = true`, and `use_lockfile = true`; it never stores credentials. Both
+files are ignored and reproducible from explicit inputs.
+
+Confirm the remote state and a successful no-change plan before archiving the
+initial local state in owner-controlled secure storage. Never delete or
+overwrite the only known-good state during handoff.
+
+## Repeated execution, adoption, and recovery
+
+For a later public clone whose backend already contains the migrated bootstrap
+state:
+
+1. recreate the ignored owner variables;
+2. run `scripts/aws_bootstrap_backend.py` with the same exact bucket, region,
+   and bootstrap key;
+3. run `terraform init -reconfigure -backend-config=backend.hcl`; and
+4. require `terraform plan` to report only reviewed intentional drift.
+
+Repeated apply is idempotent when inputs and AWS state agree. If the bucket
+exists but remote state is absent, stop: recover the original local state or
+perform an explicit resource-by-resource import before apply. Never create a
+second bucket or guess ownership. S3 versioning is the recovery boundary for
+accidental state-object replacement; the `.tflock` object is the concurrency
+boundary. Do not delete a live lock without proving that no Terraform process
+owns it.
+
+ECR and IAM adoption follows the same rule: import an existing exactly owned
+resource into the canonical state rather than renaming, recreating, or
+silently taking ownership. Changing account, partition, region, prefix,
+repository identity, state key, role path, boundary, or trust is a reviewed
+bootstrap change.
+
+## AWS-free verification and policy proof
+
+Canonical local and GitHub verification performs no AWS API call:
+
+```console
+python scripts/verify.py --groups aws-static
+```
+
+That group checks Terraform formatting, provider lock, `validate`, TFLint,
+mock-provider plans, backend-generation contracts, and the versioned
+allow/deny matrix in
+[`infra/aws/bootstrap/policy-matrix.json`](infra/aws/bootstrap/policy-matrix.json).
+The matrix combines each identity policy with the fixed boundary and separately
+evaluates trust policies. It proves intended positives and privilege-
+escalation, cross-environment, persistent-resource, wrong-service, fork, pull-
+request, audience, repository, workflow, and ref negatives.
+
+This repository-owned evaluator is static contract proof, not AWS IAM Access
+Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS
+simulation may add read-only sanitized evidence, but it must not mutate IAM or
+create a resource. Static proof does not claim that the Step 4 topology, Step 5
+lifecycle, Step 6 automation, or Step 7 real-AWS cycle exists.
