@@ -1,0 +1,124 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListExactLifecycleControl",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "controls/${NAME_PREFIX}/${ENVIRONMENT}/*"
+        }
+      }
+    },
+    {
+      "Sid": "InspectPersistentStateBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}"
+    },
+    {
+      "Sid": "UseExactLifecycleControl",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/*"
+    },
+    {
+      "Sid": "UseExactCodeBuildProjects",
+      "Effect": "Allow",
+      "Action": [
+        "codebuild:BatchGetBuilds",
+        "codebuild:BatchGetProjects",
+        "codebuild:ListTagsForResource",
+        "codebuild:StartBuild"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:codebuild:${AWS_REGION}:${AWS_ACCOUNT_ID}:project/${NAME_PREFIX}-${ENVIRONMENT}-image-build",
+        "arn:${AWS_PARTITION}:codebuild:${AWS_REGION}:${AWS_ACCOUNT_ID}:project/${NAME_PREFIX}-${ENVIRONMENT}-destroy",
+        "arn:${AWS_PARTITION}:codebuild:${AWS_REGION}:${AWS_ACCOUNT_ID}:build/${NAME_PREFIX}-${ENVIRONMENT}-image-build:*",
+        "arn:${AWS_PARTITION}:codebuild:${AWS_REGION}:${AWS_ACCOUNT_ID}:build/${NAME_PREFIX}-${ENVIRONMENT}-destroy:*"
+      ]
+    },
+    {
+      "Sid": "InspectExactImageRepositories",
+      "Effect": "Allow",
+      "Action": ["ecr:DescribeRepositories", "ecr:GetLifecyclePolicy"],
+      "Resource": [
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/web",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/api",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/ml"
+      ]
+    },
+    {
+      "Sid": "ManageExactFallbackSchedule",
+      "Effect": "Allow",
+      "Action": [
+        "scheduler:CreateSchedule",
+        "scheduler:DeleteSchedule",
+        "scheduler:GetSchedule",
+        "scheduler:UpdateSchedule"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule/default/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+    },
+    {
+      "Sid": "PassExactSchedulerRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-scheduler",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "scheduler.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "RunExactMigrationTask",
+      "Effect": "Allow",
+      "Action": "ecs:RunTask",
+      "Resource": "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:task-definition/${NAME_PREFIX}-${ENVIRONMENT}-migration:*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${NAME_PREFIX}-${ENVIRONMENT}"
+        }
+      }
+    },
+    {
+      "Sid": "InspectAndStopExactEnvironmentTasks",
+      "Effect": "Allow",
+      "Action": ["ecs:DescribeTasks", "ecs:ListTasks", "ecs:StopTask"],
+      "Resource": "*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${NAME_PREFIX}-${ENVIRONMENT}"
+        }
+      }
+    },
+    {
+      "Sid": "ManageBoundedSyntheticReviewer",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminDeleteUser",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminListGroupsForUser",
+        "cognito-idp:AdminSetUserPassword"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:cognito-idp:${AWS_REGION}:${AWS_ACCOUNT_ID}:userpool/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    }
+  ]
+}

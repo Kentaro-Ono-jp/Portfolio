@@ -4,7 +4,12 @@
     {
       "Sid": "ExactOperatorController",
       "Effect": "Allow",
-      "Principal": {"AWS": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment"},
+      "Principal": {
+        "AWS": [
+          "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment",
+          "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-codebuild-destroy"
+        ]
+      },
       "Action": "sts:AssumeRole"
     }
   ]

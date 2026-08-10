@@ -95,6 +95,7 @@
       "Resource": [
         "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster/${NAME_PREFIX}-${ENVIRONMENT}",
         "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/${NAME_PREFIX}-${ENVIRONMENT}/${NAME_PREFIX}-${ENVIRONMENT}-*",
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:task/${NAME_PREFIX}-${ENVIRONMENT}/*",
         "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:task-definition/${NAME_PREFIX}-${ENVIRONMENT}-*:*",
         "arn:${AWS_PARTITION}:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/*",
         "arn:${AWS_PARTITION}:mq:${AWS_REGION}:${AWS_ACCOUNT_ID}:broker:${NAME_PREFIX}-${ENVIRONMENT}-rabbitmq:*",

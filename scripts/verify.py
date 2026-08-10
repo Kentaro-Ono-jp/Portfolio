@@ -317,9 +317,17 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
         "scripts/aws_bootstrap_backend.py",
         "scripts/verify_aws_bootstrap.py",
         "scripts/verify_aws_environment.py",
+        "scripts/verify_aws_lifecycle.py",
         "scripts/verify_aws_static_iam.py",
-    } or normalized.startswith(("infra/aws/bootstrap/", "infra/aws/environment/")):
+        "scripts/aws_lifecycle.py",
+        "scripts/aws_lifecycle_core.py",
+    } or normalized.startswith(
+        ("infra/aws/bootstrap/", "infra/aws/environment/", "infra/aws/lifecycle/")
+    ):
         return frozenset({"aws-static"})
+
+    if normalized == "playwright.aws.config.ts" or normalized.startswith("tests/aws/"):
+        return frozenset({"aws-static", "web-static"})
 
     api_runtime_helpers = {
         "scripts/prepare_integration.py",
@@ -604,6 +612,12 @@ def test_file_inventory() -> tuple[tuple[str, str], ...]:
             inventory.append(
                 ("aws-static", path.relative_to(REPOSITORY_ROOT).as_posix())
             )
+    for path in (REPOSITORY_ROOT / "infra" / "aws" / "lifecycle" / "tests").glob(
+        "test_*.py"
+    ):
+        inventory.append(("aws-static", path.relative_to(REPOSITORY_ROOT).as_posix()))
+    for path in (REPOSITORY_ROOT / "tests" / "aws").glob("*.spec.ts"):
+        inventory.append(("web-static", path.relative_to(REPOSITORY_ROOT).as_posix()))
     return tuple(sorted(inventory))
 
 
@@ -799,7 +813,10 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_lifecycle.py",
                 "scripts/verify_aws_static_iam.py",
+                "scripts/aws_lifecycle.py",
+                "scripts/aws_lifecycle_core.py",
             ],
         ),
         (
@@ -830,7 +847,10 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_lifecycle.py",
                 "scripts/verify_aws_static_iam.py",
+                "scripts/aws_lifecycle.py",
+                "scripts/aws_lifecycle_core.py",
             ],
         ),
         (
@@ -978,6 +998,10 @@ def static_checks(
             "Prove the NAT-free managed AWS environment",
             [sys.executable, "scripts/verify_aws_environment.py"],
         ),
+        (
+            "Prove the bounded AWS lifecycle controller",
+            [sys.executable, "scripts/verify_aws_lifecycle.py"],
+        ),
     ]
     check_groups = {
         "Validate canonical contracts": "contracts",
@@ -1007,6 +1031,7 @@ def static_checks(
         "Prove portable AWS bootstrap and policy boundaries": "aws-static",
         "Prove the frozen persistent static IAM contract": "aws-static",
         "Prove the NAT-free managed AWS environment": "aws-static",
+        "Prove the bounded AWS lifecycle controller": "aws-static",
     }
     filtered = [check for check in checks if check_groups[check[0]] in groups]
     if "api-static" in groups:

@@ -31,6 +31,15 @@ output "service_identifiers" {
   }
 }
 
+output "migration_network" {
+  description = "Exact Fargate network boundary for the one-shot API-area migration task."
+  value = {
+    subnet_ids        = module.network.public_task_subnet_ids
+    security_group_id = module.network.security_group_ids.api
+    public_ip         = true
+  }
+}
+
 output "bootstrap_references" {
   description = "Persistent resources consumed by ARN/URL reference only and never owned by this state."
   value = {

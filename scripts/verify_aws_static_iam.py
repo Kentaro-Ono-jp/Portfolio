@@ -167,6 +167,7 @@ def verify_contract_payloads(
         "staticIamAttestation",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions",
+        "lifecycleControl",
     ]
     if operator.get("permissions") != expected_operator_policies:
         raise RuntimeError("Operator static policy attachments drifted")
@@ -223,8 +224,13 @@ def verify_contract_payloads(
         for statement in policy["Statement"]
         for resource in values(statement["Resource"])
     }
-    if set(values(ceiling["Resource"])) != identity_resources:
-        raise RuntimeError("Static IAM identity and boundary resources differ")
+    expected_ceiling_resources = {
+        "arn:aws:iam::111122223333:user/ReactorFrontNoel",
+        "arn:aws:iam::111122223333:role/example-portfolio-manual-*",
+        "arn:aws:iam::111122223333:policy/ReactorFrontPortfolio*",
+    }
+    if set(values(ceiling["Resource"])) != expected_ceiling_resources:
+        raise RuntimeError("Static IAM boundary read ceiling drifted")
 
     expected_role_arns = {
         f"arn:aws:iam::111122223333:role/{spec['name']}"
@@ -405,9 +411,10 @@ def verify_offline() -> dict[str, Any]:
         "canonicalDocuments": len(calculated),
         "canonicalContractSha256": sha256(calculated),
         "failClosedMutationCases": mutation_cases,
-        "awsApiCalls": 0,
-        "awsWrites": 0,
-        "awsResourcesCreated": 0,
+        "staticVerifierAwsApiCalls": 0,
+        "staticVerifierAwsWrites": 0,
+        "staticVerifierAwsResourcesCreated": 0,
+        "liveAwsHistoryIncluded": False,
     }
 
 
@@ -687,9 +694,9 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
         "sourceCredentialVerified": True,
         "operatorSessionVerified": True,
         "drift": False,
-        "liveReadCalls": source.calls + operator.calls,
-        "liveWrites": 0,
-        "liveResourcesCreated": 0,
+        "attestationAwsReadCalls": source.calls + operator.calls,
+        "attestationAwsWriteCalls": 0,
+        "attestationAwsResourcesCreated": 0,
         "renderedInventorySha256": sha256(live_shape),
     }
 

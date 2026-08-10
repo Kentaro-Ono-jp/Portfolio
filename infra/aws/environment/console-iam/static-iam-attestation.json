@@ -29,7 +29,10 @@
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-web-workload",
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-api-workload",
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-ml-workload",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-destroy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-scheduler",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-codebuild-image",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-codebuild-destroy"
       ]
     },
     {
@@ -54,7 +57,12 @@
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioTaskExecutionPolicy",
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioApiWorkloadPolicy",
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioMlWorkloadPolicy",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioDestroyPolicy"
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioDestroyPolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioLifecycleControlPolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioLifecycleDestroyPolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioSchedulerPolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioCodeBuildImagePolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioCodeBuildDestroyPolicy"
       ]
     }
   ]

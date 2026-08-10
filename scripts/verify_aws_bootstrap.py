@@ -40,7 +40,11 @@ POLICY_EXPRESSION = """jsonencode({
   policy_sizes = {
     boundary = length(local.permissions_boundary_policy),
     global_inline = { for name, policy in local.global_identity_policies : name => length(policy) },
-    environment_inline = { for name, policy in local.environment_identity_policies : name => length(policy) },
+    environment_inline = { for name, policy in local.environment_inline_policies : name => length(policy) },
+    lifecycle_managed = merge(
+      { for name, policy in local.lifecycle_operator_policies : "operator/${name}" => length(policy) },
+      { for name, policy in local.lifecycle_destroy_policies : "destroy/${name}" => length(policy) }
+    ),
     global_trust = {
       iam_manager = length(local.human_trust_policy),
       automation = length(local.automation_trust_policy)
@@ -477,8 +481,8 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
         raise RuntimeError(
             "ECR contract must contain independent Web, API, and ML repositories"
         )
-    if len(payload["environment_identity"]) != 16:
-        raise RuntimeError("Synthetic contract must expose eight roles per environment")
+    if len(payload["environment_identity"]) != 18:
+        raise RuntimeError("Synthetic contract must expose nine roles per environment")
 
     sizes = payload["policy_sizes"]
     if sizes["boundary"] > 6144:
@@ -511,6 +515,14 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
     if inline_without_reserve:
         raise RuntimeError(
             f"Role inline-policy headroom reserve consumed: {inline_without_reserve}"
+        )
+    managed_without_reserve = {
+        name: size for name, size in sizes["lifecycle_managed"].items() if size > 5632
+    }
+    if managed_without_reserve:
+        raise RuntimeError(
+            "Lifecycle managed-policy headroom reserve consumed: "
+            f"{managed_without_reserve}"
         )
     oversized_trust = {
         name: size
@@ -673,7 +685,6 @@ def verify_delegated_pass_role_ceiling(payload: dict[str, Any]) -> int:
         "api-workload": "ecs-tasks.amazonaws.com",
         "ml-workload": "ecs-tasks.amazonaws.com",
         "scheduler": "scheduler.amazonaws.com",
-        "codebuild-destroy": "codebuild.amazonaws.com",
     }
     target_roles = {
         **payload["role_arns"],

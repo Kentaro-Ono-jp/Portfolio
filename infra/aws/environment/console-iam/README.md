@@ -10,13 +10,14 @@ contract. Drift stops deployment; the deployment path never repairs it.
 
 `ReactorFrontPortfolioOperatorPermissions` and
 `ReactorFrontPortfolioOperatorBoundary` are deliberately separate managed
-policies. `OperatorPermissions` holds backend, image, exact PassRole, and
-destroy-role-assumption authority. The operator's environment authority is
+policies. `OperatorPermissions` holds backend, exact PassRole, and
+destroy-role-assumption authority. Image publication belongs only to the
+separate CodeBuild image role. The operator's environment authority is
 split into two more static managed policies: one for exact ownership tags at
 creation and one for reads plus exact-ARN or ownership-tagged operations. This
 keeps every document below the managed-policy quota without widening an
 action to unrelated account resources. The boundary is only the maximum
-authority that any of the six roles may receive. Never attach the boundary as
+authority that any of the nine roles may receive. Never attach the boundary as
 an identity policy, and never use any permissions policy as a permissions
 boundary.
 
@@ -55,7 +56,7 @@ python scripts/verify_aws_static_iam.py
 
 `--live` is an explicit read-only mode. It takes account, partition, region,
 prefix, environment, repository identity, and state-bucket name as command
-arguments; these deployment inputs never come from `awsinfo`. It uses the
+arguments; these deployment inputs never come from private credential context. It uses the
 standard AWS credential chain only to identify the existing source user,
 assumes the exact operator, keeps the STS credential in process memory, and
 prints only sanitized counts and hashes.
@@ -66,7 +67,7 @@ prints only sanitized counts and hashes.
    `manifest.json` if the account does not already contain them. This is a
    one-time account prerequisite; the operator role never receives
    `iam:CreateServiceLinkedRole`.
-2. In IAM **Policies**, create the twelve customer-managed policies named by
+2. In IAM **Policies**, create the seventeen customer-managed policies named by
    `manifest.json`, pasting the corresponding rendered JSON document.
 3. Select the existing `ReactorFrontNoel` credential-only IAM user; do not
    create a second deployment user. It must have no Console access, group,
@@ -77,11 +78,11 @@ prints only sanitized counts and hashes.
    and observation sessions and do not provide a deployment path. Reuse the
    user's one existing access key from the owner's private credential store;
    never commit or publish it.
-   A local `awsinfo` store, when used, supplies only that existing user's access
-   key material. Role ARNs, backend settings, ECR URLs, Terraform variables,
-   and deployment targets come from the checked-in contract and AWS outputs,
-   never from `awsinfo`.
-4. Create the six roles named by the manifest and paste each rendered trust
+   The maintainer-private Portfolio AWS context vault, when used, supplies only
+   that existing user's access-key material. Role ARNs, backend settings, ECR
+   URLs, Terraform variables, and deployment targets come from the checked-in
+   contract and AWS outputs, never from that private context.
+4. Create the nine roles named by the manifest and paste each rendered trust
    policy. The operator trust accepts only the exact Noel Deployment user in
    the same account; it does not require MFA. Source access keys and login
    material remain external to Terraform and the public repository.
@@ -92,12 +93,14 @@ prints only sanitized counts and hashes.
 7. Add exactly the five tags in that role's manifest `tags` object. Extra
    tags, a missing tag, or any wrong value (including `PortfolioPurpose`) are
    contract drift and stop deployment attestation.
-8. Verify that the operator has exactly the four identity policies listed by
+8. Verify that the operator has exactly the five identity policies listed by
    the manifest, exactly one separately named boundary, and no inline policy.
    `StaticIamAttestation` is read-only and is restricted to the one source
-   user, six persistent roles, and twelve managed policies by exact ARN.
-   Verify that the destroy role has only `OperatorPermissions` and
-   `DestroyPolicy`. Verify that the old
+   user, nine persistent roles, and seventeen managed policies by exact ARN.
+   Verify that the destroy role has only `OperatorPermissions`,
+   `DestroyPolicy`, and `LifecycleDestroyPolicy`. Verify that Scheduler,
+   CodeBuild image, and CodeBuild destroy each have only their one exact
+   lifecycle policy. Verify that the old
    combined policy has zero attachments and zero boundary usages before
    deleting it.
 9. Verify the Noel user has no Console login, group, inline policy, boundary,

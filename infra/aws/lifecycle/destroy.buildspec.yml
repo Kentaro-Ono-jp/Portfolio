@@ -1,0 +1,33 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  install:
+    commands:
+      - set -euo pipefail
+      - aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$PORTFOLIO_CONFIGURATION_KEY" /tmp/lifecycle.json >/dev/null
+      - python3 -c 'import json; p=json.load(open("/tmp/lifecycle.json", encoding="utf-8")); d=p["configuration"]; json.dump(d, open("/tmp/config.json", "w", encoding="utf-8")); open("/tmp/source.env", "w", encoding="utf-8").write("SOURCE_SHA=" + d["sourceSha"] + "\nREPOSITORY_URL=" + d["repositoryUrl"] + "\n")'
+      - source /tmp/source.env
+      - test "${#SOURCE_SHA}" -eq 40
+      - git init --quiet /tmp/portfolio
+      - git -C /tmp/portfolio remote add origin "$REPOSITORY_URL"
+      - git -C /tmp/portfolio fetch --quiet --depth=1 origin "$SOURCE_SHA"
+      - git -C /tmp/portfolio checkout --quiet --detach FETCH_HEAD
+      - test "$(git -C /tmp/portfolio rev-parse HEAD)" = "$SOURCE_SHA"
+      - curl --fail --location --silent --show-error "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip" --output /tmp/terraform.zip
+      - curl --fail --location --silent --show-error "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_SHA256SUMS" --output /tmp/terraform.sha256sums
+      - cd /tmp && grep 'terraform_1.15.8_linux_amd64.zip$' terraform.sha256sums | sha256sum --check
+      - unzip -q /tmp/terraform.zip -d /usr/local/bin
+  build:
+    commands:
+      - cd /tmp/portfolio
+      - python3 scripts/aws_lifecycle.py --aws-cli "$(command -v aws)" --config /tmp/config.json controller-destroy
+  post_build:
+    commands:
+      - rm -f /tmp/lifecycle.json /tmp/config.json /tmp/source.env /tmp/terraform.zip /tmp/terraform.sha256sums
+      - echo "Fallback destroy controller completed."
+
+artifacts:
+  files: []

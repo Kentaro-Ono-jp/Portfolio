@@ -1,0 +1,87 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListExactLifecycleAndState",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "environments/${ENVIRONMENT}/terraform.tfstate",
+            "environments/${ENVIRONMENT}/terraform.tfstate.tflock",
+            "controls/${NAME_PREFIX}/${ENVIRONMENT}/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "InspectPersistentStateBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}"
+    },
+    {
+      "Sid": "UseExactLifecycleControl",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/*"
+    },
+    {
+      "Sid": "RemoveExactCompletedFallback",
+      "Effect": "Allow",
+      "Action": ["scheduler:DeleteSchedule", "scheduler:GetSchedule"],
+      "Resource": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule/default/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+    },
+    {
+      "Sid": "RemoveExactPublishedImages",
+      "Effect": "Allow",
+      "Action": ["ecr:BatchDeleteImage", "ecr:DescribeImages"],
+      "Resource": [
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/web",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/api",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/ml"
+      ]
+    },
+    {
+      "Sid": "ReadServiceSpecificResidue",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "cognito-idp:ListUserPools",
+        "ec2:DescribeInternetGateways",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcEndpoints",
+        "ec2:DescribeVpcs",
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:DescribeTasks",
+        "ecs:ListClusters",
+        "ecs:ListServices",
+        "ecs:ListTaskDefinitions",
+        "ecs:ListTasks",
+        "logs:DescribeLogGroups",
+        "mq:DescribeBroker",
+        "mq:ListBrokers",
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBSubnetGroups",
+        "route53:ListHostedZonesByName",
+        "secretsmanager:ListSecrets",
+        "servicediscovery:ListNamespaces",
+        "servicediscovery:ListServices",
+        "tag:GetResources"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

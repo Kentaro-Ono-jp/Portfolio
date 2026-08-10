@@ -137,6 +137,13 @@ work, tests, validation, read-only inventory, and plan-only work do not. Cost
 estimates are assumptions rather than guarantees; TTL, destroy, residual
 inventory, and the deploying account's cost boundary remain authoritative.
 
+Subsequent implementation selection: Issue #114 preserves the historical
+`3/3` record but supersedes the former numeric ceiling for Step 5/Step 7 with
+the completion-first serialized-attempt boundary selected by that Issue. Each
+attempt remains TTL-first, truthfully recorded, isolated, destroyed when
+appropriate, and swept to zero before another construction attempt. This does
+not weaken the two-hour fallback, destroy authority, or zero-residue decision.
+
 Each focused increment records exact review endpoints, successful
 authoritative workflow evidence or a complete governed qualified limitation,
 independent review, merge, merged-main evidence or the corresponding

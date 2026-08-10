@@ -319,6 +319,11 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "apiWorkload",
         "mlWorkload",
         "destroy",
+        "lifecycleControl",
+        "lifecycleDestroy",
+        "scheduler",
+        "codebuildImage",
+        "codebuildDestroy",
     }
     policy_specs = manifest.get("managedPolicies", {})
     if set(policy_specs) != expected_policy_keys:
@@ -447,6 +452,9 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "api_workload",
         "ml_workload",
         "destroy",
+        "scheduler",
+        "codebuild_image",
+        "codebuild_destroy",
     }
     roles = manifest.get("roles", {})
     if set(roles) != expected_roles:
@@ -464,6 +472,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "staticIamAttestation",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions",
+        "lifecycleControl",
     ]
     if roles["operator_deployment"].get("permissions") != operator_permission_keys:
         raise RuntimeError(
@@ -471,10 +480,22 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         )
     if roles["web_workload"].get("permissions") != []:
         raise RuntimeError("Web workload must remain an empty-authority role")
-    if roles["destroy"].get("permissions") != ["operatorPermissions", "destroy"]:
+    if roles["destroy"].get("permissions") != [
+        "operatorPermissions",
+        "destroy",
+        "lifecycleDestroy",
+    ]:
         raise RuntimeError(
             "Destroy must combine backend reads with separate delete authority"
         )
+    expected_controller_permissions = {
+        "scheduler": ["scheduler"],
+        "codebuild_image": ["codebuildImage"],
+        "codebuild_destroy": ["codebuildDestroy"],
+    }
+    for purpose, expected_permissions in expected_controller_permissions.items():
+        if roles[purpose].get("permissions") != expected_permissions:
+            raise RuntimeError(f"Controller role permissions drifted: {purpose}")
 
     trust_files = {role["trust"] for role in roles.values()}
     trusts = {

@@ -37,12 +37,6 @@
       ]
     },
     {
-      "Sid": "ReadStateBucketLocation",
-      "Effect": "Allow",
-      "Action": "s3:GetBucketLocation",
-      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}"
-    },
-    {
       "Sid": "ListExactEnvironmentState",
       "Effect": "Allow",
       "Action": "s3:ListBucket",
@@ -67,22 +61,6 @@
       "Effect": "Allow",
       "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/environments/${ENVIRONMENT}/terraform.tfstate.tflock"
-    },
-    {
-      "Sid": "PublishImmutableImages",
-      "Effect": "Allow",
-      "Action": "ecr:*",
-      "Resource": [
-        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/web",
-        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/api",
-        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/ml"
-      ]
-    },
-    {
-      "Sid": "AuthenticateToEcr",
-      "Effect": "Allow",
-      "Action": "ecr:GetAuthorizationToken",
-      "Resource": "*"
     },
     {
       "Sid": "PassExactRuntimeRoles",

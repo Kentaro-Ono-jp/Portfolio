@@ -50,6 +50,7 @@ locals {
     "api-workload",
     "ml-workload",
     "scheduler",
+    "codebuild-image",
     "codebuild-destroy",
     "destroy",
   ])
@@ -143,7 +144,7 @@ locals {
         Action    = "sts:AssumeRole"
         Condition = {
           StringEquals = { "aws:SourceAccount" = var.aws_account_id }
-          ArnLike      = { "aws:SourceArn" = "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/*/${var.name_prefix}-${environment}-destroy-*" }
+          ArnLike      = { "aws:SourceArn" = "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/default/${var.name_prefix}-${environment}-destroy" }
         }
       }]
     })
@@ -160,6 +161,22 @@ locals {
         Condition = {
           StringEquals = { "aws:SourceAccount" = var.aws_account_id }
           ArnLike      = { "aws:SourceArn" = "arn:${var.aws_partition}:codebuild:${var.aws_region}:${var.aws_account_id}:project/${var.name_prefix}-${environment}-destroy" }
+        }
+      }]
+    })
+  }
+
+  codebuild_image_trust_policies = {
+    for environment in keys(var.environment_state_keys) : environment => jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Sid       = "ExactEnvironmentImageProject"
+        Effect    = "Allow"
+        Principal = { Service = local.codebuild_service_principal }
+        Action    = "sts:AssumeRole"
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.aws_account_id }
+          ArnLike      = { "aws:SourceArn" = "arn:${var.aws_partition}:codebuild:${var.aws_region}:${var.aws_account_id}:project/${var.name_prefix}-${environment}-image-build" }
         }
       }]
     })
@@ -187,6 +204,7 @@ locals {
       role.purpose == "operator-deployment" ? local.human_trust_policy :
       contains(["task-execution", "web-workload", "api-workload", "ml-workload"], role.purpose) ? local.ecs_trust_policy :
       role.purpose == "scheduler" ? local.scheduler_trust_policies[role.environment] :
+      role.purpose == "codebuild-image" ? local.codebuild_image_trust_policies[role.environment] :
       role.purpose == "codebuild-destroy" ? local.codebuild_trust_policies[role.environment] :
       local.destroy_trust_policies[role.environment]
     )

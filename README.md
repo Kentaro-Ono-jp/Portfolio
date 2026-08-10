@@ -252,8 +252,8 @@ HTTPS, destroy, and tag plus service-specific residual inventory. Ordinary PR,
 fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
 authority.
 
-This section records an implementation contract, not a successful deployment
-claim. The repository implements and verifies the managed-runtime
+This section distinguishes implemented lifecycle machinery from successful
+live proof. The repository implements and verifies the managed-runtime
 compatibility boundary for task-role S3, Cognito-shaped OIDC, RabbitMQ 4.2, and
 initial measured Fargate sizing. It also defines the portable persistent S3
 state backend, immutable Web/API/ML ECR repositories, fixed Permissions
@@ -270,14 +270,19 @@ canonical static objects by exact ARN. It cannot mutate IAM or self-heal
 drift. See the
 [AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md) and
 [portable AWS bootstrap guide](AWS_BOOTSTRAP.md), plus the
-[managed-environment guide](infra/aws/environment/README.md). An
-owner-authorized exploratory AWS evaluation consumed the governed `3/3`
+[managed-environment guide](infra/aws/environment/README.md) and
+[TTL-first lifecycle guide](infra/aws/lifecycle/README.md). The lifecycle now
+provides preflight, immutable CodeBuild image publication, independent
+Scheduler/CodeBuild destroy fallback, apply, migration, seed, authenticated
+smoke, extend, destroy, status, and residual sweep. An owner-authorized
+exploratory AWS evaluation historically consumed the governed `3/3`
 construction attempts without reaching a successful hosted cycle. The partial
 environment was destroyed, Terraform state returned to zero, a fresh live plan
 returned 81 create-only resources, and service-specific inventory found zero
-application residue. Step 5 lifecycle, Step 6 automation, and the successful
-Step 7 green-cycle proof remain unimplemented; no fourth construction apply is
-claimed or performed.
+application residue. Issue #114 supersedes the old numeric ceiling with a
+completion-first serialized-attempt boundary. Step 6 automation remains a later
+increment; successful Step 7 green-cycle evidence is recorded only after a
+complete live apply-to-sweep run actually passes.
 
 ## Completed third vertical slice
 

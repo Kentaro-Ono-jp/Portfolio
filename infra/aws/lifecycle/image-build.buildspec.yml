@@ -1,0 +1,48 @@
+version: 0.2
+
+env:
+  shell: bash
+  exported-variables:
+    - WEB_DIGEST
+    - API_DIGEST
+    - ML_DIGEST
+
+phases:
+  install:
+    commands:
+      - set -euo pipefail
+      - aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$PORTFOLIO_CONFIGURATION_KEY" /tmp/lifecycle.json >/dev/null
+      - python3 -c 'import json; d=json.load(open("/tmp/lifecycle.json", encoding="utf-8"))["configuration"]; open("/tmp/source.env", "w", encoding="utf-8").write("SOURCE_SHA=" + d["sourceSha"] + "\nREPOSITORY_URL=" + d["repositoryUrl"] + "\nIMAGE_TAG=sha-" + d["sourceSha"][:12] + "\n" + "\n".join(k.upper()+"_REPOSITORY="+v for k,v in d["ecrRepositoryUrls"].items()) + "\n")'
+      - source /tmp/source.env
+      - test "${#SOURCE_SHA}" -eq 40
+      - git init --quiet /tmp/portfolio
+      - git -C /tmp/portfolio remote add origin "$REPOSITORY_URL"
+      - git -C /tmp/portfolio fetch --quiet --depth=1 origin "$SOURCE_SHA"
+      - git -C /tmp/portfolio checkout --quiet --detach FETCH_HEAD
+      - test "$(git -C /tmp/portfolio rev-parse HEAD)" = "$SOURCE_SHA"
+      - aws ecr get-login-password --region "$PORTFOLIO_AWS_REGION" | docker login --username AWS --password-stdin "${WEB_REPOSITORY%%/*}"
+  build:
+    commands:
+      - source /tmp/source.env
+      - docker build --file /tmp/portfolio/infra/docker/web/Dockerfile --tag "portfolio-web:$IMAGE_TAG" /tmp/portfolio
+      - docker tag "portfolio-web:$IMAGE_TAG" "$WEB_REPOSITORY:$IMAGE_TAG"
+      - docker push "$WEB_REPOSITORY:$IMAGE_TAG" >/dev/null
+      - docker build --file /tmp/portfolio/infra/docker/api/Dockerfile --tag "portfolio-api:$IMAGE_TAG" /tmp/portfolio
+      - docker tag "portfolio-api:$IMAGE_TAG" "$API_REPOSITORY:$IMAGE_TAG"
+      - docker push "$API_REPOSITORY:$IMAGE_TAG" >/dev/null
+      - docker build --file /tmp/portfolio/infra/docker/ml/Dockerfile --tag "portfolio-ml:$IMAGE_TAG" /tmp/portfolio
+      - docker tag "portfolio-ml:$IMAGE_TAG" "$ML_REPOSITORY:$IMAGE_TAG"
+      - docker push "$ML_REPOSITORY:$IMAGE_TAG" >/dev/null
+  post_build:
+    commands:
+      - source /tmp/source.env
+      - WEB_DIGEST="$(aws ecr describe-images --repository-name "${WEB_REPOSITORY#*/}" --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+      - API_DIGEST="$(aws ecr describe-images --repository-name "${API_REPOSITORY#*/}" --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+      - ML_DIGEST="$(aws ecr describe-images --repository-name "${ML_REPOSITORY#*/}" --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+      - export WEB_DIGEST API_DIGEST ML_DIGEST
+      - test "${WEB_DIGEST#sha256:}" != "$WEB_DIGEST" && test "${API_DIGEST#sha256:}" != "$API_DIGEST" && test "${ML_DIGEST#sha256:}" != "$ML_DIGEST"
+      - rm -f /tmp/lifecycle.json /tmp/source.env
+      - echo "Immutable Web/API/ML image publication completed."
+
+artifacts:
+  files: []

@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+LIFECYCLE_ROOT = REPOSITORY_ROOT / "infra" / "aws" / "lifecycle"
+CONSOLE_IAM_ROOT = REPOSITORY_ROOT / "infra" / "aws" / "environment" / "console-iam"
+
+
+def load_json(path: Path) -> dict[str, object]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise RuntimeError(f"Lifecycle JSON must be an object: {path.name}")
+    return value
+
+
+def statement(policy: dict[str, object], sid: str) -> dict[str, object]:
+    statements = [
+        item
+        for item in policy.get("Statement", [])
+        if isinstance(item, dict) and item.get("Sid") == sid
+    ]
+    if len(statements) != 1:
+        raise RuntimeError(f"Lifecycle IAM statement drifted: {sid}")
+    return statements[0]
+
+
+def main() -> int:
+    required = (
+        LIFECYCLE_ROOT / "README.md",
+        LIFECYCLE_ROOT / "controller-contract.json",
+        LIFECYCLE_ROOT / "image-build.buildspec.yml",
+        LIFECYCLE_ROOT / "destroy.buildspec.yml",
+        REPOSITORY_ROOT / "scripts" / "aws_lifecycle.py",
+        REPOSITORY_ROOT / "scripts" / "aws_lifecycle_core.py",
+    )
+    missing = [
+        path.relative_to(REPOSITORY_ROOT).as_posix()
+        for path in required
+        if not path.is_file()
+    ]
+    if missing:
+        raise RuntimeError(
+            "Lifecycle contract files are missing: " + ", ".join(missing)
+        )
+    contract = load_json(LIFECYCLE_ROOT / "controller-contract.json")
+    if contract.get("schemaVersion") != 1:
+        raise RuntimeError("Unsupported lifecycle controller contract schema")
+    if set(contract.get("projects", {})) != {"image", "destroy"}:
+        raise RuntimeError(
+            "Lifecycle controller must define exact image and destroy projects"
+        )
+    if contract.get("normalDeploymentIamMutation") is not False:
+        raise RuntimeError("Lifecycle controller must keep normal deployment IAM-free")
+    if contract.get("schedule", {}).get("actionAfterCompletion") != "NONE":
+        raise RuntimeError("Fallback schedule must remain until zero residue is proved")
+    if contract.get("schedule", {}).get("maximumTtlMinutes") != 120:
+        raise RuntimeError("Fallback schedule must preserve the two-hour maximum")
+    projects = contract.get("projects", {})
+    if (
+        projects.get("image", {}).get("autoRetryLimit") != 0
+        or projects.get("destroy", {}).get("autoRetryLimit") != 2
+    ):
+        raise RuntimeError("Destroy controller must retain two automatic retries")
+    manifest = load_json(CONSOLE_IAM_ROOT / "manifest.json")
+    roles = manifest.get("roles", {})
+    policies = manifest.get("managedPolicies", {})
+    expected_attachments = {
+        "operator_deployment": "lifecycleControl",
+        "destroy": "lifecycleDestroy",
+        "scheduler": "scheduler",
+        "codebuild_image": "codebuildImage",
+        "codebuild_destroy": "codebuildDestroy",
+    }
+    for role, policy in expected_attachments.items():
+        role_value = roles.get(role, {}) if isinstance(roles, dict) else {}
+        policy_value = policies.get(policy, {}) if isinstance(policies, dict) else {}
+        if policy not in role_value.get("permissions", []) or not policy_value.get(
+            "document"
+        ):
+            raise RuntimeError(f"Persistent lifecycle attachment drifted: {role}")
+    lifecycle_policy = load_json(CONSOLE_IAM_ROOT / "lifecycle-control.json")
+    migration = statement(lifecycle_policy, "RunExactMigrationTask")
+    if migration.get("Action") != "ecs:RunTask" or "ecs:cluster" not in json.dumps(
+        migration.get("Condition", {}), sort_keys=True
+    ):
+        raise RuntimeError("Migration must bind RunTask to the exact cluster")
+    lifecycle_destroy = load_json(CONSOLE_IAM_ROOT / "lifecycle-destroy.json")
+    image_cleanup = statement(lifecycle_destroy, "RemoveExactPublishedImages")
+    if (
+        set(image_cleanup.get("Action", []))
+        != {
+            "ecr:BatchDeleteImage",
+            "ecr:DescribeImages",
+        }
+        or len(image_cleanup.get("Resource", [])) != 3
+    ):
+        raise RuntimeError("Destroy must remove and inventory three exact images")
+    repository_inspection = statement(lifecycle_policy, "InspectExactImageRepositories")
+    if (
+        set(repository_inspection.get("Action", []))
+        != {
+            "ecr:DescribeRepositories",
+            "ecr:GetLifecyclePolicy",
+        }
+        or len(repository_inspection.get("Resource", [])) != 3
+    ):
+        raise RuntimeError("Preflight must attest three exact image repositories")
+    state_actions = {
+        "s3:GetBucketLocation",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration",
+    }
+    if (
+        set(
+            statement(lifecycle_policy, "InspectPersistentStateBucket").get(
+                "Action", []
+            )
+        )
+        != state_actions
+    ):
+        raise RuntimeError("Operator lifecycle state-bucket attestation drifted")
+    if (
+        set(
+            statement(lifecycle_destroy, "InspectPersistentStateBucket").get(
+                "Action", []
+            )
+        )
+        != state_actions
+    ):
+        raise RuntimeError("Destroy lifecycle state-bucket attestation drifted")
+    image_build = (LIFECYCLE_ROOT / "image-build.buildspec.yml").read_text(
+        encoding="utf-8"
+    )
+    for token in ("exported-variables", "WEB_DIGEST", "API_DIGEST", "ML_DIGEST"):
+        if token not in image_build:
+            raise RuntimeError("Image build must export three immutable digests")
+    lifecycle_source = (REPOSITORY_ROOT / "scripts" / "aws_lifecycle.py").read_text(
+        encoding="utf-8"
+    )
+    forbidden_iam_writes = (
+        '"create-policy"',
+        '"create-role"',
+        '"attach-role-policy"',
+        '"put-role-policy"',
+        '"put-role-permissions-boundary"',
+        '"update-assume-role-policy"',
+    )
+    if any(token in lifecycle_source for token in forbidden_iam_writes):
+        raise RuntimeError("Normal lifecycle contains an IAM mutation command")
+    for token in ('"batch-delete-image"', '"describe-images"', "config.image_tag"):
+        if token not in lifecycle_source:
+            raise RuntimeError("Lifecycle zero-residue image proof drifted")
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "infra/aws/lifecycle/tests",
+            "-p",
+            "test_*.py",
+        ],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+    )
+    result = {
+        "schemaVersion": 2,
+        "controllerProjects": 2,
+        "controllerLogGroups": 2,
+        "destroyControllerAutoRetries": 2,
+        "maximumTtlMinutes": 120,
+        "normalDeploymentIamMutation": False,
+        "persistentIamAttachments": len(expected_attachments),
+        "immutableDigestExports": 3,
+        "immutableImageResidueChecks": 3,
+        "persistentImageRepositoryChecks": 3,
+        "persistentStateBucketChecks": 4,
+        "staticVerifierAwsApiCalls": 0,
+        "staticVerifierAwsWrites": 0,
+        "staticVerifierAwsResourcesCreated": 0,
+        "liveAwsHistoryIncluded": False,
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (
+        OSError,
+        RuntimeError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ) as error:
+        print(f"AWS lifecycle verification failed: {error}", file=sys.stderr)
+        raise SystemExit(1) from error

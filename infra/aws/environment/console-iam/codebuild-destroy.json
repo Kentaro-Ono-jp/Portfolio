@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadExactLifecycleConfiguration",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/configuration.json"
+    },
+    {
+      "Sid": "WriteExactDestroyLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:${AWS_PARTITION}:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/controller/destroy:*"
+    },
+    {
+      "Sid": "AssumeExactDestroyRole",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+    }
+  ]
+}

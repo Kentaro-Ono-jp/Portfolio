@@ -9,6 +9,20 @@
       "expected": "allowed"
     },
     {
+      "name": "operator attests exact persistent state bucket versioning",
+      "role": "manual/operator-deployment",
+      "action": "s3:GetBucketVersioning",
+      "resource": "state-bucket",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot inspect a foreign state bucket",
+      "role": "manual/operator-deployment",
+      "action": "s3:GetBucketVersioning",
+      "resource": "arn:aws:s3:::unrelated-state-bucket",
+      "expected": "denied"
+    },
+    {
       "name": "operator cannot read another environment state",
       "role": "manual/operator-deployment",
       "action": "s3:GetObject",
@@ -16,11 +30,46 @@
       "expected": "denied"
     },
     {
-      "name": "operator publishes an owned immutable image",
+      "name": "operator cannot publish an immutable image directly",
       "role": "manual/operator-deployment",
       "action": "ecr:PutImage",
       "resource": "ecr:web",
+      "expected": "denied"
+    },
+    {
+      "name": "image controller publishes an owned immutable image",
+      "role": "manual/codebuild-image",
+      "action": "ecr:PutImage",
+      "resource": "ecr:web",
       "expected": "allowed"
+    },
+    {
+      "name": "operator inspects an exact persistent image repository",
+      "role": "manual/operator-deployment",
+      "action": "ecr:DescribeRepositories",
+      "resource": "ecr:web",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot inspect a foreign image repository",
+      "role": "manual/operator-deployment",
+      "action": "ecr:DescribeRepositories",
+      "resource": "arn:aws:ecr:us-east-1:111122223333:repository/unrelated/web",
+      "expected": "denied"
+    },
+    {
+      "name": "operator inspects exact persistent controller log tags",
+      "role": "manual/operator-deployment",
+      "action": "logs:ListTagsForResource",
+      "resource": "arn:aws:logs:us-east-1:111122223333:log-group:/portfolio/example-portfolio/manual/controller/destroy",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot inspect foreign controller log tags",
+      "role": "manual/operator-deployment",
+      "action": "logs:ListTagsForResource",
+      "resource": "arn:aws:logs:us-east-1:111122223333:log-group:/portfolio/unrelated/manual/controller/destroy",
+      "expected": "denied"
     },
     {
       "name": "operator passes exact API role to ECS",
@@ -59,6 +108,90 @@
       "resource": "arn:aws:iam::111122223333:role/example-portfolio/example-portfolio-manual-evil-workload",
       "context": {
         "iam:PassedToService": "ecs-tasks.amazonaws.com"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator runs the exact migration task in its exact cluster",
+      "role": "manual/operator-deployment",
+      "action": "ecs:RunTask",
+      "resource": "arn:aws:ecs:us-east-1:111122223333:task-definition/example-portfolio-manual-migration:1",
+      "context": {
+        "ecs:cluster": "arn:aws:ecs:us-east-1:111122223333:cluster/example-portfolio-manual"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot run migration in another cluster",
+      "role": "manual/operator-deployment",
+      "action": "ecs:RunTask",
+      "resource": "arn:aws:ecs:us-east-1:111122223333:task-definition/example-portfolio-manual-migration:1",
+      "context": {
+        "ecs:cluster": "arn:aws:ecs:us-east-1:111122223333:cluster/example-portfolio-monthly"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator tags only the generated migration task",
+      "role": "manual/operator-deployment",
+      "action": "ecs:TagResource",
+      "resource": "arn:aws:ecs:us-east-1:111122223333:task/example-portfolio-manual/task-id",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot retag a foreign task",
+      "role": "manual/operator-deployment",
+      "action": "ecs:TagResource",
+      "resource": "arn:aws:ecs:us-east-1:111122223333:task/unrelated-cluster/task-id",
+      "context": {
+        "aws:RequestTag/PortfolioEnvironment": "manual",
+        "aws:RequestTag/PortfolioManaged": "true",
+        "aws:RequestTag/PortfolioPersistent": "false",
+        "aws:RequestTag/PortfolioRepository": "example-owner/example-repository",
+        "aws:TagKeys": [
+          "PortfolioEnvironment",
+          "PortfolioManaged",
+          "PortfolioPersistent",
+          "PortfolioRepository"
+        ]
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator manages the owned synthetic reviewer",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:AdminCreateUser",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_owned",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "manual",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot manage a foreign synthetic reviewer",
+      "role": "manual/operator-deployment",
+      "action": "cognito-idp:AdminCreateUser",
+      "resource": "arn:aws:cognito-idp:us-east-1:111122223333:userpool/us-east-1_foreign",
+      "context": {
+        "aws:ResourceTag/PortfolioEnvironment": "monthly",
+        "aws:ResourceTag/PortfolioManaged": "true",
+        "aws:ResourceTag/PortfolioPersistent": "false",
+        "aws:ResourceTag/PortfolioRepository": "example-owner/example-repository"
       },
       "expected": "denied"
     },
@@ -939,6 +1072,20 @@
       "expected": "denied"
     },
     {
+      "name": "destroy removes an exact published image",
+      "role": "manual/destroy",
+      "action": "ecr:BatchDeleteImage",
+      "resource": "ecr:web",
+      "expected": "allowed"
+    },
+    {
+      "name": "destroy cannot remove an image from a foreign repository",
+      "role": "manual/destroy",
+      "action": "ecr:BatchDeleteImage",
+      "resource": "arn:aws:ecr:us-east-1:111122223333:repository/unrelated/web",
+      "expected": "denied"
+    },
+    {
       "name": "destroy cannot delete persistent ECR",
       "role": "manual/destroy",
       "action": "ecr:DeleteRepository",
@@ -1276,7 +1423,7 @@
       "principal": "scheduler.amazonaws.com",
       "context": {
         "aws:SourceAccount": "111122223333",
-        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-manual-destroy-123"
+        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-manual-destroy"
       },
       "expected": "allowed"
     },
@@ -1288,7 +1435,7 @@
       "principal": "scheduler.amazonaws.com",
       "context": {
         "aws:SourceAccount": "111122223333",
-        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-monthly-destroy-123"
+        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-monthly-destroy"
       },
       "expected": "denied"
     },

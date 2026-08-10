@@ -41,7 +41,28 @@ returns to a separate static-IAM maintenance increment.
 
 Step 4 now defines the independent environment state root and its NAT-free VPC, generated API Gateway HTTP API plus VPC Link and Cloud Map ingress, distinct Web/API-area/ML Fargate services, RDS PostgreSQL 18, encrypted application S3 bucket, Amazon MQ RabbitMQ 4.2, Cognito Authorization Code/PKCE managed login, generated Secrets Manager values, bounded CloudWatch logs, exact ownership tags, and portable outputs. The root consumes only explicit persistent-bootstrap references, pins every image by digest, gives no database or end-user identity to ML, and is validated by mock-provider tests plus a fail-closed sanitized plan against an unreachable endpoint. That static plan proves 81 create-only resources and 60 exactly tagged resources. Its verifier process makes zero AWS API calls, writes, or resources, but those explicitly verifier-scoped zeros exclude the real AWS history below and are not Issue-wide totals.
 
-These are definitions and static evidence, not a successful hosted lifecycle. An owner-authorized exploratory AWS evaluation verified the separately named Console-owned operator permissions and boundary, then consumed the governed `3/3` billable construction attempts while exposing provider-dependent authorization requirements; none reached a green environment. No fourth construction apply was performed. The partial environment was destroyed through the separate destroy role, Terraform state returned to zero, a fresh live plan returned 81 creates with no update or delete, and tag plus service-specific inventory found zero application residue. GitHub OIDC configuration, Step 5 lifecycle, Step 6 deployment workflows, the successful Step 7 real-AWS cycle, and Step 8 completion record remain unimplemented.
+Step 5 now defines a single TTL-first lifecycle command surface, a persistent
+artifact-free CodeBuild image builder, and a persistent Scheduler/CodeBuild
+destroy controller outside the environment state. The controller consumes the
+frozen static IAM contract, uses an S3 conditional lease plus ETag checkpoints,
+registers and reads back a maximum-two-hour fallback before apply, and retains
+that fallback until Terraform plus exact-image, service, and tag inventory
+prove zero residue. The destroy project keeps two static automatic retries for
+failures after Scheduler has successfully delivered the CodeBuild start call.
+The lifecycle has no deployment-time IAM mutation, quota calculation, policy
+generation, or private deployment-configuration dependency.
+
+An owner-authorized exploratory AWS evaluation historically consumed the
+governed `3/3` billable construction attempts while exposing provider-dependent
+authorization requirements; none reached a green environment. The partial
+environment was destroyed through the separate destroy role, Terraform state
+returned to zero, a fresh live plan returned 81 creates with no update or
+delete, and tag plus service-specific inventory found zero application residue.
+Issue #114 supersedes the old numeric attempt ceiling with its
+completion-first serialized-attempt boundary. The `3/3` notation remains
+immutable history, not a current cap. GitHub OIDC deployment workflows, the
+successful Step 7 real-AWS cycle, and Step 8 completion record remain pending
+until their evidence actually passes.
 
 ## Outcome
 
@@ -57,8 +78,10 @@ From one public repository clone, an authorized operator can:
 5. apply the managed AWS environment with Terraform;
 6. complete database migration, synthetic identity/data seed, health checks, and the authenticated document-processing smoke path;
 7. reach the Web over an AWS-provided HTTPS endpoint;
-8. destroy the environment through the same operation surface; and
-9. prove that no tagged or service-specific billable application residue remains.
+8. destroy the environment and its exact published image digests through the
+   same operation surface; and
+9. prove that no image, tagged, or service-specific billable application
+   residue remains.
 
 The repository continues to support AWS-free GitHub Actions verification and AWS-free local Docker Compose execution.
 
@@ -171,16 +194,27 @@ The slice fails closed when any of the following is absent, inconsistent, stale,
   Publication Gate B/Stage B result, or complete selected, executed, carried,
   and skipped group and test-file N/NN inventory;
 
-Apply failure still consumes one maintainer construction attempt once billable application resource creation begins. It must leave the pre-registered fallback able to destroy partial state. A failed destroy is blocking evidence, not permission to forget or recreate the environment. A missing workflow, delayed schedule, Budget email, or `terraform destroy` exit code alone is never proof that resources are gone.
+Apply failure is recorded as one maintainer construction attempt once billable
+application resource creation begins. It must leave the pre-registered fallback
+able to destroy partial state. A failed destroy is blocking evidence, not
+permission to forget or recreate the environment. A missing workflow, delayed
+schedule, Budget email, or `terraform destroy` exit code alone is never proof
+that resources are gone.
 
 Public errors, logs, workflow summaries, plans, artifacts, Issues, and PRs must not contain credentials, state contents, database/broker passwords, user passwords, account-specific private notes, local paths, source bytes, extracted text, or unfiltered provider errors.
 
 ## Cost and deployment-attempt boundary
 
 - Git commits, PRs, merges, local tests, static verification, Terraform validation, read-only inventory, and plan-only work do not count as a deploy attempt.
-- The maintainer construction phase permits at most three attempts that begin billable AWS application-resource creation. A failed partial apply counts.
-- The attempt ceiling is not a target and does not override the deploying account's accepted Budget, alert threshold, TTL, or stop decision.
-- Attempt 1 begins only after topology, exact regional estimate, IAM simulation, schedule-first fallback, manual destroy, and residual sweep are implemented and rehearsed without billable application creation where possible.
+- Issue #114 permits the serialized apply/deploy/retry attempts reasonably
+  required to complete one green lifecycle; it has no numeric attempt ceiling.
+  Every failed partial apply still counts and is recorded truthfully.
+- The existing `$9` warning and `$10` Budget value are non-blocking observation
+  settings for Issue #114. They are not deleted or modified, and they do not
+  replace TTL, destroy authority, serial isolation, or rational cost control.
+- Construction begins only after topology, current price observation, IAM
+  simulation, schedule-first fallback, manual destroy, and residual sweep are
+  implemented and rehearsed without billable application creation where possible.
 - One cycle becomes green only after apply, migration/seed, health and authenticated smoke, necessary external HTTPS verification, destroy, and residual sweep all complete.
 - General self-host documentation must publish service-level cost drivers and make clear that all cost belongs to the deploying account.
 
@@ -247,11 +281,12 @@ formatting, provider locks, validation, lint, four mocked-plan contracts, the
 exact resource and ownership-tag inventory, service-aware security boundaries,
 secret redaction, digest pinning, and a create-only fail-closed plan without
 calling AWS. Separately, an owner-authorized exploratory Step 4 evaluation
-consumed all `3/3` construction attempts without a green lifecycle. Its partial
+historically consumed all `3/3` construction attempts without a green lifecycle. Its partial
 resources were destroyed, Terraform state returned to zero, and the residual
 sweep found no application resource. That bounded history is not Step 7 proof;
-no fourth apply is authorized. Repeatable lifecycle and destroy execution
-remain Step 5 work.
+Issue #114 supersedes the former ceiling while preserving serialized attempts,
+TTL-first fallback, truthful attempt accounting, destroy, and zero-residue
+requirements.
 
 ### Step 5: Implement the lifecycle and destroy safety system
 
@@ -263,6 +298,15 @@ Lifecycle preflight consumes the frozen IAM contract. It must not calculate
 IAM quota, generate or split policies, create policy versions, change policy or
 boundary attachments, apply bootstrap IAM, or self-heal drift.
 
+Implemented in `scripts/aws_lifecycle.py` and `infra/aws/lifecycle/`. The
+state-machine and AWS-free verifier cover strict transitions, every forward
+write-boundary interruption, same-phase idempotency, failure/resume identity,
+conditional lease/ETag forwarding, partial image cleanup, immutable digest
+input, maximum TTL and extend bounds, controller failure checkpointing,
+redaction, and truthful missing-state reporting. Persistent
+Scheduler, CodeBuild image, and CodeBuild destroy roles/projects are canonical
+static prerequisites; normal deployment only reads and uses them.
+
 ### Step 6: Add explicit manual and monthly automation paths
 
 Deliver the owner-controlled manual on-demand workflow and the monthly scheduled proof using the same modules with isolated environment names/state/tags. Use GitHub OIDC or another accepted short-lived automation trust; do not use maintainer long-term keys.
@@ -271,7 +315,11 @@ Acceptance requires fork PRs, ordinary CI, Dependabot, and unapproved branches t
 
 ### Step 7: Prove one complete real-AWS lifecycle
 
-Within the maximum-three-attempt construction boundary, execute the accepted public mechanism against the maintainer account and capture bounded evidence for caller identity, apply, migration, synthetic seed, health, Cognito login, upload, outbox, RabbitMQ, ML result, review/audit, external HTTPS, destroy, and residual sweep.
+Within the completion-first serialized-attempt boundary selected by Issue #114,
+execute the accepted public mechanism against the maintainer account and capture
+bounded evidence for caller identity, apply, migration, synthetic seed, health,
+Cognito login, upload, outbox, RabbitMQ, ML result, review/audit, external HTTPS,
+destroy, and residual sweep.
 
 Acceptance requires at least one complete green cycle. Any failed attempt is recorded truthfully, destroyed, swept, and reconciled before another attempt is considered.
 
@@ -295,7 +343,7 @@ The complete evidence matrix includes:
 6. deploy-command unit/integration tests for ordering, locking, TTL-first registration, retries, interruption, and redaction;
 7. authoritative existing Compose/API/ML/Web/Playwright proof without AWS credentials;
 8. plan-only AWS account checks that create no billable application resources;
-9. one bounded real-AWS authenticated end-to-end lifecycle; and
+9. one TTL-bounded real-AWS authenticated end-to-end lifecycle; and
 10. manual and automatic destroy plus service/tag residual inventory.
 
 No AI agent starts or mutates local Docker Desktop. Real AWS writes use only the explicit approved write role/path and count against the attempt ledger when billable application creation begins.
@@ -308,7 +356,7 @@ No AI agent starts or mutates local Docker Desktop. Real AWS writes use only the
 4. Terraform environment: network, ingress/discovery, ECS, RDS, S3, MQ, Cognito, secrets/logs.
 5. Lifecycle safety: preflight, TTL-first fallback, deploy/status/seed/smoke/destroy/sweep.
 6. Automation: GitHub OIDC/manual/monthly paths, concurrency and outside-window safety.
-7. Real AWS green proof: bounded attempt, authenticated smoke, destroy, sweep, cost evidence.
+7. Real AWS green proof: serialized TTL-bounded attempt, authenticated smoke, destroy, sweep, cost evidence.
 8. Public completion record: portable guide, limitations, exact evidence, completed specification.
 
 Each increment should use one focused Issue and one reviewable PR unless a proved smaller split is required. The umbrella Issue is the accumulated ledger; it is not authorization to implement the complete slice as one bulk change.
@@ -351,7 +399,7 @@ changing the proof path.
 - [ ] Ordinary CI, fork PRs, and unapproved actors cannot obtain AWS write authority.
 - [ ] A two-hour fallback is registered before billable apply and remains independent of the environment state.
 - [ ] Manual destroy and automatic destroy use the exact environment state and are safe to retry.
-- [ ] At least one complete apply-to-sweep real-AWS cycle passes within the maximum-three-attempt construction boundary.
+- [ ] At least one complete apply-to-sweep real-AWS cycle passes within the completion-first serialized-attempt boundary selected by Issue #114.
 - [ ] No billable application residue remains after the green cycle.
 - [ ] Public evidence contains no secret, private state, account-specific credential, personal input, local path, or maintainer-private dependency.
 - [ ] Third-party documentation explains ownership, cost drivers, limits, failure recovery, destroy, and residual verification.

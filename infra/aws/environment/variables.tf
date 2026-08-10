@@ -32,6 +32,12 @@ variable "aws_region" {
   }
 }
 
+variable "offline_static_mode" {
+  description = "True only for AWS-free mocked and unreachable-provider proof; live lifecycle execution keeps account and credential checks enabled."
+  type        = bool
+  default     = false
+}
+
 variable "availability_zones" {
   description = "Exactly two explicit availability zones in aws_region; no AWS discovery is performed."
   type        = list(string)

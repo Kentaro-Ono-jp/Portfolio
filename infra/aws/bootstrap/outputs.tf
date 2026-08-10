@@ -37,6 +37,23 @@ output "environment_role_arns" {
   }
 }
 
+output "controller_projects" {
+  description = "Persistent artifact-free image and destroy projects consumed by the lifecycle."
+  value = {
+    for key, project in aws_codebuild_project.controller : key => {
+      arn  = project.arn
+      name = project.name
+    }
+  }
+}
+
+output "effective_environment_identity_policy_digests" {
+  description = "Canonical effective identity-policy digests, including separately managed lifecycle control and destroy authority."
+  value = {
+    for name, policy in local.environment_identity_policies : name => sha256(policy)
+  }
+}
+
 output "github_trust_contract" {
   description = "Future automation requires the exact customized subject template before either allowed event can assume the role."
   value = {

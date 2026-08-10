@@ -19,8 +19,9 @@ URLs. It has no `terraform_remote_state` or AWS discovery data source.
 
 `console-iam/manifest.json` keeps `OperatorPermissions` and `OperatorBoundary`
 as independently named and versioned managed policies. The former holds
-backend, image, PassRole, and destroy-role-assumption authority; two additional
-static managed policies split tag-on-create operations from exact-ARN and
+backend, PassRole, and destroy-role-assumption authority; the separate
+CodeBuild image role alone publishes images. Two additional static managed
+policies split tag-on-create operations from exact-ARN and
 ownership-tagged environment operations. The boundary remains a separate
 maximum ceiling shared by all roles. The Console procedure contains no
 explicit deny, dynamic attachment, inline policy, or Terraform-managed IAM
@@ -43,9 +44,10 @@ The latter two preserve explicitly approved price and observation sessions;
 destroy and every other role remain unavailable. The operator role trusts only
 the same-account source user without MFA. All plan/apply calls use the resulting
 short-lived operator STS credentials.
-Local `awsinfo` may supply only that existing user's access-key material. Role
-ARNs, backend settings, ECR URLs, Terraform variables, and construction targets
-remain explicit repository or AWS-output inputs and never depend on `awsinfo`.
+The maintainer-private Portfolio AWS context vault may supply only that existing
+user's access-key material. Role ARNs, backend settings, ECR URLs, Terraform
+variables, and construction targets remain explicit repository or AWS-output
+inputs and never depend on that private context.
 
 The separate destroy identity policy enforces the full ownership tuple on
 generated identifiers, exact environment-name ARN patterns where the service
@@ -75,10 +77,10 @@ tags:
 - `PortfolioPersistent=false`
 - `PortfolioRepository=<owner/name>`
 
-Step 5 will generate ignored partial S3 backend files with the bootstrap
-bucket/region and this exact key. Keeping the backend declaration outside the
-checked-in root allows deterministic local plan proof without reading or
-writing remote state.
+Step 5 copies this root into a private runtime directory and adds the partial S3
+backend declaration there with the bootstrap bucket/region and this exact key.
+Keeping the live backend declaration outside the checked-in root preserves the
+deterministic local plan proof without reading or writing remote state.
 
 ## Topology
 
@@ -137,17 +139,19 @@ credential store.
 
 An AWS-free verification run is never deployment authority. A live plan or
 apply requires a separately approved operator session, exact remote backend,
-immutable image digests, and account-owned rendered role ARNs. Lifecycle,
-TTL-first fallback, destroy, and residual-sweep automation remain separate
-delivery increments.
+immutable image digests, and account-owned rendered role ARNs. The sibling
+`../lifecycle/` root implements the TTL-first lifecycle, independent destroy
+fallback, and residual sweep while consuming this Terraform root by copy.
 
 ## Exploratory live evaluation record
 
-An owner-authorized manual evaluation of this static root consumed all `3/3`
-governed construction attempts without reaching a successful hosted cycle. It
+An owner-authorized manual evaluation of this static root historically consumed
+all `3/3` governed construction attempts without reaching a successful hosted cycle. It
 was used to correct provider-dependent tag, refresh, delegated-service, enum,
 and destroy cleanup authority in the static contract; it is not Step 7 green
-proof and does not authorize a fourth construction apply.
+proof. Issue #114 supersedes that former numeric ceiling with a
+completion-first serialized-attempt boundary; the historical `3/3` record is
+immutable evidence, not a current cap.
 
 The partial environment was then destroyed through the separate destroy role.
 Terraform state returned to zero, a fresh live plan contained 81 creates and no
