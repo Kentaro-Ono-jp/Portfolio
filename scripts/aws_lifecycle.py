@@ -484,7 +484,7 @@ def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
             or str(source.get("buildspec", "")).replace("\r\n", "\n").strip()
             != expected_buildspec.replace("\r\n", "\n").strip()
             or artifacts.get("type") != "NO_ARTIFACTS"
-            or project.get("buildTimeoutInMinutes") != 60
+            or project.get("timeoutInMinutes") != 60
             or project.get("queuedTimeoutInMinutes") != 30
             or project.get("autoRetryLimit") != (0 if purpose == "image" else 2)
             or environment.get("computeType") != "BUILD_GENERAL1_SMALL"
