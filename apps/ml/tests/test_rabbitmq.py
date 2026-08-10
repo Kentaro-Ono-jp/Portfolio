@@ -294,6 +294,7 @@ def test_publish_declares_durable_result_topology_and_persistent_json(
             "durable": True,
             "exclusive": False,
             "auto_delete": False,
+            "arguments": {"x-queue-type": "quorum"},
         }
     ]
     assert [binding["routing_key"] for binding in installed.channel.bindings] == list(

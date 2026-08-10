@@ -140,7 +140,11 @@ def rabbitmq_channel(
         pika.URLParameters(settings.rabbitmq_url.get_secret_value())
     )
     channel = connection.channel()
-    channel.queue_declare(queue=REQUEST_QUEUE, durable=True)
+    channel.queue_declare(
+        queue=REQUEST_QUEUE,
+        durable=True,
+        arguments={"x-queue-type": "quorum"},
+    )
     channel.queue_purge(queue=REQUEST_QUEUE)
     yield channel
     channel.queue_purge(queue=REQUEST_QUEUE)

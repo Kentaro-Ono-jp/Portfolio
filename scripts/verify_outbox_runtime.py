@@ -122,7 +122,11 @@ def purge_requested_queue(settings: Settings) -> None:
     )
     try:
         channel = connection.channel()
-        channel.queue_declare(queue=REQUEST_QUEUE, durable=True)
+        channel.queue_declare(
+            queue=REQUEST_QUEUE,
+            durable=True,
+            arguments={"x-queue-type": "quorum"},
+        )
         channel.queue_purge(queue=REQUEST_QUEUE)
     finally:
         connection.close()

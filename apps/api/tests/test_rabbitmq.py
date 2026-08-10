@@ -314,6 +314,7 @@ def test_publish_declares_durable_topology_and_celery_v2_message(
         "durable": True,
         "exclusive": False,
         "auto_delete": False,
+        "arguments": {"x-queue-type": "quorum"},
     }
     assert installed.channel.bindings[0]["routing_key"] == REQUEST_ROUTING_KEY
 
