@@ -276,15 +276,20 @@ provides preflight, immutable CodeBuild image publication, independent
 Scheduler/CodeBuild destroy fallback, apply, migration, seed, authenticated
 smoke, extend, destroy, status, and residual sweep. Scheduler trust is bound to
 the exact persistent environment schedule group rather than an unsupported
-individual schedule ARN. An owner-authorized
-exploratory AWS evaluation historically consumed the governed `3/3`
-construction attempts without reaching a successful hosted cycle. The partial
-environment was destroyed, Terraform state returned to zero, a fresh live plan
-returned 81 create-only resources, and service-specific inventory found zero
-application residue. Issue #114 supersedes the old numeric ceiling with a
-completion-first serialized-attempt boundary. Step 6 automation remains a later
-increment; successful Step 7 green-cycle evidence is recorded only after a
-complete live apply-to-sweep run actually passes.
+individual schedule ARN. An owner-authorized exploratory AWS evaluation
+historically consumed the governed `3/3` construction attempts without
+reaching a successful hosted cycle. Issue #114 superseded that old numeric
+ceiling with a completion-first serialized-attempt boundary and then completed
+Step 7: exact source/user/role and static-IAM attestation, three immutable
+CodeBuild image digests, verified schedule-first fallback, Terraform apply,
+three healthy ECS tasks, migration, synthetic seed, authenticated asynchronous
+document smoke over external HTTPS, manual destroy, and 27-category service/tag
+residual proof all passed. The fallback was removed only after zero residue.
+Cost Explorer was observed once through the separate billing-read role; its
+delayed estimate is supporting evidence, not the destroy proof. The ephemeral
+environment and deployment images are gone; persistent static IAM, empty ECR
+repositories, state backend, and independent controller remain. Step 6
+automation remains a later increment.
 
 ## Completed third vertical slice
 

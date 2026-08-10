@@ -201,6 +201,15 @@ def main() -> int:
     lifecycle_source = (REPOSITORY_ROOT / "scripts" / "aws_lifecycle.py").read_text(
         encoding="utf-8"
     )
+    destroy_build = (LIFECYCLE_ROOT / "destroy.buildspec.yml").read_text(
+        encoding="utf-8"
+    )
+    terraform_archive = "terraform_1.15.8_linux_amd64.zip"
+    if destroy_build.count(f"/tmp/{terraform_archive}") != 3 or (
+        f"grep '{terraform_archive}$' terraform.sha256sums | sha256sum --check"
+        not in destroy_build
+    ):
+        raise RuntimeError("Destroy controller Terraform checksum binding drifted")
     forbidden_iam_writes = (
         '"create-policy"',
         '"create-role"',

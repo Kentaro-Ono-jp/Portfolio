@@ -65,9 +65,9 @@ returned to zero, a fresh live plan returned 81 creates with no update or
 delete, and tag plus service-specific inventory found zero application residue.
 Issue #114 supersedes the old numeric attempt ceiling with its
 completion-first serialized-attempt boundary. The `3/3` notation remains
-immutable history, not a current cap. GitHub OIDC deployment workflows, the
-successful Step 7 real-AWS cycle, and Step 8 completion record remain pending
-until their evidence actually passes.
+immutable history, not a current cap. GitHub OIDC deployment workflows and the
+Step 8 completion record remain pending. Issue #114 completed the Step 7
+real-AWS cycle described below.
 
 ## Outcome
 
@@ -333,6 +333,27 @@ destroy, and residual sweep.
 
 Acceptance requires at least one complete green cycle. Any failed attempt is recorded truthfully, destroyed, swept, and reconciled before another attempt is considered.
 
+Issue #114 completed this step. The accepted live cycle verified the exact
+source user and operator session, read back 24 canonical static-IAM documents
+with zero drift, published three immutable image digests, registered and
+verified the independent fallback before apply, created the 85-resource managed
+topology, reached three healthy ECS services/tasks, and passed migration,
+synthetic seed, Cognito access-token/external-HTTPS upload, asynchronous
+RabbitMQ/ML completion, review, and audit checks. Manual destroy then removed
+the environment and exact deployment images; Terraform plus 27 service/tag
+categories reported zero application residue before the fallback and control
+capsules were removed.
+
+One Cost Explorer page was read through the separate billing-read role. Its
+current two-day estimate was `$0.000415` plus the owner-accepted `$0.01` API
+request charge; the result was marked estimated and does not replace the
+zero-residue proof. A real Scheduler-to-CodeBuild invocation also exposed a
+Terraform archive filename/checksum mismatch in the destroy buildspec. That
+diagnostic run remains a failure rather than passing evidence; the buildspec
+now preserves the official archive filename, and exact-head automatic-path
+proof is recorded with the focused PR/Issue evidence rather than relabeling the
+failed run.
+
 ### Step 8: Publish portable operations and completion evidence
 
 Deliver the third-party deployment guide, local/AWS mapping, cost and quota guide, security boundary, troubleshooting, destroy/recovery guide, exact focused history, authoritative workflows, sanitized AWS proof, known limitations, and completed Delivery Specification 0004.
@@ -409,8 +430,8 @@ changing the proof path.
 - [ ] Ordinary CI, fork PRs, and unapproved actors cannot obtain AWS write authority.
 - [ ] A two-hour fallback is registered before billable apply and remains independent of the environment state.
 - [ ] Manual destroy and automatic destroy use the exact environment state and are safe to retry.
-- [ ] At least one complete apply-to-sweep real-AWS cycle passes within the completion-first serialized-attempt boundary selected by Issue #114.
-- [ ] No billable application residue remains after the green cycle.
+- [x] At least one complete apply-to-sweep real-AWS cycle passes within the completion-first serialized-attempt boundary selected by Issue #114.
+- [x] No billable application residue remains after the green cycle.
 - [ ] Public evidence contains no secret, private state, account-specific credential, personal input, local path, or maintainer-private dependency.
 - [ ] Third-party documentation explains ownership, cost drivers, limits, failure recovery, destroy, and residual verification.
 - [ ] Every focused increment has successful exact-head authoritative workflow

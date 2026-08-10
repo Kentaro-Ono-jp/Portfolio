@@ -55,12 +55,13 @@ or identity detail.
 This diagram is the currently implemented local and GitHub Actions runtime.
 The accepted AWS adapter below preserves its ownership and trust boundaries.
 
-## Accepted managed-ephemeral AWS deployment profile
+## Implemented managed-ephemeral AWS deployment profile
 
-The fourth-slice profile is an implemented Terraform definition, not live AWS
-runtime evidence. It is complete only after the focused increments in
+The fourth-slice profile is an implemented Terraform definition with one
+owner-authorized live apply-to-smoke-to-sweep proof completed by Issue #114.
 [Delivery Specification 0004](../delivery/0004-portable-managed-ephemeral-aws-deployment.md)
-implement and prove the lifecycle.
+separates that Step 5/Step 7 result from the still-later Step 6 automation and
+Step 8 full-slice publication work.
 
 ```mermaid
 flowchart LR
@@ -119,7 +120,7 @@ destroy controller. The ephemeral layer owns network, ingress, discovery,
 ECS, RDS, S3 application data, Amazon MQ, Cognito, secrets, and bounded logs.
 Manual and monthly environments use different names, state keys, and tags.
 
-The accepted lifecycle is preflight, immutable image selection, two-hour
+The accepted and live-proved lifecycle is preflight, immutable image selection, two-hour
 fallback registration, apply, migration, synthetic seed, health,
 authentication and asynchronous smoke, external HTTPS check, manual destroy,
 and tag plus service-specific residual sweep. The EventBridge Scheduler and
@@ -324,14 +325,13 @@ does not claim production readiness.
 - Multi-tenancy, organization membership, assignment queues, administration,
   account recovery, MFA, and audit search/export/retention/legal hold remain
   separate product decisions.
-- The managed-ephemeral AWS topology is implemented and inspected through an
-  AWS-free deterministic Terraform plan. An owner-authorized exploratory
-  evaluation consumed the bounded `3/3` construction attempts without a green
-  lifecycle; the partial environment was destroyed, state returned to zero,
-  and the residual sweep found no application resource. Lifecycle tooling and
-  automation remain unimplemented. No public hosted service, successful AWS
-  lifecycle, production identity provider, durable shared session, high
-  availability, or stable public URL is claimed.
+- The managed-ephemeral AWS topology is implemented, inspected through an
+  AWS-free deterministic Terraform plan, and proved by one owner-authorized
+  live lifecycle through authenticated asynchronous smoke, manual destroy, and
+  27-category zero residue. The environment is intentionally gone after proof.
+  GitHub OIDC/manual/monthly automation, a production identity provider,
+  durable shared session, high availability, always-on hosting, and a stable
+  public URL remain outside the completed Issue #114 scope.
 
 ## Accepted records
 

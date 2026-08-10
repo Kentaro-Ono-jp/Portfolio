@@ -153,3 +153,21 @@ The final tag sweep treats an unknown tagged resource kind as residue. For a
 known kind, its owning service-specific inventory is authoritative because the
 Resource Groups Tagging API can temporarily retain a mapping after the resource
 has already been deleted.
+
+## Issue 114 live checkpoint
+
+The owner-authorized Step 7 cycle completed the public lifecycle through three
+immutable images, verified fallback, apply, three healthy ECS tasks, migration,
+synthetic seed, authenticated external-HTTPS asynchronous smoke, manual
+destroy, and 27-category zero residue. The fallback and remote controls were
+removed only after that proof. A single billing-read Cost Explorer page
+returned an estimated `$0.000415` for the scoped two-day window; its accepted
+API-query charge and delayed estimate are supporting evidence only.
+
+The implementation history is not rewritten as uniformly green. An earlier
+real Scheduler-to-CodeBuild destroy invocation failed before destroy because
+the downloaded Terraform archive had been renamed while its official checksum
+line retained the original filename. The buildspec now downloads, verifies,
+extracts, and removes the same pinned filename. The focused PR/Issue evidence
+records the subsequent exact-head automatic-path result separately from that
+failed diagnostic run.

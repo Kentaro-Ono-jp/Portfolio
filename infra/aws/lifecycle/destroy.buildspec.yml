@@ -16,17 +16,17 @@ phases:
       - git -C /tmp/portfolio fetch --quiet --depth=1 origin "$SOURCE_SHA"
       - git -C /tmp/portfolio checkout --quiet --detach FETCH_HEAD
       - test "$(git -C /tmp/portfolio rev-parse HEAD)" = "$SOURCE_SHA"
-      - curl --fail --location --silent --show-error "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip" --output /tmp/terraform.zip
+      - curl --fail --location --silent --show-error "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip" --output /tmp/terraform_1.15.8_linux_amd64.zip
       - curl --fail --location --silent --show-error "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_SHA256SUMS" --output /tmp/terraform.sha256sums
       - cd /tmp && grep 'terraform_1.15.8_linux_amd64.zip$' terraform.sha256sums | sha256sum --check
-      - unzip -q /tmp/terraform.zip -d /usr/local/bin
+      - unzip -q /tmp/terraform_1.15.8_linux_amd64.zip -d /usr/local/bin
   build:
     commands:
       - cd /tmp/portfolio
       - python3 scripts/aws_lifecycle.py --aws-cli "$(command -v aws)" --config /tmp/config.json controller-destroy
   post_build:
     commands:
-      - rm -f /tmp/lifecycle.json /tmp/config.json /tmp/source.env /tmp/terraform.zip /tmp/terraform.sha256sums
+      - rm -f /tmp/lifecycle.json /tmp/config.json /tmp/source.env /tmp/terraform_1.15.8_linux_amd64.zip /tmp/terraform.sha256sums
       - echo "Fallback destroy controller completed."
 
 artifacts:
