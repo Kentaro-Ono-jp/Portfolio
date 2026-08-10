@@ -45,6 +45,20 @@
       ]
     },
     {
+      "Sid": "ManageApiGatewayLogDeliveryDependency",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogDelivery",
+        "logs:DeleteLogDelivery",
+        "logs:DescribeResourcePolicies",
+        "logs:GetLogDelivery",
+        "logs:ListLogDeliveries",
+        "logs:PutResourcePolicy",
+        "logs:UpdateLogDelivery"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "InspectExactImageRepositories",
       "Effect": "Allow",
       "Action": ["ecr:DescribeRepositories", "ecr:GetLifecyclePolicy"],

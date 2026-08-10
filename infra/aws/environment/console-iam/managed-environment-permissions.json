@@ -81,7 +81,7 @@
       }
     },
     {
-      "Sid": "CreateApiGatewayResourcesWithoutDependentTagContext",
+      "Sid": "AuthorizeApiGatewayCreateTagDependency",
       "Effect": "Allow",
       "Action": "apigateway:TagResource",
       "Resource": [
@@ -106,20 +106,6 @@
         "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*",
         "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks/*"
       ]
-    },
-    {
-      "Sid": "ManageApiGatewayLogDeliveryDependency",
-      "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogDelivery",
-        "logs:DeleteLogDelivery",
-        "logs:DescribeResourcePolicies",
-        "logs:GetLogDelivery",
-        "logs:ListLogDeliveries",
-        "logs:PutResourcePolicy",
-        "logs:UpdateLogDelivery"
-      ],
-      "Resource": "*"
     },
     {
       "Sid": "TagOnlyDuringNetworkCreation",

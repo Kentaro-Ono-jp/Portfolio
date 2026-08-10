@@ -68,6 +68,7 @@ EXPECTED_RESOURCE_COUNTS = {
     "aws_vpc_security_group_ingress_rule": 5,
     "random_password": 2,
 }
+EXPECTED_TAGGABLE_RESOURCE_COUNT = 62
 FORBIDDEN_RESOURCE_TYPES = {
     "aws_acm_certificate",
     "aws_alb",
@@ -125,6 +126,7 @@ REVIEWED_API_GATEWAY_IAM_ACTIONS = {
     "apigateway:PATCH",
     "apigateway:POST",
     "apigateway:PUT",
+    "apigateway:TagResource",
 }
 CONSOLE_IAM_TOKENS = {
     "AWS_ACCOUNT_ID": "111122223333",
@@ -1213,8 +1215,15 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             if not verb.startswith(("describe", "get", "head", "list")):
                 unconditioned_global_operator_writes.append(action)
     record(
-        "operatorHasNoUnconditionedGlobalWrite",
-        unconditioned_global_operator_writes == [],
+        "operatorHasOnlyOwnerAcceptedUnconditionedGlobalWrites",
+        set(unconditioned_global_operator_writes)
+        == {
+            action
+            for action in OWNER_ACCEPTED_GLOBAL_SERVICE_DEPENDENCY_ACTIONS
+            if not action.split(":", 1)[-1]
+            .lower()
+            .startswith(("describe", "get", "head", "list"))
+        },
     )
 
     generated_id_actions = [
@@ -1542,8 +1551,9 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             if not verb.startswith(("describe", "get", "head", "list")):
                 unconditioned_global_writes.append(action)
     record(
-        "onlyAwsGlobalDestroyActionIsTaskDefinitionDeregister",
-        unconditioned_global_writes == ["ecs:DeregisterTaskDefinition"],
+        "destroyHasOnlyOwnerAcceptedUnconditionedGlobalWrites",
+        set(unconditioned_global_writes)
+        == {"ecs:DeregisterTaskDefinition", "logs:DeleteLogDelivery"},
     )
     record(
         "destroyCanDeregisterTaskDefinition",
@@ -1554,8 +1564,8 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     record(
-        "operatorCannotDeregisterTaskDefinition",
-        not policy_allows(
+        "operatorCanDeregisterSupersededTaskDefinition",
+        policy_allows(
             permissions,
             "ecs:DeregisterTaskDefinition",
             "arn:aws:ecs:us-east-1:111122223333:task-definition/example-portfolio-manual-web:1",
@@ -2087,8 +2097,11 @@ def verify_tags(resources: list[dict[str, Any]]) -> int:
                 f"Resource has non-exact ownership tags: {resource['address']} {tags}"
             )
         tagged += 1
-    if tagged != 60:
-        raise RuntimeError(f"Expected 60 taggable resources, got {tagged}")
+    if tagged != EXPECTED_TAGGABLE_RESOURCE_COUNT:
+        raise RuntimeError(
+            f"Expected {EXPECTED_TAGGABLE_RESOURCE_COUNT} taggable resources, "
+            f"got {tagged}"
+        )
     return tagged
 
 

@@ -326,6 +326,22 @@ locals {
           ]
         },
         {
+          # HTTP API access logging uses account-level delivery permissions that
+          # expose neither a resource ARN nor a scoping condition.
+          Sid    = "ManageApiGatewayLogDeliveryDependency"
+          Effect = "Allow"
+          Action = [
+            "logs:CreateLogDelivery",
+            "logs:DeleteLogDelivery",
+            "logs:DescribeResourcePolicies",
+            "logs:GetLogDelivery",
+            "logs:ListLogDeliveries",
+            "logs:PutResourcePolicy",
+            "logs:UpdateLogDelivery",
+          ]
+          Resource = "*"
+        },
+        {
           Sid      = "InspectExactImageRepositories"
           Effect   = "Allow"
           Action   = ["ecr:DescribeRepositories", "ecr:GetLifecyclePolicy"]
@@ -663,21 +679,6 @@ locals {
             "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis/*",
             "arn:${var.aws_partition}:apigateway:${var.aws_region}::/vpclinks/*",
           ]
-        },
-        {
-          # HTTP API access logging uses account-level delivery permissions that
-          # expose neither a resource ARN nor a scoping condition.
-          Effect = "Allow"
-          Action = [
-            "logs:CreateLogDelivery",
-            "logs:DeleteLogDelivery",
-            "logs:DescribeResourcePolicies",
-            "logs:GetLogDelivery",
-            "logs:ListLogDeliveries",
-            "logs:PutResourcePolicy",
-            "logs:UpdateLogDelivery",
-          ]
-          Resource = "*"
         },
         {
           # CreateTaggedIdEnvironmentServices

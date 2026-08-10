@@ -217,6 +217,7 @@ matching `aws:CalledVia` forward-access context. Direct calls do not satisfy
 those grants. Route 53 deletion is not granted because AWS documents
 `DeleteNamespace` as needing only Cloud Map authority. AWS documents
 `ecs:DeregisterTaskDefinition` as not supporting resource-level permissions,
-so that one action is isolated as the only unconditioned global destroy write;
-it is absent from `OperatorPermissions` and the destroy role remains unable to
-mutate IAM or its own policies.
+so it and the account-level `logs:DeleteLogDelivery` cleanup dependency are the
+only unconditioned global destroy writes. The operator receives deregistration
+only through the separately named `LifecycleControlPolicy`; the destroy role
+remains unable to mutate IAM or its own policies.
