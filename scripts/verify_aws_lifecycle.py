@@ -215,9 +215,9 @@ def main() -> int:
     required_aws_preflight = {
         "/usr/local/bin/aws --version",
         "/usr/local/bin/aws sts get-caller-identity",
-        "/usr/local/bin/aws s3api get-object --bucket \"$PORTFOLIO_STATE_BUCKET\" --key \"$PORTFOLIO_CONFIGURATION_KEY\"",
-        "/usr/local/bin/aws s3api get-object --bucket \"$PORTFOLIO_STATE_BUCKET\" --key \"$LEASE_KEY\"",
-        "/usr/local/bin/aws sts assume-role --role-arn \"$DESTROY_ROLE_ARN\"",
+        '/usr/local/bin/aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$PORTFOLIO_CONFIGURATION_KEY"',
+        '/usr/local/bin/aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$LEASE_KEY"',
+        '/usr/local/bin/aws sts assume-role --role-arn "$DESTROY_ROLE_ARN"',
         "--aws-cli /usr/local/bin/aws",
     }
     if not all(token in destroy_build for token in required_aws_preflight):
