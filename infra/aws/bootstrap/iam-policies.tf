@@ -616,8 +616,8 @@ locals {
         },
         {
           # CreateTaggedApiGatewayResources
-          Effect   = "Allow"
-          Action   = "apigateway:POST"
+          Effect = "Allow"
+          Action = "apigateway:POST"
           Resource = [
             "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis",
             "arn:${var.aws_partition}:apigateway:${var.aws_region}::/vpclinks",
