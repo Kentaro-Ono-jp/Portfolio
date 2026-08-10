@@ -167,9 +167,10 @@ API-query charge and delayed estimate are supporting evidence only.
 The implementation history is not rewritten as uniformly green. Two real
 Scheduler-to-CodeBuild destroy invocations failed before destroy: the first
 renamed the downloaded Terraform archive while retaining the official checksum
-filename, and the next two exposed the complete CodeBuild runtime binding:
-the default `python3` was 3.10, and selecting `python: 3.13` makes the selected
-runtime available through `python` while leaving the OS `python3` unchanged.
-The buildspec now preserves the official archive filename, selects Python 3.13,
-and invokes that selected entrypoint. The focused PR/Issue evidence records the
-subsequent automatic-path result separately from all diagnostic runs.
+filename, and the later runs exposed the complete CodeBuild runtime binding:
+the default `python3` was 3.10, while the supported `python: 3.13` selection is
+implemented by `pyenv global` but the build shell can still resolve the OS
+interpreter ahead of the selected shim. The buildspec now preserves the
+official archive filename, selects Python 3.13, and invokes the selected
+interpreter through `pyenv exec python`. The focused PR/Issue evidence records
+the subsequent automatic-path result separately from all diagnostic runs.
