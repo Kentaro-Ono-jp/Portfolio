@@ -26,6 +26,16 @@ maximum ceiling shared by all roles. The Console procedure contains no
 explicit deny, dynamic attachment, inline policy, or Terraform-managed IAM
 object.
 
+The Console-owned IAM objects are a frozen prerequisite, not a deployment
+phase. Static maintenance is performed once by an owner-admin principal and
+includes quota proof plus live Console read-back. Normal deployment verifies
+the existing source identity, assumes the exact operator, and uses the
+separate exact-ARN `StaticIamAttestation` policy to compare the live user,
+roles, trusts, boundaries, attachments, and default managed-policy documents
+with the checked-in contract. Drift fails closed. Deployment cannot generate,
+attach, version, repair, or otherwise mutate IAM and does not recalculate IAM
+quota or invoke the bootstrap IAM root.
+
 The Console-owned existing `ReactorFrontNoel` source user has no Console
 login and no AWS resource authority. Its three static identity policies permit
 only `sts:AssumeRole` on the exact operator, billing-read, and observer roles.
@@ -117,6 +127,13 @@ Run the repository-owned entrypoint:
 ```text
 python scripts/verify.py --groups aws-static
 ```
+
+The default static-IAM proof is also directly available as
+`python scripts/verify_aws_static_iam.py`. Its optional `--live` mode performs
+only source-identity check, exact operator assumption, and read-only IAM
+attestation. All deployment configuration is explicit repository or AWS-output
+input; only the existing source access-key material may come from the private
+credential store.
 
 An AWS-free verification run is never deployment authority. A live plan or
 apply requires a separately approved operator session, exact remote backend,

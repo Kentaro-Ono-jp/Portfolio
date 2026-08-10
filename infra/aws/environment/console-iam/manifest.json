@@ -1,5 +1,13 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "lifecycle": {
+    "staticIamOwner": "owner-admin principal",
+    "deploymentMode": "read-only-consumer",
+    "deploymentIamMutation": false,
+    "deploymentPolicyGeneration": false,
+    "deploymentQuotaCalculation": false,
+    "driftMode": "fail-closed"
+  },
   "ownershipTags": {
     "PortfolioEnvironment": "${ENVIRONMENT}",
     "PortfolioManaged": "true",
@@ -40,6 +48,10 @@
     "operatorPermissions": {
       "name": "ReactorFrontPortfolioOperatorPermissions",
       "document": "operator-permissions.json"
+    },
+    "staticIamAttestation": {
+      "name": "ReactorFrontPortfolioStaticIamAttestation",
+      "document": "static-iam-attestation.json"
     },
     "managedEnvironmentPermissions": {
       "name": "ReactorFrontPortfolioManagedEnvironmentPermissions",
@@ -91,6 +103,7 @@
       "trust": "operator-trust.json",
       "permissions": [
         "operatorPermissions",
+        "staticIamAttestation",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions"
       ],

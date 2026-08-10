@@ -2,8 +2,8 @@
 
 > Status: three vertical slices completed; fourth portable managed-ephemeral
 > AWS deployment slice in progress — runtime compatibility, persistent
-> bootstrap/least privilege, and managed-environment Terraform implemented —
-> 2026-08-09
+> bootstrap/least privilege, frozen persistent deployment IAM, and
+> managed-environment Terraform implemented — 2026-08-10
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -38,6 +38,9 @@ third-party clone deploys only into the third party's AWS account. Runtime
 adapters plus the persistent Terraform state/ECR/IAM bootstrap and static
 least-privilege proof are implemented. The NAT-free managed application
 topology is also defined and proven through an AWS-free deterministic plan.
+The maintainer deployment IAM is a frozen Console-owned prerequisite:
+deployment assumes the exact operator, attests the canonical objects
+read-only, and fails closed instead of generating or repairing IAM.
 Lifecycle commands, deployment workflow, and a real AWS green cycle remain
 separate increments.
 
@@ -260,7 +263,11 @@ root for the NAT-free VPC, generated API Gateway endpoint, VPC Link and Cloud
 Map ingress, three Fargate services, RDS PostgreSQL 18, S3, Amazon MQ RabbitMQ
 4.2, Cognito managed login, injected secrets, bounded logs, exact ownership
 tags, and portable outputs. Its fail-closed static plan creates no AWS
-resource. See the
+resource. The maintainer IAM contract is separately frozen: one owner-admin
+maintenance path owns quota and Console changes, while deployment can only
+verify the exact source user, assume the exact operator, and read back the
+canonical static objects by exact ARN. It cannot mutate IAM or self-heal
+drift. See the
 [AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md) and
 [portable AWS bootstrap guide](AWS_BOOTSTRAP.md), plus the
 [managed-environment guide](infra/aws/environment/README.md). An

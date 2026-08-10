@@ -317,6 +317,7 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
         "scripts/aws_bootstrap_backend.py",
         "scripts/verify_aws_bootstrap.py",
         "scripts/verify_aws_environment.py",
+        "scripts/verify_aws_static_iam.py",
     } or normalized.startswith(("infra/aws/bootstrap/", "infra/aws/environment/")):
         return frozenset({"aws-static"})
 
@@ -798,6 +799,7 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_static_iam.py",
             ],
         ),
         (
@@ -828,6 +830,7 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_static_iam.py",
             ],
         ),
         (
@@ -968,6 +971,10 @@ def static_checks(
             [sys.executable, "scripts/verify_aws_bootstrap.py"],
         ),
         (
+            "Prove the frozen persistent static IAM contract",
+            [sys.executable, "scripts/verify_aws_static_iam.py"],
+        ),
+        (
             "Prove the NAT-free managed AWS environment",
             [sys.executable, "scripts/verify_aws_environment.py"],
         ),
@@ -998,6 +1005,7 @@ def static_checks(
         "Validate deployable Compose boundaries": "compose",
         "Validate test identity boundary": "compose",
         "Prove portable AWS bootstrap and policy boundaries": "aws-static",
+        "Prove the frozen persistent static IAM contract": "aws-static",
         "Prove the NAT-free managed AWS environment": "aws-static",
     }
     filtered = [check for check in checks if check_groups[check[0]] in groups]

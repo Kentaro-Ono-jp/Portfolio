@@ -4,6 +4,14 @@ This Terraform root implements the persistent state, ECR, Permissions
 Boundary, role, trust, pass-role, and environment-isolation contracts described
 in the [portable AWS bootstrap guide](../../../AWS_BOOTSTRAP.md).
 
+For the maintainer account, this root is a one-time provisioning/reference
+implementation. The selected live contract is the Console-owned static IAM
+inventory in `../environment/console-iam/`. Normal deployment must not plan or
+apply this root, recalculate IAM quota, generate policy documents, change a
+permissions boundary, or repair drift. It only assumes the already-fixed
+operator and performs exact read-only attestation. A third-party account owner
+may still use this root once to establish its own portable prerequisites.
+
 - `versions.tf` pins Terraform and the AWS provider.
 - `variables.tf` rejects ambiguous account, partition, region, name,
   repository, state-key, principal, and workflow inputs.
