@@ -73,10 +73,13 @@ CodeBuild projects outside the environment state:
   repository Dockerfiles, and pushes only to the three exact persistent ECR
   repositories;
 - the non-privileged destroy project clones the exact public commit, verifies
-  the pinned Terraform archive, assumes only the exact destroy role, destroys
-  the exact remote state, deletes the three exact published image digests from
-  the persistent repositories, and performs the service/tag sweep. The project
-  has two static automatic retries because Scheduler delivery proves only that
+  the selected Python and AWS CLI v2 entrypoints, reads both exact controller
+  inputs, proves its exact caller, and preflights the one allowed destroy-role
+  assumption before downloading tools. The CodeBuild role cannot mutate
+  lifecycle or Terraform state itself. The assumed destroy role destroys the
+  exact remote state, deletes the three exact published image digests from the
+  persistent repositories, and performs the service/tag sweep. The project has
+  two static automatic retries because Scheduler delivery proves only that
   CodeBuild accepted the start request, not that the build itself succeeded.
 
 Only the exact image project is operator-reconcilable. This avoids an

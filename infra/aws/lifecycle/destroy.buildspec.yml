@@ -12,10 +12,14 @@ phases:
       - test -x /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python
       - /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 13)'
       - test -x /usr/local/bin/aws
-      - aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$PORTFOLIO_CONFIGURATION_KEY" /tmp/lifecycle.json >/dev/null
-      - /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python -c 'import json; p=json.load(open("/tmp/lifecycle.json", encoding="utf-8")); d=p["configuration"]; json.dump(d, open("/tmp/config.json", "w", encoding="utf-8")); open("/tmp/source.env", "w", encoding="utf-8").write("SOURCE_SHA=" + d["sourceSha"] + "\nREPOSITORY_URL=" + d["repositoryUrl"] + "\n")'
+      - /usr/local/bin/aws --version 2>&1 | grep -q '^aws-cli/2\.'
+      - /usr/local/bin/aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$PORTFOLIO_CONFIGURATION_KEY" /tmp/lifecycle.json >/dev/null
+      - /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python -c 'import json; p=json.load(open("/tmp/lifecycle.json", encoding="utf-8")); d=p["configuration"]; json.dump(d, open("/tmp/config.json", "w", encoding="utf-8")); open("/tmp/source.env", "w", encoding="utf-8").write("SOURCE_SHA=" + d["sourceSha"] + "\nREPOSITORY_URL=" + d["repositoryUrl"] + "\nLEASE_KEY=" + d["controlPrefix"] + "/lease.json\nDESTROY_ROLE_ARN=" + d["roles"]["destroy"] + "\nEXPECTED_CALLER_PREFIX=arn:" + d["partition"] + ":sts::" + d["accountId"] + ":assumed-role/" + d["namePrefix"] + "-" + d["environment"] + "-codebuild-destroy/\n")'
       - source /tmp/source.env
       - test "${#SOURCE_SHA}" -eq 40
+      - CALLER_ARN="$(/usr/local/bin/aws sts get-caller-identity --query Arn --output text)" && [[ "$CALLER_ARN" == "$EXPECTED_CALLER_PREFIX"* ]]
+      - /usr/local/bin/aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$LEASE_KEY" /tmp/lease.json >/dev/null
+      - /usr/local/bin/aws sts assume-role --role-arn "$DESTROY_ROLE_ARN" --role-session-name portfolio-destroy-preflight --query 'Credentials.Expiration' --output text >/dev/null
       - git init --quiet /tmp/portfolio
       - git -C /tmp/portfolio remote add origin "$REPOSITORY_URL"
       - git -C /tmp/portfolio fetch --quiet --depth=1 origin "$SOURCE_SHA"
@@ -31,7 +35,7 @@ phases:
       - /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python scripts/aws_lifecycle.py --aws-cli /usr/local/bin/aws --config /tmp/config.json controller-destroy
   post_build:
     commands:
-      - rm -f /tmp/lifecycle.json /tmp/config.json /tmp/source.env /tmp/terraform_1.15.8_linux_amd64.zip /tmp/terraform.sha256sums
+      - rm -f /tmp/lifecycle.json /tmp/lease.json /tmp/config.json /tmp/source.env /tmp/terraform_1.15.8_linux_amd64.zip /tmp/terraform.sha256sums
       - echo "Fallback destroy controller completed."
 
 artifacts:

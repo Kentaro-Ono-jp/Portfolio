@@ -109,7 +109,10 @@ prints only sanitized counts and hashes.
    Verify that the destroy role has only `OperatorPermissions`,
    `DestroyPolicy`, and `LifecycleDestroyPolicy`. Verify that Scheduler,
    CodeBuild image, and CodeBuild destroy each have only their one exact
-   lifecycle policy. Verify that the old
+   lifecycle policy. The CodeBuild destroy policy must read both exact
+   controller inputs (`configuration.json` and `lease.json`), must not mutate
+   lifecycle or Terraform state itself, and must assume only the exact destroy
+   role before any mutation. Verify that the old
    combined policy has zero attachments and zero boundary usages before
    deleting it.
 9. Verify the Noel user has no Console login, group, inline policy, boundary,

@@ -3,7 +3,7 @@
   "documents": {
     "api-workload.json": "c97129d67f7d7835c85321870979a6527e830a58898b0465bbb424460cb4233d",
     "codebuild-destroy-trust.json": "ebe0f4b78d27b51cf6dcab534818fc6710767d663d26b916e5a1e7a3d0369844",
-    "codebuild-destroy.json": "e43881f2e9cb53d35d9274f29b26f041d1a8985eb01c8d4296f2d4e931259504",
+    "codebuild-destroy.json": "ed8076f698ad9d98729f236f364387e98fa25a919a28e93e9e65b92d5e1ee481",
     "codebuild-image-trust.json": "3c6b0c077a5fd7bab4ca1257926954747ca64045dddd69ae1ddcd953df1adec3",
     "codebuild-image.json": "820ce65631188c51fbde46e3e4ef5b1dac0ef7cf86ef052112ad120155d52d26",
     "destroy-trust.json": "6dc6c66fd6a12822ddb1c5812ea2a666626fd3922bb504bb30f66447b2e62138",

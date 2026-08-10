@@ -522,6 +522,36 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
     for purpose, expected_permissions in expected_controller_permissions.items():
         if roles[purpose].get("permissions") != expected_permissions:
             raise RuntimeError(f"Controller role permissions drifted: {purpose}")
+    codebuild_destroy = policies["codebuildDestroy"]
+    lifecycle_inputs = [
+        statement
+        for statement in codebuild_destroy.get("Statement", [])
+        if statement.get("Sid") == "ReadExactLifecycleInputs"
+    ]
+    exact_control_inputs = {
+        "arn:aws:s3:::example-portfolio-111122223333-us-east-1-state/controls/"
+        "example-portfolio/manual/configuration.json",
+        "arn:aws:s3:::example-portfolio-111122223333-us-east-1-state/controls/"
+        "example-portfolio/manual/lease.json",
+    }
+    if (
+        len(lifecycle_inputs) != 1
+        or lifecycle_inputs[0].get("Action") != "s3:GetObject"
+        or set(string_values(lifecycle_inputs[0].get("Resource", [])))
+        != exact_control_inputs
+    ):
+        raise RuntimeError(
+            "CodeBuild destroy must read both exact lifecycle inputs before assumption"
+        )
+    if any(
+        fnmatch.fnmatchcase(action.lower(), pattern.lower())
+        for statement in codebuild_destroy.get("Statement", [])
+        for action in ("s3:PutObject", "s3:DeleteObject")
+        for pattern in string_values(statement.get("Action", []))
+    ):
+        raise RuntimeError(
+            "CodeBuild destroy must not mutate lifecycle or Terraform state directly"
+        )
 
     trust_files = {role["trust"] for role in roles.values()}
     trusts = {

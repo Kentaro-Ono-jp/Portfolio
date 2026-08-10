@@ -931,17 +931,45 @@
       "expected": "denied"
     },
     {
-      "name": "CodeBuild uses exact state lock",
+      "name": "CodeBuild cannot mutate exact state lock before role assumption",
       "role": "manual/codebuild-destroy",
       "action": "s3:DeleteObject",
       "resource": "state-lock:manual",
-      "expected": "allowed"
+      "expected": "denied"
     },
     {
       "name": "CodeBuild cannot delete bootstrap state",
       "role": "manual/codebuild-destroy",
       "action": "s3:DeleteObject",
       "resource": "bootstrap-state",
+      "expected": "denied"
+    },
+    {
+      "name": "CodeBuild reads exact lifecycle configuration",
+      "role": "manual/codebuild-destroy",
+      "action": "s3:GetObject",
+      "resource": "control-configuration:manual",
+      "expected": "allowed"
+    },
+    {
+      "name": "CodeBuild reads exact lifecycle lease",
+      "role": "manual/codebuild-destroy",
+      "action": "s3:GetObject",
+      "resource": "control-lease:manual",
+      "expected": "allowed"
+    },
+    {
+      "name": "CodeBuild cannot read lifecycle reviewer secret",
+      "role": "manual/codebuild-destroy",
+      "action": "s3:GetObject",
+      "resource": "control-secret:manual",
+      "expected": "denied"
+    },
+    {
+      "name": "CodeBuild cannot mutate lifecycle lease",
+      "role": "manual/codebuild-destroy",
+      "action": "s3:PutObject",
+      "resource": "control-lease:manual",
       "expected": "denied"
     },
     {

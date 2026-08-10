@@ -1076,27 +1076,17 @@ locals {
   }
 
   codebuild_destroy_policies = {
-    for environment, key in var.environment_state_keys : environment => jsonencode({
+    for environment in keys(var.environment_state_keys) : environment => jsonencode({
       Version = "2012-10-17"
       Statement = [
         {
-          Sid       = "ListExactEnvironmentState"
-          Effect    = "Allow"
-          Action    = "s3:ListBucket"
-          Resource  = local.state_bucket_arn
-          Condition = { StringLike = { "s3:prefix" = [key, "${key}.tflock"] } }
-        },
-        {
-          Sid      = "UseExactEnvironmentState"
-          Effect   = "Allow"
-          Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-          Resource = [local.environment_state_arns[environment], local.environment_lock_arns[environment]]
-        },
-        {
-          Sid      = "UseExactLifecycleControl"
-          Effect   = "Allow"
-          Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-          Resource = "${local.state_bucket_arn}/controls/${var.name_prefix}/${environment}/*"
+          Sid    = "ReadExactLifecycleInputs"
+          Effect = "Allow"
+          Action = "s3:GetObject"
+          Resource = [
+            "${local.state_bucket_arn}/controls/${var.name_prefix}/${environment}/configuration.json",
+            "${local.state_bucket_arn}/controls/${var.name_prefix}/${environment}/lease.json",
+          ]
         },
         {
           Sid      = "WriteExactDestroyLogs"

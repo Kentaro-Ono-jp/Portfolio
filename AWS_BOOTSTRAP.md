@@ -61,7 +61,7 @@ environment destroy authority cannot remove persistent bootstrap resources.
 | ML workload | Reads/writes only the exact environment application objects; it cannot delete them and receives no PostgreSQL or Cognito administration authority. |
 | Future automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name/ref, and a customized subject that encodes only `workflow_dispatch` or `schedule`. It can assume only exact environment operator/destroy roles. |
 | Scheduler fallback | Uses the exact persistent environment schedule group and starts only that environment's future CodeBuild destroy project. The trust SourceArn is the group ARN required by Scheduler, never an individual schedule ARN. |
-| CodeBuild fallback | Uses only that environment state and lock objects, writes its exact destroy log, and assumes only that environment destroy role. |
+| CodeBuild fallback | Reads only that environment's exact lifecycle configuration and lease, writes its exact destroy log, and assumes only that environment destroy role. Terraform state and lifecycle mutation begin only after the separate destroy role is assumed. |
 | Destroy | Deletes only exact environment-named or correctly tagged application resources. It cannot mutate state, ECR, IAM, the boundary, or another environment. |
 
 Every delegable role carries the same fixed boundary. The boundary is the

@@ -2,10 +2,13 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ReadExactLifecycleConfiguration",
+      "Sid": "ReadExactLifecycleInputs",
       "Effect": "Allow",
       "Action": "s3:GetObject",
-      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/configuration.json"
+      "Resource": [
+        "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/configuration.json",
+        "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/lease.json"
+      ]
     },
     {
       "Sid": "WriteExactDestroyLogs",

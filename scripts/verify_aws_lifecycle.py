@@ -212,8 +212,27 @@ def main() -> int:
         raise RuntimeError("Destroy controller selected-runtime entrypoint drifted")
     if "sys.version_info[:2] == (3, 13)" not in destroy_build:
         raise RuntimeError("Destroy controller runtime assertion drifted")
-    if destroy_build.count("/usr/local/bin/aws") != 2:
+    required_aws_preflight = {
+        "/usr/local/bin/aws --version",
+        "/usr/local/bin/aws sts get-caller-identity",
+        "/usr/local/bin/aws s3api get-object --bucket \"$PORTFOLIO_STATE_BUCKET\" --key \"$PORTFOLIO_CONFIGURATION_KEY\"",
+        "/usr/local/bin/aws s3api get-object --bucket \"$PORTFOLIO_STATE_BUCKET\" --key \"$LEASE_KEY\"",
+        "/usr/local/bin/aws sts assume-role --role-arn \"$DESTROY_ROLE_ARN\"",
+        "--aws-cli /usr/local/bin/aws",
+    }
+    if not all(token in destroy_build for token in required_aws_preflight):
         raise RuntimeError("Destroy controller AWS CLI binding drifted")
+    codebuild_destroy = load_json(CONSOLE_IAM_ROOT / "codebuild-destroy.json")
+    lifecycle_inputs = statement(codebuild_destroy, "ReadExactLifecycleInputs")
+    expected_inputs = {
+        "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/configuration.json",
+        "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/lease.json",
+    }
+    if (
+        lifecycle_inputs.get("Action") != "s3:GetObject"
+        or set(lifecycle_inputs.get("Resource", [])) != expected_inputs
+    ):
+        raise RuntimeError("Destroy controller lifecycle input authority drifted")
     if destroy_build.count(f"/tmp/{terraform_archive}") != 3 or (
         f"grep '{terraform_archive}$' terraform.sha256sums | sha256sum --check"
         not in destroy_build

@@ -286,6 +286,24 @@ def resolve_symbol(value: str, payload: dict[str, Any]) -> str:
         return payload["environment_lock_arns"][value.removeprefix("state-lock:")]
     if value.startswith("state:"):
         return payload["environment_state_arns"][value.removeprefix("state:")]
+    if value.startswith("control-configuration:"):
+        environment = value.removeprefix("control-configuration:")
+        return (
+            f"{payload['state_bucket_arn']}/controls/example-portfolio/"
+            f"{environment}/configuration.json"
+        )
+    if value.startswith("control-lease:"):
+        environment = value.removeprefix("control-lease:")
+        return (
+            f"{payload['state_bucket_arn']}/controls/example-portfolio/"
+            f"{environment}/lease.json"
+        )
+    if value.startswith("control-secret:"):
+        environment = value.removeprefix("control-secret:")
+        return (
+            f"{payload['state_bucket_arn']}/controls/example-portfolio/"
+            f"{environment}/synthetic-reviewer.json"
+        )
     if value.startswith("ecr:"):
         return payload["ecr_arns"][value.removeprefix("ecr:")]
     if value.startswith("app-object:"):
