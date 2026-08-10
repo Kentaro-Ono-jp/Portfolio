@@ -26,7 +26,7 @@ output "static_contract" {
     public_inbound_cidrs       = []
     security_group_edges = [
       { from = "api-gateway-vpc-link", to = "web", protocol = "tcp", port = 3000 },
-      { from = "web", to = "api", protocol = "tcp", port = 8000 },
+      { from = "api-gateway-vpc-link", to = "api", protocol = "tcp", port = 8000 },
       { from = "api", to = "postgresql", protocol = "tcp", port = 5432 },
       { from = "api", to = "rabbitmq", protocol = "tcp", port = 5671 },
       { from = "ml", to = "rabbitmq", protocol = "tcp", port = 5671 },

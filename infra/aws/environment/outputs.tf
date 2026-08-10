@@ -10,6 +10,7 @@ output "public_endpoints" {
   description = "Non-secret generated endpoints and private service identifiers required by Step 5."
   value = {
     web_https             = module.ingress.public_api_endpoint
+    api_https             = module.ingress.api_endpoint
     api_private_dns       = module.ingress.cloud_map.api_dns_name
     cognito_authorization = module.identity.runtime_contract.authorization_url
     cognito_issuer        = module.identity.runtime_contract.issuer

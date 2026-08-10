@@ -105,9 +105,15 @@ run "portable_environment_contract" {
       output.static_contract.network.isolated_subnet_count == 2 &&
       output.static_contract.network.isolated_default_routes == 0 &&
       length(output.static_contract.network.public_inbound_cidrs) == 0 &&
-      length(output.static_contract.network.security_group_edges) == 5
+      length(output.static_contract.network.security_group_edges) == 5 &&
+      contains(output.static_contract.network.security_group_edges, {
+        from     = "api-gateway-vpc-link"
+        to       = "api"
+        protocol = "tcp"
+        port     = 8000
+      })
     )
-    error_message = "The network must remain NAT-free, isolated, inbound-closed, and limited to five accepted service edges."
+    error_message = "The NAT-free topology must include the exact VPC Link to API service edge."
   }
 
   assert {
@@ -115,10 +121,12 @@ run "portable_environment_contract" {
       output.static_contract.ingress.public_boundary == "api-gateway-http-api-generated-https" &&
       output.static_contract.ingress.integration_connection == "VPC_LINK" &&
       output.static_contract.ingress.integration_target == "cloud-map:web" &&
+      output.static_contract.ingress.api_integration_target == "cloud-map:api" &&
+      output.static_contract.ingress.generated_https_apis == 2 &&
       output.static_contract.ingress.alb_resources == 0 &&
       output.static_contract.ingress.custom_domain_resources == 0
     )
-    error_message = "Ingress must use only the generated HTTP API endpoint, VPC Link, and Cloud Map."
+    error_message = "Ingress must use only two generated HTTP API endpoints, one VPC Link, and the Web/API Cloud Map targets."
   }
 
   assert {

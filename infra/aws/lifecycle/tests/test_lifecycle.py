@@ -473,6 +473,18 @@ class LifecycleContractTests(unittest.TestCase):
             },
             {
                 "ResourceARN": (
+                    "arn:aws:ecs:us-east-1:111122223333:"
+                    "service/reactorfront-manual/reactorfront-manual-web"
+                )
+            },
+            {
+                "ResourceARN": (
+                    "arn:aws:ecs:us-east-1:111122223333:"
+                    "task/reactorfront-manual/deleted"
+                )
+            },
+            {
+                "ResourceARN": (
                     "arn:aws:ec2:us-east-1:111122223333:"
                     "security-group-rule/sgr-deleted"
                 )
@@ -481,6 +493,8 @@ class LifecycleContractTests(unittest.TestCase):
         inventory = {
             "cognitoUserPool": 0,
             "activeTaskDefinition": 0,
+            "ecsService": 0,
+            "ecsTask": 0,
             "securityGroup": 0,
         }
         self.assertEqual(

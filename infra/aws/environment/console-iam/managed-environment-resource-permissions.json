@@ -16,6 +16,7 @@
         "ec2:DescribeVpcAttribute",
         "ec2:DescribeVpcEndpoints",
         "ec2:DescribeVpcs",
+        "ecs:DescribeTaskDefinition",
         "logs:DescribeLogGroups",
         "rds:DescribeDBInstances",
         "servicediscovery:GetNamespace",
@@ -31,7 +32,9 @@
       "Effect": "Allow",
       "Action": [
         "apigateway:GET",
+        "apigateway:PATCH",
         "apigateway:POST",
+        "apigateway:PUT",
         "cognito-idp:CreateGroup",
         "cognito-idp:CreateManagedLoginBranding",
         "cognito-idp:CreateResourceServer",
@@ -54,13 +57,17 @@
         "ec2:ModifySecurityGroupRules",
         "ec2:ModifyVpcAttribute",
         "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ecs:UpdateService",
         "servicediscovery:CreateService"
       ],
       "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::*",
         "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*",
         "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks/*",
         "arn:${AWS_PARTITION}:cognito-idp:${AWS_REGION}:${AWS_ACCOUNT_ID}:userpool/*",
         "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:*/*",
+        "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/${NAME_PREFIX}-${ENVIRONMENT}/${NAME_PREFIX}-${ENVIRONMENT}-*",
         "arn:${AWS_PARTITION}:servicediscovery:${AWS_REGION}:${AWS_ACCOUNT_ID}:namespace/*"
       ],
       "Condition": {
@@ -78,7 +85,6 @@
       "Action": [
         "ecs:DescribeClusters",
         "ecs:DescribeServices",
-        "ecs:DescribeTaskDefinition",
         "ecs:ListTagsForResource",
         "logs:ListTagsForResource",
         "logs:PutRetentionPolicy",

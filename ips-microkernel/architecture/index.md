@@ -100,8 +100,9 @@ flowchart LR
 
 The initial proof uses public task subnets for outbound-only Fargate access and
 isolated service subnets for RDS and Amazon MQ. Security Groups permit no
-direct Internet task ingress. VPC Link reaches only Web, Web reaches only API,
-and API/ML reach only their required managed dependencies. An S3 gateway
+direct Internet task ingress. The shared VPC Link reaches Web and API on their
+exact ports; Web reaches API only through the second generated HTTPS endpoint.
+API/ML reach only their required managed dependencies. An S3 gateway
 endpoint is used, and NAT Gateway, ALB, custom domain, CloudFront, and WAF are
 not initial requirements.
 

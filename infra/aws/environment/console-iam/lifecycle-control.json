@@ -94,6 +94,34 @@
       }
     },
     {
+      "Sid": "TagMigrationTaskOnCreate",
+      "Effect": "Allow",
+      "Action": "ecs:TagResource",
+      "Resource": "arn:${AWS_PARTITION}:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:task/${NAME_PREFIX}-${ENVIRONMENT}/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "DeregisterSupersededTaskDefinitionAwsGlobalOnly",
+      "Effect": "Allow",
+      "Action": "ecs:DeregisterTaskDefinition",
+      "Resource": "*"
+    },
+    {
       "Sid": "InspectAndStopExactEnvironmentTasks",
       "Effect": "Allow",
       "Action": ["ecs:DescribeTasks", "ecs:ListTasks", "ecs:StopTask"],

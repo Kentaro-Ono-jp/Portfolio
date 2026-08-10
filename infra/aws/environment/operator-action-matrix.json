@@ -8,9 +8,12 @@
   "resourceActions": {
     "aws_apigatewayv2_api": [
       ["apigateway:POST", "api-gateway-api-collection", "request-tags"],
-      ["apigateway:POST", "api-gateway-tags", "owner-accepted-global-tagging"],
+      ["apigateway:POST", "api-gateway-tags", "owner-accepted-no-tag-context"],
+      ["apigateway:PUT", "api-gateway-tags", "owner-accepted-no-tag-context"],
       ["apigateway:GET", "api-gateway-api", "resource-tags"],
-      ["apigateway:POST", "api-gateway-api", "resource-tags"]
+      ["apigateway:PATCH", "api-gateway-api", "owner-accepted-no-tag-context"],
+      ["apigateway:POST", "api-gateway-api", "resource-tags"],
+      ["apigateway:PUT", "api-gateway-api", "resource-tags"]
     ],
     "aws_apigatewayv2_integration": [
       ["apigateway:POST", "api-gateway-integration-collection", "resource-tags"],
@@ -22,14 +25,30 @@
     ],
     "aws_apigatewayv2_stage": [
       ["apigateway:POST", "api-gateway-stage-collection", "resource-tags"],
+      ["apigateway:TagResource", "api-gateway-stage-collection", "owner-accepted-no-tag-context"],
+      ["apigateway:POST", "api-gateway-tags", "owner-accepted-no-tag-context"],
+      ["apigateway:PUT", "api-gateway-tags", "owner-accepted-no-tag-context"],
       ["apigateway:GET", "api-gateway-stage", "resource-tags"],
-      ["apigateway:POST", "api-gateway-stage", "resource-tags"]
+      ["apigateway:PATCH", "api-gateway-stage", "owner-accepted-no-tag-context"],
+      ["apigateway:POST", "api-gateway-stage", "resource-tags"],
+      ["apigateway:PUT", "api-gateway-stage", "resource-tags"],
+      ["logs:CreateLogDelivery", "*", "owner-accepted-global-service-dependency"],
+      ["logs:DeleteLogDelivery", "*", "owner-accepted-global-service-dependency"],
+      ["logs:DescribeResourcePolicies", "*", "owner-accepted-global-service-dependency"],
+      ["logs:GetLogDelivery", "*", "owner-accepted-global-service-dependency"],
+      ["logs:ListLogDeliveries", "*", "owner-accepted-global-service-dependency"],
+      ["logs:PutResourcePolicy", "*", "owner-accepted-global-service-dependency"],
+      ["logs:UpdateLogDelivery", "*", "owner-accepted-global-service-dependency"]
     ],
     "aws_apigatewayv2_vpc_link": [
       ["apigateway:POST", "api-gateway-vpc-link-collection", "request-tags"],
-      ["apigateway:POST", "api-gateway-tags", "owner-accepted-global-tagging"],
+      ["apigateway:TagResource", "api-gateway-vpc-link-collection", "owner-accepted-no-tag-context"],
+      ["apigateway:POST", "api-gateway-tags", "owner-accepted-no-tag-context"],
+      ["apigateway:PUT", "api-gateway-tags", "owner-accepted-no-tag-context"],
       ["apigateway:GET", "api-gateway-vpc-link", "resource-tags"],
-      ["apigateway:POST", "api-gateway-vpc-link", "resource-tags"]
+      ["apigateway:PATCH", "api-gateway-vpc-link", "owner-accepted-no-tag-context"],
+      ["apigateway:POST", "api-gateway-vpc-link", "resource-tags"],
+      ["apigateway:PUT", "api-gateway-vpc-link", "resource-tags"]
     ],
     "aws_cloudwatch_log_group": [
       ["logs:CreateLogGroup", "log-group", "exact-resource-and-request-tags"],
@@ -89,11 +108,13 @@
       ["ecs:CreateService", "ecs-service", "exact-resource-and-request-tags"],
       ["ecs:DescribeServices", "ecs-service", "exact-resource"],
       ["ecs:ListTagsForResource", "ecs-service", "exact-resource"],
-      ["ecs:TagResource", "ecs-service", "exact-resource-and-request-tags"]
+      ["ecs:TagResource", "ecs-service", "exact-resource-and-request-tags"],
+      ["ecs:UpdateService", "ecs-service", "resource-tags"]
     ],
     "aws_ecs_task_definition": [
       ["ecs:RegisterTaskDefinition", "ecs-task-definition", "exact-resource-and-request-tags"],
-      ["ecs:DescribeTaskDefinition", "ecs-task-definition", "exact-resource"],
+      ["ecs:DescribeTaskDefinition", "*", "global-read"],
+      ["ecs:DeregisterTaskDefinition", "*", "owner-accepted-global-service-dependency"],
       ["ecs:ListTagsForResource", "ecs-task-definition", "exact-resource"],
       ["ecs:TagResource", "ecs-task-definition", "exact-resource-and-request-tags"],
       ["iam:PassRole", "iam-task-execution-role", "exact-resource", {"iam:PassedToService": "ecs-tasks.amazonaws.com"}],
@@ -231,14 +252,16 @@
       ["ec2:AuthorizeSecurityGroupEgress", "ec2-security-group-rule", "request-tags"],
       ["ec2:CreateTags", "ec2-security-group-rule", "request-tags", {"ec2:CreateAction": "AuthorizeSecurityGroupEgress"}],
       ["ec2:DescribeSecurityGroupRules", "*", "global-read"],
-      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"]
+      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"],
+      ["ec2:RevokeSecurityGroupEgress", "ec2-security-group", "resource-tags"]
     ],
     "aws_vpc_security_group_ingress_rule": [
       ["ec2:AuthorizeSecurityGroupIngress", "ec2-security-group", "resource-tags"],
       ["ec2:AuthorizeSecurityGroupIngress", "ec2-security-group-rule", "request-tags"],
       ["ec2:CreateTags", "ec2-security-group-rule", "request-tags", {"ec2:CreateAction": "AuthorizeSecurityGroupIngress"}],
       ["ec2:DescribeSecurityGroupRules", "*", "global-read"],
-      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"]
+      ["ec2:ModifySecurityGroupRules", "ec2-security-group", "resource-tags"],
+      ["ec2:RevokeSecurityGroupIngress", "ec2-security-group", "resource-tags"]
     ]
   }
 }

@@ -81,26 +81,45 @@
       }
     },
     {
-      "Sid": "TagDuringTaggedApiGatewayCreation",
+      "Sid": "CreateApiGatewayResourcesWithoutDependentTagContext",
       "Effect": "Allow",
-      "Action": "apigateway:POST",
-      "Resource": "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/tags/*",
-      "Condition": {
-        "StringEquals": {
-          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
-          "aws:RequestTag/PortfolioManaged": "true",
-          "aws:RequestTag/PortfolioPersistent": "false",
-          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
-        },
-        "ForAllValues:StringEquals": {
-          "aws:TagKeys": [
-            "PortfolioEnvironment",
-            "PortfolioManaged",
-            "PortfolioPersistent",
-            "PortfolioRepository"
-          ]
-        }
-      }
+      "Action": "apigateway:TagResource",
+      "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*/stages",
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks"
+      ]
+    },
+    {
+      "Sid": "TagApiGatewayResourcesWithoutDependentTagContext",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:POST",
+        "apigateway:PUT"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/tags/*"
+    },
+    {
+      "Sid": "PatchApiGatewayTagTargetsWithoutDependentTagContext",
+      "Effect": "Allow",
+      "Action": "apigateway:PATCH",
+      "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*",
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks/*"
+      ]
+    },
+    {
+      "Sid": "ManageApiGatewayLogDeliveryDependency",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogDelivery",
+        "logs:DeleteLogDelivery",
+        "logs:DescribeResourcePolicies",
+        "logs:GetLogDelivery",
+        "logs:ListLogDeliveries",
+        "logs:PutResourcePolicy",
+        "logs:UpdateLogDelivery"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "TagOnlyDuringNetworkCreation",

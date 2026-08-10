@@ -135,15 +135,59 @@ environment ARN patterns. Their inverse proof rejects cross-environment,
 cross-repository, unmanaged, persistent, missing/additional-tag, and foreign
 resource cases at both the identity and effective layers.
 
-API Gateway V2 authorizes tags included by `CreateApi` and `CreateVpcLink`
-through `apigateway:POST` on its separate `/tags/*` resource. AWS exposes no
-target ARN or prior-resource-tag condition on that tag resource. The operator
-therefore receives this companion create authorization only with the exact four
-request tags and no additional key. As with the Cloud Map exception below, an
-exact request could relabel an unrelated API Gateway resource; this is an
+API Gateway V2 authorizes tags included by `CreateApi`, `CreateStage`, and
+`CreateVpcLink` through `apigateway:POST` + `PUT` on `/tags/*`, `PATCH` on the
+new target, and—for stage and VPC-link creation—the literal
+`apigateway:TagResource` action on the same `/apis/*/stages` and `/vpclinks`
+collection resource used by the create. The Service Authorization table maps
+standalone tagging to HTTP verbs, but repeated live creates still requested
+this literal dependent action after all three mapped verbs were present. The
+IAM Console validator currently labels it unknown even though IAM stores it and
+the live service consumes it. Live
+AWS execution proved that the dependent call exposes neither request nor
+resource ownership tags. The operator therefore receives only these exact
+action/resource pairs without a tag condition, while target `POST` + `PUT` and
+later operations retain the full ownership tuple. As with the Cloud Map
+exception below, this could create, relabel, or patch an unrelated API Gateway
+resource in the dedicated account; it is an
 owner-accepted static limitation for the dedicated deployment account, not a
 foreign-target isolation claim. The lifecycle's before/after service inventory
 and zero-residue proof remain mandatory.
+
+Enabling HTTP API access logging also invokes CloudWatch Logs' account-level
+delivery control plane. AWS documents seven delivery actions whose Service
+Authorization entries expose no resource type or scoping condition, so only
+`CreateLogDelivery`, `DeleteLogDelivery`, `DescribeResourcePolicies`,
+`GetLogDelivery`, `ListLogDeliveries`, `PutResourcePolicy`, and
+`UpdateLogDelivery` use `Resource: "*"`. Log-group creation, tagging,
+retention, and later data access remain bound to the exact environment log
+groups. This is an owner-accepted service dependency, not a general Logs write
+grant.
+The destroy role receives only the corresponding `ListLogDeliveries`,
+`GetLogDelivery`, and `DeleteLogDelivery` account-level subset used to remove
+the Stage delivery, not the create/update/resource-policy actions.
+
+ECS `DescribeTaskDefinition` exposes no resource type in AWS's Service
+Authorization table. The operator therefore reads it through the global
+metadata statement, while registration, tagging, and service mutation remain
+bound to the exact environment task-definition and service ARNs.
+
+The tagged one-off migration uses `RunTask` on only the exact migration task
+definition and exact cluster. Because the new task has no existing resource
+tags at create time, its dependent `ecs:TagResource` authorization is kept in
+`LifecycleControlPolicy` and binds the exact environment task ARN pattern to
+the complete four-key request-tag tuple.
+
+Terraform updates deregister superseded task-definition revisions. AWS exposes
+no resource type or scoping condition for `DeregisterTaskDefinition`, so that
+single action uses `Resource: "*"` in `LifecycleControlPolicy`. Registration,
+service updates, migration runs, tagging, and PassRole remain exact; the global
+deregister operation is an owner-accepted dependency of the dedicated account.
+
+Cloud Map remains SRV-only for both ECS services. Separate generated HTTPS
+HTTP APIs route to the Web and API services through the shared VPC Link, so
+API Gateway performs `DiscoverInstances` for both targets while the Web server
+uses the API-specific generated endpoint for authenticated upstream calls.
 
 `rds:DescribeDBInstances` is a read-only list operation whose provider request
 uses the wildcard DB resource rather than the eventual exact DB ARN, so it is

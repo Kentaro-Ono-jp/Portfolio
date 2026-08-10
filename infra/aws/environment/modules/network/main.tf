@@ -99,17 +99,17 @@ resource "aws_vpc_security_group_ingress_rule" "web_from_vpc_link" {
   to_port                      = 3000
 }
 
-resource "aws_vpc_security_group_egress_rule" "web_to_api" {
-  security_group_id            = aws_security_group.environment["web"].id
+resource "aws_vpc_security_group_egress_rule" "vpc_link_to_api" {
+  security_group_id            = aws_security_group.environment["vpc-link"].id
   referenced_security_group_id = aws_security_group.environment["api"].id
   ip_protocol                  = "tcp"
   from_port                    = 8000
   to_port                      = 8000
 }
 
-resource "aws_vpc_security_group_ingress_rule" "api_from_web" {
+resource "aws_vpc_security_group_ingress_rule" "api_from_vpc_link" {
   security_group_id            = aws_security_group.environment["api"].id
-  referenced_security_group_id = aws_security_group.environment["web"].id
+  referenced_security_group_id = aws_security_group.environment["vpc-link"].id
   ip_protocol                  = "tcp"
   from_port                    = 8000
   to_port                      = 8000

@@ -135,6 +135,16 @@
       }
     },
     {
+      "Sid": "RemoveApiGatewayLogDeliveryDependency",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DeleteLogDelivery",
+        "logs:GetLogDelivery",
+        "logs:ListLogDeliveries"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "DeleteExactOwnedBroker",
       "Effect": "Allow",
       "Action": "mq:DeleteBroker",

@@ -42,6 +42,7 @@ const serverConfigSchema = z.strictObject({
     .trim()
     .min(1)
     .default("openid groups offline_access"),
+  PORTFOLIO_WEB_OIDC_RESOURCE: httpUrlSchema.optional(),
   PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK: booleanString.default(false),
   PORTFOLIO_WEB_SESSION_ABSOLUTE_SECONDS: z.coerce
     .number()
@@ -81,6 +82,7 @@ export interface ServerConfig {
   oidcClientId: string;
   oidcClientSecret?: string;
   oidcScopes: string;
+  oidcResource?: string;
   allowInsecureLoopback: boolean;
   sessionAbsoluteSeconds: number;
   sessionInactivitySeconds: number;
@@ -116,6 +118,9 @@ function requireSafeOidcTransport(
     new URL(values.PORTFOLIO_WEB_OIDC_DISCOVERY_URL),
     new URL(values.PORTFOLIO_WEB_OIDC_TOKEN_URL),
     new URL(values.PORTFOLIO_WEB_OIDC_JWKS_URL),
+    ...(values.PORTFOLIO_WEB_OIDC_RESOURCE === undefined
+      ? []
+      : [new URL(values.PORTFOLIO_WEB_OIDC_RESOURCE)]),
   ];
 
   if (values.PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK) {
@@ -158,6 +163,7 @@ export function readServerConfig(
     PORTFOLIO_WEB_OIDC_CLIENT_SECRET:
       environment.PORTFOLIO_WEB_OIDC_CLIENT_SECRET,
     PORTFOLIO_WEB_OIDC_SCOPES: environment.PORTFOLIO_WEB_OIDC_SCOPES,
+    PORTFOLIO_WEB_OIDC_RESOURCE: environment.PORTFOLIO_WEB_OIDC_RESOURCE,
     PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK:
       environment.PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK,
     PORTFOLIO_WEB_SESSION_ABSOLUTE_SECONDS:
@@ -195,6 +201,13 @@ export function readServerConfig(
     oidcClientId: parsed.data.PORTFOLIO_WEB_OIDC_CLIENT_ID,
     ...(clientSecret === undefined ? {} : { oidcClientSecret: clientSecret }),
     oidcScopes: parsed.data.PORTFOLIO_WEB_OIDC_SCOPES,
+    ...(parsed.data.PORTFOLIO_WEB_OIDC_RESOURCE === undefined
+      ? {}
+      : {
+          oidcResource: normalizedUrl(
+            parsed.data.PORTFOLIO_WEB_OIDC_RESOURCE,
+          ),
+        }),
     allowInsecureLoopback:
       parsed.data.PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK,
     sessionAbsoluteSeconds: parsed.data.PORTFOLIO_WEB_SESSION_ABSOLUTE_SECONDS,

@@ -111,16 +111,44 @@ cross-environment, cross-repository, and undeclared fifth-key variants. Every
 request is evaluated independently at identity, boundary, and effective layers
 with expectations that name the actual enforcing layer.
 
-API Gateway V2 tagged creates also have a companion authorization: AWS maps
-the tag operation to `apigateway:POST` on `/tags/*`, separate from the `/apis`
-or `/vpclinks` create collection. The identity requires the exact four request
-tags and no additional key. Because that tag resource exposes neither the
-target ARN nor a prior-resource-tag condition, static proof records this as the
-same kind of owner-accepted creation-time tagging limitation described below
+API Gateway V2 tagged creates also have a companion authorization. Live AWS
+execution proved that this dependent `TagResource` authorization exposes
+neither request nor resource ownership tags. It uses `apigateway:POST` + `PUT`
+on `/tags/*`, `PATCH` on the new target, and—for `CreateStage` and
+`CreateVpcLink`—the literal `apigateway:TagResource` action on the same
+`/apis/*/stages` and `/vpclinks` collection resource used by the create. The
+Service Authorization table maps standalone tagging to HTTP verbs, but repeated
+live creates still requested this literal dependent action after all three
+mapped verbs were present; the IAM Console validator currently labels the
+literal action unknown even though IAM stores it and the live service consumes
+it. The static identity therefore grants only those
+exact action/resource pairs without a tag condition; target `POST` + `PUT` and
+all later operations retain resource-tag conditions. Because these resources
+expose neither a distinguishable create-only action nor a prior-resource-tag
+condition, static proof records this as the same kind of owner-accepted
+creation-time tagging limitation described below
 for Cloud Map, rather than claiming foreign-target isolation. RDS provider
 polling uses the wildcard resource for the read-only
 `rds:DescribeDBInstances` list operation; that action is isolated as global
 metadata read and does not grant RDS mutation or secret access.
+
+HTTP API access logging has a separate CloudWatch Logs dependency. AWS's
+official logging guide requires the account-level log-delivery actions, and the
+Service Authorization table exposes no resource type or scoping condition for
+them. The operator therefore grants only `CreateLogDelivery`,
+`DeleteLogDelivery`, `DescribeResourcePolicies`, `GetLogDelivery`,
+`ListLogDeliveries`, `PutResourcePolicy`, and `UpdateLogDelivery` at
+`Resource: "*"`; log-group creation, tagging, retention, and later access stay
+bound to the exact `/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/*` log groups.
+The destroy role receives only the corresponding `ListLogDeliveries`,
+`GetLogDelivery`, and `DeleteLogDelivery` account-level subset needed to remove
+that Stage delivery; it does not receive the create/update/resource-policy
+actions.
+
+ECS `DescribeTaskDefinition` is another resource-less read in AWS's Service
+Authorization table. It therefore uses `Resource: "*"` only in the global
+metadata-read statement; registration, tagging, and service mutation remain
+scoped to the environment task-definition and service ARNs.
 
 Amazon MQ `CreateBroker` is resource-less at authorization time. The fixed
 boundary therefore permits only that action for the environment-operator

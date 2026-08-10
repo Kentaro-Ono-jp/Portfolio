@@ -88,7 +88,7 @@ deterministic local plan proof without reading or writing remote state.
   two isolated service subnets, public and isolated route tables, the S3
   gateway endpoint, and exact Security Group edges. It creates no NAT or
   Internet-facing inbound rule.
-- `modules/ingress` owns the generated API Gateway HTTP API endpoint, VPC Link,
+- `modules/ingress` owns the two generated API Gateway HTTP API endpoints, one VPC Link,
   private Cloud Map namespace, Web/API services, throttling, and bounded access
   logs. There is no Terraform-managed ALB, custom domain, certificate, Route
   53, CloudFront, or WAF resource. Cloud Map delegates private hosted-zone
@@ -106,12 +106,15 @@ deterministic local plan proof without reading or writing remote state.
   DB/MQ connection secrets, and immediate environment destroy settings.
 - `modules/identity` owns an admin-seed-only Cognito pool, public
   Authorization Code/PKCE client, resource audience, managed login v2, and the
-  accepted `reactorfront-reviewers` group. No user is seeded in Step 4.
+  accepted `reactorfront-reviewers` group. Web sends that resource audience in
+  the authorize request so Cognito binds the access-token `aud` claim. No user
+  is seeded in Step 4.
 
 Fargate tasks use public task subnets plus explicit public IP assignment only
 for outbound access. Direct Internet ingress to task ENIs, RDS, and MQ is
-absent. The allowed application edges are API Gateway VPC Link to Web, Web to
-API, API to PostgreSQL, and API/ML to RabbitMQ over TLS. Web receives no
+absent. The allowed application edges are API Gateway VPC Link to Web and API,
+API to PostgreSQL, and API/ML to RabbitMQ over TLS. Web reaches API through the
+second generated HTTPS endpoint and receives no
 application-store credentials; ML receives neither PostgreSQL credentials nor
 end-user identity.
 

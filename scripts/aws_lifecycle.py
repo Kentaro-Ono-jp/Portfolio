@@ -1777,15 +1777,19 @@ def command_smoke(
             "PORTFOLIO_AWS_SMOKE_BASE_URL": endpoint,
             "PORTFOLIO_AWS_SMOKE_USERNAME": str(reviewer.get("username", "")),
             "PORTFOLIO_AWS_SMOKE_PASSWORD": str(reviewer.get("password", "")),
+            "PORTFOLIO_AWS_SMOKE_RESOURCE": config.oidc_api_audience,
             "PORTFOLIO_AWS_SMOKE_OUTPUT": str(
                 runtime_directory(config_path) / "smoke-result.json"
             ),
         }
     )
     pnpm = require_command("pnpm")
+    pnpm_command = [pnpm]
+    if os.name == "nt" and Path(pnpm).suffix.lower() in {".cmd", ".bat"}:
+        pnpm_command = [require_command("cmd"), "/d", "/c", pnpm]
     run_process(
         [
-            pnpm,
+            *pnpm_command,
             "exec",
             "playwright",
             "test",
@@ -1804,6 +1808,7 @@ def command_smoke(
         "upload": True,
         "asynchronousCompletion": True,
         "reviewDecision": True,
+        "resourceBoundAudience": True,
         "auditHistory": True,
         "sourcePrivate": True,
     }
@@ -1904,6 +1909,8 @@ TAGGED_RESOURCE_INVENTORY_LABELS = {
     "servicediscovery:service": "cloudMapService",
     "route53:hostedzone": "privateHostedZone",
     "ecs:cluster": "ecsCluster",
+    "ecs:service": "ecsService",
+    "ecs:task": "ecsTask",
     "ecs:task-definition": "activeTaskDefinition",
     "secretsmanager:secret": "runtimeSecret",
 }
@@ -2058,6 +2065,21 @@ def inventory_residue(client: AwsCli, config: LifecycleConfig) -> dict[str, int]
         for arn in clusters.get("clusterArns", [])
         if str(arn).endswith(f"/{config.name_prefix}-{config.environment}")
     )
+    cluster_name = f"{config.name_prefix}-{config.environment}"
+    if inventory["ecsCluster"]:
+        services = client.call("ecs", "list-services", "--cluster", cluster_name) or {}
+        inventory["ecsService"] = sum(
+            1
+            for arn in services.get("serviceArns", [])
+            if str(arn).endswith(f"/{cluster_name}/{cluster_name}-web")
+            or str(arn).endswith(f"/{cluster_name}/{cluster_name}-api")
+            or str(arn).endswith(f"/{cluster_name}/{cluster_name}-ml")
+        )
+        tasks = client.call("ecs", "list-tasks", "--cluster", cluster_name) or {}
+        inventory["ecsTask"] = len(tasks.get("taskArns", []))
+    else:
+        inventory["ecsService"] = 0
+        inventory["ecsTask"] = 0
     task_definitions = (
         client.call(
             "ecs",

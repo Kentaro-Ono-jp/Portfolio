@@ -379,6 +379,12 @@ locals {
           }
         },
         {
+          Sid      = "DeregisterSupersededTaskDefinitionAwsGlobalOnly"
+          Effect   = "Allow"
+          Action   = "ecs:DeregisterTaskDefinition"
+          Resource = "*"
+        },
+        {
           Sid      = "TagMigrationTaskOnCreate"
           Effect   = "Allow"
           Action   = "ecs:TagResource"
@@ -609,10 +615,13 @@ locals {
           Condition = { StringEquals = { "iam:PassedToService" = local.ecs_service_principal } }
         },
         {
-          # CreateTaggedHttpApi
+          # CreateTaggedApiGatewayResources
           Effect   = "Allow"
           Action   = "apigateway:POST"
-          Resource = "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis"
+          Resource = [
+            "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis",
+            "arn:${var.aws_partition}:apigateway:${var.aws_region}::/vpclinks",
+          ]
           Condition = {
             StringEquals = {
               "aws:RequestTag/PortfolioEnvironment" = environment
@@ -631,27 +640,44 @@ locals {
           }
         },
         {
-          # API Gateway authorizes tags supplied to CreateApi/CreateVpcLink
-          # through the service's /tags resource, not only the create collection.
+          # CreateStage/CreateVpcLink dependent TagResource reuses these create resources
+          # without exposing either request or resource ownership tags.
+          Effect = "Allow"
+          Action = "apigateway:TagResource"
+          Resource = [
+            "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis/*/stages",
+            "arn:${var.aws_partition}:apigateway:${var.aws_region}::/vpclinks",
+          ]
+        },
+        {
+          # API Gateway dependent TagResource omits both request and resource tags.
           Effect   = "Allow"
-          Action   = "apigateway:POST"
+          Action   = ["apigateway:POST", "apigateway:PUT"]
           Resource = "arn:${var.aws_partition}:apigateway:${var.aws_region}::/tags/*"
-          Condition = {
-            StringEquals = {
-              "aws:RequestTag/PortfolioEnvironment" = environment
-              "aws:RequestTag/PortfolioManaged"     = "true"
-              "aws:RequestTag/PortfolioPersistent"  = "false"
-              "aws:RequestTag/PortfolioRepository"  = var.repository_identity
-            }
-            "ForAllValues:StringEquals" = {
-              "aws:TagKeys" = [
-                "PortfolioEnvironment",
-                "PortfolioManaged",
-                "PortfolioPersistent",
-                "PortfolioRepository",
-              ]
-            }
-          }
+        },
+        {
+          # The same dependent authorization requires PATCH on the new target.
+          Effect = "Allow"
+          Action = "apigateway:PATCH"
+          Resource = [
+            "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis/*",
+            "arn:${var.aws_partition}:apigateway:${var.aws_region}::/vpclinks/*",
+          ]
+        },
+        {
+          # HTTP API access logging uses account-level delivery permissions that
+          # expose neither a resource ARN nor a scoping condition.
+          Effect = "Allow"
+          Action = [
+            "logs:CreateLogDelivery",
+            "logs:DeleteLogDelivery",
+            "logs:DescribeResourcePolicies",
+            "logs:GetLogDelivery",
+            "logs:ListLogDeliveries",
+            "logs:PutResourcePolicy",
+            "logs:UpdateLogDelivery",
+          ]
+          Resource = "*"
         },
         {
           # CreateTaggedIdEnvironmentServices
@@ -767,7 +793,7 @@ locals {
           # MutateOwnedHttpApiResources
           Effect   = "Allow"
           Action   = ["apigateway:PATCH", "apigateway:POST", "apigateway:PUT"]
-          Resource = "arn:${var.aws_partition}:apigateway:${var.aws_region}::/apis/*"
+          Resource = "arn:${var.aws_partition}:apigateway:${var.aws_region}::*"
           Condition = {
             StringEquals = {
               "aws:ResourceTag/PortfolioEnvironment" = environment
@@ -778,13 +804,19 @@ locals {
           }
         },
         {
+          # DescribeTaskDefinition has no resource type in the ECS authorization table.
+          Effect   = "Allow"
+          Action   = "ecs:DescribeTaskDefinition"
+          Resource = "*"
+        },
+        {
           # ManageExactEnvironmentServices
           Effect = "Allow"
           Action = [
             "apigateway:GET",
             "cognito-idp:DescribeUserPool",
             "ecs:CreateCluster", "ecs:CreateService", "ecs:DescribeClusters", "ecs:DescribeServices",
-            "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UpdateService",
+            "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UpdateService",
             "logs:CreateLogGroup", "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents",
             "mq:DescribeBroker",
             "rds:CreateDBInstance", "rds:ModifyDBInstance",
@@ -908,6 +940,8 @@ locals {
             "ec2:AuthorizeSecurityGroupEgress",
             "ec2:AuthorizeSecurityGroupIngress",
             "ec2:CreateRoute",
+            "ec2:RevokeSecurityGroupEgress",
+            "ec2:RevokeSecurityGroupIngress",
           ]
           Resource = "*"
           Condition = {
@@ -1157,6 +1191,16 @@ locals {
               "aws:ResourceTag/PortfolioRepository"  = var.repository_identity
             }
           }
+        },
+        {
+          Sid    = "RemoveApiGatewayLogDeliveryDependency"
+          Effect = "Allow"
+          Action = [
+            "logs:DeleteLogDelivery",
+            "logs:GetLogDelivery",
+            "logs:ListLogDeliveries",
+          ]
+          Resource = "*"
         },
         {
           Sid      = "DeleteExactApplicationObjectsAndBucket"

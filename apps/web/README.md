@@ -15,6 +15,11 @@ the API base URL in `PORTFOLIO_API_BASE_URL`, preserve canonical problem
 responses, and prevent tokens and the private upstream address from entering
 the client bundle.
 
+In the AWS runtime, `PORTFOLIO_WEB_OIDC_RESOURCE` adds Cognito resource binding
+to the Authorization Code/PKCE request. The resulting access token carries the
+exact API audience that the FastAPI boundary validates; local Dex mode leaves
+the optional resource parameter unset.
+
 ## Boundary rules
 
 - Consume backend capabilities only through the canonical OpenAPI contract.

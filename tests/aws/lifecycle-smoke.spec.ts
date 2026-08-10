@@ -7,8 +7,14 @@ import { canonicalInvoicePdf } from "../e2e/pdf-fixture";
 const username = process.env.PORTFOLIO_AWS_SMOKE_USERNAME;
 const password = process.env.PORTFOLIO_AWS_SMOKE_PASSWORD;
 const output = process.env.PORTFOLIO_AWS_SMOKE_OUTPUT;
+const resource = process.env.PORTFOLIO_AWS_SMOKE_RESOURCE;
 
-if (username === undefined || password === undefined || output === undefined) {
+if (
+  username === undefined ||
+  password === undefined ||
+  output === undefined ||
+  resource === undefined
+) {
   throw new Error(
     "AWS smoke requires private runtime identity inputs and an output path.",
   );
@@ -18,6 +24,7 @@ test("proves the managed authenticated asynchronous lifecycle", async ({
   page,
 }) => {
   let pkceObserved = false;
+  let resourceBindingObserved = false;
   page.on("request", (request) => {
     const url = new URL(request.url());
     if (
@@ -26,6 +33,12 @@ test("proves the managed authenticated asynchronous lifecycle", async ({
       (url.searchParams.get("code_challenge")?.length ?? 0) >= 43
     ) {
       pkceObserved = true;
+    }
+    if (
+      url.pathname.endsWith("/oauth2/authorize") &&
+      url.searchParams.get("resource") === resource
+    ) {
+      resourceBindingObserved = true;
     }
   });
 
@@ -114,6 +127,7 @@ test("proves the managed authenticated asynchronous lifecycle", async ({
         authorizationCodePkce: pkceObserved,
         externalHttps: true,
         reviewDecision: true,
+        resourceBoundAudience: resourceBindingObserved,
         sourcePrivate: true,
         upload: true,
       },
