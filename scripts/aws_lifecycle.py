@@ -1095,10 +1095,17 @@ def run_preflight(
             raise LifecycleError("An existing lifecycle lease blocks construction.")
         validate_lease_payload(lease[0], config)
         lease_state = "recovered-exact"
-    namespaces = operator.call("servicediscovery", "list-namespaces") or {}
-    services = operator.call("servicediscovery", "list-services") or {}
+    inventory_probe = assume_role(
+        operator,
+        config,
+        "destroy",
+        "portfolio-preflight-inventory",
+    )
+    namespaces = inventory_probe.call("servicediscovery", "list-namespaces") or {}
+    services = inventory_probe.call("servicediscovery", "list-services") or {}
     if namespaces.get("Namespaces") or services.get("Services"):
         raise LifecycleError("Cloud Map is not empty; owner review is required.")
+    operator.effects.add(inventory_probe.effects)
     proof = {
         "sourceIdentity": "verified",
         "operatorSession": "verified",
@@ -1109,6 +1116,7 @@ def run_preflight(
         "sourceRevision": config.source_sha,
         "region": config.region,
         "cloudMapIsolation": "empty",
+        "cloudMapInventorySession": "destroy-read-only",
         "remoteControlObjects": 1 if lease_state == "recovered-exact" else 0,
         "lifecycleLease": lease_state,
         "readOnly": True,
