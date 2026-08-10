@@ -58,6 +58,11 @@ def main() -> int:
         raise RuntimeError("Lifecycle controller must keep normal deployment IAM-free")
     if contract.get("schedule", {}).get("actionAfterCompletion") != "NONE":
         raise RuntimeError("Fallback schedule must remain until zero residue is proved")
+    if (
+        contract.get("schedule", {}).get("group")
+        != "${NAME_PREFIX}-${ENVIRONMENT}-lifecycle"
+    ):
+        raise RuntimeError("Fallback must use the exact persistent schedule group")
     if contract.get("schedule", {}).get("maximumTtlMinutes") != 120:
         raise RuntimeError("Fallback schedule must preserve the two-hour maximum")
     projects = contract.get("projects", {})
@@ -84,6 +89,29 @@ def main() -> int:
         ):
             raise RuntimeError(f"Persistent lifecycle attachment drifted: {role}")
     lifecycle_policy = load_json(CONSOLE_IAM_ROOT / "lifecycle-control.json")
+    schedule_group = statement(lifecycle_policy, "InspectExactLifecycleScheduleGroup")
+    if set(schedule_group.get("Action", [])) != {
+        "scheduler:GetScheduleGroup",
+        "scheduler:ListTagsForResource",
+    } or ":schedule-group/${NAME_PREFIX}-${ENVIRONMENT}-lifecycle" not in str(
+        schedule_group.get("Resource", "")
+    ):
+        raise RuntimeError("Lifecycle schedule-group attestation drifted")
+    schedule_management = statement(lifecycle_policy, "ManageExactFallbackSchedule")
+    if ":schedule/${NAME_PREFIX}-${ENVIRONMENT}-lifecycle/" not in str(
+        schedule_management.get("Resource", "")
+    ):
+        raise RuntimeError("Fallback schedule is not bound inside the exact group")
+    scheduler_trust = load_json(CONSOLE_IAM_ROOT / "scheduler-trust.json")
+    scheduler_statement = scheduler_trust.get("Statement", [{}])[0]
+    trust_condition = scheduler_statement.get("Condition", {})
+    source_arn = trust_condition.get("StringEquals", {}).get("aws:SourceArn")
+    if (
+        set(trust_condition) != {"StringEquals"}
+        or source_arn
+        != "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule-group/${NAME_PREFIX}-${ENVIRONMENT}-lifecycle"
+    ):
+        raise RuntimeError("Scheduler trust must use the exact schedule-group ARN")
     migration = statement(lifecycle_policy, "RunExactMigrationTask")
     if migration.get("Action") != "ecs:RunTask" or "ecs:cluster" not in json.dumps(
         migration.get("Condition", {}), sort_keys=True
@@ -174,6 +202,7 @@ def main() -> int:
         "schemaVersion": 2,
         "controllerProjects": 2,
         "controllerLogGroups": 2,
+        "persistentScheduleGroups": 1,
         "destroyControllerAutoRetries": 2,
         "maximumTtlMinutes": 120,
         "normalDeploymentIamMutation": False,

@@ -195,6 +195,10 @@ class LifecycleConfig:
         return f"{self.name_prefix}-{self.environment}-destroy"
 
     @property
+    def schedule_group_name(self) -> str:
+        return f"{self.name_prefix}-{self.environment}-lifecycle"
+
+    @property
     def image_tag(self) -> str:
         return f"sha-{self.source_sha[:12]}"
 

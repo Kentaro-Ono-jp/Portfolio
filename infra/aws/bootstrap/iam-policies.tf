@@ -347,6 +347,12 @@ locals {
           ]
         },
         {
+          Sid      = "InspectExactLifecycleScheduleGroup"
+          Effect   = "Allow"
+          Action   = ["scheduler:GetScheduleGroup", "scheduler:ListTagsForResource"]
+          Resource = "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule-group/${var.name_prefix}-${environment}-lifecycle"
+        },
+        {
           Sid       = "PassSchedulerRoleOnlyToScheduler"
           Effect    = "Allow"
           Action    = "iam:PassRole"
@@ -358,7 +364,7 @@ locals {
           Effect = "Allow"
           Action = ["scheduler:CreateSchedule", "scheduler:DeleteSchedule", "scheduler:GetSchedule", "scheduler:UpdateSchedule"]
           Resource = (
-            "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/default/${var.name_prefix}-${environment}-destroy"
+            "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/${var.name_prefix}-${environment}-lifecycle/${var.name_prefix}-${environment}-destroy"
           )
         },
         {
@@ -465,7 +471,7 @@ locals {
           Sid      = "RemoveExactCompletedFallback"
           Effect   = "Allow"
           Action   = ["scheduler:DeleteSchedule", "scheduler:GetSchedule"]
-          Resource = "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/default/${var.name_prefix}-${environment}-destroy"
+          Resource = "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/${var.name_prefix}-${environment}-lifecycle/${var.name_prefix}-${environment}-destroy"
         },
         {
           Sid      = "RemoveExactPublishedImages"
@@ -713,7 +719,7 @@ locals {
             "arn:${var.aws_partition}:logs:${var.aws_region}:${var.aws_account_id}:log-group:/portfolio/${var.name_prefix}/${environment}/*:*",
             "arn:${var.aws_partition}:mq:${var.aws_region}:${var.aws_account_id}:broker:${var.name_prefix}-${environment}-*:*",
             "arn:${var.aws_partition}:rds:${var.aws_region}:${var.aws_account_id}:db:${var.name_prefix}-${environment}-*",
-            "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/default/${var.name_prefix}-${environment}-destroy",
+            "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/${var.name_prefix}-${environment}-lifecycle/${var.name_prefix}-${environment}-destroy",
             "arn:${var.aws_partition}:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.name_prefix}-${environment}-*",
             "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:namespace/*",
             "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:service/*",

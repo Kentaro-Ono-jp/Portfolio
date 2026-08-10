@@ -25,6 +25,21 @@ locals {
   ]...)
 }
 
+resource "aws_scheduler_schedule_group" "lifecycle" {
+  for_each = var.environment_state_keys
+
+  name = "${var.name_prefix}-${each.key}-lifecycle"
+
+  tags = {
+    PortfolioEnvironment = each.key
+    PortfolioPurpose     = "lifecycle-controller"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "aws_cloudwatch_log_group" "controller" {
   for_each = local.controller_projects
 

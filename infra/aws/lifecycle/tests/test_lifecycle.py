@@ -110,6 +110,7 @@ class LifecycleContractTests(unittest.TestCase):
             actual.configuration_key, "controls/reactorfront/manual/configuration.json"
         )
         self.assertEqual(actual.schedule_name, "reactorfront-manual-destroy")
+        self.assertEqual(actual.schedule_group_name, "reactorfront-manual-lifecycle")
 
     def test_configuration_rejects_foreign_state_and_roles(self) -> None:
         payload = configuration().to_dict()
@@ -387,6 +388,45 @@ class LifecycleContractTests(unittest.TestCase):
             deleted_keys,
             [config.secret_key, config.lease_key, config.configuration_key],
         )
+        schedule_delete = next(
+            arguments
+            for service, operation, arguments in fake.calls
+            if service == "scheduler" and operation == "delete-schedule"
+        )
+        self.assertEqual(
+            schedule_delete[schedule_delete.index("--group-name") + 1],
+            config.schedule_group_name,
+        )
+
+    def test_tag_inventory_ignores_only_service_proved_ghosts(self) -> None:
+        mappings = [
+            {
+                "ResourceARN": (
+                    "arn:aws:cognito-idp:us-east-1:111122223333:"
+                    "userpool/us-east-1_deleted"
+                )
+            },
+            {
+                "ResourceARN": (
+                    "arn:aws:ecs:us-east-1:111122223333:"
+                    "task-definition/reactorfront-manual-web:1"
+                )
+            },
+        ]
+        inventory = {"cognitoUserPool": 0, "activeTaskDefinition": 0}
+        self.assertEqual(
+            lifecycle.unresolved_tagged_resource_count(mappings, inventory), 0
+        )
+        inventory["activeTaskDefinition"] = 1
+        self.assertEqual(
+            lifecycle.unresolved_tagged_resource_count(mappings, inventory), 1
+        )
+
+    def test_tag_inventory_keeps_unknown_kinds_fail_closed(self) -> None:
+        mappings = [
+            {"ResourceARN": ("arn:aws:unexpected:us-east-1:111122223333:thing/example")}
+        ]
+        self.assertEqual(lifecycle.unresolved_tagged_resource_count(mappings, {}), 1)
 
     def test_status_never_claims_missing_evidence(self) -> None:
         empty = sanitized_status(None)

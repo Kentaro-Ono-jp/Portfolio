@@ -71,8 +71,11 @@ CodeBuild projects outside the environment state:
   has two static automatic retries because Scheduler delivery proves only that
   CodeBuild accepted the start request, not that the build itself succeeded.
 
-The fixed EventBridge Scheduler schedule targets only the destroy project.
-Its action-after-completion is `NONE`: target invocation is not proof of
+The fixed EventBridge Scheduler schedule targets only the destroy project and
+lives in an environment-specific persistent schedule group. The execution-role
+trust uses that exact schedule-group ARN because Scheduler does not support an
+individual schedule ARN as `aws:SourceArn`. Its action-after-completion is
+`NONE`: target invocation is not proof of
 successful destroy, so the schedule, lease, and remote checkpoint survive
 until Terraform state, the exact deployment images, and every service-specific
 residue category are zero.
@@ -115,3 +118,8 @@ separately; it never relabels the direct-call subtotal as a lifecycle total.
 Raw provider, Terraform, CodeBuild, browser, credential, state, secret,
 account, and private path values are retained only in their private execution
 surfaces and are never copied into public evidence.
+
+The final tag sweep treats an unknown tagged resource kind as residue. For a
+known kind, its owning service-specific inventory is authoritative because the
+Resource Groups Tagging API can temporarily retain a mapping after the resource
+has already been deleted.

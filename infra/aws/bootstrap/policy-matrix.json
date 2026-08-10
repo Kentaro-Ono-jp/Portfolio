@@ -1416,14 +1416,14 @@
       "expected": "denied"
     },
     {
-      "name": "exact schedule assumes Scheduler role",
+      "name": "exact schedule group assumes Scheduler role",
       "role": "manual/scheduler",
       "action": "sts:AssumeRole",
       "principalType": "Service",
       "principal": "scheduler.amazonaws.com",
       "context": {
         "aws:SourceAccount": "111122223333",
-        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-manual-destroy"
+        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule-group/example-portfolio-manual-lifecycle"
       },
       "expected": "allowed"
     },
@@ -1435,7 +1435,7 @@
       "principal": "scheduler.amazonaws.com",
       "context": {
         "aws:SourceAccount": "111122223333",
-        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule/default/example-portfolio-monthly-destroy"
+        "aws:SourceArn": "arn:aws:scheduler:us-east-1:111122223333:schedule-group/example-portfolio-monthly-lifecycle"
       },
       "expected": "denied"
     },

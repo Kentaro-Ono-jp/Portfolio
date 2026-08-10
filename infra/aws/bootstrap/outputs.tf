@@ -47,6 +47,16 @@ output "controller_projects" {
   }
 }
 
+output "lifecycle_schedule_groups" {
+  description = "Persistent environment-scoped schedule groups consumed by TTL fallback schedules."
+  value = {
+    for environment, group in aws_scheduler_schedule_group.lifecycle : environment => {
+      arn  = group.arn
+      name = group.name
+    }
+  }
+}
+
 output "effective_environment_identity_policy_digests" {
   description = "Canonical effective identity-policy digests, including separately managed lifecycle control and destroy authority."
   value = {

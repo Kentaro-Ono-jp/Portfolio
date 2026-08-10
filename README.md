@@ -274,7 +274,9 @@ drift. See the
 [TTL-first lifecycle guide](infra/aws/lifecycle/README.md). The lifecycle now
 provides preflight, immutable CodeBuild image publication, independent
 Scheduler/CodeBuild destroy fallback, apply, migration, seed, authenticated
-smoke, extend, destroy, status, and residual sweep. An owner-authorized
+smoke, extend, destroy, status, and residual sweep. Scheduler trust is bound to
+the exact persistent environment schedule group rather than an unsupported
+individual schedule ARN. An owner-authorized
 exploratory AWS evaluation historically consumed the governed `3/3`
 construction attempts without reaching a successful hosted cycle. The partial
 environment was destroyed, Terraform state returned to zero, a fresh live plan

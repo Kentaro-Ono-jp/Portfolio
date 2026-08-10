@@ -305,7 +305,10 @@ conditional lease/ETag forwarding, partial image cleanup, immutable digest
 input, maximum TTL and extend bounds, controller failure checkpointing,
 redaction, and truthful missing-state reporting. Persistent
 Scheduler, CodeBuild image, and CodeBuild destroy roles/projects are canonical
-static prerequisites; normal deployment only reads and uses them.
+static prerequisites; the persistent environment-specific schedule group is
+also a canonical prerequisite. Its execution-role trust uses the exact group
+ARN because AWS Scheduler rejects an individual schedule ARN as SourceArn.
+Normal deployment only reads and uses these prerequisites.
 
 ### Step 6: Add explicit manual and monthly automation paths
 

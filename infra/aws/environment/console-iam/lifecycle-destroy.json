@@ -37,7 +37,7 @@
       "Sid": "RemoveExactCompletedFallback",
       "Effect": "Allow",
       "Action": ["scheduler:DeleteSchedule", "scheduler:GetSchedule"],
-      "Resource": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule/default/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+      "Resource": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule/${NAME_PREFIX}-${ENVIRONMENT}-lifecycle/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
     },
     {
       "Sid": "RemoveExactPublishedImages",

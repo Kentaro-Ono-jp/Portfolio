@@ -138,13 +138,15 @@ locals {
     for environment in keys(var.environment_state_keys) : environment => jsonencode({
       Version = "2012-10-17"
       Statement = [{
-        Sid       = "ExactEnvironmentSchedule"
+        Sid       = "ExactEnvironmentScheduleGroup"
         Effect    = "Allow"
         Principal = { Service = local.scheduler_service_principal }
         Action    = "sts:AssumeRole"
         Condition = {
-          StringEquals = { "aws:SourceAccount" = var.aws_account_id }
-          ArnLike      = { "aws:SourceArn" = "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule/default/${var.name_prefix}-${environment}-destroy" }
+          StringEquals = {
+            "aws:SourceAccount" = var.aws_account_id
+            "aws:SourceArn"     = "arn:${var.aws_partition}:scheduler:${var.aws_region}:${var.aws_account_id}:schedule-group/${var.name_prefix}-${environment}-lifecycle"
+          }
         }
       }]
     })

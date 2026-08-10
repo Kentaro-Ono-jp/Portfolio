@@ -55,6 +55,12 @@
       ]
     },
     {
+      "Sid": "InspectExactLifecycleScheduleGroup",
+      "Effect": "Allow",
+      "Action": ["scheduler:GetScheduleGroup", "scheduler:ListTagsForResource"],
+      "Resource": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule-group/${NAME_PREFIX}-${ENVIRONMENT}-lifecycle"
+    },
+    {
       "Sid": "ManageExactFallbackSchedule",
       "Effect": "Allow",
       "Action": [
@@ -63,7 +69,7 @@
         "scheduler:GetSchedule",
         "scheduler:UpdateSchedule"
       ],
-      "Resource": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule/default/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+      "Resource": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule/${NAME_PREFIX}-${ENVIRONMENT}-lifecycle/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
     },
     {
       "Sid": "PassExactSchedulerRole",

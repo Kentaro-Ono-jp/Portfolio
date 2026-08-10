@@ -21,7 +21,8 @@ may still use this root once to establish its own portable prerequisites.
   purpose roles, separately managed lifecycle-control/lifecycle-destroy
   authority, quota preconditions, and trust documents.
 - `controller.tf` owns persistent artifact-free image and destroy CodeBuild
-  projects plus their retained control-plane log groups.
+  projects, their retained control-plane log groups, and one exact lifecycle
+  schedule group per environment.
 - `policy-matrix.json` is the versioned positive/negative simulation contract.
 - The fixed boundary keeps durable service/purpose, persistent-resource, IAM,
   and exact PassRole guardrails. Bootstrap-owned non-replaceable identity

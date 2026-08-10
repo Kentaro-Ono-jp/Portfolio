@@ -21,7 +21,7 @@
   },
   "schedule": {
     "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
-    "group": "default",
+    "group": "${NAME_PREFIX}-${ENVIRONMENT}-lifecycle",
     "actionAfterCompletion": "NONE",
     "maximumTtlMinutes": 120,
     "target": "destroy"

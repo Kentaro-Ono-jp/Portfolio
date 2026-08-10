@@ -71,7 +71,8 @@ run "portable_bootstrap_contract" {
   assert {
     condition = (
       length(aws_codebuild_project.controller) == 4 &&
-      length(aws_cloudwatch_log_group.controller) == 4
+      length(aws_cloudwatch_log_group.controller) == 4 &&
+      length(aws_scheduler_schedule_group.lifecycle) == 2
     )
     error_message = "Each environment must have persistent image and destroy controllers."
   }

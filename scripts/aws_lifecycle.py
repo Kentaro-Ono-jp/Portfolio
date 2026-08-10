@@ -560,6 +560,50 @@ def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
         if tags != expected_tags:
             raise LifecycleError("Persistent controller log tags drifted.")
 
+    schedule_group = (
+        operator.call(
+            "scheduler",
+            "get-schedule-group",
+            "--name",
+            config.schedule_group_name,
+        )
+        or {}
+    )
+    expected_group_arn = (
+        f"arn:{config.partition}:scheduler:{config.region}:{config.account_id}:"
+        f"schedule-group/{config.schedule_group_name}"
+    )
+    if (
+        schedule_group.get("Arn") != expected_group_arn
+        or schedule_group.get("State") != "ACTIVE"
+    ):
+        raise LifecycleError("Persistent lifecycle schedule group drifted.")
+    schedule_group_tags = (
+        operator.call(
+            "scheduler",
+            "list-tags-for-resource",
+            "--resource-arn",
+            expected_group_arn,
+        )
+        or {}
+    )
+    expected_group_tags = {
+        "PortfolioEnvironment": config.environment,
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": config.repository_identity,
+    }
+    actual_group_tags = {
+        str(item.get("Key")): str(item.get("Value"))
+        for item in schedule_group_tags.get("Tags", [])
+        if isinstance(item, dict)
+    }
+    if any(
+        actual_group_tags.get(key) != value
+        for key, value in expected_group_tags.items()
+    ):
+        raise LifecycleError("Persistent lifecycle schedule group tags drifted.")
+
 
 def verify_image_repositories(config: LifecycleConfig, operator: AwsCli) -> None:
     names = [f"{config.name_prefix}/{purpose}" for purpose in ("web", "api", "ml")]
@@ -1298,7 +1342,7 @@ def verify_schedule(
             "--name",
             config.schedule_name,
             "--group-name",
-            "default",
+            config.schedule_group_name,
         )
         or {}
     )
@@ -1342,7 +1386,7 @@ def command_register_fallback(
         "--name",
         config.schedule_name,
         "--group-name",
-        "default",
+        config.schedule_group_name,
         "--schedule-expression",
         schedule_expression(expiry),
         "--schedule-expression-timezone",
@@ -1776,7 +1820,7 @@ def command_extend(
         "--name",
         config.schedule_name,
         "--group-name",
-        "default",
+        config.schedule_group_name,
         "--schedule-expression",
         schedule_expression(new_expiry),
         "--schedule-expression-timezone",
@@ -1809,6 +1853,66 @@ def tag_filters(config: LifecycleConfig) -> list[str]:
     return [
         f"Name=tag:{key},Values={value}" for key, value in config.ownership_tags.items()
     ]
+
+
+TAGGED_RESOURCE_INVENTORY_LABELS = {
+    "ec2:vpc": "vpc",
+    "ec2:subnet": "subnet",
+    "ec2:security-group": "securityGroup",
+    "ec2:route-table": "routeTable",
+    "ec2:internet-gateway": "internetGateway",
+    "ec2:vpc-endpoint": "vpcEndpoint",
+    "ec2:network-interface": "networkInterface",
+    "rds:db": "database",
+    "rds:subgrp": "databaseSubnetGroup",
+    "mq:broker": "broker",
+    "logs:log-group": "applicationLogGroup",
+    "apigateway:apis": "apiGateway",
+    "apigateway:vpclinks": "vpcLink",
+    "cognito-idp:userpool": "cognitoUserPool",
+    "servicediscovery:namespace": "cloudMapNamespace",
+    "servicediscovery:service": "cloudMapService",
+    "route53:hostedzone": "privateHostedZone",
+    "ecs:cluster": "ecsCluster",
+    "ecs:task-definition": "activeTaskDefinition",
+    "secretsmanager:secret": "runtimeSecret",
+}
+
+
+def tagged_resource_kind(arn: str) -> str:
+    parts = arn.split(":", maxsplit=5)
+    if len(parts) != 6:
+        return "unknown"
+    service = parts[2]
+    resource = parts[5].lstrip("/")
+    if service == "s3":
+        return "s3:bucket"
+    resource_type = resource.split("/", maxsplit=1)[0].split(":", maxsplit=1)[0]
+    return f"{service}:{resource_type}"
+
+
+def unresolved_tagged_resource_count(
+    mappings: object, inventory: Mapping[str, int]
+) -> int:
+    if not isinstance(mappings, list):
+        raise LifecycleError("Tagged resource inventory was not a list.")
+    unresolved = 0
+    for mapping in mappings:
+        if not isinstance(mapping, dict):
+            unresolved += 1
+            continue
+        kind = tagged_resource_kind(str(mapping.get("ResourceARN", "")))
+        label = (
+            "applicationBucket"
+            if kind == "s3:bucket"
+            else TAGGED_RESOURCE_INVENTORY_LABELS.get(kind)
+        )
+        # The Resource Groups Tagging API can retain mappings after the owning
+        # service has already proved the resource absent. Unknown resource
+        # kinds remain fail-closed; known kinds defer to the exact service probe.
+        if label is None or inventory.get(label, 0) > 0:
+            unresolved += 1
+    return unresolved
 
 
 def inventory_residue(client: AwsCli, config: LifecycleConfig) -> dict[str, int]:
@@ -1967,7 +2071,9 @@ def inventory_residue(client: AwsCli, config: LifecycleConfig) -> dict[str, int]
         )
         or {}
     )
-    inventory["tagInventory"] = len(tagged.get("ResourceTagMappingList", []))
+    inventory["tagInventory"] = unresolved_tagged_resource_count(
+        tagged.get("ResourceTagMappingList", []), inventory
+    )
     for purpose in ("web", "api", "ml"):
         response = client.call(
             "ecr",
@@ -2097,7 +2203,7 @@ def cleanup_completed_controls(config: LifecycleConfig, destroy: AwsCli) -> None
         "--name",
         config.schedule_name,
         "--group-name",
-        "default",
+        config.schedule_group_name,
         allow_error_codes=("ResourceNotFoundException",),
     )
     for key in (config.secret_key, config.lease_key, config.configuration_key):
@@ -2150,7 +2256,7 @@ def command_destroy(
             "--name",
             config.schedule_name,
             "--group-name",
-            "default",
+            config.schedule_group_name,
             "--schedule-expression",
             schedule_expression(expiry),
             "--schedule-expression-timezone",
@@ -2293,7 +2399,7 @@ def command_status(
             "--name",
             config.schedule_name,
             "--group-name",
-            "default",
+            config.schedule_group_name,
             allow_error_codes=("ResourceNotFoundException",),
         )
         status["fallback"] = (

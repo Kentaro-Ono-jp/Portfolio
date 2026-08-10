@@ -100,8 +100,8 @@ secret values and Terraform state are never public evidence.
 
 Keep only low-cost control resources in a persistent bootstrap layer: the
 encrypted and versioned S3 state backend and lockfile, ECR repositories with
-lifecycle cleanup, bounded IAM and workload roles, and the independent
-destroy controller.
+lifecycle cleanup, bounded IAM and workload roles, the environment-scoped
+Scheduler group, and the independent destroy controller.
 
 Put network, ingress, discovery, ECS, RDS, S3 application data, Amazon MQ,
 Cognito, runtime secrets, and environment logs in an environment-specific
@@ -114,7 +114,10 @@ maintainer's account, identity, credentials, state, or machine-local files.
 Before creating billable application resources, register a one-time two-hour
 fallback outside the state it destroys. EventBridge Scheduler invokes a
 persistent CodeBuild destroy project bound to the exact source, backend, state
-key, and environment, then deletes the completed schedule.
+key, and environment, then deletes the completed schedule. Scheduler execution
+trust is scoped to the exact persistent schedule-group ARN, which is the
+service-supported confused-deputy boundary; it is not scoped to an unsupported
+individual schedule ARN.
 
 The normal lifecycle is preflight, immutable image publication, fallback
 registration, Terraform apply, migration, synthetic seed, health and

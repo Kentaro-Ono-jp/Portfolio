@@ -2,14 +2,14 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ExactEnvironmentSchedule",
+      "Sid": "ExactEnvironmentScheduleGroup",
       "Effect": "Allow",
       "Principal": {"Service": "scheduler.amazonaws.com"},
       "Action": "sts:AssumeRole",
       "Condition": {
-        "StringEquals": {"aws:SourceAccount": "${AWS_ACCOUNT_ID}"},
-        "ArnLike": {
-          "aws:SourceArn": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule/default/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+        "StringEquals": {
+          "aws:SourceAccount": "${AWS_ACCOUNT_ID}",
+          "aws:SourceArn": "arn:${AWS_PARTITION}:scheduler:${AWS_REGION}:${AWS_ACCOUNT_ID}:schedule-group/${NAME_PREFIX}-${ENVIRONMENT}-lifecycle"
         }
       }
     }
