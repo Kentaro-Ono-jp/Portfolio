@@ -5,6 +5,8 @@ env:
 
 phases:
   install:
+    runtime-versions:
+      python: 3.13
     commands:
       - set -euo pipefail
       - aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$PORTFOLIO_CONFIGURATION_KEY" /tmp/lifecycle.json >/dev/null

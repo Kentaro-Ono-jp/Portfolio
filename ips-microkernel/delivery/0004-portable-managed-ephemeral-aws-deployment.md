@@ -347,12 +347,13 @@ capsules were removed.
 One Cost Explorer page was read through the separate billing-read role. Its
 current two-day estimate was `$0.000415` plus the owner-accepted `$0.01` API
 request charge; the result was marked estimated and does not replace the
-zero-residue proof. A real Scheduler-to-CodeBuild invocation also exposed a
-Terraform archive filename/checksum mismatch in the destroy buildspec. That
-diagnostic run remains a failure rather than passing evidence; the buildspec
-now preserves the official archive filename, and exact-head automatic-path
-proof is recorded with the focused PR/Issue evidence rather than relabeling the
-failed run.
+zero-residue proof. Real Scheduler-to-CodeBuild invocations also exposed a
+Terraform archive filename/checksum mismatch and an unpinned CodeBuild default
+Python 3.10 runtime against the repository's Python 3.13 contract. Both
+diagnostic runs remain failures rather than passing evidence; the buildspec now
+preserves the official archive filename and selects the supported Python 3.13
+runtime explicitly. Automatic-path proof is recorded with the focused PR/Issue
+evidence rather than relabeling either failed run.
 
 ### Step 8: Publish portable operations and completion evidence
 
