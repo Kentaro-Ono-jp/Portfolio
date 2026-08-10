@@ -7,7 +7,7 @@
     "codebuild-image-trust.json": "3c6b0c077a5fd7bab4ca1257926954747ca64045dddd69ae1ddcd953df1adec3",
     "codebuild-image.json": "820ce65631188c51fbde46e3e4ef5b1dac0ef7cf86ef052112ad120155d52d26",
     "destroy-trust.json": "6dc6c66fd6a12822ddb1c5812ea2a666626fd3922bb504bb30f66447b2e62138",
-    "destroy.json": "f2dec87ed36bd48fb0d062452ffd886ec8bf0f52524c97f6ac62ac8fd618f0d7",
+    "destroy.json": "0fb69584db28724724deef8b9b0d8bb8ad8814592e9f6fd732952a708aab1143",
     "ecs-task-trust.json": "309a05385bf93ee8e210c75e45a815ac27936356a208a348e9f17cc8be48bc9e",
     "lifecycle-control.json": "8f4805370201e59cc03a006dfff21d5ef286ec3785798f5d907f56f12d7ffecc",
     "lifecycle-destroy.json": "1290e95d47dcd7bd5df14f458501aa002908d2140a8f8b49466763269ea11ecf",

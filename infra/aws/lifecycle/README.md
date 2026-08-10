@@ -100,6 +100,9 @@ read authority. The subsequent service-specific and tag sweep is the
 independent, fail-closed proof of actual absence. Provider delete waiters retain
 only the exact owned/named read actions they require; they do not gain general
 secret-value authority.
+Exact environment-prefixed Secrets Manager deletion does not depend on a
+resource tag that disappears during forced deletion, so an interrupted delete
+remains idempotent without granting another environment's secret ARN.
 
 Fallback registration first creates a fresh create-only Terraform plan, then
 registers and reads back the one-time schedule before apply. The accepted
