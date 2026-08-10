@@ -167,16 +167,21 @@ removed only after that proof. A single billing-read Cost Explorer page
 returned an estimated `$0.000415` for the scoped two-day window; its accepted
 API-query charge and delayed estimate are supporting evidence only.
 
-The implementation history is not rewritten as uniformly green. Two real
-Scheduler-to-CodeBuild destroy invocations failed before destroy: the first
-renamed the downloaded Terraform archive while retaining the official checksum
-filename, and the later runs exposed the complete CodeBuild runtime binding:
-the default `python3` was 3.10, while the supported `python: 3.13` selection is
-implemented by `pyenv global` but the build shell can still resolve the OS
-interpreter ahead of the selected shim, including through `pyenv exec`. The
-buildspec now preserves the official archive filename, selects Python 3.13,
-asserts its version, and invokes the interpreter at the exact path defined by
-the pinned CodeBuild image and `$PYTHON_313_VERSION`. The controller likewise
-invokes the image's exact AWS CLI v2 path rather than a shell-resolved shim. The
-focused PR/Issue evidence records the subsequent automatic-path result
-separately from all diagnostic runs.
+The implementation history is not rewritten as uniformly green. Seven real
+Scheduler-to-CodeBuild destroy invocations failed before the first complete
+automatic destroy. The first retained a checksum filename that no longer
+matched the downloaded Terraform archive. The next four exposed the complete
+CodeBuild runtime binding: the default `python3` was 3.10, while the supported
+`python: 3.13` selection is implemented by `pyenv global` but the build shell
+could still resolve the OS interpreter ahead of the selected shim, including
+through `python` and `pyenv exec`. The following two reached the exact Python
+runtime and exposed that the frozen Console IAM policy allowed the controller
+configuration object but not the equally required lifecycle lease. The
+buildspec now preserves the official archive filename, invokes the exact
+Python 3.13 and AWS CLI v2 paths defined by the pinned image, and preflights the
+exact caller, both controller inputs, and the one destroy-role assumption. The
+CodeBuild identity policy now reads those two exact objects and cannot mutate
+them or Terraform state. The next scheduled invocation passed install, build,
+Terraform destroy, the 27-category residue sweep, and control cleanup; an
+independent read-only sweep also reported zero residual resources. Focused
+PR/Issue evidence keeps that successful run separate from all diagnostics.
