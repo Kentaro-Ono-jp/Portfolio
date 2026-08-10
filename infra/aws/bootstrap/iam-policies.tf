@@ -119,8 +119,8 @@ locals {
         Action = [
           "apigateway:DELETE",
           "cognito-idp:DeleteUserPool",
-          "servicediscovery:DeleteNamespace",
-          "servicediscovery:DeleteService",
+          "servicediscovery:Delete*",
+          "servicediscovery:List*",
         ]
         Resource = "*"
         Condition = {

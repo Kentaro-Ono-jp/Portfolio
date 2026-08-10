@@ -26,6 +26,8 @@
         "servicediscovery:GetNamespace",
         "servicediscovery:GetOperation",
         "servicediscovery:GetService",
+        "servicediscovery:ListNamespaces",
+        "servicediscovery:ListServices",
         "servicediscovery:ListTagsForResource",
         "servicediscovery:TagResource",
         "sts:GetCallerIdentity",

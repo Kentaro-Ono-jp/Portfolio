@@ -18,7 +18,7 @@
     "noel-assume-billing-read-role.json": "91b5290c572b524e405132b6ccb509b957d1a4ba519f6a2b2f4cc01b32fee11f",
     "noel-assume-observer-role.json": "b87bb6840517556dbb3232279f029fad8b84fd6a251ec0532458319efd7dfc51",
     "noel-deployment-assume-operator.json": "d5f93554e18c4f21bf3e11bb25117290c9a0ee810cf66b31d67f9f176de517d5",
-    "operator-boundary.json": "0d7566a83166aba7e408cd905f65a5c4e38d0c2542866a44cb7cff5df3f87517",
+    "operator-boundary.json": "a7254b9fdb762aca691f43dbc9ddf96a239cc32f2ae0a5133d816cb76c06bf3e",
     "operator-permissions.json": "5fda8c9af516c18af587cee8b3fc8bda96330286fd30853571c2cd329549a10a",
     "operator-trust.json": "beee2e9149948e624f1f5b1ff2c381e987bc614f0c97d0451ee11d634444e086",
     "scheduler-trust.json": "73ae4f3acaa980a6a1e9b0054eed642af04f003b5775124d0ca33b91b8fe4568",
