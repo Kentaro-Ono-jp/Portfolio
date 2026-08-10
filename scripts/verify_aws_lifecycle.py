@@ -207,6 +207,10 @@ def main() -> int:
     terraform_archive = "terraform_1.15.8_linux_amd64.zip"
     if "runtime-versions:\n      python: 3.13" not in destroy_build:
         raise RuntimeError("Destroy controller Python runtime pin drifted")
+    if "python3" in destroy_build or (
+        "python scripts/aws_lifecycle.py" not in destroy_build
+    ):
+        raise RuntimeError("Destroy controller selected-runtime entrypoint drifted")
     if destroy_build.count(f"/tmp/{terraform_archive}") != 3 or (
         f"grep '{terraform_archive}$' terraform.sha256sums | sha256sum --check"
         not in destroy_build

@@ -348,12 +348,13 @@ One Cost Explorer page was read through the separate billing-read role. Its
 current two-day estimate was `$0.000415` plus the owner-accepted `$0.01` API
 request charge; the result was marked estimated and does not replace the
 zero-residue proof. Real Scheduler-to-CodeBuild invocations also exposed a
-Terraform archive filename/checksum mismatch and an unpinned CodeBuild default
-Python 3.10 runtime against the repository's Python 3.13 contract. Both
+Terraform archive filename/checksum mismatch and the full CodeBuild runtime
+binding: the unpinned `python3` defaulted to 3.10, while an explicit Python 3.13
+selection is exposed through `python`, not the unchanged OS `python3`. All
 diagnostic runs remain failures rather than passing evidence; the buildspec now
-preserves the official archive filename and selects the supported Python 3.13
-runtime explicitly. Automatic-path proof is recorded with the focused PR/Issue
-evidence rather than relabeling either failed run.
+preserves the official archive filename, selects Python 3.13, and invokes that
+selected entrypoint. Automatic-path proof is recorded with the focused PR/Issue
+evidence rather than relabeling any failed run.
 
 ### Step 8: Publish portable operations and completion evidence
 
