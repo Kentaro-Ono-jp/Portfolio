@@ -2166,7 +2166,9 @@ def terraform_destroy(
         "module.managed_state.aws_secretsmanager_secret_version.broker",
         "module.managed_state.aws_secretsmanager_secret_version.database",
     }
-    for address in sorted(managed_secret_versions.intersection(listed.stdout.splitlines())):
+    for address in sorted(
+        managed_secret_versions.intersection(listed.stdout.splitlines())
+    ):
         run_process(
             [
                 terraform,

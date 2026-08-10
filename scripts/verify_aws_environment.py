@@ -103,9 +103,9 @@ API_GATEWAY_LOG_DELIVERY_ACTIONS = {
     "logs:PutResourcePolicy",
     "logs:UpdateLogDelivery",
 }
-OWNER_ACCEPTED_GLOBAL_SERVICE_DEPENDENCY_ACTIONS = (
-    API_GATEWAY_LOG_DELIVERY_ACTIONS | {"ecs:DeregisterTaskDefinition"}
-)
+OWNER_ACCEPTED_GLOBAL_SERVICE_DEPENDENCY_ACTIONS = API_GATEWAY_LOG_DELIVERY_ACTIONS | {
+    "ecs:DeregisterTaskDefinition"
+}
 
 API_GATEWAY_LOG_DELIVERY_DESTROY_ACTIONS = {
     "logs:DeleteLogDelivery",
@@ -1026,8 +1026,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         for statement in permissions["Statement"]
         if set(string_values(statement.get("Action", [])))
         == {"apigateway:POST", "apigateway:PUT"}
-        and statement.get("Resource")
-        == "arn:aws:apigateway:us-east-1::/tags/*"
+        and statement.get("Resource") == "arn:aws:apigateway:us-east-1::/tags/*"
     ]
     api_gateway_target_identity_statements = [
         statement
@@ -1928,7 +1927,10 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 )
 
     require_ec2_multi_resource_authorizations(resource_actions)
-    for resource_type, required_rows in required_ec2_multi_resource_authorizations.items():
+    for (
+        resource_type,
+        required_rows,
+    ) in required_ec2_multi_resource_authorizations.items():
         for required in required_rows:
             mutation = {key: list(value) for key, value in resource_actions.items()}
             mutation[resource_type] = [
