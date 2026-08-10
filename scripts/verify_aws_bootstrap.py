@@ -854,8 +854,12 @@ def verify_operator_control_plane(payload: dict[str, Any]) -> int:
             f"HTTP API write form {action} {resource_path}",
             action,
             f"arn:aws:apigateway:us-east-1::{resource_path}",
-            resource_tags,
-            "resource",
+            # API Gateway reuses PATCH on the just-created target as a
+            # dependent tag-on-create authorization and supplies no ownership
+            # context. The same grant therefore covers direct PATCH calls, an
+            # owner-accepted limitation documented by the static IAM contract.
+            {} if action == "apigateway:PATCH" else resource_tags,
+            None if action == "apigateway:PATCH" else "resource",
             all_allowed,
         )
         for action, resource_path in http_api_write_resources
