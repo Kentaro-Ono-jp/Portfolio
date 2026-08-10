@@ -204,9 +204,7 @@ export function readServerConfig(
     ...(parsed.data.PORTFOLIO_WEB_OIDC_RESOURCE === undefined
       ? {}
       : {
-          oidcResource: normalizedUrl(
-            parsed.data.PORTFOLIO_WEB_OIDC_RESOURCE,
-          ),
+          oidcResource: normalizedUrl(parsed.data.PORTFOLIO_WEB_OIDC_RESOURCE),
         }),
     allowInsecureLoopback:
       parsed.data.PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK,
