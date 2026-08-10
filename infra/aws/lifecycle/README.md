@@ -173,6 +173,7 @@ implemented by `pyenv global` but the build shell can still resolve the OS
 interpreter ahead of the selected shim, including through `pyenv exec`. The
 buildspec now preserves the official archive filename, selects Python 3.13,
 asserts its version, and invokes the interpreter at the exact path defined by
-the pinned CodeBuild image and `$PYTHON_313_VERSION`. The focused PR/Issue
-evidence records the subsequent automatic-path result separately from all
-diagnostic runs.
+the pinned CodeBuild image and `$PYTHON_313_VERSION`. The controller likewise
+invokes the image's exact AWS CLI v2 path rather than a shell-resolved shim. The
+focused PR/Issue evidence records the subsequent automatic-path result
+separately from all diagnostic runs.

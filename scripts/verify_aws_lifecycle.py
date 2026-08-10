@@ -212,6 +212,8 @@ def main() -> int:
         raise RuntimeError("Destroy controller selected-runtime entrypoint drifted")
     if "sys.version_info[:2] == (3, 13)" not in destroy_build:
         raise RuntimeError("Destroy controller runtime assertion drifted")
+    if destroy_build.count("/usr/local/bin/aws") != 2:
+        raise RuntimeError("Destroy controller AWS CLI binding drifted")
     if destroy_build.count(f"/tmp/{terraform_archive}") != 3 or (
         f"grep '{terraform_archive}$' terraform.sha256sums | sha256sum --check"
         not in destroy_build
