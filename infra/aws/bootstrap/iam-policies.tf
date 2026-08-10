@@ -317,7 +317,6 @@ locals {
           Action = [
             "codebuild:BatchGetBuilds",
             "codebuild:BatchGetProjects",
-            "codebuild:ListTagsForResource",
             "codebuild:StartBuild",
           ]
           Resource = [

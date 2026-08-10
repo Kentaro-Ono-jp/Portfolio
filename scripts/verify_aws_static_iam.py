@@ -64,6 +64,23 @@ def sha256(payload: Any) -> str:
     return hashlib.sha256(canonical_json(payload)).hexdigest()
 
 
+def normalized_iam_document(payload: Any) -> Any:
+    """Normalize IAM's semantically unordered JSON arrays for live read-back."""
+    if isinstance(payload, dict):
+        return {
+            key: normalized_iam_document(value)
+            for key, value in sorted(payload.items())
+        }
+    if isinstance(payload, list):
+        normalized = [normalized_iam_document(value) for value in payload]
+        return sorted(normalized, key=canonical_json)
+    return payload
+
+
+def iam_documents_equal(actual: Any, expected: Any) -> bool:
+    return normalized_iam_document(actual) == normalized_iam_document(expected)
+
+
 def load_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -374,6 +391,39 @@ def verify_mutation_boundaries(
     return len(cases) + len(tag_cases)
 
 
+def verify_live_document_normalization() -> int:
+    expected = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": ["sts:TagSession", "sts:AssumeRole"],
+                "Principal": {
+                    "AWS": ["arn:example:role/operator", "arn:example:role/controller"]
+                },
+            }
+        ],
+    }
+    reordered = copy.deepcopy(expected)
+    reordered["Statement"][0]["Action"].reverse()
+    reordered["Statement"][0]["Principal"]["AWS"].reverse()
+    if not iam_documents_equal(reordered, expected):
+        raise RuntimeError("IAM live document normalization rejected reordered sets")
+
+    missing = copy.deepcopy(expected)
+    missing["Statement"][0]["Principal"]["AWS"].pop()
+    if iam_documents_equal(missing, expected):
+        raise RuntimeError(
+            "IAM live document normalization accepted a missing principal"
+        )
+
+    changed = copy.deepcopy(expected)
+    changed["Statement"][0]["Effect"] = "Deny"
+    if iam_documents_equal(changed, expected):
+        raise RuntimeError("IAM live document normalization accepted changed semantics")
+    return 3
+
+
 def verify_offline() -> dict[str, Any]:
     manifest = load_json(CONTRACT_ROOT / "manifest.json")
     policy_specs = manifest.get("managedPolicies", {})
@@ -402,6 +452,7 @@ def verify_offline() -> dict[str, Any]:
     mutation_cases = verify_mutation_boundaries(
         manifest, policy, boundary, digest_contract, calculated
     )
+    normalization_cases = verify_live_document_normalization()
     return {
         "schemaVersion": manifest["schemaVersion"],
         "managedPolicies": len(policy_specs),
@@ -411,6 +462,7 @@ def verify_offline() -> dict[str, Any]:
         "canonicalDocuments": len(calculated),
         "canonicalContractSha256": sha256(calculated),
         "failClosedMutationCases": mutation_cases,
+        "liveDocumentNormalizationCases": normalization_cases,
         "staticVerifierAwsApiCalls": 0,
         "staticVerifierAwsWrites": 0,
         "staticVerifierAwsResourcesCreated": 0,
@@ -572,7 +624,9 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
         expected_trust = rendered(load_json(CONTRACT_ROOT / spec["trust"]), tokens)
         if role_value.get("Arn") != role_arns[purpose]:
             raise RuntimeError(f"Static role ARN drifted: {purpose}")
-        if role_value.get("AssumeRolePolicyDocument") != expected_trust:
+        if not iam_documents_equal(
+            role_value.get("AssumeRolePolicyDocument"), expected_trust
+        ):
             raise RuntimeError(f"Static role trust drifted: {purpose}")
         if (
             role_value.get("PermissionsBoundary", {}).get("PermissionsBoundaryArn")
@@ -621,7 +675,9 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
         expected_document = rendered(
             load_json(CONTRACT_ROOT / spec["document"]), tokens
         )
-        if version.get("PolicyVersion", {}).get("Document") != expected_document:
+        if not iam_documents_equal(
+            version.get("PolicyVersion", {}).get("Document"), expected_document
+        ):
             raise RuntimeError(f"Static managed policy document drifted: {key}")
         operator.call("iam", "list-policy-versions", "--policy-arn", policy_arns[key])
         operator.call("iam", "list-policy-tags", "--policy-arn", policy_arns[key])

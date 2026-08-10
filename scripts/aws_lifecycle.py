@@ -504,18 +504,9 @@ def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
         }
         if variables != expected_environment:
             raise LifecycleError(f"Persistent {purpose} project inputs drifted.")
-        tags = (
-            operator.call(
-                "codebuild",
-                "list-tags-for-resource",
-                "--resource-arn",
-                str(project.get("arn", "")),
-            )
-            or {}
-        )
         tag_map = {
             str(item.get("key")): str(item.get("value"))
-            for item in tags.get("tags", [])
+            for item in project.get("tags", [])
             if isinstance(item, dict)
         }
         expected_tags = {
