@@ -2388,6 +2388,48 @@ def _validate_review_adjudication_sequence(failures: list[str]) -> None:
         )
 
 
+def _delivery_gate_order_is_valid(content: str) -> bool:
+    edges = set(
+        re.findall(
+            r"(?m)^\s*([A-Za-z][A-Za-z0-9_]*)"
+            r"(?:\[[^\n]*\])?\s*-->\s*"
+            r"([A-Za-z][A-Za-z0-9_]*)",
+            content,
+        )
+    )
+    required = {
+        ("Clone", "Source"),
+        ("Source", "Assume"),
+        ("Assume", "Attest"),
+        ("Frozen", "Attest"),
+        ("Attest", "Preflight"),
+    }
+    return required <= edges and ("Preflight", "Attest") not in edges
+
+
+def _validate_delivery_gate_order(failures: list[str]) -> None:
+    relative_path = Path(
+        "ips-microkernel/delivery/0004-portable-managed-ephemeral-aws-deployment.md"
+    )
+    path = REPOSITORY_ROOT / relative_path
+    if not path.is_file():
+        return
+    content = path.read_text(encoding="utf-8")
+    if not _delivery_gate_order_is_valid(content):
+        failures.append(
+            f"{relative_path.as_posix()}: static IAM attestation must precede "
+            "lifecycle preflight"
+        )
+        return
+
+    reversed_edge = content.replace("Attest --> Preflight", "Preflight --> Attest", 1)
+    if reversed_edge == content or _delivery_gate_order_is_valid(reversed_edge):
+        failures.append(
+            f"{relative_path.as_posix()}: reversed attestation/preflight mutation "
+            "was accepted"
+        )
+
+
 def governance_failures() -> list[str]:
     failures: list[str] = []
 
@@ -2397,6 +2439,7 @@ def governance_failures() -> list[str]:
 
     _validate_required_governance_text(failures, REQUIRED_GOVERNANCE_TEXT)
     _validate_review_adjudication_sequence(failures)
+    _validate_delivery_gate_order(failures)
 
     for relative_path, forbidden_fragments in FORBIDDEN_STALE_ROUTING_TEXT.items():
         path = REPOSITORY_ROOT / relative_path

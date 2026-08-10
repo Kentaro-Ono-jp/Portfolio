@@ -29,6 +29,16 @@ The planning baseline and Step 2 runtime-compatibility boundary are implemented:
 
 Step 3 now defines the persistent portable bootstrap: an encrypted, versioned, public-blocked S3 backend with S3 lockfile and deterministic local-to-remote state adoption; independent immutable Web/API/ML ECR repositories with bounded cleanup; one quota-checked fixed Permissions Boundary; environment-isolated operator, IAM-manager, automation, task-execution, Web/API/ML workload, Scheduler, CodeBuild, and destroy authorities; exact trust and pass-role contracts including an event-bound customized GitHub OIDC subject; and repository-owned AWS-free mock-plan plus allowed/denied and delegated-authority simulation proof. The fixed boundary is a durable service/purpose, persistent-resource, IAM-mutation, and exact-PassRole guardrail. Bootstrap-owned inline identity policies, which delegated roles cannot replace, enforce exact generated-resource ownership; static proof reports identity, boundary, and their effective intersection without pretending that the deliberately wider boundary duplicates every ownership predicate. This owner-selected rule is recorded in [umbrella #95](https://github.com/Kentaro-Ono-jp/Portfolio/issues/95#issuecomment-5230632458).
 
+The maintainer path now freezes deployment IAM as a persistent static
+prerequisite. One separately approved owner-admin Console operation installs or
+updates the canonical user, roles, trusts, managed policies, attachments, and
+boundary after repository-owned quota proof. Normal deployment only verifies
+the existing credential-only source user, assumes the exact operator, and
+performs exact-ARN read-only attestation against canonical document hashes.
+It cannot generate, attach, version, repair, or otherwise mutate IAM, cannot
+recalculate IAM quota, and cannot invoke bootstrap IAM. Drift fails closed and
+returns to a separate static-IAM maintenance increment.
+
 Step 4 now defines the independent environment state root and its NAT-free VPC, generated API Gateway HTTP API plus VPC Link and Cloud Map ingress, distinct Web/API-area/ML Fargate services, RDS PostgreSQL 18, encrypted application S3 bucket, Amazon MQ RabbitMQ 4.2, Cognito Authorization Code/PKCE managed login, generated Secrets Manager values, bounded CloudWatch logs, exact ownership tags, and portable outputs. The root consumes only explicit persistent-bootstrap references, pins every image by digest, gives no database or end-user identity to ML, and is validated by mock-provider tests plus a fail-closed sanitized plan against an unreachable endpoint. That static plan proves 81 create-only resources and 60 exactly tagged resources. Its verifier process makes zero AWS API calls, writes, or resources, but those explicitly verifier-scoped zeros exclude the real AWS history below and are not Issue-wide totals.
 
 These are definitions and static evidence, not a successful hosted lifecycle. An owner-authorized exploratory AWS evaluation verified the separately named Console-owned operator permissions and boundary, then consumed the governed `3/3` billable construction attempts while exposing provider-dependent authorization requirements; none reached a green environment. No fourth construction apply was performed. The partial environment was destroyed through the separate destroy role, Terraform state returned to zero, a fresh live plan returned 81 creates with no update or delete, and tag plus service-specific inventory found zero application residue. GitHub OIDC configuration, Step 5 lifecycle, Step 6 deployment workflows, the successful Step 7 real-AWS cycle, and Step 8 completion record remain unimplemented.
@@ -37,8 +47,11 @@ These are definitions and static evidence, not a successful hosted lifecycle. An
 
 From one public repository clone, an authorized operator can:
 
-1. verify local tools, AWS caller identity, region, quota, expected cost, and state backend;
-2. bootstrap bounded deployment roles and persistent low-cost control resources without creating a shared maintainer account dependency;
+1. verify local tools, the exact source identity, exact operator assumption,
+   frozen static-IAM attestation, region, expected cost, and state backend;
+2. consume already-installed bounded deployment roles and persistent low-cost
+   control resources without changing IAM or creating a shared maintainer
+   account dependency;
 3. build and identify immutable application images;
 4. register a two-hour automatic destroy fallback before billable application creation;
 5. apply the managed AWS environment with Terraform;
@@ -51,9 +64,13 @@ The repository continues to support AWS-free GitHub Actions verification and AWS
 
 ```mermaid
 flowchart LR
-    Clone["Public repository clone"] --> Preflight["Preflight and cost boundary"]
-    Preflight --> Bootstrap["Portable IAM and persistent bootstrap"]
-    Bootstrap --> TTL["Register destroy fallback first"]
+    Owner["One-time owner-admin static IAM maintenance"] --> Frozen["Frozen persistent IAM contract"]
+    Clone["Public repository clone"] --> Source["Verify exact source identity"]
+    Source --> Assume["Assume exact operator role"]
+    Frozen --> Attest["Read-only static IAM attestation"]
+    Assume --> Attest
+    Attest --> Preflight["Lifecycle preflight and cost boundary"]
+    Preflight --> TTL["Register destroy fallback first"]
     TTL --> Terraform["Terraform managed environment"]
     Terraform --> Gateway["API Gateway HTTPS"]
     Gateway --> Web["ECS/Fargate Web"]
@@ -213,6 +230,12 @@ Deliver the remote-state bootstrap, ECR lifecycle, Permissions Boundary, operato
 
 Acceptance requires a new account owner to bootstrap independently, every privileged action to have an exact purpose, administrator/user/credential/account changes to remain denied, exact generated-resource ownership to be enforced by bootstrap-owned non-replaceable identity policies and their effective boundary intersection, and public examples to contain no maintainer identity or secret. The one fixed boundary must retain useful managed-policy quota headroom rather than duplicating every service-specific ownership predicate.
 
+For the maintainer account, acceptance additionally requires a frozen
+Console-owned static IAM contract. Static quota work and IAM changes occur only
+in a separately governed maintenance operation. Deployment has only exact-source
+identity verification, exact operator assumption, and exact-ARN read-only
+attestation; any drift fails closed without repair.
+
 ### Step 4: Implement the ephemeral managed environment
 
 Deliver Terraform modules for the NAT-free VPC, API Gateway/VPC Link/Cloud Map, ECS services and task definitions, RDS PostgreSQL, S3, Amazon MQ RabbitMQ, Cognito, Secrets Manager injection, CloudWatch logs, tags, and outputs.
@@ -235,6 +258,10 @@ remain Step 5 work.
 Deliver preflight, image publication, schedule-first two-hour TTL, apply, status, seed, smoke, extend, manual destroy, automatic CodeBuild destroy fallback, and service-specific residual sweep.
 
 Acceptance requires fallback registration before billable apply, exact source/state binding, safe retry/idempotency, environment concurrency control, sanitized logs, and a failed or interrupted local operator path that still leaves an independent destroy route.
+
+Lifecycle preflight consumes the frozen IAM contract. It must not calculate
+IAM quota, generate or split policies, create policy versions, change policy or
+boundary attachments, apply bootstrap IAM, or self-heal drift.
 
 ### Step 6: Add explicit manual and monthly automation paths
 

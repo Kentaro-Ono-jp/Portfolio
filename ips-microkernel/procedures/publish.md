@@ -113,6 +113,22 @@ repository persistence of the Stage B rule later moves `HEAD`, ordinary
 candidate Gate A, CI, and review apply to that changed head; they do not prove
 the rule itself.
 
+## External-write evidence gate
+
+When the accepted focused Issue requires successful exact-head authoritative
+CI before an owner-authorized cloud, account, deployment, evaluation, or other
+external write, treat that order as a hard stop:
+
+1. keep the external target unchanged until the candidate is pushed, the live
+   remote and PR heads equal the full intended SHA, and authoritative CI
+   succeeds for that exact head;
+2. do not substitute local proof, owner authorization, a prior-head run, or a
+   later same-head success for the required pre-write exact-head result; and
+3. if an external write already occurred out of order, stop further writes,
+   preserve the real timestamps and effects, disclose the sequencing
+   limitation, and route it through review adjudication and knowledge
+   curation instead of rewriting it as a passing pre-write gate.
+
 ## Conditional exception
 
 When the complete candidate satisfies the

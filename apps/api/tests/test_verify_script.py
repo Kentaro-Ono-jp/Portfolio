@@ -897,6 +897,7 @@ def test_aws_environment_change_selects_only_aws_static(
 
     assert plan.groups == {"aws-static"}
     assert verifier.plan_for_paths(["scripts/verify_aws_environment.py"]).groups == {"aws-static"}
+    assert verifier.plan_for_paths(["scripts/verify_aws_static_iam.py"]).groups == {"aws-static"}
 
 
 def test_plan_outputs_bind_exact_endpoints_and_carry_run(

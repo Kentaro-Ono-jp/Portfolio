@@ -1,5 +1,13 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "lifecycle": {
+    "staticIamOwner": "owner-admin principal",
+    "deploymentMode": "read-only-consumer",
+    "deploymentIamMutation": false,
+    "deploymentPolicyGeneration": false,
+    "deploymentQuotaCalculation": false,
+    "driftMode": "fail-closed"
+  },
   "ownershipTags": {
     "PortfolioEnvironment": "${ENVIRONMENT}",
     "PortfolioManaged": "true",
@@ -40,6 +48,10 @@
     "operatorPermissions": {
       "name": "ReactorFrontPortfolioOperatorPermissions",
       "document": "operator-permissions.json"
+    },
+    "staticIamAttestation": {
+      "name": "ReactorFrontPortfolioStaticIamAttestation",
+      "document": "static-iam-attestation.json"
     },
     "managedEnvironmentPermissions": {
       "name": "ReactorFrontPortfolioManagedEnvironmentPermissions",
@@ -91,40 +103,83 @@
       "trust": "operator-trust.json",
       "permissions": [
         "operatorPermissions",
+        "staticIamAttestation",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions"
       ],
-      "boundary": "operatorBoundary"
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "operator-deployment"
+      }
     },
     "task_execution": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-task-execution",
       "trust": "ecs-task-trust.json",
       "permissions": ["taskExecution"],
-      "boundary": "operatorBoundary"
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "task-execution"
+      }
     },
     "web_workload": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-web-workload",
       "trust": "ecs-task-trust.json",
       "permissions": [],
-      "boundary": "operatorBoundary"
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "web-workload"
+      }
     },
     "api_workload": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-api-workload",
       "trust": "ecs-task-trust.json",
       "permissions": ["apiWorkload"],
-      "boundary": "operatorBoundary"
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "api-workload"
+      }
     },
     "ml_workload": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-ml-workload",
       "trust": "ecs-task-trust.json",
       "permissions": ["mlWorkload"],
-      "boundary": "operatorBoundary"
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "ml-workload"
+      }
     },
     "destroy": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
       "trust": "destroy-trust.json",
       "permissions": ["operatorPermissions", "destroy"],
-      "boundary": "operatorBoundary"
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "destroy"
+      }
     }
   }
 }

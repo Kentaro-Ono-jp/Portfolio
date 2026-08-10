@@ -1,0 +1,61 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadExactDeploymentSourceIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetLoginProfile",
+        "iam:GetUser",
+        "iam:ListAccessKeys",
+        "iam:ListAttachedUserPolicies",
+        "iam:ListGroupsForUser",
+        "iam:ListUserPolicies"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:user/ReactorFrontNoel"
+    },
+    {
+      "Sid": "ReadExactPersistentRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:ListRoleTags"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-task-execution",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-web-workload",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-api-workload",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-ml-workload",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+      ]
+    },
+    {
+      "Sid": "ReadExactPersistentManagedPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListEntitiesForPolicy",
+        "iam:ListPolicyTags",
+        "iam:ListPolicyVersions"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioNoelAssumeBillingReadRole",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioNoelDeploymentAssumeOperator",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioNoelAssumeObserverRole",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioOperatorPermissions",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioStaticIamAttestation",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioManagedEnvironmentPermissions",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioManagedEnvironmentResourcePermissions",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioOperatorBoundary",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioTaskExecutionPolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioApiWorkloadPolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioMlWorkloadPolicy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioDestroyPolicy"
+      ]
+    }
+  ]
+}

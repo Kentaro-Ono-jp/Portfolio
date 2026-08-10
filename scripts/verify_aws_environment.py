@@ -293,14 +293,25 @@ def foreign_operator_resource(symbol: str) -> str:
 
 def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
     manifest = rendered_console_json(CONSOLE_IAM_ROOT / "manifest.json")
-    if manifest.get("schemaVersion") != 1:
+    if manifest.get("schemaVersion") != 2:
         raise RuntimeError("Unknown Console IAM manifest schema")
+    expected_lifecycle = {
+        "staticIamOwner": "owner-admin principal",
+        "deploymentMode": "read-only-consumer",
+        "deploymentIamMutation": False,
+        "deploymentPolicyGeneration": False,
+        "deploymentQuotaCalculation": False,
+        "driftMode": "fail-closed",
+    }
+    if manifest.get("lifecycle") != expected_lifecycle:
+        raise RuntimeError("Console IAM lifecycle contract drifted")
 
     expected_policy_keys = {
         "noelAssumeBillingReadRole",
         "noelDeploymentAssumeOperator",
         "noelAssumeObserverRole",
         "operatorPermissions",
+        "staticIamAttestation",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions",
         "operatorBoundary",
@@ -450,6 +461,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             )
     operator_permission_keys = [
         "operatorPermissions",
+        "staticIamAttestation",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions",
     ]
@@ -762,6 +774,56 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
                 f"{label}Cannot{action.replace(':', '')}",
                 not policy_allows(policy, action, destroy_role),
             )
+
+    attestation_resources = {
+        "SourceUser": "arn:aws:iam::111122223333:user/ReactorFrontNoel",
+        "OperatorRole": exact_operator_role,
+        "DestroyRole": destroy_role,
+        "OperatorPolicy": (
+            "arn:aws:iam::111122223333:policy/ReactorFrontPortfolioOperatorPermissions"
+        ),
+    }
+    attestation_actions = {
+        "SourceUser": "iam:GetUser",
+        "OperatorRole": "iam:GetRole",
+        "DestroyRole": "iam:ListAttachedRolePolicies",
+        "OperatorPolicy": "iam:GetPolicyVersion",
+    }
+    for label, resource in attestation_resources.items():
+        action = attestation_actions[label]
+        record(
+            f"identityCanReadExactStaticIam{label}",
+            policy_allows(permissions, action, resource),
+        )
+        record(
+            f"boundaryCanReadExactStaticIam{label}",
+            policy_allows(boundary, action, resource),
+        )
+    for label, action, resource in (
+        (
+            "UnrelatedUser",
+            "iam:GetUser",
+            "arn:aws:iam::111122223333:user/unrelated-user",
+        ),
+        (
+            "UnrelatedRole",
+            "iam:GetRole",
+            "arn:aws:iam::111122223333:role/unrelated-role",
+        ),
+        (
+            "UnrelatedPolicy",
+            "iam:GetPolicyVersion",
+            "arn:aws:iam::111122223333:policy/unrelated-policy",
+        ),
+    ):
+        record(
+            f"identityCannotReadStaticIam{label}",
+            not policy_allows(permissions, action, resource),
+        )
+        record(
+            f"boundaryCannotReadStaticIam{label}",
+            not policy_allows(boundary, action, resource),
+        )
 
     record(
         "identityCannotDeleteStateBucket",

@@ -12,6 +12,25 @@ does not read a maintainer profile, private overlay, credential file, state
 file, or machine-local note. All AWS resources, retained versions, images, and
 cost belong to the deploying account.
 
+## Persistent static IAM lifecycle
+
+Bootstrap is a one-time account-owner operation, not the first phase of every
+deployment. In the maintainer account the selected live implementation is the
+Console-owned contract under `infra/aws/environment/console-iam/`; the
+Terraform bootstrap remains the portable equivalent for a new third-party
+account. After installation, normal deployment treats IAM as immutable:
+
+```text
+source credential identity -> exact operator AssumeRole -> read-only static IAM attestation -> deployment preflight -> deploy
+```
+
+It must never perform quota calculation, policy generation or splitting,
+policy-version creation, attachment changes, boundary changes, bootstrap IAM
+apply, or drift repair. Any mismatch with the checked-in canonical document
+digests fails closed and returns to a separately approved static-IAM
+maintenance operation by an `owner-admin principal`. The exact administrator
+IAM user name is private and is never a public contract or evidence field.
+
 ## Persistent resources
 
 - one owner-named S3 bucket with versioning, AES-256 server-side encryption,
