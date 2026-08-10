@@ -12,7 +12,8 @@ const generatedType = path.join(
   "generated",
   "api.d.ts",
 );
-const before = await readFile(generatedType, "utf8");
+const normalizeNewlines = (value) => value.replaceAll("\r\n", "\n");
+const before = normalizeNewlines(await readFile(generatedType, "utf8"));
 const pnpmEntrypoint = process.env.npm_execpath;
 
 if (!pnpmEntrypoint) {
@@ -29,7 +30,7 @@ if (generation.status !== 0) {
   throw new Error(`Contract generation failed with exit code ${generation.status}.`);
 }
 
-const after = await readFile(generatedType, "utf8");
+const after = normalizeNewlines(await readFile(generatedType, "utf8"));
 if (before !== after) {
   throw new Error(
     "Generated API types had drifted and were refreshed. Review and commit the updated file.",
