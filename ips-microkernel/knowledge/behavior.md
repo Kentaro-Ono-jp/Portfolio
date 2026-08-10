@@ -612,6 +612,48 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #107
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/107#issuecomment-5230145388).
 
+### Compare frozen role tags as an exact map
+
+- **Trigger:** A frozen cloud-IAM manifest or live attestation adds or changes
+  canonical persistent-role tags.
+- **HEAD effect:** `moving`
+- **Problem:** A required-key subset comparison reports no drift when a
+  canonical purpose tag is missing or wrong, or when an undeclared extra tag
+  exists.
+- **Detect:** Load the production manifest, render the complete tag map for
+  every declared role, and invoke the production exact-map comparator with the
+  canonical map, then once each with `PortfolioPurpose` missing, its value
+  changed to another role purpose, and one undeclared tag added.
+- **Pass:** Every canonical role map has exactly the declared keys and values,
+  every canonical comparison succeeds, and every missing, wrong, or extra
+  mutation fails with the role-tag drift result.
+- **Repair:** Declare the complete per-role tag map in the canonical manifest,
+  compare the live map by exact equality, and retain independent missing,
+  wrong, and extra negative cases at the production comparator.
+- **Origins:** PR #113
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/113#issuecomment-5235195287).
+
+### Preserve normative cloud gate order in diagrams
+
+- **Trigger:** A normative delivery diagram adds or changes source-identity,
+  role-assumption, static-attestation, or lifecycle-preflight gates.
+- **HEAD effect:** `moving`
+- **Problem:** The diagram reverses a security gate required by the focused
+  Issue or adjacent normative procedure, so later implementation can follow a
+  contradictory but apparently accepted sequence.
+- **Detect:** Parse the Mermaid edges into a directed graph, locate the exact
+  source-identity, role-assumption, static-attestation, and lifecycle-preflight
+  nodes, and require one ordered path through them; separately replace the
+  attestation-to-preflight edge with its inverse and repeat the path check.
+- **Pass:** The canonical graph has exactly the ordered path `source identity
+  -> exact role assumption -> static attestation -> lifecycle preflight`, and
+  the reversed-edge mutation has no accepted path.
+- **Repair:** Rewire the normative diagram to the accepted gate sequence,
+  preserve its downstream deployment edges, and retain the inverse-edge path
+  check.
+- **Origins:** PR #113
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/113#issuecomment-5235195287).
+
 ## Execution and correction
 
 A failed triggered rule blocks reviewer dispatch.

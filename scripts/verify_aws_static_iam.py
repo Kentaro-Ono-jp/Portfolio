@@ -108,6 +108,29 @@ def rendered(payload: Any, tokens: dict[str, str]) -> Any:
     return json.loads(text)
 
 
+def canonical_role_tags(
+    manifest: dict[str, Any], purpose: str, tokens: dict[str, str]
+) -> dict[str, str]:
+    role_tags = manifest["roles"][purpose].get("tags")
+    if not isinstance(role_tags, dict):
+        raise RuntimeError(f"Static role tag contract is missing: {purpose}")
+    expected = {
+        **rendered(manifest["ownershipTags"], tokens),
+        "PortfolioPurpose": purpose.replace("_", "-"),
+    }
+    actual = rendered(role_tags, tokens)
+    if actual != expected:
+        raise RuntimeError(f"Static role tag contract drifted: {purpose}")
+    return expected
+
+
+def verify_exact_role_tags(
+    purpose: str, expected: dict[str, str], actual: dict[str, str]
+) -> None:
+    if actual != expected:
+        raise RuntimeError(f"Static role tags drifted: {purpose}")
+
+
 def statement_by_sid(policy: dict[str, Any], sid: str) -> dict[str, Any]:
     statements = [item for item in policy["Statement"] if item.get("Sid") == sid]
     if len(statements) != 1:
@@ -157,6 +180,8 @@ def verify_contract_payloads(
         "REPOSITORY_IDENTITY": "example-owner/example-repository",
         "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
     }
+    for purpose in manifest["roles"]:
+        canonical_role_tags(manifest, purpose, tokens)
     statements = {
         "ReadExactDeploymentSourceIdentity": USER_READ_ACTIONS,
         "ReadExactPersistentRoles": ROLE_READ_ACTIONS,
@@ -285,6 +310,47 @@ def verify_mutation_boundaries(
     stale_digests["documents"]["manifest.json"] = "0" * 64
     cases.append(("stale canonical digest", manifest, policy, boundary, stale_digests))
 
+    tokens = {
+        "AWS_ACCOUNT_ID": "111122223333",
+        "AWS_PARTITION": "aws",
+        "AWS_REGION": "us-east-1",
+        "ENVIRONMENT": "manual",
+        "NAME_PREFIX": "example-portfolio",
+        "REPOSITORY_IDENTITY": "example-owner/example-repository",
+        "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
+    }
+    tag_cases: list[tuple[str, str, dict[str, str], dict[str, str]]] = []
+    purposes = tuple(manifest["roles"])
+    for purpose in purposes:
+        expected_tags = canonical_role_tags(manifest, purpose, tokens)
+
+        missing_tag = copy.deepcopy(expected_tags)
+        missing_tag.pop("PortfolioPurpose")
+        tag_cases.append(
+            (
+                f"missing role purpose tag: {purpose}",
+                purpose,
+                expected_tags,
+                missing_tag,
+            )
+        )
+
+        wrong_tag = copy.deepcopy(expected_tags)
+        wrong_tag["PortfolioPurpose"] = next(
+            candidate.replace("_", "-")
+            for candidate in purposes
+            if candidate != purpose
+        )
+        tag_cases.append(
+            (f"wrong role purpose tag: {purpose}", purpose, expected_tags, wrong_tag)
+        )
+
+        extra_tag = copy.deepcopy(expected_tags)
+        extra_tag["UndeclaredTag"] = "unexpected"
+        tag_cases.append(
+            (f"extra role tag: {purpose}", purpose, expected_tags, extra_tag)
+        )
+
     for label, case_manifest, case_policy, case_boundary, case_digests in cases:
         expect_rejection(
             label,
@@ -292,7 +358,14 @@ def verify_mutation_boundaries(
                 verify_contract_payloads(m, p, b, d, calculated)
             ),
         )
-    return len(cases)
+    for label, purpose, expected_tags, actual_tags in tag_cases:
+        expect_rejection(
+            label,
+            lambda p=purpose, e=expected_tags, a=actual_tags: verify_exact_role_tags(
+                p, e, a
+            ),
+        )
+    return len(cases) + len(tag_cases)
 
 
 def verify_offline() -> dict[str, Any]:
@@ -486,7 +559,6 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
             "Deployment source user must have exactly one active access key"
         )
 
-    required_tags = manifest["ownershipTags"]
     for purpose, spec in role_specs.items():
         role = operator.call("iam", "get-role", "--role-name", spec["name"]) or {}
         role_value = role.get("Role", {})
@@ -517,8 +589,8 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError(f"Static role has an inline policy: {purpose}")
         tags = operator.call("iam", "list-role-tags", "--role-name", spec["name"]) or {}
         tag_map = {item["Key"]: item["Value"] for item in tags.get("Tags", [])}
-        if any(tag_map.get(key) != value for key, value in required_tags.items()):
-            raise RuntimeError(f"Static role ownership tags drifted: {purpose}")
+        expected_tags = canonical_role_tags(manifest, purpose, tokens)
+        verify_exact_role_tags(purpose, expected_tags, tag_map)
 
     for key, spec in policy_specs.items():
         metadata = (

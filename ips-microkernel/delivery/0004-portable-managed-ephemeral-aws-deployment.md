@@ -65,10 +65,12 @@ The repository continues to support AWS-free GitHub Actions verification and AWS
 ```mermaid
 flowchart LR
     Owner["One-time owner-admin static IAM maintenance"] --> Frozen["Frozen persistent IAM contract"]
-    Clone["Public repository clone"] --> Preflight["Preflight and cost boundary"]
-    Frozen --> Preflight
-    Preflight --> Attest["Exact operator AssumeRole and read-only IAM attestation"]
-    Attest --> TTL["Register destroy fallback first"]
+    Clone["Public repository clone"] --> Source["Verify exact source identity"]
+    Source --> Assume["Assume exact operator role"]
+    Frozen --> Attest["Read-only static IAM attestation"]
+    Assume --> Attest
+    Attest --> Preflight["Lifecycle preflight and cost boundary"]
+    Preflight --> TTL["Register destroy fallback first"]
     TTL --> Terraform["Terraform managed environment"]
     Terraform --> Gateway["API Gateway HTTPS"]
     Gateway --> Web["ECS/Fargate Web"]

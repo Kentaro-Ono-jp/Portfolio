@@ -89,8 +89,9 @@ prints only sanitized counts and hashes.
    every role.
 6. Attach only the policies listed for that role. The Web workload role has no
    identity policy. Its empty authority is intentional.
-7. Add the four ownership tags from the manifest and set
-   `PortfolioPurpose` to the role purpose.
+7. Add exactly the five tags in that role's manifest `tags` object. Extra
+   tags, a missing tag, or any wrong value (including `PortfolioPurpose`) are
+   contract drift and stop deployment attestation.
 8. Verify that the operator has exactly the four identity policies listed by
    the manifest, exactly one separately named boundary, and no inline policy.
    `StaticIamAttestation` is read-only and is restricted to the one source
