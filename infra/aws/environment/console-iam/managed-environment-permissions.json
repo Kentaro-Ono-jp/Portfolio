@@ -34,6 +34,25 @@
       }
     },
     {
+      "Sid": "CreateInsideOwnedVpc",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateSubnet",
+        "ec2:CreateVpcEndpoint"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:vpc/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
       "Sid": "CreateTaggedApiGatewayResources",
       "Effect": "Allow",
       "Action": "apigateway:POST",

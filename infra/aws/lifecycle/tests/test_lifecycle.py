@@ -82,6 +82,7 @@ def state_at(config: LifecycleConfig, target: Phase) -> LifecycleState:
 class FakeAws:
     def __init__(self, identity: str = "") -> None:
         self.identity = identity
+        self.env: dict[str, str] = {}
         self.effects = lifecycle.Effects()
         self.calls: list[tuple[str, str, tuple[str, ...]]] = []
 
@@ -375,6 +376,23 @@ class LifecycleContractTests(unittest.TestCase):
             {"reactorfront/web", "reactorfront/api", "reactorfront/ml"},
         )
 
+    def test_terraform_destroy_uses_state_then_independent_sweep(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.APPLYING)
+        fake = FakeAws()
+        with (
+            patch.object(
+                lifecycle,
+                "terraform_init",
+                return_value=(Path("environment"), Path("vars.json"), Path("plan")),
+            ),
+            patch.object(lifecycle, "require_command", return_value="terraform"),
+            patch.object(lifecycle, "run_process") as run,
+        ):
+            lifecycle.terraform_destroy(config, state, Path("config.json"), fake)
+        command = run.call_args.args[0]
+        self.assertIn("-refresh=false", command)
+
     def test_control_cleanup_deletes_configuration_last(self) -> None:
         config = configuration()
         fake = FakeAws()
@@ -448,6 +466,30 @@ class LifecycleContractTests(unittest.TestCase):
             with self.assertRaises(LifecycleError):
                 assert_public_safe(unsafe)
         assert_public_safe({"phase": "applied", "resourceCounts": {"created": 81}})
+
+    def test_failed_process_retains_only_private_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            (repository / ".git").mkdir()
+            with patch.object(lifecycle, "REPOSITORY_ROOT", repository):
+                with self.assertRaises(LifecycleError) as raised:
+                    lifecycle.run_process(
+                        [
+                            sys.executable,
+                            "-c",
+                            "import sys; print('private-value', file=sys.stderr); sys.exit(1)",
+                        ],
+                        label="Synthetic process",
+                    )
+            self.assertNotIn("private-value", str(raised.exception))
+            diagnostic = (
+                repository
+                / ".git"
+                / "portfolio-aws-lifecycle"
+                / "private-diagnostics"
+                / "synthetic-process.log"
+            )
+            self.assertIn("private-value", diagnostic.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

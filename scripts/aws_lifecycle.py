@@ -177,8 +177,37 @@ def run_process(
         check=False,
     )
     if result.returncode != 0:
-        raise LifecycleError(f"{label} failed; private diagnostics were suppressed.")
+        retain_private_process_diagnostic(label, result)
+        raise LifecycleError(f"{label} failed; private diagnostics were retained.")
     return result
+
+
+def retain_private_process_diagnostic(
+    label: str, result: subprocess.CompletedProcess[str]
+) -> None:
+    git_root = REPOSITORY_ROOT / ".git"
+    if not git_root.is_dir():
+        return
+    safe_label = "".join(
+        character.lower() if character.isalnum() else "-" for character in label
+    ).strip("-")
+    while "--" in safe_label:
+        safe_label = safe_label.replace("--", "-")
+    path = (
+        git_root
+        / "portfolio-aws-lifecycle"
+        / "private-diagnostics"
+        / (f"{safe_label or 'process'}.log")
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "STDOUT\n" + (result.stdout or "") + "\nSTDERR\n" + (result.stderr or ""),
+        encoding="utf-8",
+    )
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def require_command(command: str) -> str:
@@ -2105,6 +2134,7 @@ def terraform_destroy(
             "destroy",
             "-input=false",
             "-auto-approve",
+            "-refresh=false",
             f"-var-file={tfvars}",
         ],
         env=terraform_environment(config, destroy),

@@ -32,6 +32,9 @@ may still use this root once to establish its own portable prerequisites.
   multi-resource Cloud Map contexts, restricts ownership tag keys, and rejects
   cross-environment/repository plus unowned Cognito cases; PassRole proof also
   synthesizes undeclared wildcard-matching targets.
+- EC2 subnet, Security Group, route-table, and endpoint creation separately
+  authorizes the existing ownership-tagged VPC; the new resource still
+  requires the exact request-tag tuple.
 - GitHub trust requires the documented repository-level customized OIDC
   subject before the future Step 6 workflow can assume the automation role.
 - `tests/bootstrap.tftest.hcl` uses a mocked AWS provider and creates no

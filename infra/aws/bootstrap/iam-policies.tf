@@ -480,6 +480,66 @@ locals {
           Resource = values(local.ecr_repository_arns)
         },
         {
+          Sid    = "ReadGlobalProviderDestroyState"
+          Effect = "Allow"
+          Action = [
+            "cognito-idp:DescribeUserPoolDomain",
+            "ec2:DescribeNetworkAcls",
+            "ec2:DescribePrefixLists",
+            "ec2:DescribeSecurityGroupRules",
+            "ec2:DescribeVpcAttribute",
+            "servicediscovery:GetOperation",
+            "sts:GetCallerIdentity",
+          ]
+          Resource = "*"
+        },
+        {
+          Sid    = "ReadOwnedProviderDestroyState"
+          Effect = "Allow"
+          Action = [
+            "cognito-idp:DescribeManagedLoginBranding",
+            "cognito-idp:DescribeManagedLoginBrandingByClient",
+            "cognito-idp:DescribeResourceServer",
+            "cognito-idp:DescribeUserPool",
+            "cognito-idp:DescribeUserPoolClient",
+            "cognito-idp:GetGroup",
+            "cognito-idp:GetUserPoolMfaConfig",
+            "cognito-idp:ListTagsForResource",
+            "cognito-idp:ListUserPoolClients",
+            "servicediscovery:GetNamespace",
+            "servicediscovery:GetService",
+            "servicediscovery:ListInstances",
+            "servicediscovery:ListTagsForResource",
+          ]
+          Resource = [
+            "arn:${var.aws_partition}:cognito-idp:${var.aws_region}:${var.aws_account_id}:userpool/*",
+            "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:namespace/*",
+            "arn:${var.aws_partition}:servicediscovery:${var.aws_region}:${var.aws_account_id}:service/*",
+          ]
+          Condition = {
+            StringEquals = {
+              "aws:ResourceTag/PortfolioEnvironment" = environment
+              "aws:ResourceTag/PortfolioManaged"     = "true"
+              "aws:ResourceTag/PortfolioPersistent"  = "false"
+              "aws:ResourceTag/PortfolioRepository"  = var.repository_identity
+            }
+          }
+        },
+        {
+          Sid    = "ReadExactNamedProviderDestroyState"
+          Effect = "Allow"
+          Action = [
+            "logs:ListTagsForResource",
+            "secretsmanager:DescribeSecret",
+            "secretsmanager:GetResourcePolicy",
+          ]
+          Resource = [
+            "arn:${var.aws_partition}:logs:${var.aws_region}:${var.aws_account_id}:log-group:/portfolio/${var.name_prefix}/${environment}/*",
+            "arn:${var.aws_partition}:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.name_prefix}-${environment}-database-*",
+            "arn:${var.aws_partition}:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.name_prefix}-${environment}-broker-*",
+          ]
+        },
+        {
           Sid    = "ReadServiceSpecificResidue"
           Effect = "Allow"
           Action = [
@@ -752,6 +812,25 @@ locals {
                 "PortfolioPersistent",
                 "PortfolioRepository",
               ]
+            }
+          }
+        },
+        {
+          # Authorize multi-resource create calls against only the owned VPC.
+          Effect = "Allow"
+          Action = [
+            "ec2:CreateRouteTable",
+            "ec2:CreateSecurityGroup",
+            "ec2:CreateSubnet",
+            "ec2:CreateVpcEndpoint",
+          ]
+          Resource = "arn:${var.aws_partition}:ec2:${var.aws_region}:${var.aws_account_id}:vpc/*"
+          Condition = {
+            StringEquals = {
+              "aws:ResourceTag/PortfolioEnvironment" = environment
+              "aws:ResourceTag/PortfolioManaged"     = "true"
+              "aws:ResourceTag/PortfolioPersistent"  = "false"
+              "aws:ResourceTag/PortfolioRepository"  = var.repository_identity
             }
           }
         },

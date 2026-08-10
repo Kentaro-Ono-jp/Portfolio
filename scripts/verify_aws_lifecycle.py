@@ -118,6 +118,22 @@ def main() -> int:
     ):
         raise RuntimeError("Migration must bind RunTask to the exact cluster")
     lifecycle_destroy = load_json(CONSOLE_IAM_ROOT / "lifecycle-destroy.json")
+    provider_destroy_reads = statement(
+        lifecycle_destroy, "ReadOwnedProviderDestroyState"
+    )
+    if not {
+        "cognito-idp:DescribeUserPool",
+        "servicediscovery:ListInstances",
+    }.issubset(set(provider_destroy_reads.get("Action", []))):
+        raise RuntimeError("Owned provider destroy reads drifted")
+    exact_destroy_reads = statement(
+        lifecycle_destroy, "ReadExactNamedProviderDestroyState"
+    )
+    if not {
+        "logs:ListTagsForResource",
+        "secretsmanager:DescribeSecret",
+    }.issubset(set(exact_destroy_reads.get("Action", []))):
+        raise RuntimeError("Exact provider destroy reads drifted")
     image_cleanup = statement(lifecycle_destroy, "RemoveExactPublishedImages")
     if (
         set(image_cleanup.get("Action", []))
@@ -184,6 +200,9 @@ def main() -> int:
     for token in ('"batch-delete-image"', '"describe-images"', "config.image_tag"):
         if token not in lifecycle_source:
             raise RuntimeError("Lifecycle zero-residue image proof drifted")
+    for token in ('"-refresh=false"', "retain_private_process_diagnostic"):
+        if token not in lifecycle_source:
+            raise RuntimeError("Lifecycle private destroy diagnostics drifted")
     subprocess.run(
         [
             sys.executable,

@@ -26,6 +26,7 @@
         "servicediscovery:GetNamespace",
         "servicediscovery:GetOperation",
         "servicediscovery:GetService",
+        "servicediscovery:ListInstances",
         "servicediscovery:ListNamespaces",
         "servicediscovery:ListServices",
         "servicediscovery:ListTagsForResource",

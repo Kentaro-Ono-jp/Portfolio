@@ -1625,6 +1625,57 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 "Cloud Map operation-mapping mutation was not rejected: "
                 f"{resource_type}"
             )
+    required_ec2_multi_resource_authorizations = {
+        "aws_route_table": (
+            "ec2:CreateRouteTable",
+            "ec2-vpc",
+            "resource-tags",
+        ),
+        "aws_security_group": (
+            "ec2:CreateSecurityGroup",
+            "ec2-vpc",
+            "resource-tags",
+        ),
+        "aws_subnet": ("ec2:CreateSubnet", "ec2-vpc", "resource-tags"),
+        "aws_vpc_endpoint": (
+            "ec2:CreateVpcEndpoint",
+            "ec2-vpc",
+            "resource-tags",
+        ),
+    }
+
+    def require_ec2_multi_resource_authorizations(
+        candidate_actions: dict[str, Any],
+    ) -> None:
+        for (
+            resource_type,
+            required,
+        ) in required_ec2_multi_resource_authorizations.items():
+            actual = {tuple(row[:3]) for row in candidate_actions[resource_type]}
+            if required not in actual:
+                raise RuntimeError(
+                    "EC2 create operations must authorize the existing owned "
+                    f"VPC resource: {resource_type} missing={required}"
+                )
+
+    require_ec2_multi_resource_authorizations(resource_actions)
+    for resource_type, required in required_ec2_multi_resource_authorizations.items():
+        mutation = {key: list(value) for key, value in resource_actions.items()}
+        mutation[resource_type] = [
+            row for row in mutation[resource_type] if tuple(row[:3]) != required
+        ]
+        try:
+            require_ec2_multi_resource_authorizations(mutation)
+        except RuntimeError as error:
+            if resource_type not in str(error):
+                raise RuntimeError(
+                    "EC2 multi-resource mutation failed unexpectedly"
+                ) from error
+            operation_mapping_mutation_cases += 1
+        else:
+            raise RuntimeError(
+                f"EC2 multi-resource mutation was not rejected: {resource_type}"
+            )
     return {
         "provider": provider,
         "resourceTypes": len(resource_actions),

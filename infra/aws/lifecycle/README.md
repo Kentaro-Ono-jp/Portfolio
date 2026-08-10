@@ -94,6 +94,12 @@ Destroy also handles an interruption before all three image digests were
 checkpointed: it resolves the deterministic immutable tag in each exact
 repository, validates any digest already recorded, removes any partial image,
 and skips Terraform only when apply could not yet have created resources.
+Terraform destroy deliberately uses the remote state without a provider-wide
+refresh so the destroy role does not need application-secret or broad metadata
+read authority. The subsequent service-specific and tag sweep is the
+independent, fail-closed proof of actual absence. Provider delete waiters retain
+only the exact owned/named read actions they require; they do not gain general
+secret-value authority.
 
 Fallback registration first creates a fresh create-only Terraform plan, then
 registers and reads back the one-time schedule before apply. The accepted

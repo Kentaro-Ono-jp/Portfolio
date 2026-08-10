@@ -108,7 +108,8 @@ run "portable_bootstrap_contract" {
       length(local.permissions_boundary_policy) <= 5632 &&
       alltrue([for policy in values(local.global_identity_policies) : length(policy) <= 9728]) &&
       alltrue([for policy in values(local.environment_inline_policies) : length(policy) <= 9728]) &&
-      alltrue([for policy in values(local.lifecycle_operator_policies) : length(policy) <= 5632])
+      alltrue([for policy in values(local.lifecycle_operator_policies) : length(policy) <= 5632]) &&
+      alltrue([for policy in values(local.lifecycle_destroy_policies) : length(policy) <= 5632])
     )
     error_message = "Every generated IAM policy must fit its quota and preserve the boundary headroom reserve."
   }

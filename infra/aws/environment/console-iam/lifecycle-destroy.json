@@ -50,6 +50,66 @@
       ]
     },
     {
+      "Sid": "ReadGlobalProviderDestroyState",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:DescribeUserPoolDomain",
+        "ec2:DescribeNetworkAcls",
+        "ec2:DescribePrefixLists",
+        "ec2:DescribeSecurityGroupRules",
+        "ec2:DescribeVpcAttribute",
+        "servicediscovery:GetOperation",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadOwnedProviderDestroyState",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:DescribeManagedLoginBranding",
+        "cognito-idp:DescribeManagedLoginBrandingByClient",
+        "cognito-idp:DescribeResourceServer",
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:GetGroup",
+        "cognito-idp:GetUserPoolMfaConfig",
+        "cognito-idp:ListTagsForResource",
+        "cognito-idp:ListUserPoolClients",
+        "servicediscovery:GetNamespace",
+        "servicediscovery:GetService",
+        "servicediscovery:ListInstances",
+        "servicediscovery:ListTagsForResource"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:cognito-idp:${AWS_REGION}:${AWS_ACCOUNT_ID}:userpool/*",
+        "arn:${AWS_PARTITION}:servicediscovery:${AWS_REGION}:${AWS_ACCOUNT_ID}:namespace/*",
+        "arn:${AWS_PARTITION}:servicediscovery:${AWS_REGION}:${AWS_ACCOUNT_ID}:service/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
+      "Sid": "ReadExactNamedProviderDestroyState",
+      "Effect": "Allow",
+      "Action": [
+        "logs:ListTagsForResource",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetResourcePolicy"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/*",
+        "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-database-*",
+        "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-broker-*"
+      ]
+    },
+    {
       "Sid": "ReadServiceSpecificResidue",
       "Effect": "Allow",
       "Action": [

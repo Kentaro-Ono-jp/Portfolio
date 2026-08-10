@@ -274,6 +274,12 @@ the maximum accepted 20-character prefix, the complete 1,656-case delegated
 `iam:PassRole` ceiling, 60 tagged-destroy layer/context decisions, and 336
 operator control-plane layer/context decisions.
 
+EC2 create authorization is multi-resource as well: subnet, Security Group,
+route-table, and VPC-endpoint creation each requires request-tag authority for
+the new resource plus resource-tag authority for the already-owned VPC. The
+managed-environment verifier removes each VPC companion row in turn and
+requires the mutation to fail closed.
+
 This repository-owned evaluator is static contract proof, not AWS IAM Access
 Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS
 simulation may add read-only sanitized evidence, but it must not mutate IAM or

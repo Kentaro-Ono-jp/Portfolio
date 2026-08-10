@@ -118,6 +118,7 @@
     ],
     "aws_route_table": [
       ["ec2:CreateRouteTable", "*", "request-tags"],
+      ["ec2:CreateRouteTable", "ec2-vpc", "resource-tags"],
       ["ec2:CreateTags", "ec2-route-table", "request-tags", {"ec2:CreateAction": "CreateRouteTable"}],
       ["ec2:DescribeRouteTables", "*", "global-read"]
     ],
@@ -176,6 +177,7 @@
     ],
     "aws_security_group": [
       ["ec2:CreateSecurityGroup", "*", "request-tags"],
+      ["ec2:CreateSecurityGroup", "ec2-vpc", "resource-tags"],
       ["ec2:CreateTags", "ec2-security-group", "request-tags", {"ec2:CreateAction": "CreateSecurityGroup"}],
       ["ec2:DescribeSecurityGroups", "*", "global-read"],
       ["ec2:RevokeSecurityGroupEgress", "ec2-security-group", "resource-tags"]
@@ -200,6 +202,7 @@
     ],
     "aws_subnet": [
       ["ec2:CreateSubnet", "*", "request-tags"],
+      ["ec2:CreateSubnet", "ec2-vpc", "resource-tags"],
       ["ec2:CreateTags", "ec2-subnet", "request-tags", {"ec2:CreateAction": "CreateSubnet"}],
       ["ec2:DescribeSubnets", "*", "global-read"]
     ],
@@ -215,6 +218,7 @@
     ],
     "aws_vpc_endpoint": [
       ["ec2:CreateVpcEndpoint", "*", "request-tags"],
+      ["ec2:CreateVpcEndpoint", "ec2-vpc", "resource-tags"],
       ["ec2:CreateTags", "ec2-vpc-endpoint", "request-tags", {"ec2:CreateAction": "CreateVpcEndpoint"}],
       ["ec2:DescribeVpcEndpoints", "*", "global-read"],
       ["ec2:DescribePrefixLists", "*", "global-read"]
