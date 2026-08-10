@@ -9,8 +9,10 @@ phases:
       python: 3.13
     commands:
       - set -euo pipefail
+      - test -x /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python
+      - /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python -c 'import sys; assert sys.version_info[:2] == (3, 13)'
       - aws s3api get-object --bucket "$PORTFOLIO_STATE_BUCKET" --key "$PORTFOLIO_CONFIGURATION_KEY" /tmp/lifecycle.json >/dev/null
-      - pyenv exec python -c 'import json; p=json.load(open("/tmp/lifecycle.json", encoding="utf-8")); d=p["configuration"]; json.dump(d, open("/tmp/config.json", "w", encoding="utf-8")); open("/tmp/source.env", "w", encoding="utf-8").write("SOURCE_SHA=" + d["sourceSha"] + "\nREPOSITORY_URL=" + d["repositoryUrl"] + "\n")'
+      - /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python -c 'import json; p=json.load(open("/tmp/lifecycle.json", encoding="utf-8")); d=p["configuration"]; json.dump(d, open("/tmp/config.json", "w", encoding="utf-8")); open("/tmp/source.env", "w", encoding="utf-8").write("SOURCE_SHA=" + d["sourceSha"] + "\nREPOSITORY_URL=" + d["repositoryUrl"] + "\n")'
       - source /tmp/source.env
       - test "${#SOURCE_SHA}" -eq 40
       - git init --quiet /tmp/portfolio
@@ -25,7 +27,7 @@ phases:
   build:
     commands:
       - cd /tmp/portfolio
-      - pyenv exec python scripts/aws_lifecycle.py --aws-cli "$(command -v aws)" --config /tmp/config.json controller-destroy
+      - /root/.pyenv/versions/$PYTHON_313_VERSION/bin/python scripts/aws_lifecycle.py --aws-cli "$(command -v aws)" --config /tmp/config.json controller-destroy
   post_build:
     commands:
       - rm -f /tmp/lifecycle.json /tmp/config.json /tmp/source.env /tmp/terraform_1.15.8_linux_amd64.zip /tmp/terraform.sha256sums

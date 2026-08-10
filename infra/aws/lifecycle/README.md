@@ -170,7 +170,9 @@ renamed the downloaded Terraform archive while retaining the official checksum
 filename, and the later runs exposed the complete CodeBuild runtime binding:
 the default `python3` was 3.10, while the supported `python: 3.13` selection is
 implemented by `pyenv global` but the build shell can still resolve the OS
-interpreter ahead of the selected shim. The buildspec now preserves the
-official archive filename, selects Python 3.13, and invokes the selected
-interpreter through `pyenv exec python`. The focused PR/Issue evidence records
-the subsequent automatic-path result separately from all diagnostic runs.
+interpreter ahead of the selected shim, including through `pyenv exec`. The
+buildspec now preserves the official archive filename, selects Python 3.13,
+asserts its version, and invokes the interpreter at the exact path defined by
+the pinned CodeBuild image and `$PYTHON_313_VERSION`. The focused PR/Issue
+evidence records the subsequent automatic-path result separately from all
+diagnostic runs.

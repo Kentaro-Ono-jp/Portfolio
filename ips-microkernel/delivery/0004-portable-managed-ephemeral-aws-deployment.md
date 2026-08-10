@@ -351,11 +351,12 @@ zero-residue proof. Real Scheduler-to-CodeBuild invocations also exposed a
 Terraform archive filename/checksum mismatch and the full CodeBuild runtime
 binding: the unpinned `python3` defaulted to 3.10, while the supported Python
 3.13 selection uses `pyenv global` even when the build shell still resolves an
-OS interpreter first. All diagnostic runs remain failures rather than passing
-evidence; the buildspec now preserves the official archive filename, selects
-Python 3.13, and invokes that interpreter through `pyenv exec python`.
-Automatic-path proof is recorded with the focused PR/Issue evidence rather than
-relabeling any failed run.
+OS interpreter first, including through the shim-aware command. All diagnostic
+runs remain failures rather than passing evidence; the buildspec now preserves
+the official archive filename, selects and asserts Python 3.13, and invokes the
+exact interpreter path defined by the pinned CodeBuild image. Automatic-path
+proof is recorded with the focused PR/Issue evidence rather than relabeling any
+failed run.
 
 ### Step 8: Publish portable operations and completion evidence
 
