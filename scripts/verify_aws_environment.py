@@ -238,6 +238,7 @@ def operator_resource(symbol: str) -> str:
         "api-gateway-route": f"arn:{partition}:apigateway:{region}::/apis/api-owned/routes/route-owned",
         "api-gateway-stage-collection": f"arn:{partition}:apigateway:{region}::/apis/api-owned/stages",
         "api-gateway-stage": f"arn:{partition}:apigateway:{region}::/apis/api-owned/stages/$default",
+        "api-gateway-tags": f"arn:{partition}:apigateway:{region}::/tags/encoded-owned-resource",
         "api-gateway-vpc-link-collection": f"arn:{partition}:apigateway:{region}::/vpclinks",
         "api-gateway-vpc-link": f"arn:{partition}:apigateway:{region}::/vpclinks/vpclink-owned",
         "cloudmap-namespace": f"arn:{partition}:servicediscovery:{region}:{account}:namespace/ns-owned",
@@ -997,6 +998,60 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             identity_allows and boundary_allows,
         )
 
+    api_gateway_tag_resource = operator_resource("api-gateway-tags")
+    api_gateway_tag_identity_statements = [
+        statement
+        for statement in permissions["Statement"]
+        if "apigateway:POST" in string_values(statement.get("Action", []))
+        and statement.get("Resource")
+        == "arn:aws:apigateway:us-east-1::/tags/*"
+    ]
+    record(
+        "operatorApiGatewayCreateTaggingUsesOneExactIdentityGrant",
+        len(api_gateway_tag_identity_statements) == 1
+        and api_gateway_tag_identity_statements[0].get("Condition")
+        == expected_cloud_map_tag_condition,
+    )
+    api_gateway_tag_identity_allows = policy_allows(
+        permissions,
+        "apigateway:POST",
+        api_gateway_tag_resource,
+        cloud_map_retag_context,
+    )
+    api_gateway_tag_boundary_allows = policy_allows(
+        boundary,
+        "apigateway:POST",
+        api_gateway_tag_resource,
+        cloud_map_retag_context,
+    )
+    record(
+        "operatorIdentityAllowsOwnerAcceptedApiGatewayCreateTagging",
+        api_gateway_tag_identity_allows,
+    )
+    record(
+        "operatorBoundaryAllowsOwnerAcceptedApiGatewayCreateTagging",
+        api_gateway_tag_boundary_allows,
+    )
+    record(
+        "operatorEffectiveAllowsOwnerAcceptedApiGatewayCreateTagging",
+        api_gateway_tag_identity_allows and api_gateway_tag_boundary_allows,
+    )
+    record(
+        "operatorEffectiveDisclosesForeignApiGatewayTagTargetLimitation",
+        policy_allows(
+            permissions,
+            "apigateway:POST",
+            "arn:aws:apigateway:us-east-1::/tags/encoded-foreign-resource",
+            cloud_map_retag_context,
+        )
+        and policy_allows(
+            boundary,
+            "apigateway:POST",
+            "arn:aws:apigateway:us-east-1::/tags/encoded-foreign-resource",
+            cloud_map_retag_context,
+        ),
+    )
+
     for (
         resource_type,
         row_index,
@@ -1534,13 +1589,17 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 action not in CLOUD_MAP_DELEGATED_ACTIONS
             ):
                 raise RuntimeError(f"Unexpected service-delegated action: {row}")
+            owner_accepted_global_tagging_targets = {
+                ("servicediscovery:TagResource", "cloudmap-namespace"),
+                ("servicediscovery:TagResource", "cloudmap-service"),
+                ("apigateway:POST", "api-gateway-tags"),
+            }
             if ownership == "owner-accepted-global-tagging" and (
-                action != "servicediscovery:TagResource"
-                or resource not in {"cloudmap-namespace", "cloudmap-service"}
+                (action, resource) not in owner_accepted_global_tagging_targets
             ):
                 raise RuntimeError(
-                    "Owner-accepted global tagging is limited to the two exact "
-                    f"Cloud Map authorization targets: {row}"
+                    "Owner-accepted global tagging is limited to the reviewed "
+                    f"AWS create-operation authorization targets: {row}"
                 )
             if action == "servicediscovery:TagResource" and (
                 ownership != "owner-accepted-global-tagging"
@@ -1625,23 +1684,65 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 "Cloud Map operation-mapping mutation was not rejected: "
                 f"{resource_type}"
             )
+    required_api_gateway_create_tag_authorizations = {
+        "aws_apigatewayv2_api",
+        "aws_apigatewayv2_vpc_link",
+    }
+
+    def require_api_gateway_create_tag_authorizations(
+        candidate_actions: dict[str, Any],
+    ) -> None:
+        required = (
+            "apigateway:POST",
+            "api-gateway-tags",
+            "owner-accepted-global-tagging",
+        )
+        for resource_type in required_api_gateway_create_tag_authorizations:
+            actual = {tuple(row[:3]) for row in candidate_actions[resource_type]}
+            if required not in actual:
+                raise RuntimeError(
+                    "API Gateway tagged creates must authorize the documented "
+                    f"/tags operation: {resource_type} missing={required}"
+                )
+
+    require_api_gateway_create_tag_authorizations(resource_actions)
+    for resource_type in required_api_gateway_create_tag_authorizations:
+        mutation = {key: list(value) for key, value in resource_actions.items()}
+        mutation[resource_type] = [
+            row
+            for row in mutation[resource_type]
+            if not (
+                row[0] == "apigateway:POST" and row[1] == "api-gateway-tags"
+            )
+        ]
+        try:
+            require_api_gateway_create_tag_authorizations(mutation)
+        except RuntimeError as error:
+            if resource_type not in str(error):
+                raise RuntimeError(
+                    "API Gateway create-tag mutation failed unexpectedly"
+                ) from error
+            operation_mapping_mutation_cases += 1
+        else:
+            raise RuntimeError(
+                "API Gateway create-tag mutation was not rejected: "
+                f"{resource_type}"
+            )
+
     required_ec2_multi_resource_authorizations = {
-        "aws_route_table": (
-            "ec2:CreateRouteTable",
-            "ec2-vpc",
-            "resource-tags",
-        ),
-        "aws_security_group": (
-            "ec2:CreateSecurityGroup",
-            "ec2-vpc",
-            "resource-tags",
-        ),
-        "aws_subnet": ("ec2:CreateSubnet", "ec2-vpc", "resource-tags"),
-        "aws_vpc_endpoint": (
-            "ec2:CreateVpcEndpoint",
-            "ec2-vpc",
-            "resource-tags",
-        ),
+        "aws_route_table": {
+            ("ec2:CreateRouteTable", "ec2-vpc", "resource-tags"),
+        },
+        "aws_security_group": {
+            ("ec2:CreateSecurityGroup", "ec2-vpc", "resource-tags"),
+        },
+        "aws_subnet": {
+            ("ec2:CreateSubnet", "ec2-vpc", "resource-tags"),
+        },
+        "aws_vpc_endpoint": {
+            ("ec2:CreateVpcEndpoint", "ec2-vpc", "resource-tags"),
+            ("ec2:CreateVpcEndpoint", "ec2-route-table", "resource-tags"),
+        },
     }
 
     def require_ec2_multi_resource_authorizations(
@@ -1652,30 +1753,32 @@ def verify_operator_action_matrix() -> dict[str, Any]:
             required,
         ) in required_ec2_multi_resource_authorizations.items():
             actual = {tuple(row[:3]) for row in candidate_actions[resource_type]}
-            if required not in actual:
+            if not required.issubset(actual):
                 raise RuntimeError(
-                    "EC2 create operations must authorize the existing owned "
-                    f"VPC resource: {resource_type} missing={required}"
+                    "EC2 create operations must authorize every existing owned "
+                    f"network dependency: {resource_type} missing={sorted(required - actual)}"
                 )
 
     require_ec2_multi_resource_authorizations(resource_actions)
-    for resource_type, required in required_ec2_multi_resource_authorizations.items():
-        mutation = {key: list(value) for key, value in resource_actions.items()}
-        mutation[resource_type] = [
-            row for row in mutation[resource_type] if tuple(row[:3]) != required
-        ]
-        try:
-            require_ec2_multi_resource_authorizations(mutation)
-        except RuntimeError as error:
-            if resource_type not in str(error):
+    for resource_type, required_rows in required_ec2_multi_resource_authorizations.items():
+        for required in required_rows:
+            mutation = {key: list(value) for key, value in resource_actions.items()}
+            mutation[resource_type] = [
+                row for row in mutation[resource_type] if tuple(row[:3]) != required
+            ]
+            try:
+                require_ec2_multi_resource_authorizations(mutation)
+            except RuntimeError as error:
+                if resource_type not in str(error):
+                    raise RuntimeError(
+                        "EC2 multi-resource mutation failed unexpectedly"
+                    ) from error
+                operation_mapping_mutation_cases += 1
+            else:
                 raise RuntimeError(
-                    "EC2 multi-resource mutation failed unexpectedly"
-                ) from error
-            operation_mapping_mutation_cases += 1
-        else:
-            raise RuntimeError(
-                f"EC2 multi-resource mutation was not rejected: {resource_type}"
-            )
+                    "EC2 multi-resource mutation was not rejected: "
+                    f"{resource_type} {required}"
+                )
     return {
         "provider": provider,
         "resourceTypes": len(resource_actions),

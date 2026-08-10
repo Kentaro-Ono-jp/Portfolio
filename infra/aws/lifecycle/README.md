@@ -96,10 +96,16 @@ repository, validates any digest already recorded, removes any partial image,
 and skips Terraform only when apply could not yet have created resources.
 Terraform destroy deliberately uses the remote state without a provider-wide
 refresh so the destroy role does not need application-secret or broad metadata
-read authority. The subsequent service-specific and tag sweep is the
+read authority. Before destroy, the two exact secret-version addresses are
+detached from Terraform state; deleting each still-managed parent secret
+removes its versions without ever granting the destroy role `GetSecretValue`.
+The subsequent service-specific and tag sweep is the
 independent, fail-closed proof of actual absence. Provider delete waiters retain
 only the exact owned/named read actions they require; they do not gain general
-secret-value authority.
+secret-value authority. Stale Resource Groups Tagging API mappings, including
+deleted security-group rules, are ignored only when the exact owning-service
+inventory has independently proved their parent resource absent; unknown tagged
+resource kinds remain blocking.
 Exact environment-prefixed Secrets Manager deletion does not depend on a
 resource tag that disappears during forced deletion, so an interrupted delete
 remains idempotent without granting another environment's secret ARN.

@@ -389,9 +389,50 @@ class LifecycleContractTests(unittest.TestCase):
             patch.object(lifecycle, "require_command", return_value="terraform"),
             patch.object(lifecycle, "run_process") as run,
         ):
+            run.return_value.stdout = "\n".join(
+                (
+                    "module.managed_state.aws_secretsmanager_secret_version.broker",
+                    "module.managed_state.aws_secretsmanager_secret_version.database",
+                    "module.network.aws_vpc.this",
+                )
+            )
             lifecycle.terraform_destroy(config, state, Path("config.json"), fake)
-        command = run.call_args.args[0]
-        self.assertIn("-refresh=false", command)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands[0][-2:], ["state", "list"])
+        self.assertEqual(
+            [command[-2:] for command in commands[1:3]],
+            [
+                [
+                    "rm",
+                    "module.managed_state.aws_secretsmanager_secret_version.broker",
+                ],
+                [
+                    "rm",
+                    "module.managed_state.aws_secretsmanager_secret_version.database",
+                ],
+            ],
+        )
+        self.assertIn("-refresh=false", commands[-1])
+
+    def test_terraform_destroy_skips_absent_secret_versions(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.APPLYING)
+        fake = FakeAws()
+        with (
+            patch.object(
+                lifecycle,
+                "terraform_init",
+                return_value=(Path("environment"), Path("vars.json"), Path("plan")),
+            ),
+            patch.object(lifecycle, "require_command", return_value="terraform"),
+            patch.object(lifecycle, "run_process") as run,
+        ):
+            run.return_value.stdout = "module.network.aws_vpc.this\n"
+            lifecycle.terraform_destroy(config, state, Path("config.json"), fake)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(commands[0][-2:], ["state", "list"])
+        self.assertIn("destroy", commands[1])
 
     def test_control_cleanup_deletes_configuration_last(self) -> None:
         config = configuration()
@@ -430,8 +471,18 @@ class LifecycleContractTests(unittest.TestCase):
                     "task-definition/reactorfront-manual-web:1"
                 )
             },
+            {
+                "ResourceARN": (
+                    "arn:aws:ec2:us-east-1:111122223333:"
+                    "security-group-rule/sgr-deleted"
+                )
+            },
         ]
-        inventory = {"cognitoUserPool": 0, "activeTaskDefinition": 0}
+        inventory = {
+            "cognitoUserPool": 0,
+            "activeTaskDefinition": 0,
+            "securityGroup": 0,
+        }
         self.assertEqual(
             lifecycle.unresolved_tagged_resource_count(mappings, inventory), 0
         )

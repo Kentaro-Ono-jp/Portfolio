@@ -34,7 +34,7 @@
       }
     },
     {
-      "Sid": "CreateInsideOwnedVpc",
+      "Sid": "CreateAgainstOwnedNetworkDependencies",
       "Effect": "Allow",
       "Action": [
         "ec2:CreateRouteTable",
@@ -42,7 +42,10 @@
         "ec2:CreateSubnet",
         "ec2:CreateVpcEndpoint"
       ],
-      "Resource": "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:vpc/*",
+      "Resource": [
+        "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:route-table/*",
+        "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:vpc/*"
+      ],
       "Condition": {
         "StringEquals": {
           "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
@@ -60,6 +63,28 @@
         "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis",
         "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks"
       ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:RequestTag/PortfolioManaged": "true",
+          "aws:RequestTag/PortfolioPersistent": "false",
+          "aws:RequestTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "PortfolioEnvironment",
+            "PortfolioManaged",
+            "PortfolioPersistent",
+            "PortfolioRepository"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "TagDuringTaggedApiGatewayCreation",
+      "Effect": "Allow",
+      "Action": "apigateway:POST",
+      "Resource": "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/tags/*",
       "Condition": {
         "StringEquals": {
           "aws:RequestTag/PortfolioEnvironment": "${ENVIRONMENT}",

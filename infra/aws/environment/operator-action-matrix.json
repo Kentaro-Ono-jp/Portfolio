@@ -8,6 +8,7 @@
   "resourceActions": {
     "aws_apigatewayv2_api": [
       ["apigateway:POST", "api-gateway-api-collection", "request-tags"],
+      ["apigateway:POST", "api-gateway-tags", "owner-accepted-global-tagging"],
       ["apigateway:GET", "api-gateway-api", "resource-tags"],
       ["apigateway:POST", "api-gateway-api", "resource-tags"]
     ],
@@ -26,6 +27,7 @@
     ],
     "aws_apigatewayv2_vpc_link": [
       ["apigateway:POST", "api-gateway-vpc-link-collection", "request-tags"],
+      ["apigateway:POST", "api-gateway-tags", "owner-accepted-global-tagging"],
       ["apigateway:GET", "api-gateway-vpc-link", "resource-tags"],
       ["apigateway:POST", "api-gateway-vpc-link", "resource-tags"]
     ],
@@ -67,7 +69,7 @@
     ],
     "aws_db_instance": [
       ["rds:CreateDBInstance", "rds-db", "exact-resource-and-request-tags"],
-      ["rds:DescribeDBInstances", "rds-db", "exact-resource"],
+      ["rds:DescribeDBInstances", "*", "global-read"],
       ["rds:ListTagsForResource", "rds-db", "exact-resource"],
       ["rds:AddTagsToResource", "rds-db", "exact-resource-and-request-tags"]
     ],
@@ -219,6 +221,7 @@
     "aws_vpc_endpoint": [
       ["ec2:CreateVpcEndpoint", "*", "request-tags"],
       ["ec2:CreateVpcEndpoint", "ec2-vpc", "resource-tags"],
+      ["ec2:CreateVpcEndpoint", "ec2-route-table", "resource-tags"],
       ["ec2:CreateTags", "ec2-vpc-endpoint", "request-tags", {"ec2:CreateAction": "CreateVpcEndpoint"}],
       ["ec2:DescribeVpcEndpoints", "*", "global-read"],
       ["ec2:DescribePrefixLists", "*", "global-read"]

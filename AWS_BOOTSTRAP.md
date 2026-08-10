@@ -111,6 +111,17 @@ cross-environment, cross-repository, and undeclared fifth-key variants. Every
 request is evaluated independently at identity, boundary, and effective layers
 with expectations that name the actual enforcing layer.
 
+API Gateway V2 tagged creates also have a companion authorization: AWS maps
+the tag operation to `apigateway:POST` on `/tags/*`, separate from the `/apis`
+or `/vpclinks` create collection. The identity requires the exact four request
+tags and no additional key. Because that tag resource exposes neither the
+target ARN nor a prior-resource-tag condition, static proof records this as the
+same kind of owner-accepted creation-time tagging limitation described below
+for Cloud Map, rather than claiming foreign-target isolation. RDS provider
+polling uses the wildcard resource for the read-only
+`rds:DescribeDBInstances` list operation; that action is isolated as global
+metadata read and does not grant RDS mutation or secret access.
+
 Amazon MQ `CreateBroker` is resource-less at authorization time. The fixed
 boundary therefore permits only that action for the environment-operator
 purpose, while its bootstrap-owned identity policy requires the complete four
@@ -275,10 +286,11 @@ the maximum accepted 20-character prefix, the complete 1,656-case delegated
 operator control-plane layer/context decisions.
 
 EC2 create authorization is multi-resource as well: subnet, Security Group,
-route-table, and VPC-endpoint creation each requires request-tag authority for
-the new resource plus resource-tag authority for the already-owned VPC. The
-managed-environment verifier removes each VPC companion row in turn and
-requires the mutation to fail closed.
+and route-table creation each requires request-tag authority for the new
+resource plus resource-tag authority for the already-owned VPC. VPC-endpoint
+creation additionally requires the already-owned route table. The
+managed-environment verifier removes every VPC and route-table companion row in
+turn and requires each mutation to fail closed.
 
 This repository-owned evaluator is static contract proof, not AWS IAM Access
 Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS

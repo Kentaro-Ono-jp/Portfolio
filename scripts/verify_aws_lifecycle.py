@@ -200,7 +200,12 @@ def main() -> int:
     for token in ('"batch-delete-image"', '"describe-images"', "config.image_tag"):
         if token not in lifecycle_source:
             raise RuntimeError("Lifecycle zero-residue image proof drifted")
-    for token in ('"-refresh=false"', "retain_private_process_diagnostic"):
+    for token in (
+        '"-refresh=false"',
+        "retain_private_process_diagnostic",
+        "aws_secretsmanager_secret_version.broker",
+        "aws_secretsmanager_secret_version.database",
+    ):
         if token not in lifecycle_source:
             raise RuntimeError("Lifecycle private destroy diagnostics drifted")
     subprocess.run(

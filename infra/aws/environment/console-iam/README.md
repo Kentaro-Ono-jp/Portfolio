@@ -135,6 +135,23 @@ environment ARN patterns. Their inverse proof rejects cross-environment,
 cross-repository, unmanaged, persistent, missing/additional-tag, and foreign
 resource cases at both the identity and effective layers.
 
+API Gateway V2 authorizes tags included by `CreateApi` and `CreateVpcLink`
+through `apigateway:POST` on its separate `/tags/*` resource. AWS exposes no
+target ARN or prior-resource-tag condition on that tag resource. The operator
+therefore receives this companion create authorization only with the exact four
+request tags and no additional key. As with the Cloud Map exception below, an
+exact request could relabel an unrelated API Gateway resource; this is an
+owner-accepted static limitation for the dedicated deployment account, not a
+foreign-target isolation claim. The lifecycle's before/after service inventory
+and zero-residue proof remain mandatory.
+
+`rds:DescribeDBInstances` is a read-only list operation whose provider request
+uses the wildcard DB resource rather than the eventual exact DB ARN, so it is
+isolated in the global metadata-read statement. It grants no RDS mutation or
+secret value. EC2 VPC endpoint creation is authorized independently for the new
+request-tagged endpoint and for both existing dependencies: the owned VPC and
+owned route table.
+
 AWS's operation-to-IAM mapping requires `servicediscovery:TagResource` alongside
 both Cloud Map create actions, although provider 6.58.0 sends the tags in each
 create payload. `ManagedEnvironmentPermissions` and the separately managed

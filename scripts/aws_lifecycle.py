@@ -1888,6 +1888,7 @@ TAGGED_RESOURCE_INVENTORY_LABELS = {
     "ec2:vpc": "vpc",
     "ec2:subnet": "subnet",
     "ec2:security-group": "securityGroup",
+    "ec2:security-group-rule": "securityGroup",
     "ec2:route-table": "routeTable",
     "ec2:internet-gateway": "internetGateway",
     "ec2:vpc-endpoint": "vpcEndpoint",
@@ -2127,6 +2128,35 @@ def terraform_destroy(
 ) -> None:
     terraform = require_command("terraform")
     environment_root, tfvars, _ = terraform_init(config, state, config_path, destroy)
+    terraform_env = terraform_environment(config, destroy)
+    listed = run_process(
+        [
+            terraform,
+            f"-chdir={environment_root}",
+            "state",
+            "list",
+        ],
+        env=terraform_env,
+        timeout=300,
+        label="Terraform managed environment state inventory",
+    )
+    managed_secret_versions = {
+        "module.managed_state.aws_secretsmanager_secret_version.broker",
+        "module.managed_state.aws_secretsmanager_secret_version.database",
+    }
+    for address in sorted(managed_secret_versions.intersection(listed.stdout.splitlines())):
+        run_process(
+            [
+                terraform,
+                f"-chdir={environment_root}",
+                "state",
+                "rm",
+                address,
+            ],
+            env=terraform_env,
+            timeout=300,
+            label="Terraform managed secret-version state detachment",
+        )
     run_process(
         [
             terraform,
@@ -2137,7 +2167,7 @@ def terraform_destroy(
             "-refresh=false",
             f"-var-file={tfvars}",
         ],
-        env=terraform_environment(config, destroy),
+        env=terraform_env,
         timeout=3600,
         label="Terraform managed environment destroy",
     )

@@ -631,6 +631,29 @@ locals {
           }
         },
         {
+          # API Gateway authorizes tags supplied to CreateApi/CreateVpcLink
+          # through the service's /tags resource, not only the create collection.
+          Effect   = "Allow"
+          Action   = "apigateway:POST"
+          Resource = "arn:${var.aws_partition}:apigateway:${var.aws_region}::/tags/*"
+          Condition = {
+            StringEquals = {
+              "aws:RequestTag/PortfolioEnvironment" = environment
+              "aws:RequestTag/PortfolioManaged"     = "true"
+              "aws:RequestTag/PortfolioPersistent"  = "false"
+              "aws:RequestTag/PortfolioRepository"  = var.repository_identity
+            }
+            "ForAllValues:StringEquals" = {
+              "aws:TagKeys" = [
+                "PortfolioEnvironment",
+                "PortfolioManaged",
+                "PortfolioPersistent",
+                "PortfolioRepository",
+              ]
+            }
+          }
+        },
+        {
           # CreateTaggedIdEnvironmentServices
           Effect = "Allow"
           Action = [
@@ -764,7 +787,7 @@ locals {
             "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:TagResource", "ecs:UpdateService",
             "logs:CreateLogGroup", "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents",
             "mq:DescribeBroker",
-            "rds:CreateDBInstance", "rds:DescribeDBInstances", "rds:ModifyDBInstance",
+            "rds:CreateDBInstance", "rds:ModifyDBInstance",
             "secretsmanager:CreateSecret", "secretsmanager:DescribeSecret", "secretsmanager:PutSecretValue",
             "secretsmanager:TagResource", "secretsmanager:UpdateSecret",
             "servicediscovery:GetNamespace", "servicediscovery:GetService",
@@ -824,7 +847,10 @@ locals {
             "ec2:CreateSubnet",
             "ec2:CreateVpcEndpoint",
           ]
-          Resource = "arn:${var.aws_partition}:ec2:${var.aws_region}:${var.aws_account_id}:vpc/*"
+          Resource = [
+            "arn:${var.aws_partition}:ec2:${var.aws_region}:${var.aws_account_id}:route-table/*",
+            "arn:${var.aws_partition}:ec2:${var.aws_region}:${var.aws_account_id}:vpc/*",
+          ]
           Condition = {
             StringEquals = {
               "aws:ResourceTag/PortfolioEnvironment" = environment
@@ -870,7 +896,7 @@ locals {
         {
           # InspectEnvironmentNetwork
           Effect   = "Allow"
-          Action   = "ec2:Describe*"
+          Action   = ["ec2:Describe*", "rds:DescribeDBInstances"]
           Resource = "*"
         },
         {
