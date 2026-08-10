@@ -5,8 +5,8 @@ and maintains in the AWS Console. They include one credential-only Noel IAM
 user, its exact assume-role policies, and the deployment and read-only roles.
 Terraform in `../` consumes the resulting role ARNs by reference and never
 creates, updates, detaches, or deletes IAM objects. `manifest.json`, the JSON
-documents, and `static-contract-digests.json` are the canonical persistent
-contract. Drift stops deployment; the deployment path never repairs it.
+documents, and `static-contract-digests.json` are the canonical persistent IAM
+contract. IAM drift stops deployment; the deployment path never repairs it.
 
 `ReactorFrontPortfolioOperatorPermissions` and
 `ReactorFrontPortfolioOperatorBoundary` are deliberately separate managed
@@ -47,6 +47,15 @@ credential, assumes the exact operator role, reads the fixed IAM objects using
 and fails closed on any mismatch. It never recalculates quota, generates or
 splits a policy, creates a policy version, changes a boundary, changes an
 attachment, invokes the bootstrap IAM root, or attempts self-healing.
+
+The lifecycle policy separately permits `codebuild:UpdateProject` on only the
+exact persistent image-build project. This is not IAM self-healing: when all
+other project fields already match, preflight may synchronize only its inline
+repository-owned buildspec and must read back its exact normalized SHA-256.
+The destroy project and every foreign project remain denied, and the operator
+has no CodeBuild `iam:PassRole` grant, so it cannot replace the project service
+role. This one-time static permission remains installed between deployments;
+normal deployment never changes the permission itself.
 
 The static verifier is AWS-free by default:
 

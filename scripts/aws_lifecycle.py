@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import secrets
@@ -47,6 +48,7 @@ WRITE_OPERATIONS = {
     "s3api:put-object",
     "s3api:delete-object",
     "codebuild:start-build",
+    "codebuild:update-project",
     "scheduler:create-schedule",
     "scheduler:update-schedule",
     "scheduler:delete-schedule",
@@ -471,7 +473,23 @@ def expected_project_environment(config: LifecycleConfig) -> dict[str, str]:
     }
 
 
-def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
+def normalized_buildspec(value: str) -> str:
+    return value.replace("\r\n", "\n").strip()
+
+
+def buildspec_digest(value: str) -> str:
+    return (
+        "sha256:"
+        + hashlib.sha256(normalized_buildspec(value).encode("utf-8")).hexdigest()
+    )
+
+
+def verify_controller_projects(
+    config: LifecycleConfig,
+    operator: AwsCli,
+    *,
+    reconcile_image_buildspec: bool = False,
+) -> dict[str, object]:
     response = (
         operator.call(
             "codebuild",
@@ -487,6 +505,7 @@ def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
         raise LifecycleError("Persistent CodeBuild controller inventory is incomplete.")
     by_name = {str(project.get("name")): project for project in projects}
     expected_environment = expected_project_environment(config)
+    image_reconciliation: dict[str, object] | None = None
     for purpose in ("image", "destroy"):
         project = by_name.get(config.projects[purpose])
         if not isinstance(project, dict):
@@ -507,11 +526,10 @@ def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
         expected_log_group = (
             f"/portfolio/{config.name_prefix}/{config.environment}/controller/{purpose}"
         )
+        current_buildspec = str(source.get("buildspec", ""))
         if (
             project.get("serviceRole") != role_arn(config, role_purpose)
             or source.get("type") != "NO_SOURCE"
-            or str(source.get("buildspec", "")).replace("\r\n", "\n").strip()
-            != expected_buildspec.replace("\r\n", "\n").strip()
             or artifacts.get("type") != "NO_ARTIFACTS"
             or project.get("timeoutInMinutes") != 60
             or project.get("queuedTimeoutInMinutes") != 30
@@ -548,6 +566,53 @@ def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
         }
         if tag_map != expected_tags:
             raise LifecycleError(f"Persistent {purpose} project tags drifted.")
+        if normalized_buildspec(current_buildspec) == normalized_buildspec(
+            expected_buildspec
+        ):
+            continue
+        if purpose != "image" or not reconcile_image_buildspec:
+            raise LifecycleError(f"Persistent {purpose} project contract drifted.")
+        image_reconciliation = {
+            "previousBuildspecSha256": buildspec_digest(current_buildspec),
+            "currentBuildspecSha256": buildspec_digest(expected_buildspec),
+        }
+
+    if image_reconciliation is not None:
+        expected_buildspec = (LIFECYCLE_ROOT / "image-build.buildspec.yml").read_text(
+            encoding="utf-8"
+        )
+        operator.call(
+            "codebuild",
+            "update-project",
+            "--name",
+            config.projects["image"],
+            "--source",
+            canonical_json({"type": "NO_SOURCE", "buildspec": expected_buildspec}),
+        )
+        try:
+            verify_controller_projects(config, operator)
+        except LifecycleError as error:
+            raise LifecycleError(
+                "Image project reconciliation did not preserve the exact contract."
+            ) from error
+
+    return {
+        "imageBuildspecReconciled": image_reconciliation is not None,
+        **(image_reconciliation or {}),
+    }
+
+
+def verify_controller(
+    config: LifecycleConfig,
+    operator: AwsCli,
+    *,
+    reconcile_image_buildspec: bool = False,
+) -> dict[str, object]:
+    project_evidence = verify_controller_projects(
+        config,
+        operator,
+        reconcile_image_buildspec=reconcile_image_buildspec,
+    )
     log_prefix = f"/portfolio/{config.name_prefix}/{config.environment}/controller/"
     log_response = (
         operator.call(
@@ -632,6 +697,7 @@ def verify_controller(config: LifecycleConfig, operator: AwsCli) -> None:
         for key, value in expected_group_tags.items()
     ):
         raise LifecycleError("Persistent lifecycle schedule group tags drifted.")
+    return project_evidence
 
 
 def verify_image_repositories(config: LifecycleConfig, operator: AwsCli) -> None:
@@ -1138,7 +1204,7 @@ def run_preflight(
         "portfolio-lifecycle-preflight",
     )
     static = verify_static_iam(config, source.executable)
-    verify_controller(config, operator)
+    controller = verify_controller(config, operator, reconcile_image_buildspec=True)
     verify_image_repositories(config, operator)
     verify_state_bucket(config, operator)
     lease_state = "absent"
@@ -1184,6 +1250,7 @@ def run_preflight(
         "operatorSession": "verified",
         "staticIam": "verified",
         "persistentController": "verified",
+        "imageBuildspecReconciled": controller["imageBuildspecReconciled"],
         "persistentImageRepositories": 3,
         "persistentStateBucket": "verified",
         "sourceRevision": config.source_sha,
@@ -1192,8 +1259,13 @@ def run_preflight(
         "cloudMapInventorySession": "destroy-read-only",
         "remoteControlObjects": 1 if lease_state == "recovered-exact" else 0,
         "lifecycleLease": lease_state,
-        "readOnly": True,
+        "readOnly": not bool(controller["imageBuildspecReconciled"]),
         "staticIamReadCalls": int(static.get("attestationAwsReadCalls", 0)),
+        **{
+            key: value
+            for key, value in controller.items()
+            if key.endswith("BuildspecSha256")
+        },
     }
     assert_public_safe(proof)
     write_private_json(runtime_directory(config_path) / "preflight.json", proof)
@@ -1216,7 +1288,7 @@ def run_resume_preflight(
         "portfolio-lifecycle-resume",
     )
     verify_static_iam(config, source.executable)
-    verify_controller(config, operator)
+    verify_controller(config, operator, reconcile_image_buildspec=True)
     verify_image_repositories(config, operator)
     verify_state_bucket(config, operator)
     return operator

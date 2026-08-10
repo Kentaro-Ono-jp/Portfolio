@@ -13,6 +13,14 @@ or recalculates IAM. Static IAM maintenance remains a separately reviewed
 owner-admin operation; the accepted result persists after an environment is
 destroyed or this focused Issue closes.
 
+The one non-IAM controller maintenance exception is the image project's inline
+buildspec. When every other image-project field, role, input, log target, and
+ownership tag is already exact, preflight may update only that exact project's
+buildspec from the checked-out repository. It then reads back the normalized
+SHA-256 before starting a build and reports the write plus before/after hashes.
+Destroy-project drift, any other project drift, and any IAM or service-role
+change still fail closed. The operator has no CodeBuild `iam:PassRole` grant.
+
 ## Ordered interface
 
 ```text
@@ -70,6 +78,13 @@ CodeBuild projects outside the environment state:
   the persistent repositories, and performs the service/tag sweep. The project
   has two static automatic retries because Scheduler delivery proves only that
   CodeBuild accepted the start request, not that the build itself succeeded.
+
+Only the exact image project is operator-reconcilable. This avoids an
+owner-admin browser stop whenever its repository-owned buildspec advances,
+without granting mutation of the destroy project or a path to pass another
+service role. The reconciliation is not a hidden preflight: it is allowed only
+after every non-buildspec field passes and is included in sanitized effect
+evidence.
 
 The fixed EventBridge Scheduler schedule targets only the destroy project and
 lives in an environment-specific persistent schedule group. The execution-role

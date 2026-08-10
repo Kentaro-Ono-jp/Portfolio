@@ -326,6 +326,12 @@ locals {
           ]
         },
         {
+          Sid      = "ReconcileExactImageBuildspec"
+          Effect   = "Allow"
+          Action   = "codebuild:UpdateProject"
+          Resource = "arn:${var.aws_partition}:codebuild:${var.aws_region}:${var.aws_account_id}:project/${var.name_prefix}-${environment}-image-build"
+        },
+        {
           # HTTP API access logging uses account-level delivery permissions that
           # expose neither a resource ARN nor a scoping condition.
           Sid    = "ManageApiGatewayLogDeliveryDependency"

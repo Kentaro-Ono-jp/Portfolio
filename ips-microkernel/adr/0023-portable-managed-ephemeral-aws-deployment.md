@@ -128,6 +128,12 @@ service-specific residual inventory. The fallback remains available if the
 operator path is interrupted. A successful `terraform destroy` exit code,
 Budget alert, or schedule invocation alone is not proof that spending stopped.
 
+The operator may reconcile only the exact image project's inline buildspec
+from the checked-out repository, and only after every other project property
+matches the persistent controller contract. It must read back the normalized
+SHA-256 before use. This exception adds no CodeBuild `iam:PassRole`, cannot
+update the destroy project, and does not permit deployment-time IAM mutation.
+
 ### Bound authority, cost, and evidence
 
 Deployment, IAM-management, automation, workload, execution, and destroy roles

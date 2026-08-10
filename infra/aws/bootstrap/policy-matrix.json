@@ -58,6 +58,27 @@
       "expected": "denied"
     },
     {
+      "name": "operator reconciles only the exact image project buildspec",
+      "role": "manual/operator-deployment",
+      "action": "codebuild:UpdateProject",
+      "resource": "codebuild-image:manual",
+      "expected": "allowed"
+    },
+    {
+      "name": "operator cannot update the exact destroy project",
+      "role": "manual/operator-deployment",
+      "action": "codebuild:UpdateProject",
+      "resource": "codebuild:manual",
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot update another environment image project",
+      "role": "manual/operator-deployment",
+      "action": "codebuild:UpdateProject",
+      "resource": "codebuild-image:monthly",
+      "expected": "denied"
+    },
+    {
       "name": "operator inspects exact persistent controller log tags",
       "role": "manual/operator-deployment",
       "action": "logs:ListTagsForResource",
@@ -86,6 +107,16 @@
       "role": "manual/operator-deployment",
       "action": "iam:PassRole",
       "resource": "role:manual/api-workload",
+      "context": {
+        "iam:PassedToService": "codebuild.amazonaws.com"
+      },
+      "expected": "denied"
+    },
+    {
+      "name": "operator cannot pass the image role to CodeBuild",
+      "role": "manual/operator-deployment",
+      "action": "iam:PassRole",
+      "resource": "role:manual/codebuild-image",
       "context": {
         "iam:PassedToService": "codebuild.amazonaws.com"
       },

@@ -299,6 +299,12 @@ def resolve_symbol(value: str, payload: dict[str, Any]) -> str:
             "arn:aws:codebuild:us-east-1:111122223333:project/"
             f"example-portfolio-{environment}-destroy"
         )
+    if value.startswith("codebuild-image:"):
+        environment = value.removeprefix("codebuild-image:")
+        return (
+            "arn:aws:codebuild:us-east-1:111122223333:project/"
+            f"example-portfolio-{environment}-image-build"
+        )
     if value.startswith("secret:"):
         environment, name = value.removeprefix("secret:").split("/", 1)
         return (

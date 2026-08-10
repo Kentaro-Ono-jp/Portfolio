@@ -45,6 +45,12 @@
       ]
     },
     {
+      "Sid": "ReconcileExactImageBuildspec",
+      "Effect": "Allow",
+      "Action": "codebuild:UpdateProject",
+      "Resource": "arn:${AWS_PARTITION}:codebuild:${AWS_REGION}:${AWS_ACCOUNT_ID}:project/${NAME_PREFIX}-${ENVIRONMENT}-image-build"
+    },
+    {
       "Sid": "ManageApiGatewayLogDeliveryDependency",
       "Effect": "Allow",
       "Action": [

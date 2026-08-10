@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -102,7 +103,134 @@ class FakeAws:
         return {}
 
 
+def controller_project(
+    config: LifecycleConfig, purpose: str, *, buildspec: str | None = None
+) -> dict[str, object]:
+    buildspec_name = (
+        "image-build.buildspec.yml" if purpose == "image" else "destroy.buildspec.yml"
+    )
+    expected_buildspec = (
+        REPOSITORY_ROOT / "infra" / "aws" / "lifecycle" / buildspec_name
+    ).read_text(encoding="utf-8")
+    return {
+        "name": config.projects[purpose],
+        "serviceRole": config.roles[
+            "codebuild_image" if purpose == "image" else "codebuild_destroy"
+        ],
+        "source": {
+            "type": "NO_SOURCE",
+            "buildspec": expected_buildspec if buildspec is None else buildspec,
+        },
+        "artifacts": {"type": "NO_ARTIFACTS"},
+        "timeoutInMinutes": 60,
+        "queuedTimeoutInMinutes": 30,
+        "autoRetryLimit": 0 if purpose == "image" else 2,
+        "environment": {
+            "computeType": "BUILD_GENERAL1_SMALL",
+            "image": "aws/codebuild/standard:7.0",
+            "type": "LINUX_CONTAINER",
+            "imagePullCredentialsType": "CODEBUILD",
+            "privilegedMode": purpose == "image",
+            "environmentVariables": [
+                {"name": name, "value": value}
+                for name, value in lifecycle.expected_project_environment(
+                    config
+                ).items()
+            ],
+        },
+        "logsConfig": {
+            "cloudWatchLogs": {
+                "status": "ENABLED",
+                "groupName": (
+                    f"/portfolio/{config.name_prefix}/{config.environment}/"
+                    f"controller/{purpose}"
+                ),
+                "streamName": purpose,
+            }
+        },
+        "tags": [
+            {"key": name, "value": value}
+            for name, value in {
+                "PortfolioEnvironment": config.environment,
+                "PortfolioLayer": "bootstrap",
+                "PortfolioManaged": "true",
+                "PortfolioPersistent": "true",
+                "PortfolioPurpose": f"{purpose}-controller",
+                "PortfolioRepository": config.repository_identity,
+            }.items()
+        ],
+    }
+
+
+class FakeControllerAws(FakeAws):
+    def __init__(self, projects: list[dict[str, object]]) -> None:
+        super().__init__()
+        self.projects = {str(project["name"]): project for project in projects}
+
+    def call(self, service: str, operation: str, *arguments: str, **_: object):
+        self.calls.append((service, operation, arguments))
+        if service == "codebuild" and operation == "batch-get-projects":
+            names = arguments[arguments.index("--names") + 1 :]
+            return {"projects": [self.projects[name] for name in names]}
+        if service == "codebuild" and operation == "update-project":
+            name = arguments[arguments.index("--name") + 1]
+            source = json.loads(arguments[arguments.index("--source") + 1])
+            self.projects[name]["source"] = source
+            return {"project": self.projects[name]}
+        return super().call(service, operation, *arguments)
+
+
 class LifecycleContractTests(unittest.TestCase):
+    def test_image_buildspec_only_is_reconciled_and_read_back(self) -> None:
+        config = configuration()
+        fake = FakeControllerAws(
+            [
+                controller_project(config, "image", buildspec="stale"),
+                controller_project(config, "destroy"),
+            ]
+        )
+        evidence = lifecycle.verify_controller_projects(
+            config, fake, reconcile_image_buildspec=True
+        )
+        self.assertTrue(evidence["imageBuildspecReconciled"])
+        self.assertEqual(
+            [operation for _, operation, _ in fake.calls].count("update-project"),
+            1,
+        )
+        self.assertNotEqual(
+            evidence["previousBuildspecSha256"],
+            evidence["currentBuildspecSha256"],
+        )
+
+    def test_controller_reconciliation_rejects_non_buildspec_drift(self) -> None:
+        config = configuration()
+        image = controller_project(config, "image", buildspec="stale")
+        image["timeoutInMinutes"] = 61
+        fake = FakeControllerAws([image, controller_project(config, "destroy")])
+        with self.assertRaises(LifecycleError):
+            lifecycle.verify_controller_projects(
+                config, fake, reconcile_image_buildspec=True
+            )
+        self.assertNotIn(
+            "update-project", [operation for _, operation, _ in fake.calls]
+        )
+
+    def test_controller_never_reconciles_destroy_buildspec(self) -> None:
+        config = configuration()
+        fake = FakeControllerAws(
+            [
+                controller_project(config, "image"),
+                controller_project(config, "destroy", buildspec="stale"),
+            ]
+        )
+        with self.assertRaises(LifecycleError):
+            lifecycle.verify_controller_projects(
+                config, fake, reconcile_image_buildspec=True
+            )
+        self.assertNotIn(
+            "update-project", [operation for _, operation, _ in fake.calls]
+        )
+
     def test_configuration_round_trip_and_exact_bindings(self) -> None:
         expected = configuration()
         actual = LifecycleConfig.from_dict(expected.to_dict())

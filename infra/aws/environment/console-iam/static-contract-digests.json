@@ -9,7 +9,7 @@
     "destroy-trust.json": "6dc6c66fd6a12822ddb1c5812ea2a666626fd3922bb504bb30f66447b2e62138",
     "destroy.json": "a848741e0c04e38aed6891c6c467858bd2e60c812b3574c1555bde2b55613dc0",
     "ecs-task-trust.json": "309a05385bf93ee8e210c75e45a815ac27936356a208a348e9f17cc8be48bc9e",
-    "lifecycle-control.json": "7567b621df7c9e339642432995849e4932eac32c8f44113174f222b09403ac0c",
+    "lifecycle-control.json": "f47f8805773936399ff6171d30d3bd17326bb587adb40e92c3f4a517bc12c209",
     "lifecycle-destroy.json": "1290e95d47dcd7bd5df14f458501aa002908d2140a8f8b49466763269ea11ecf",
     "managed-environment-permissions.json": "a48b1ef1cd3a073a507a81928c809c3d6f60e5de198f06c7dfe0759da5d15005",
     "managed-environment-resource-permissions.json": "d1b8a1e2cf371e288a620b37f508450c043f77a2c3c504cdd56e98a05590f611",

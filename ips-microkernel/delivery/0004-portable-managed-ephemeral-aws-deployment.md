@@ -51,6 +51,11 @@ prove zero residue. The destroy project keeps two static automatic retries for
 failures after Scheduler has successfully delivered the CodeBuild start call.
 The lifecycle has no deployment-time IAM mutation, quota calculation, policy
 generation, or private deployment-configuration dependency.
+The exact image CodeBuild project's repository-owned inline buildspec is the
+sole non-IAM controller-maintenance exception: only when every other project
+field already matches may the operator synchronize that one field and read
+back its normalized SHA-256. Destroy-project, service-role, IAM, and any other
+controller drift still fail closed.
 
 An owner-authorized exploratory AWS evaluation historically consumed the
 governed `3/3` billable construction attempts while exposing provider-dependent
@@ -296,7 +301,7 @@ Acceptance requires fallback registration before billable apply, exact source/st
 
 Lifecycle preflight consumes the frozen IAM contract. It must not calculate
 IAM quota, generate or split policies, create policy versions, change policy or
-boundary attachments, apply bootstrap IAM, or self-heal drift.
+boundary attachments, apply bootstrap IAM, or self-heal IAM drift.
 
 Implemented in `scripts/aws_lifecycle.py` and `infra/aws/lifecycle/`. The
 state-machine and AWS-free verifier cover strict transitions, every forward
@@ -308,7 +313,9 @@ Scheduler, CodeBuild image, and CodeBuild destroy roles/projects are canonical
 static prerequisites; the persistent environment-specific schedule group is
 also a canonical prerequisite. Its execution-role trust uses the exact group
 ARN because AWS Scheduler rejects an individual schedule ARN as SourceArn.
-Normal deployment only reads and uses these prerequisites.
+Normal deployment reads and uses these prerequisites. It may synchronize only
+the exact image project's inline buildspec after all non-buildspec fields pass,
+without changing IAM, a service role, or the destroy controller.
 
 ### Step 6: Add explicit manual and monthly automation paths
 

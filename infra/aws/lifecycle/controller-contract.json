@@ -1,6 +1,13 @@
 {
   "schemaVersion": 1,
   "normalDeploymentIamMutation": false,
+  "imageBuildspecReconciliation": {
+    "actor": "operator_deployment",
+    "project": "image",
+    "requiresEveryOtherProjectFieldExact": true,
+    "readBackExactSha256": true,
+    "changesIamOrServiceRole": false
+  },
   "projects": {
     "image": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-image-build",

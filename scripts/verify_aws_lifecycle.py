@@ -56,6 +56,15 @@ def main() -> int:
         )
     if contract.get("normalDeploymentIamMutation") is not False:
         raise RuntimeError("Lifecycle controller must keep normal deployment IAM-free")
+    reconciliation = contract.get("imageBuildspecReconciliation", {})
+    if reconciliation != {
+        "actor": "operator_deployment",
+        "project": "image",
+        "requiresEveryOtherProjectFieldExact": True,
+        "readBackExactSha256": True,
+        "changesIamOrServiceRole": False,
+    }:
+        raise RuntimeError("Image buildspec reconciliation contract drifted")
     if contract.get("schedule", {}).get("actionAfterCompletion") != "NONE":
         raise RuntimeError("Fallback schedule must remain until zero residue is proved")
     if (
@@ -89,6 +98,11 @@ def main() -> int:
         ):
             raise RuntimeError(f"Persistent lifecycle attachment drifted: {role}")
     lifecycle_policy = load_json(CONSOLE_IAM_ROOT / "lifecycle-control.json")
+    image_reconciliation = statement(lifecycle_policy, "ReconcileExactImageBuildspec")
+    if image_reconciliation.get("Action") != "codebuild:UpdateProject" or not str(
+        image_reconciliation.get("Resource", "")
+    ).endswith(":project/${NAME_PREFIX}-${ENVIRONMENT}-image-build"):
+        raise RuntimeError("Image buildspec reconciliation is not exact-project only")
     schedule_group = statement(lifecycle_policy, "InspectExactLifecycleScheduleGroup")
     if set(schedule_group.get("Action", [])) != {
         "scheduler:GetScheduleGroup",
@@ -197,6 +211,14 @@ def main() -> int:
     )
     if any(token in lifecycle_source for token in forbidden_iam_writes):
         raise RuntimeError("Normal lifecycle contains an IAM mutation command")
+    for token in (
+        '"update-project"',
+        "reconcile_image_buildspec=True",
+        "previousBuildspecSha256",
+        "currentBuildspecSha256",
+    ):
+        if token not in lifecycle_source:
+            raise RuntimeError("Exact image buildspec reconciliation drifted")
     for token in ('"batch-delete-image"', '"describe-images"', "config.image_tag"):
         if token not in lifecycle_source:
             raise RuntimeError("Lifecycle zero-residue image proof drifted")
