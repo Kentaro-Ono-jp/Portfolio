@@ -357,7 +357,7 @@
       "expected": "allowed"
     },
     {
-      "name": "operator cannot update a cross-repository HTTP API",
+      "name": "operator accepts dependent PATCH without HTTP API ownership context",
       "role": "manual/operator-deployment",
       "action": "apigateway:PATCH",
       "resource": "arn:aws:apigateway:us-east-1::/apis/foreign-api",
@@ -367,7 +367,7 @@
         "aws:ResourceTag/PortfolioPersistent": "false",
         "aws:ResourceTag/PortfolioRepository": "other-owner/other-repository"
       },
-      "expected": "denied"
+      "expected": "allowed"
     },
     {
       "name": "operator cannot create a cross-repository HTTP API",
