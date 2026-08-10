@@ -525,12 +525,19 @@ def assert_public_safe(value: object, *, path: str = "$") -> None:
         for index, item in enumerate(value):
             assert_public_safe(item, path=f"{path}[{index}]")
         return
-    if isinstance(value, str) and (
-        AWS_ACCOUNT_VALUE.search(value)
-        or AWS_KEY_VALUE.search(value)
-        or PRIVATE_PATH_VALUE.search(value)
-    ):
-        raise LifecycleError(f"Sanitized output contains a private value at {path}.")
+    if isinstance(value, str):
+        public_hash = (
+            SHA_PATTERN.fullmatch(value) is not None
+            or DIGEST_PATTERN.fullmatch(value) is not None
+        )
+        if (
+            (not public_hash and AWS_ACCOUNT_VALUE.search(value))
+            or AWS_KEY_VALUE.search(value)
+            or PRIVATE_PATH_VALUE.search(value)
+        ):
+            raise LifecycleError(
+                f"Sanitized output contains a private value at {path}."
+            )
 
 
 def sanitized_status(state: LifecycleState | None) -> dict[str, object]:

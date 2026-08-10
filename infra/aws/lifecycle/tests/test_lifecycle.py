@@ -485,8 +485,7 @@ class LifecycleContractTests(unittest.TestCase):
             },
             {
                 "ResourceARN": (
-                    "arn:aws:ec2:us-east-1:111122223333:"
-                    "security-group-rule/sgr-deleted"
+                    "arn:aws:ec2:us-east-1:111122223333:security-group-rule/sgr-deleted"
                 )
             },
         ]
@@ -531,6 +530,10 @@ class LifecycleContractTests(unittest.TestCase):
             with self.assertRaises(LifecycleError):
                 assert_public_safe(unsafe)
         assert_public_safe({"phase": "applied", "resourceCounts": {"created": 81}})
+        assert_public_safe(
+            {"sourceRevision": "27f4f755323807584dfcd2cd25625503df04b012"}
+        )
+        assert_public_safe({"imageDigest": "sha256:" + "7" * 64})
 
     def test_failed_process_retains_only_private_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
