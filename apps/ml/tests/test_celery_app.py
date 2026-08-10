@@ -85,9 +85,7 @@ def test_celery_configuration_preserves_late_ack_and_fixed_route() -> None:
     assert celery_app.app.conf.task_default_routing_key == REQUEST_ROUTING_KEY
     assert celery_app.app.conf.broker_transport_options["confirm_publish"] is True
     assert celery_app.app.conf.worker_enable_remote_control is False
-    assert celery_app.app.conf.task_queues[0].queue_arguments == {
-        "x-queue-type": "quorum"
-    }
+    assert celery_app.app.conf.task_queues[0].queue_arguments == {"x-queue-type": "quorum"}
 
 
 def test_valid_request_runs_processor(monkeypatch: pytest.MonkeyPatch) -> None:
