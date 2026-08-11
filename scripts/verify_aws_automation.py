@@ -18,6 +18,8 @@ from aws_automation_maintenance import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "aws-deploy.yml"
+PACKAGE_PATH = REPOSITORY_ROOT / "package.json"
+NODE_VERSION_PATH = REPOSITORY_ROOT / ".node-version"
 CONTRACT_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_contract.py"
 GUARD_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_guard.py"
 OIDC_CLAIM_PATH = REPOSITORY_ROOT / "scripts" / "aws_oidc_claim_guard.py"
@@ -29,6 +31,10 @@ BOOTSTRAP_LOCALS_PATH = REPOSITORY_ROOT / "infra" / "aws" / "bootstrap" / "local
 
 CHECKOUT_STEP = "Check out the exact source"
 GUARD_STEP = "Guard the exact automation route"
+PNPM_STEP = "Install pnpm"
+NODE_STEP = "Set up Node.js"
+DEPENDENCIES_STEP = "Install pinned dependencies"
+PLAYWRIGHT_STEP = "Install pinned Playwright browser"
 OIDC_CLAIM_STEP = "Verify the exact GitHub OIDC claims"
 OIDC_STEP = "Obtain the short-lived GitHub OIDC session"
 
@@ -38,11 +44,24 @@ def workflow_step_names(source: str) -> list[str]:
 
 
 def verify_workflow_gate_order(names: list[str]) -> None:
-    for expected in (CHECKOUT_STEP, GUARD_STEP, OIDC_CLAIM_STEP, OIDC_STEP):
+    for expected in (
+        CHECKOUT_STEP,
+        GUARD_STEP,
+        PNPM_STEP,
+        NODE_STEP,
+        DEPENDENCIES_STEP,
+        PLAYWRIGHT_STEP,
+        OIDC_CLAIM_STEP,
+        OIDC_STEP,
+    ):
         if names.count(expected) != 1:
             raise RuntimeError(f"Deployment workflow step is not exact: {expected}")
     checkout = names.index(CHECKOUT_STEP)
     guard = names.index(GUARD_STEP)
+    pnpm = names.index(PNPM_STEP)
+    node = names.index(NODE_STEP)
+    dependencies = names.index(DEPENDENCIES_STEP)
+    playwright = names.index(PLAYWRIGHT_STEP)
     claim = names.index(OIDC_CLAIM_STEP)
     oidc = names.index(OIDC_STEP)
     if guard <= checkout:
@@ -53,6 +72,10 @@ def verify_workflow_gate_order(names: list[str]) -> None:
         raise RuntimeError("OIDC claim guard must run after the route guard")
     if claim >= oidc:
         raise RuntimeError("OIDC claim guard must run before OIDC assumption")
+    if not guard < pnpm < node < dependencies < playwright < claim:
+        raise RuntimeError(
+            "AWS smoke toolchain must be complete before OIDC assumption"
+        )
 
 
 def verify_workflow_order_mutations(names: list[str]) -> int:
@@ -66,10 +89,14 @@ def verify_workflow_order_mutations(names: list[str]) -> int:
     claim_after_oidc = list(names)
     claim_after_oidc.remove(OIDC_CLAIM_STEP)
     claim_after_oidc.insert(claim_after_oidc.index(OIDC_STEP) + 1, OIDC_CLAIM_STEP)
+    browser_after_oidc = list(names)
+    browser_after_oidc.remove(PLAYWRIGHT_STEP)
+    browser_after_oidc.insert(browser_after_oidc.index(OIDC_STEP) + 1, PLAYWRIGHT_STEP)
     for label, mutation, expected in (
         ("before checkout", before_checkout, "after exact checkout"),
         ("after OIDC", after_oidc, "before OIDC assumption"),
         ("claim after OIDC", claim_after_oidc, "before OIDC assumption"),
+        ("browser after OIDC", browser_after_oidc, "before OIDC assumption"),
     ):
         try:
             verify_workflow_gate_order(mutation)
@@ -92,6 +119,8 @@ def require(source: str, token: str, message: str) -> None:
 def main() -> int:
     for path in (
         WORKFLOW_PATH,
+        PACKAGE_PATH,
+        NODE_VERSION_PATH,
         CONTRACT_PATH,
         GUARD_PATH,
         OIDC_CLAIM_PATH,
@@ -104,6 +133,8 @@ def main() -> int:
         if not path.is_file():
             raise RuntimeError(f"AWS automation contract is missing: {path.name}")
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    package = json.loads(PACKAGE_PATH.read_text(encoding="utf-8"))
+    node_version = NODE_VERSION_PATH.read_text(encoding="utf-8").strip()
     contract = CONTRACT_PATH.read_text(encoding="utf-8")
     guard = GUARD_PATH.read_text(encoding="utf-8")
     oidc_claim = OIDC_CLAIM_PATH.read_text(encoding="utf-8")
@@ -157,6 +188,13 @@ def main() -> int:
         "ref: ${{ github.sha }}",
         "python3 scripts/aws_automation_guard.py",
         "python3 scripts/aws_oidc_claim_guard.py",
+        "pnpm/action-setup@v6",
+        "actions/setup-node@v6",
+        "node-version-file: .node-version",
+        "cache: pnpm",
+        "cache-dependency-path: pnpm-lock.yaml",
+        "pnpm install --frozen-lockfile",
+        "pnpm exec playwright install --with-deps chromium",
         "aws-actions/configure-aws-credentials@v6.2.3",
         "audience: sts.amazonaws.com",
         "role-to-assume: ${{ vars.AWS_AUTOMATION_ROLE_ARN }}",
@@ -182,6 +220,12 @@ def main() -> int:
         )
     if "steps.guard.outcome == 'success'" in workflow:
         raise RuntimeError("AWS cleanup must not run after an OIDC setup failure")
+    if package.get("packageManager") != "pnpm@11.14.0":
+        raise RuntimeError("AWS smoke pnpm version drifted")
+    if package.get("engines", {}).get("node") != "24.18.0":
+        raise RuntimeError("AWS smoke Node engine drifted")
+    if node_version != "24.18.0":
+        raise RuntimeError("AWS smoke Node runtime drifted")
     for forbidden in (
         "AWS_ACCESS_KEY_ID:",
         "AWS_SECRET_ACCESS_KEY:",
@@ -316,6 +360,8 @@ def main() -> int:
         '"--caller-mode"',
         '"--automation-event"',
         "accepted_repository_remotes(config.repository_identity)",
+        'require_command("node")',
+        'require_command("pnpm")',
         'safe_failure_prefix="Static IAM verification failed:"',
         '"--github-oidc-repository-subject"',
         "EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT",

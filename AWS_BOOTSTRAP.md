@@ -198,7 +198,10 @@ attestor all consume this same immutable subject contract; the attestor cannot
 fall back to the legacy name-only subject.
 
 `.github/workflows/aws-deploy.yml` uses that exact protected environment,
-short-lived OIDC role, and `main` workflow identity. Owner-started dispatch
+short-lived OIDC role, and `main` workflow identity. Before requesting OIDC,
+it installs the repository-pinned Node, pnpm dependencies, and Chromium
+Playwright runtime required by authenticated smoke, so a missing toolchain
+cannot create AWS resources. Owner-started dispatch
 maps only to `manual`; repository schedules map only to `monthly`. The
 permanent schedule is the first day of every month at 13:00 `Asia/Tokyo`, and
 the environment has no required reviewer or wait timer. Ordinary pushes and

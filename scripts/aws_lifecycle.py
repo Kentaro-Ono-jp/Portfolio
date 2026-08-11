@@ -1298,6 +1298,8 @@ def run_preflight(
     verify_local_source(config, require_remote=require_remote)
     require_command("git")
     require_command("terraform")
+    require_command("node")
+    require_command("pnpm")
     if not sys.version.startswith("3.13"):
         raise LifecycleError("Python 3.13 is required by the repository contract.")
     verify_source(config, source)
@@ -1382,6 +1384,8 @@ def run_resume_preflight(
     verify_local_source(config, require_remote=True)
     require_command("git")
     require_command("terraform")
+    require_command("node")
+    require_command("pnpm")
     if not sys.version.startswith("3.13"):
         raise LifecycleError("Python 3.13 is required by the repository contract.")
     verify_source(config, source)
@@ -2553,6 +2557,7 @@ def command_smoke(
             ),
         }
     )
+    require_command("node")
     pnpm = require_command("pnpm")
     pnpm_command = [pnpm]
     if os.name == "nt" and Path(pnpm).suffix.lower() in {".cmd", ".bat"}:
