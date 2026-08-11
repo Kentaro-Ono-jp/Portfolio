@@ -32,10 +32,11 @@ Step 3 now defines the persistent portable bootstrap: an encrypted, versioned, p
 The maintainer path now freezes deployment IAM as a persistent static
 prerequisite. One separately approved owner-admin Console operation installs or
 updates the canonical user, roles, trusts, managed policies, attachments, and
-boundary after repository-owned quota proof. Normal deployment only verifies
-the existing credential-only source user, assumes the exact operator, and
-performs exact-ARN read-only attestation against canonical document hashes.
-It cannot generate, attach, version, repair, or otherwise mutate IAM, cannot
+boundary after repository-owned quota proof. Normal deployment verifies either
+the existing credential-only source user or the exact short-lived GitHub
+automation session, assumes the exact environment operator, and performs
+exact-ARN read-only attestation against canonical document hashes. It cannot
+generate, attach, version, repair, or otherwise mutate IAM, cannot
 recalculate IAM quota, and cannot invoke bootstrap IAM. Drift fails closed and
 returns to a separate static-IAM maintenance increment.
 
@@ -45,8 +46,9 @@ Step 5 now defines a single TTL-first lifecycle command surface, a persistent
 artifact-free CodeBuild image builder, and a persistent Scheduler/CodeBuild
 destroy controller outside the environment state. The controller consumes the
 frozen static IAM contract, uses an S3 conditional lease plus ETag checkpoints,
-registers and reads back a maximum-two-hour fallback before apply, and retains
-that fallback until Terraform plus exact-image, service, and tag inventory
+registers and reads back a normal one-hour fallback before apply, retains an
+explicit/extend maximum of two hours, and keeps that fallback until Terraform
+plus exact-image, service, and tag inventory
 prove zero residue. The destroy project keeps two static automatic retries for
 failures after Scheduler has successfully delivered the CodeBuild start call.
 The lifecycle has no deployment-time IAM mutation, quota calculation, policy
@@ -65,8 +67,11 @@ returned to zero, a fresh live plan returned 81 creates with no update or
 delete, and tag plus service-specific inventory found zero application residue.
 Issue #114 supersedes the old numeric attempt ceiling with its
 completion-first serialized-attempt boundary. The `3/3` notation remains
-immutable history, not a current cap. GitHub OIDC deployment workflows and the
-Step 8 completion record remain pending. Issue #114 completed the Step 7
+immutable history, not a current cap. Issue #116 implements the repository
+contract for the exact GitHub OIDC workflow, isolated manual/monthly callers,
+one-hour normal TTL, and no per-run environment approval; its live manual and
+real-schedule proofs remain pending until their focused evidence is recorded.
+The Step 8 completion record remains pending. Issue #114 completed the Step 7
 real-AWS cycle described below.
 
 ## Outcome
@@ -295,7 +300,12 @@ requirements.
 
 ### Step 5: Implement the lifecycle and destroy safety system
 
-Deliver preflight, image publication, schedule-first two-hour TTL, apply, status, seed, smoke, extend, manual destroy, automatic CodeBuild destroy fallback, and service-specific residual sweep.
+Deliver preflight, image publication, schedule-first TTL, apply, status, seed,
+smoke, extend, manual destroy, automatic CodeBuild destroy fallback, and
+service-specific residual sweep. Step 5 originally selected a two-hour normal
+TTL; Issue #116 subsequently changes the normal `deploy` and
+`register-fallback` default to one hour while retaining explicit values and the
+original 120-minute maximum for `extend`.
 
 Acceptance requires fallback registration before billable apply, exact source/state binding, safe retry/idempotency, environment concurrency control, sanitized logs, and a failed or interrupted local operator path that still leaves an independent destroy route.
 
@@ -319,9 +329,29 @@ without changing IAM, a service role, or the destroy controller.
 
 ### Step 6: Add explicit manual and monthly automation paths
 
-Deliver the owner-controlled manual on-demand workflow and the monthly scheduled proof using the same modules with isolated environment names/state/tags. Use GitHub OIDC or another accepted short-lived automation trust; do not use maintainer long-term keys.
+Deliver one owner-controlled GitHub Actions workflow using the existing
+lifecycle modules and an exact short-lived GitHub OIDC role. Owner-started
+`workflow_dispatch` maps only to `manual`; repository-owned `schedule` maps
+only to `monthly`. Environment names, state keys, controls, roles, controller
+projects, and tags remain isolated.
 
-Acceptance requires fork PRs, ordinary CI, Dependabot, and unapproved branches to remain unable to assume deployment authority. Deployment and destroy schedules must be independently recoverable, and outside-window application resources must not remain running.
+The permanent monthly schedule starts on the first day of every month at
+13:00 `Asia/Tokyo`. A separately recorded temporary practical cron may exist on
+`main` only long enough to prove the real schedule-event path and must then be
+removed. The protected deployment environment has no required reviewer or wait
+timer, so accepted dispatch and schedule runs need no per-run manual approval.
+Both use the one-hour normal fallback; that TTL is an independent AWS cleanup
+deadline, not a GitHub job-time limit.
+
+Acceptance requires the customized `repo/context/job_workflow_ref/event_name`
+subject, exact repository/ref/environment/workflow guards, the exact
+automation-to-manual/monthly operator/destroy chain, and a non-cancelling
+concurrency group. Fork PRs, ordinary CI, Dependabot, pushes, and unapproved
+branches remain unable to assume deployment authority. Deployment and destroy
+schedules must be independently recoverable, and outside-window application
+resources must not remain running. Initial GitHub/OIDC/static-IAM configuration
+is a separately checkpointed owner-admin operation; normal deployment never
+mutates or repairs IAM.
 
 ### Step 7: Prove one complete real-AWS lifecycle
 
@@ -432,7 +462,7 @@ changing the proof path.
 - [x] Terraform defines the accepted managed topology, immutable image identities, bounded retention, complete tags, and portable outputs.
 - [ ] Deployment and IAM roles remain within exact resource, path, trust, pass-role, and Permissions Boundary constraints.
 - [ ] Ordinary CI, fork PRs, and unapproved actors cannot obtain AWS write authority.
-- [ ] A two-hour fallback is registered before billable apply and remains independent of the environment state.
+- [ ] A one-hour normal fallback is registered before billable apply and remains independent of the environment state; explicit TTLs and `extend` retain the two-hour maximum.
 - [ ] Manual destroy and automatic destroy use the exact environment state and are safe to retry.
 - [x] At least one complete apply-to-sweep real-AWS cycle passes within the completion-first serialized-attempt boundary selected by Issue #114.
 - [x] No billable application residue remains after the green cycle.

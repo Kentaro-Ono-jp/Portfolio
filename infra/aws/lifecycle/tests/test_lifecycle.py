@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +14,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
 
 from aws_lifecycle_core import (  # noqa: E402
+    CALLER_MODE_GITHUB_AUTOMATION,
     FORWARD_PHASES,
     LifecycleConfig,
     LifecycleError,
@@ -533,6 +535,102 @@ class LifecycleContractTests(unittest.TestCase):
         )
         self.assertEqual(actual.schedule_name, "reactorfront-manual-destroy")
         self.assertEqual(actual.schedule_group_name, "reactorfront-manual-lifecycle")
+
+    def test_automation_event_is_bound_to_the_exact_environment(self) -> None:
+        manual = replace(
+            configuration(),
+            caller_mode=CALLER_MODE_GITHUB_AUTOMATION,
+            caller_event="workflow_dispatch",
+        )
+        self.assertEqual(LifecycleConfig.from_dict(manual.to_dict()), manual)
+
+        monthly_base = configuration().to_dict()
+        monthly_base["environment"] = "monthly"
+        monthly_base["stateKey"] = "environments/monthly/terraform.tfstate"
+        monthly_base["controlPrefix"] = "controls/reactorfront/monthly"
+        monthly_base["callerMode"] = CALLER_MODE_GITHUB_AUTOMATION
+        monthly_base["callerEvent"] = "schedule"
+        monthly_base["roles"] = {
+            purpose: arn.replace("-manual-", "-monthly-")
+            for purpose, arn in monthly_base["roles"].items()  # type: ignore[union-attr]
+        }
+        monthly_base["projects"] = {
+            purpose: name.replace("-manual-", "-monthly-")
+            for purpose, name in monthly_base["projects"].items()  # type: ignore[union-attr]
+        }
+        monthly = LifecycleConfig.from_dict(monthly_base)
+        self.assertEqual(monthly.environment, "monthly")
+        self.assertEqual(monthly.caller_event, "schedule")
+
+        crossed = monthly.to_dict()
+        crossed["callerEvent"] = "workflow_dispatch"
+        with self.assertRaisesRegex(LifecycleError, "exact environment"):
+            LifecycleConfig.from_dict(crossed)
+
+    def test_legacy_source_user_configuration_keeps_its_exact_digest_shape(
+        self,
+    ) -> None:
+        legacy = configuration().to_dict()
+        legacy["schemaVersion"] = 1
+        del legacy["callerMode"]
+        del legacy["callerEvent"]
+
+        loaded = LifecycleConfig.from_dict(legacy)
+
+        self.assertEqual(loaded.caller_mode, "source-user")
+        self.assertIsNone(loaded.caller_event)
+        self.assertEqual(loaded.to_dict(), legacy)
+
+    def test_automation_source_requires_exact_role_and_session_shape(self) -> None:
+        config = replace(
+            configuration(),
+            caller_mode=CALLER_MODE_GITHUB_AUTOMATION,
+            caller_event="workflow_dispatch",
+        )
+        accepted = FakeAws(
+            "arn:aws:sts::111122223333:assumed-role/"
+            "reactorfront-automation/portfolio-github-123456"
+        )
+        lifecycle.verify_source(config, accepted)
+
+        for rejected in (
+            "arn:aws:sts::111122223333:assumed-role/reactorfront-automation/arbitrary",
+            "arn:aws:sts::111122223333:assumed-role/foreign/portfolio-github-123456",
+            "arn:aws:iam::111122223333:user/ReactorFrontNoel",
+        ):
+            with self.subTest(rejected=rejected), self.assertRaises(LifecycleError):
+                lifecycle.verify_source(config, FakeAws(rejected))
+
+    def test_source_user_mode_cannot_cross_into_monthly(self) -> None:
+        payload = configuration().to_dict()
+        payload["environment"] = "monthly"
+        payload["stateKey"] = "environments/monthly/terraform.tfstate"
+        payload["controlPrefix"] = "controls/reactorfront/monthly"
+        payload["roles"] = {
+            purpose: arn.replace("-manual-", "-monthly-")
+            for purpose, arn in payload["roles"].items()  # type: ignore[union-attr]
+        }
+        payload["projects"] = {
+            purpose: name.replace("-manual-", "-monthly-")
+            for purpose, name in payload["projects"].items()  # type: ignore[union-attr]
+        }
+
+        with self.assertRaisesRegex(LifecycleError, "manual environment"):
+            LifecycleConfig.from_dict(payload)
+
+    def test_normal_ttl_defaults_to_one_hour_without_removing_other_values(
+        self,
+    ) -> None:
+        parser = lifecycle.build_parser()
+        self.assertEqual(parser.parse_args(["deploy"]).ttl_minutes, 60)
+        self.assertEqual(
+            parser.parse_args(["register-fallback"]).ttl_minutes,
+            60,
+        )
+        self.assertEqual(
+            parser.parse_args(["deploy", "--ttl-minutes", "90"]).ttl_minutes,
+            90,
+        )
 
     def test_configuration_rejects_foreign_state_and_roles(self) -> None:
         payload = configuration().to_dict()

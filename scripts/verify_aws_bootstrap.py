@@ -501,6 +501,35 @@ def verify_policy_structure(payload: dict[str, Any]) -> None:
     ]["token.actions.githubusercontent.com:sub"]
     if set(values(trust_subjects)) != expected_subjects:
         raise RuntimeError("Allowed GitHub events must be connected to trust sub")
+    for environment in ("manual", "monthly"):
+        operator_trust = payload["environment_trust"][
+            f"{environment}/operator-deployment"
+        ]
+        principals = {
+            principal
+            for statement in operator_trust["Statement"]
+            for principal in values(statement["Principal"]["AWS"])
+        }
+        expected_principals = {
+            payload["owner_principal_arn"],
+            payload["role_arns"]["automation"],
+        }
+        if principals != expected_principals:
+            raise RuntimeError(
+                "Operator trust must retain the owner and exact automation role"
+            )
+        automation_statements = [
+            statement
+            for statement in operator_trust["Statement"]
+            if payload["role_arns"]["automation"]
+            in values(statement["Principal"]["AWS"])
+        ]
+        if (
+            len(automation_statements) != 1
+            or automation_statements[0]["Action"] != "sts:AssumeRole"
+            or automation_statements[0].get("Condition")
+        ):
+            raise RuntimeError("Automation operator trust is not exact")
     if set(payload["ecr_arns"]) != {"api", "ml", "web"}:
         raise RuntimeError(
             "ECR contract must contain independent Web, API, and ML repositories"

@@ -1,6 +1,8 @@
 {
   "canonicalization": "RFC8259 JSON; UTF-8; sorted keys; compact separators",
   "documents": {
+    "console-iam-monthly/manifest.json": "7e49deb82e4724632ccaf2497a83b8cfd47fdc868b72ad69c07a57d2bf8fc4a9",
+    "console-iam-monthly/static-iam-attestation.json": "7e817cf8c67b9749b9681f17468a4f7d650a9e5e3371c02ca07716d652169252",
     "console-iam/api-workload.json": "c97129d67f7d7835c85321870979a6527e830a58898b0465bbb424460cb4233d",
     "console-iam/automation-boundary.json": "cedb5734f5d89bc202c7712eccf40e41773655e4d7006b2d607f0773d6faf369",
     "console-iam/automation-trust.json": "bc28dcac2a43d59c7a69e92363c888ca2ebb1ab3846dc04054a845bd93dbc926",
@@ -16,7 +18,6 @@
     "console-iam/lifecycle-destroy.json": "1290e95d47dcd7bd5df14f458501aa002908d2140a8f8b49466763269ea11ecf",
     "console-iam/managed-environment-permissions.json": "a48b1ef1cd3a073a507a81928c809c3d6f60e5de198f06c7dfe0759da5d15005",
     "console-iam/managed-environment-resource-permissions.json": "d1b8a1e2cf371e288a620b37f508450c043f77a2c3c504cdd56e98a05590f611",
-    "console-iam/manifest.json": "cce45fb390d9440281c984f7459a38e315130ce053d4cc29fe65b714a9c4b395",
     "console-iam/ml-workload.json": "6bc812e90912f83f4c1d4fc93fb1b0c9c3e23295cd2034659531aa0a428c6c04",
     "console-iam/noel-assume-billing-read-role.json": "91b5290c572b524e405132b6ccb509b957d1a4ba519f6a2b2f4cc01b32fee11f",
     "console-iam/noel-assume-observer-role.json": "b87bb6840517556dbb3232279f029fad8b84fd6a251ec0532458319efd7dfc51",
@@ -26,7 +27,6 @@
     "console-iam/operator-trust.json": "276e40cbd660b89225d082bcfb4433a0aa1b8a6bfb70cb1e0c516e972514881e",
     "console-iam/scheduler-trust.json": "dc4bc42658da66b3a014f77781cf8a00509056db78198ee147a6434ac4572039",
     "console-iam/scheduler.json": "cc44cbbb200874623688482743c6ae5d0be090e8f60468d2eef1e17b8e14bc80",
-    "console-iam/static-iam-attestation.json": "cd1d3777ac989a27fee2dd1f6d45cdf2d31f761ac2ae630c0eaa94a7e827d47f",
     "console-iam/task-execution.json": "135f9becaf510b088df21f76e3397089323774b5bda2b0b1635a5a38724d9edb"
   },
   "schemaVersion": 2

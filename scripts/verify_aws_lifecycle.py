@@ -72,6 +72,8 @@ def main() -> int:
         != "${NAME_PREFIX}-${ENVIRONMENT}-lifecycle"
     ):
         raise RuntimeError("Fallback must use the exact persistent schedule group")
+    if contract.get("schedule", {}).get("normalTtlMinutes") != 60:
+        raise RuntimeError("Fallback schedule must default to one hour")
     if contract.get("schedule", {}).get("maximumTtlMinutes") != 120:
         raise RuntimeError("Fallback schedule must preserve the two-hour maximum")
     projects = contract.get("projects", {})
@@ -283,6 +285,10 @@ def main() -> int:
     ):
         if token not in lifecycle_source:
             raise RuntimeError("Lifecycle private destroy diagnostics drifted")
+    if lifecycle_source.count("default=60, choices=range(15, 121)") != 2:
+        raise RuntimeError("Normal deploy and fallback TTL must default to one hour")
+    if "default=120, choices=range(15, 121)" in lifecycle_source:
+        raise RuntimeError("Two-hour TTL must not remain the normal CLI default")
     subprocess.run(
         [
             sys.executable,
@@ -304,6 +310,7 @@ def main() -> int:
         "persistentScheduleGroups": 1,
         "destroyControllerAutoRetries": 2,
         "maximumTtlMinutes": 120,
+        "normalTtlMinutes": 60,
         "normalDeploymentIamMutation": False,
         "persistentIamAttachments": len(expected_attachments),
         "immutableDigestExports": 3,

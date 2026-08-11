@@ -30,6 +30,7 @@
     "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
     "group": "${NAME_PREFIX}-${ENVIRONMENT}-lifecycle",
     "actionAfterCompletion": "NONE",
+    "normalTtlMinutes": 60,
     "maximumTtlMinutes": 120,
     "target": "destroy"
   },

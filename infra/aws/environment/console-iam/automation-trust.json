@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ExactGitHubDeploymentWorkflow",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": [
+            "${GITHUB_REPOSITORY_SUBJECT}:environment:${GITHUB_ENVIRONMENT}:job_workflow_ref:${GITHUB_WORKFLOW_REF}:event_name:schedule",
+            "${GITHUB_REPOSITORY_SUBJECT}:environment:${GITHUB_ENVIRONMENT}:job_workflow_ref:${GITHUB_WORKFLOW_REF}:event_name:workflow_dispatch"
+          ],
+          "token.actions.githubusercontent.com:repository": "${REPOSITORY_IDENTITY}",
+          "token.actions.githubusercontent.com:ref": "refs/heads/main",
+          "token.actions.githubusercontent.com:environment": "${GITHUB_ENVIRONMENT}",
+          "token.actions.githubusercontent.com:job_workflow_ref": "${GITHUB_WORKFLOW_REF}",
+          "token.actions.githubusercontent.com:workflow": "${GITHUB_WORKFLOW_NAME}"
+        }
+      }
+    }
+  ]
+}

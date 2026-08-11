@@ -36,7 +36,9 @@ may still use this root once to establish its own portable prerequisites.
   authorizes the existing ownership-tagged VPC; the new resource still
   requires the exact request-tag tuple.
 - GitHub trust requires the documented repository-level customized OIDC
-  subject before the future Step 6 workflow can assume the automation role.
+  subject before the Step 6 workflow can assume the automation role. The
+  workflow accepts only `workflow_dispatch` and `schedule` from the exact
+  `main` workflow/environment identity.
 - `tests/bootstrap.tftest.hcl` uses a mocked AWS provider and creates no
   resource.
 - `terraform.tfvars.example` is synthetic and non-authorizing.

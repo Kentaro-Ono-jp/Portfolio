@@ -318,8 +318,11 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
         "scripts/aws_bootstrap_backend.py",
         "scripts/verify_aws_bootstrap.py",
         "scripts/verify_aws_environment.py",
+        "scripts/verify_aws_automation.py",
         "scripts/verify_aws_lifecycle.py",
         "scripts/verify_aws_static_iam.py",
+        "scripts/aws_automation_guard.py",
+        "scripts/aws_automation_maintenance.py",
         "scripts/aws_lifecycle.py",
         "scripts/aws_lifecycle_core.py",
     } or normalized.startswith(
@@ -832,8 +835,11 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_automation.py",
                 "scripts/verify_aws_lifecycle.py",
                 "scripts/verify_aws_static_iam.py",
+                "scripts/aws_automation_guard.py",
+                "scripts/aws_automation_maintenance.py",
                 "scripts/aws_lifecycle.py",
                 "scripts/aws_lifecycle_core.py",
             ],
@@ -866,8 +872,11 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_automation.py",
                 "scripts/verify_aws_lifecycle.py",
                 "scripts/verify_aws_static_iam.py",
+                "scripts/aws_automation_guard.py",
+                "scripts/aws_automation_maintenance.py",
                 "scripts/aws_lifecycle.py",
                 "scripts/aws_lifecycle_core.py",
             ],
@@ -1021,6 +1030,10 @@ def static_checks(
             "Prove the bounded AWS lifecycle controller",
             [sys.executable, "scripts/verify_aws_lifecycle.py"],
         ),
+        (
+            "Prove GitHub OIDC deployment automation",
+            [sys.executable, "scripts/verify_aws_automation.py"],
+        ),
     ]
     check_groups = {
         "Validate canonical contracts": "contracts",
@@ -1051,6 +1064,7 @@ def static_checks(
         "Prove the frozen persistent static IAM contract": "aws-static",
         "Prove the NAT-free managed AWS environment": "aws-static",
         "Prove the bounded AWS lifecycle controller": "aws-static",
+        "Prove GitHub OIDC deployment automation": "aws-static",
     }
     filtered = [check for check in checks if check_groups[check[0]] in groups]
     if "api-static" in groups:

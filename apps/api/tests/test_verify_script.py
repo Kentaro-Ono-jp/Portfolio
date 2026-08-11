@@ -841,10 +841,10 @@ def test_plan_reports_dynamic_test_file_selection(verifier: ModuleType) -> None:
         reason="test",
     )
 
-    assert len(inventory) == 59
+    assert len(inventory) == 60
     assert len(verifier.selected_test_files(plan.groups)) == 18
     assert "Verification groups: 1/10 selected" in verifier.plan_lines(plan)
-    assert "Test files: 18/59 selected" in verifier.plan_lines(plan)
+    assert "Test files: 18/60 selected" in verifier.plan_lines(plan)
 
 
 def test_partial_web_runtime_does_not_count_unexecuted_browser_e2e(
@@ -897,6 +897,7 @@ def test_aws_bootstrap_change_selects_only_aws_static_tools(
     assert verifier.selected_test_files(plan.groups) == (
         "infra/aws/bootstrap/tests/bootstrap.tftest.hcl",
         "infra/aws/environment/tests/environment.tftest.hcl",
+        "infra/aws/lifecycle/tests/test_automation.py",
         "infra/aws/lifecycle/tests/test_lifecycle.py",
     )
     assert values["needs_terraform"] == "true"

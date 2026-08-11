@@ -1,12 +1,14 @@
 # Console-owned environment IAM
 
-These documents define the persistent IAM objects that an account owner creates
-and maintains in the AWS Console. They include one credential-only Noel IAM
-user, its exact assume-role policies, and the deployment and read-only roles.
-Terraform in `../` consumes the resulting role ARNs by reference and never
-creates, updates, detaches, or deletes IAM objects. `manifest.json`, the JSON
-documents, and `static-contract-digests.json` are the canonical persistent IAM
-contract. IAM drift stops deployment; the deployment path never repairs it.
+These documents and the sibling `../console-iam-monthly/` profile define the
+persistent IAM objects that an account owner maintains separately from normal
+deployment. They include one credential-only Noel IAM user, one exact GitHub
+OIDC automation role, isolated manual/monthly role sets, and the existing
+read-only roles. Terraform in `../` consumes the resulting role ARNs by
+reference and never creates, updates, detaches, or deletes IAM objects. Each
+profile's `manifest.json`, referenced JSON documents, and
+`static-contract-digests.json` are its canonical persistent IAM contract. IAM
+drift stops deployment; the deployment path never repairs it.
 
 `ReactorFrontPortfolioOperatorPermissions` and
 `ReactorFrontPortfolioOperatorBoundary` are deliberately separate managed
@@ -30,8 +32,12 @@ with one explicit value owned by the target account:
 - `NAME_PREFIX`, `ENVIRONMENT`, and `REPOSITORY_IDENTITY`
 - `STATE_BUCKET_NAME`
 
-For the maintained proof, the stable names are `reactorfront`, `manual`, and
-`environments/manual/terraform.tfstate`. Do not commit a rendered account file.
+For the maintained proof, the stable prefix is `reactorfront`; the two exact
+environment/state pairs are `manual` with
+`environments/manual/terraform.tfstate` and `monthly` with
+`environments/monthly/terraform.tfstate`. GitHub trust additionally renders
+the repository-owned `aws-deployment` environment, workflow display name and
+`main` workflow ref. Do not commit a rendered account file.
 
 ## Frozen lifecycle
 
@@ -57,7 +63,7 @@ has no CodeBuild `iam:PassRole` grant, so it cannot replace the project service
 role. This one-time static permission remains installed between deployments;
 normal deployment never changes the permission itself.
 
-The static verifier is AWS-free by default:
+The static verifier is AWS-free by default and verifies both profiles:
 
 ```text
 python scripts/verify_aws_static_iam.py
@@ -66,9 +72,9 @@ python scripts/verify_aws_static_iam.py
 `--live` is an explicit read-only mode. It takes account, partition, region,
 prefix, environment, repository identity, and state-bucket name as command
 arguments; these deployment inputs never come from private credential context. It uses the
-standard AWS credential chain only to identify the existing source user,
-assumes the exact operator, keeps the STS credential in process memory, and
-prints only sanitized counts and hashes.
+standard AWS credential chain only to verify the configured source-user or
+GitHub-automation caller, assumes the exact environment operator, keeps the
+STS credential in process memory, and prints only sanitized counts and hashes.
 
 ## One-time Console installation or maintenance
 
@@ -76,8 +82,9 @@ prints only sanitized counts and hashes.
    `manifest.json` if the account does not already contain them. This is a
    one-time account prerequisite; the operator role never receives
    `iam:CreateServiceLinkedRole`.
-2. In IAM **Policies**, create the seventeen customer-managed policies named by
-   `manifest.json`, pasting the corresponding rendered JSON document.
+2. In IAM **Policies**, create the 33 unique customer-managed policies named by
+   the manual and monthly manifests, pasting the corresponding rendered JSON
+   document. Shared Noel and automation policies are created once.
 3. Select the existing `ReactorFrontNoel` credential-only IAM user; do not
    create a second deployment user. It must have no Console access, group,
    inline policy, permissions boundary, or AWS resource permission. Attach only
@@ -91,21 +98,27 @@ prints only sanitized counts and hashes.
    that existing user's access-key material. Role ARNs, backend settings, ECR
    URLs, Terraform variables, and deployment targets come from the checked-in
    contract and AWS outputs, never from that private context.
-4. Create the nine roles named by the manifest and paste each rendered trust
-   policy. The operator trust accepts only the exact Noel Deployment user in
-   the same account; it does not require MFA. Source access keys and login
-   material remain external to Terraform and the public repository.
-5. Set `ReactorFrontPortfolioOperatorBoundary` as the permissions boundary of
-   every role.
+4. Create the one shared automation role plus nine manual and nine monthly
+   roles named by the manifests, and paste each rendered trust policy. Each
+   operator accepts only the exact Noel Deployment user and exact automation
+   role in the same account. Each destroy role additionally retains its exact
+   environment operator and CodeBuild destroy controller trust. The automation
+   role accepts only the exact GitHub OIDC audience, repository, `main` ref,
+   environment, workflow name/ref, and complete customized subjects ending in
+   `event_name:workflow_dispatch` or `event_name:schedule`.
+5. Set the automation boundary only on the shared automation role. Set each
+   profile's operator boundary on all nine roles in that profile.
 6. Attach only the policies listed for that role. The Web workload role has no
    identity policy. Its empty authority is intentional.
 7. Add exactly the five tags in that role's manifest `tags` object. Extra
    tags, a missing tag, or any wrong value (including `PortfolioPurpose`) are
    contract drift and stop deployment attestation.
-8. Verify that the operator has exactly the five identity policies listed by
-   the manifest, exactly one separately named boundary, and no inline policy.
-   `StaticIamAttestation` is read-only and is restricted to the one source
-   user, nine persistent roles, and seventeen managed policies by exact ARN.
+8. Verify that each operator has exactly the five identity policies listed by
+   its manifest, exactly one separately named boundary, and no inline policy.
+   Each `StaticIamAttestation` is read-only and is restricted to the one source
+   user, the ten roles, and the nineteen managed policies in that profile by
+   exact ARN. The automation role has only its exact four-role-assumption
+   policy and separate automation boundary.
    Verify that the destroy role has only `OperatorPermissions`,
    `DestroyPolicy`, and `LifecycleDestroyPolicy`. Verify that Scheduler,
    CodeBuild image, and CodeBuild destroy each have only their one exact
@@ -119,9 +132,13 @@ prints only sanitized counts and hashes.
    or permission other than the three exact role assumptions. The destroy role
    and every unlisted role must remain unavailable.
 10. Only during a separately approved static-IAM maintenance operation, when a
-   checked-in policy document changes, create a new customer-managed
-   policy version in the Console and make it the default. Do not dynamically
-   attach an allow, attach a deny, or let Terraform mutate either policy.
+   checked-in policy document changes, create a new customer-managed policy
+   version and make it the default. The repository-owned maintenance entrypoint
+   is `scripts/aws_automation_maintenance.py` with
+   `--apply --owner-checkpoint issue-116`; it requires an owner-admin session, changes
+   only the named OIDC/static-IAM/monthly-controller inventory, and performs
+   exact readback. Plan/default verification does not write. Do not dynamically
+   attach an allow, attach a deny, or let normal deployment mutate a policy.
 
 The documents contain no explicit `Deny`. Effective authority is the union of
 the role's listed identity policies intersected with its static boundary.
