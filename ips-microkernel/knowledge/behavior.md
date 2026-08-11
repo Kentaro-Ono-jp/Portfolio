@@ -74,7 +74,12 @@ proved/unproved classification, or permanence claim.
   endpoint planner. Never substitute the current incremental Actions changed
   paths for that full inventory; bind each count to its displayed endpoints.
   For the Markdown-only exception, also parse the description's declared exact
-  Markdown path count and literal path list.
+  Markdown path count and literal path list. When the description or prompt
+  publishes a documentation checker file count, derive the exact tracked
+  Markdown path set from the public head Git tree and reproduce the checker in
+  an isolated clean clone. Compare both with the declared count; never use a
+  canonical-workspace filesystem walk that can include ignored or untracked
+  local Markdown.
 - **Pass:** Both declared base values equal the live base, both declared head
   values equal the live head, the PR evidence inventory and every N/NN count
   equal the applicable exact-head evidence source, every carried group is bound
@@ -84,16 +89,22 @@ proved/unproved classification, or permanence claim.
   comparison endpoints, the two counts are never conflated,
   and, when applicable, the
   declared Markdown count and literal path set exactly equal the complete live
-  diff with every path ending in `.md`; any absent workflow is declared only
-  as a qualified limitation, and the PR head is unchanged by metadata repair.
+  diff with every path ending in `.md`; every published documentation file
+  count equals both the exact public-head tracked Markdown set and the isolated
+  clean-clone checker result, with ignored and untracked local files excluded;
+  any absent workflow is declared only as a qualified limitation, and the PR
+  head is unchanged by metadata repair.
 - **Repair:** Replace every declared endpoint with the live full SHA, publish
   the selected, executed, carried, and skipped inventory plus every group and
   test-file N/NN count from the applicable exact-head evidence source, replace
   the full and incremental path counts from their separate exact comparisons,
   and, for
   a Markdown-only exception, publish the exact changed-path count, every
-  literal path, and the no-run limitation. Update the prompt, save the PR
-  description, and read the live metadata back before dispatch.
+  literal path, and the no-run limitation. Regenerate any documentation file
+  count from the exact public head in an isolated clean clone, relabel a
+  contaminated workspace count as non-public, and exclude ignored or
+  untracked Markdown. Update the prompt, save the PR description, and read the
+  live metadata back before dispatch.
 - **Origins:** PR #57
   [re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/57#issuecomment-5143276537),
   PR #64
