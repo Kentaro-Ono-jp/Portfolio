@@ -10,27 +10,29 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-EXPECTED_REPOSITORY = "Kentaro-Ono-jp/Portfolio"
-EXPECTED_REF = "refs/heads/main"
-EXPECTED_ENVIRONMENT = "aws-deployment"
-EXPECTED_WORKFLOW = "Deploy managed AWS proof"
-EXPECTED_WORKFLOW_REF = (
-    "Kentaro-Ono-jp/Portfolio/.github/workflows/aws-deploy.yml@refs/heads/main"
+from aws_automation_contract import (
+    EXPECTED_AUDIENCE,
+    EXPECTED_ENVIRONMENT,
+    EXPECTED_REF,
+    EXPECTED_REPOSITORY,
+    EXPECTED_REPOSITORY_ID,
+    EXPECTED_REPOSITORY_OWNER,
+    EXPECTED_REPOSITORY_OWNER_ID,
+    EXPECTED_WORKFLOW,
+    EXPECTED_WORKFLOW_REF,
+    expected_oidc_subject,
 )
-EXPECTED_EVENTS = {"workflow_dispatch", "schedule"}
 
 
 def expected_claims(event_name: str) -> dict[str, str]:
-    if event_name not in EXPECTED_EVENTS:
-        raise RuntimeError("OIDC event claim is not accepted")
-    subject = (
-        f"repo:{EXPECTED_REPOSITORY}:environment:{EXPECTED_ENVIRONMENT}:"
-        f"job_workflow_ref:{EXPECTED_WORKFLOW_REF}:event_name:{event_name}"
-    )
+    subject = expected_oidc_subject(event_name)
     return {
-        "aud": "sts.amazonaws.com",
+        "aud": EXPECTED_AUDIENCE,
         "sub": subject,
         "repository": EXPECTED_REPOSITORY,
+        "repository_id": EXPECTED_REPOSITORY_ID,
+        "repository_owner": EXPECTED_REPOSITORY_OWNER,
+        "repository_owner_id": EXPECTED_REPOSITORY_OWNER_ID,
         "ref": EXPECTED_REF,
         "environment": EXPECTED_ENVIRONMENT,
         "job_workflow_ref": EXPECTED_WORKFLOW_REF,
@@ -71,7 +73,7 @@ def request_token(values: Mapping[str, str]) -> str:
     url = (
         request_url
         + separator
-        + urllib.parse.urlencode({"audience": "sts.amazonaws.com"})
+        + urllib.parse.urlencode({"audience": EXPECTED_AUDIENCE})
     )
     request = urllib.request.Request(
         url,
@@ -97,7 +99,7 @@ def append_summary(path: str, event_name: str) -> None:
             "## GitHub OIDC claim guard\n\n"
             "- Audience: `sts.amazonaws.com`\n"
             f"- Event: `{event_name}`\n"
-            "- Repository/ref/environment/workflow subject: exact\n"
+            "- Immutable repository IDs/name/ref/environment/workflow: exact\n"
         )
 
 

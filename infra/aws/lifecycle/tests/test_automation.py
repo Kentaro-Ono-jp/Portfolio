@@ -13,6 +13,11 @@ from unittest.mock import patch
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
 
+from aws_automation_contract import (
+    EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+    expected_oidc_subject,
+    validate_repository_subject,
+)
 from aws_automation_guard import (
     EXPECTED_ENVIRONMENT,
     EXPECTED_REF,
@@ -250,6 +255,7 @@ class AutomationGuardTests(unittest.TestCase):
             "reactorfront",
             EXPECTED_REPOSITORY,
             "reactorfront-111122223333-us-east-1-state",
+            EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
         )
 
         names = [
@@ -262,6 +268,17 @@ class AutomationGuardTests(unittest.TestCase):
         ]
 
         self.assertEqual(names[0], "reactorfront-automation")
+        automation_trust = roles["reactorfront-automation"]["trust"]
+        subjects = automation_trust["Statement"][0]["Condition"]["StringEquals"][
+            "token.actions.githubusercontent.com:sub"
+        ]
+        self.assertEqual(
+            set(subjects),
+            {
+                expected_oidc_subject("workflow_dispatch"),
+                expected_oidc_subject("schedule"),
+            },
+        )
         for environment in ("manual", "monthly"):
             destroy = names.index(f"reactorfront-{environment}-destroy")
             for dependency in (
@@ -381,13 +398,28 @@ class AutomationGuardTests(unittest.TestCase):
                 validate_claims(claims, event_name)
                 self.assertEqual(
                     claims["sub"],
-                    (
-                        "repo:Kentaro-Ono-jp/Portfolio:environment:aws-deployment:"
-                        "job_workflow_ref:Kentaro-Ono-jp/Portfolio/.github/"
-                        "workflows/aws-deploy.yml@refs/heads/main:"
-                        f"event_name:{event_name}"
-                    ),
+                    expected_oidc_subject(event_name),
                 )
+
+    def test_oidc_repository_subject_keeps_names_and_pairs_immutable_ids(
+        self,
+    ) -> None:
+        self.assertEqual(
+            validate_repository_subject(
+                EXPECTED_REPOSITORY,
+                EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+            ),
+            EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+        )
+        for subject, error in (
+            ("repo:other/Portfolio", "names drifted"),
+            ("repo:Kentaro-Ono-jp@210682048/Portfolio", "IDs must be paired"),
+        ):
+            with (
+                self.subTest(subject=subject),
+                self.assertRaisesRegex(RuntimeError, error),
+            ):
+                validate_repository_subject(EXPECTED_REPOSITORY, subject)
 
     def test_oidc_claim_guard_rejects_every_identity_dimension(self) -> None:
         expected = expected_claims("workflow_dispatch")

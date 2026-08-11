@@ -109,7 +109,8 @@ STS credential in process memory, and prints only sanitized counts and hashes.
    role in the same account. Each destroy role additionally retains its exact
    environment operator and CodeBuild destroy controller trust. The automation
    role accepts only the exact GitHub OIDC audience, repository, `main` ref,
-   environment, workflow name/ref, and complete customized subjects ending in
+   environment, workflow name/ref, and complete customized immutable subjects
+   containing the stable owner/repository IDs and ending in
    `event_name:workflow_dispatch` or `event_name:schedule`.
 5. Set the automation boundary only on the shared automation role. Set each
    profile's operator boundary on all nine roles in that profile.

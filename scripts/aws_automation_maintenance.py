@@ -12,6 +12,10 @@ from pathlib import Path
 from typing import Any
 
 import aws_lifecycle as lifecycle
+from aws_automation_contract import (
+    EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+    validate_repository_subject,
+)
 from aws_lifecycle_core import CALLER_MODE_GITHUB_AUTOMATION, LifecycleConfig
 from verify_aws_static_iam import (
     CONTRACT_ROOTS,
@@ -21,7 +25,6 @@ from verify_aws_static_iam import (
     render_tokens,
     rendered,
 )
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 LIFECYCLE_ROOT = REPOSITORY_ROOT / "infra" / "aws" / "lifecycle"
@@ -169,7 +172,12 @@ def build_contract(
     name_prefix: str,
     repository: str,
     state_bucket: str,
+    github_repository_subject: str | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    repository_subject = validate_repository_subject(
+        repository,
+        github_repository_subject or f"repo:{repository}",
+    )
     policies: dict[str, dict[str, Any]] = {}
     roles: dict[str, dict[str, Any]] = {}
     for environment, root in CONTRACT_ROOTS.items():
@@ -181,6 +189,7 @@ def build_contract(
             name_prefix=name_prefix,
             repository_identity=repository,
             state_bucket_name=state_bucket,
+            github_repository_subject=repository_subject,
         )
         template = load_json(root / "manifest.json")
         manifest = rendered(template, tokens)
@@ -926,6 +935,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--region", default="us-east-1")
     parser.add_argument("--name-prefix", default="reactorfront")
     parser.add_argument("--repository-identity", default="Kentaro-Ono-jp/Portfolio")
+    parser.add_argument(
+        "--github-oidc-repository-subject",
+        default=EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+    )
     args = parser.parse_args()
     if args.apply and args.owner_checkpoint != "issue-116":
         parser.error("--apply requires --owner-checkpoint issue-116")
@@ -948,6 +961,7 @@ def main() -> int:
         args.name_prefix,
         args.repository_identity,
         state_bucket,
+        args.github_oidc_repository_subject,
     )
     statuses = {"create": 0, "update": 0, "unchanged": 0}
     oidc_status = ensure_oidc_provider(
@@ -1119,6 +1133,9 @@ def main() -> int:
         "awsTrackedCreates": aws.effects.resources_created,
         "policyDocumentsUpdated": aws.effects.policies_updated,
         "trustDocumentsUpdated": aws.effects.trusts_updated,
+        "githubImmutableSubject": (
+            args.github_oidc_repository_subject == EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT
+        ),
         "accountSpecificValuesPublished": False,
         "awsRegionPinned": args.region,
     }

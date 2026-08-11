@@ -24,7 +24,7 @@ variables {
 
   owner_principal_arn            = "arn:aws:iam::111122223333:user/ReactorFrontNoel"
   github_oidc_provider_arn       = "arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com"
-  github_oidc_repository_subject = "repo:example-owner/example-repository"
+  github_oidc_repository_subject = "repo:example-owner@123456/example-repository@789012"
   github_environment             = "aws-deployment"
   github_workflow_name           = "Deploy managed AWS proof"
   github_workflow_ref            = "example-owner/example-repository/.github/workflows/aws-deploy.yml@refs/heads/main"
@@ -118,7 +118,7 @@ run "portable_bootstrap_contract" {
     condition = (
       output.github_trust_contract.subject_template_keys == ["repo", "context", "job_workflow_ref", "event_name"] &&
       length(output.github_trust_contract.subjects) == 2 &&
-      alltrue([for subject in output.github_trust_contract.subjects : startswith(subject, "repo:example-owner/example-repository:environment:aws-deployment:job_workflow_ref:")])
+      alltrue([for subject in output.github_trust_contract.subjects : startswith(subject, "repo:example-owner@123456/example-repository@789012:environment:aws-deployment:job_workflow_ref:")])
     )
     error_message = "GitHub trust must connect both allowed events to the customized OIDC subject."
   }

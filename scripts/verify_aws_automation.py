@@ -6,6 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aws_automation_contract import (
+    EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+    expected_oidc_subject,
+)
 from aws_automation_maintenance import (
     WRITE_OPERATIONS,
     build_contract,
@@ -14,6 +18,7 @@ from aws_automation_maintenance import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "aws-deploy.yml"
+CONTRACT_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_contract.py"
 GUARD_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_guard.py"
 OIDC_CLAIM_PATH = REPOSITORY_ROOT / "scripts" / "aws_oidc_claim_guard.py"
 MAINTENANCE_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_maintenance.py"
@@ -85,6 +90,7 @@ def require(source: str, token: str, message: str) -> None:
 def main() -> int:
     for path in (
         WORKFLOW_PATH,
+        CONTRACT_PATH,
         GUARD_PATH,
         OIDC_CLAIM_PATH,
         MAINTENANCE_PATH,
@@ -94,6 +100,7 @@ def main() -> int:
         if not path.is_file():
             raise RuntimeError(f"AWS automation contract is missing: {path.name}")
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    contract = CONTRACT_PATH.read_text(encoding="utf-8")
     guard = GUARD_PATH.read_text(encoding="utf-8")
     oidc_claim = OIDC_CLAIM_PATH.read_text(encoding="utf-8")
     maintenance = MAINTENANCE_PATH.read_text(encoding="utf-8")
@@ -182,11 +189,6 @@ def main() -> int:
             )
 
     for token in (
-        'EXPECTED_REPOSITORY = "Kentaro-Ono-jp/Portfolio"',
-        'EXPECTED_REF = "refs/heads/main"',
-        'EXPECTED_WORKFLOW = "Deploy managed AWS proof"',
-        'EXPECTED_ENVIRONMENT = "aws-deployment"',
-        'PERMANENT_SCHEDULE = "0 13 1 * *"',
         'return AutomationRoute(event_name, "manual", "not-scheduled")',
         'return AutomationRoute(event_name, "monthly", kind)',
         "Only the repository owner may dispatch deployment.",
@@ -195,16 +197,27 @@ def main() -> int:
         require(guard, token, f"Automation guard contract drifted: {token}")
 
     for token in (
-        'EXPECTED_REPOSITORY = "Kentaro-Ono-jp/Portfolio"',
-        'EXPECTED_REF = "refs/heads/main"',
-        'EXPECTED_ENVIRONMENT = "aws-deployment"',
-        'EXPECTED_WORKFLOW = "Deploy managed AWS proof"',
-        'EXPECTED_EVENTS = {"workflow_dispatch", "schedule"}',
-        '"audience": "sts.amazonaws.com"',
+        "expected_oidc_subject(event_name)",
+        '"audience": EXPECTED_AUDIENCE',
         "validate_claims(decode_claims(token), event_name)",
         "OIDC claim mismatch:",
     ):
         require(oidc_claim, token, f"OIDC claim guard contract drifted: {token}")
+
+    for token in (
+        'EXPECTED_REPOSITORY_OWNER = "Kentaro-Ono-jp"',
+        'EXPECTED_REPOSITORY_OWNER_ID = "210682048"',
+        'EXPECTED_REPOSITORY_NAME = "Portfolio"',
+        'EXPECTED_REPOSITORY_ID = "1304682496"',
+        'EXPECTED_REF = "refs/heads/main"',
+        'EXPECTED_ENVIRONMENT = "aws-deployment"',
+        'EXPECTED_WORKFLOW = "Deploy managed AWS proof"',
+        'EXPECTED_AUDIENCE = "sts.amazonaws.com"',
+        'EXPECTED_EVENTS = frozenset({"workflow_dispatch", "schedule"})',
+        'PERMANENT_SCHEDULE = "0 13 1 * *"',
+        "validate_repository_subject",
+    ):
+        require(contract, token, f"Shared automation contract drifted: {token}")
 
     for token in (
         'parser.error("--apply requires --owner-checkpoint issue-116")',
@@ -213,6 +226,8 @@ def main() -> int:
         '"accountSpecificValuesPublished": False',
         '"awsRegionPinned": args.region',
         '"postWriteReadback": args.apply',
+        '"githubImmutableSubject"',
+        "args.github_oidc_repository_subject",
         "aws = AwsCli(args.aws_cli, region=args.region)",
         'lifecycle_env["AWS_DEFAULT_REGION"] = args.region',
         "lifecycle.verify_controller(config, reader)",
@@ -249,6 +264,7 @@ def main() -> int:
         "reactorfront",
         "Kentaro-Ono-jp/Portfolio",
         "reactorfront-111122223333-us-east-1-state",
+        EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
     )
     if len(policies) != 33 or len(roles) != 19:
         raise RuntimeError("Static maintenance inventory is incomplete")
@@ -278,6 +294,14 @@ def main() -> int:
         raise RuntimeError("Automation role attachment drifted")
     if automation.get("boundary") != "ReactorFrontPortfolioAutomationBoundary":
         raise RuntimeError("Automation role boundary drifted")
+    automation_subjects = automation["trust"]["Statement"][0]["Condition"][
+        "StringEquals"
+    ]["token.actions.githubusercontent.com:sub"]
+    if set(automation_subjects) != {
+        expected_oidc_subject("workflow_dispatch"),
+        expected_oidc_subject("schedule"),
+    }:
+        raise RuntimeError("Immutable GitHub OIDC subjects drifted")
 
     for token in (
         "CALLER_MODE_GITHUB_AUTOMATION",
