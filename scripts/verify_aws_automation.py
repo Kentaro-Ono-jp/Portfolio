@@ -9,7 +9,7 @@ from pathlib import Path
 from aws_automation_maintenance import (
     WRITE_OPERATIONS,
     build_contract,
-    role_creation_order,
+    ordered_role_specs,
 )
 
 
@@ -213,7 +213,12 @@ def main() -> int:
     if len(policies) != 33 or len(roles) != 19:
         raise RuntimeError("Static maintenance inventory is incomplete")
     ordered_names = [
-        str(spec["name"]) for spec in sorted(roles.values(), key=role_creation_order)
+        str(spec["name"])
+        for spec in ordered_role_specs(
+            roles,
+            account_id="111122223333",
+            partition="aws",
+        )
     ]
     if ordered_names[0] != "reactorfront-automation":
         raise RuntimeError("Automation role must exist before target trust updates")
@@ -221,9 +226,11 @@ def main() -> int:
         operator = f"reactorfront-{environment}-operator-deployment"
         destroy = f"reactorfront-{environment}-destroy"
         codebuild = f"reactorfront-{environment}-codebuild-destroy"
+        scheduler = f"reactorfront-{environment}-scheduler"
         if not (
             ordered_names.index(operator) < ordered_names.index(destroy)
             and ordered_names.index(codebuild) < ordered_names.index(destroy)
+            and ordered_names.index(scheduler) < ordered_names.index(destroy)
         ):
             raise RuntimeError("Static role dependency order drifted")
     automation = roles.get("reactorfront-automation", {})

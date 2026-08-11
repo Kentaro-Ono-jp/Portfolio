@@ -18,7 +18,15 @@ from aws_automation_guard import (  # noqa: E402
     PERMANENT_SCHEDULE,
     select_route,
 )
-from aws_automation_maintenance import ensure_role, lifecycle_config  # noqa: E402
+from aws_automation_maintenance import (  # noqa: E402
+    aws_error_code,
+    build_contract,
+    ensure_monthly_controllers,
+    ensure_role,
+    is_transient_aws_failure,
+    lifecycle_config,
+    ordered_role_specs,
+)
 
 
 @dataclass
@@ -71,6 +79,27 @@ class DriftedRoleAws:
         if operation == "list-role-policies":
             return {"PolicyNames": []}
         return {}
+
+
+class MissingControllerAws:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def call(
+        self,
+        service: str,
+        operation: str,
+        *_: str,
+        **__: Any,
+    ) -> dict[str, Any] | None:
+        self.calls.append((service, operation))
+        if operation == "get-schedule-group":
+            return None
+        if operation == "describe-log-groups":
+            return {"logGroups": []}
+        if operation == "batch-get-projects":
+            return {"projects": []}
+        raise AssertionError(f"Unexpected read-only controller call: {operation}")
 
 
 def context(**overrides: str) -> dict[str, str]:
@@ -203,6 +232,122 @@ class AutomationGuardTests(unittest.TestCase):
 
         self.assertNotIn(("iam", "update-assume-role-policy"), aws.calls)
         self.assertEqual(aws.effects.trusts_updated, 0)
+
+    def test_all_internal_trust_dependencies_drive_role_creation_order(self) -> None:
+        _, roles = build_contract(
+            "111122223333",
+            "aws",
+            "us-east-1",
+            "reactorfront",
+            EXPECTED_REPOSITORY,
+            "reactorfront-111122223333-us-east-1-state",
+        )
+
+        names = [
+            str(spec["name"])
+            for spec in ordered_role_specs(
+                roles,
+                account_id="111122223333",
+                partition="aws",
+            )
+        ]
+
+        self.assertEqual(names[0], "reactorfront-automation")
+        for environment in ("manual", "monthly"):
+            destroy = names.index(f"reactorfront-{environment}-destroy")
+            for dependency in (
+                "automation",
+                "operator-deployment",
+                "codebuild-destroy",
+                "scheduler",
+            ):
+                role_name = (
+                    "reactorfront-automation"
+                    if dependency == "automation"
+                    else f"reactorfront-{environment}-{dependency}"
+                )
+                self.assertLess(names.index(role_name), destroy)
+
+    def test_role_dependency_graph_rejects_cycles_and_undeclared_internal_roles(
+        self,
+    ) -> None:
+        prefix = "arn:aws:iam::111122223333:role/"
+        cyclic = {
+            "reactorfront-a": {
+                "name": "reactorfront-a",
+                "trust": {
+                    "Statement": [{"Principal": {"AWS": prefix + "reactorfront-b"}}]
+                },
+            },
+            "reactorfront-b": {
+                "name": "reactorfront-b",
+                "trust": {
+                    "Statement": [{"Principal": {"AWS": prefix + "reactorfront-a"}}]
+                },
+            },
+        }
+        with self.assertRaisesRegex(RuntimeError, "contains a cycle"):
+            ordered_role_specs(
+                cyclic,
+                account_id="111122223333",
+                partition="aws",
+            )
+
+        cyclic["reactorfront-b"]["trust"] = {
+            "Statement": [{"Principal": {"AWS": prefix + "reactorfront-undeclared"}}]
+        }
+        with self.assertRaisesRegex(RuntimeError, "undeclared internal role"):
+            ordered_role_specs(
+                cyclic,
+                account_id="111122223333",
+                partition="aws",
+            )
+
+    def test_transient_aws_failures_are_classified_for_all_iam_writes(self) -> None:
+        self.assertTrue(
+            is_transient_aws_failure(
+                "iam:create-role",
+                "MalformedPolicyDocument: Invalid principal in policy",
+            )
+        )
+        self.assertTrue(
+            is_transient_aws_failure(
+                "iam:attach-role-policy",
+                "An error occurred (NoSuchEntity) while calling AttachRolePolicy",
+            )
+        )
+        self.assertFalse(
+            is_transient_aws_failure(
+                "iam:create-role",
+                "An error occurred (AccessDenied) while calling CreateRole",
+            )
+        )
+        self.assertEqual(
+            aws_error_code("An error occurred (AccessDenied) while calling CreateRole"),
+            "AccessDenied",
+        )
+
+    def test_controller_plan_counts_all_missing_objects_without_writes(self) -> None:
+        aws = MissingControllerAws()
+
+        result = ensure_monthly_controllers(
+            aws,  # type: ignore[arg-type]
+            apply=False,
+            account_id="111122223333",
+            partition="aws",
+            region="us-east-1",
+            name_prefix="reactorfront",
+            repository=EXPECTED_REPOSITORY,
+            state_bucket="reactorfront-111122223333-us-east-1-state",
+        )
+
+        self.assertEqual(result, {"planned": 5, "created": 0})
+        self.assertFalse(
+            any(
+                operation.startswith(("create", "put", "tag"))
+                for _, operation in aws.calls
+            )
+        )
 
 
 if __name__ == "__main__":

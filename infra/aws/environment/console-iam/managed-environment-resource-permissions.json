@@ -155,6 +155,28 @@
           ]
         }
       }
+    },
+    {
+      "Sid": "BroadRuntimeServicesWithinPermissionsBoundary",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:*",
+        "codebuild:*",
+        "cognito-idp:*",
+        "ec2:*",
+        "ecr:*",
+        "ecs:*",
+        "logs:*",
+        "mq:*",
+        "rds:*",
+        "route53:*",
+        "s3:*",
+        "scheduler:*",
+        "secretsmanager:*",
+        "servicediscovery:*",
+        "tag:GetResources"
+      ],
+      "Resource": "*"
     }
   ]
 }
