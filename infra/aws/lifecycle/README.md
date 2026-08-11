@@ -162,7 +162,10 @@ and `register-fallback` calls default to 60 minutes. Explicit values from 15 to
 120 minutes remain valid; the change to the normal default does not introduce
 a 60-minute-only restriction. The accepted maximum remains 120 minutes from
 registration. `extend` remains valid only for an active fallback and cannot
-cross that original maximum. Manual destroy may begin at any earlier time.
+cross that original maximum. Normal success does not wait for the 60-minute
+deadline: it refreshes the cleanup session and starts manual destroy
+immediately after authenticated smoke. Manual destroy may also begin at any
+other earlier time.
 
 ## GitHub automation
 
@@ -175,12 +178,12 @@ non-cancelling GitHub concurrency group while their AWS names, state keys,
 controls, roles, controller projects, and ownership tags stay isolated.
 
 The permanent schedule starts at 13:00 `Asia/Tokyo` on the first day of each
-month. A separately recorded temporary cron may be added to `main` only long
-enough to prove a real `schedule` event; it maps to the same `monthly` path and
-is removed after the accepted proof. The `aws-deployment` environment has no
-required reviewer and no wait timer, so neither event has a per-run manual
+month. A separately recorded temporary cron was added to `main` only long
+enough to prove a real `schedule` event; it mapped to the same `monthly` path
+and was removed after the accepted proof. The `aws-deployment` environment has
+no required reviewer and no wait timer, so neither event has a per-run manual
 approval. The independent 60-minute AWS fallback is a cleanup deadline, not a
-GitHub job-duration limit.
+GitHub job-duration limit or an instruction to retain a healthy environment.
 
 The first live OIDC/IAM/environment installation is a separate owner-admin
 maintenance operation. `scripts/aws_automation_maintenance.py` renders the two
@@ -188,6 +191,21 @@ checked-in static profiles, changes only their named persistent objects when
 run with the recorded owner checkpoint, and then reads the monthly controller,
 ECR, and state contracts back. The normal deployment workflow never calls that
 maintenance script and never repairs IAM.
+
+## Issue 116 live automation checkpoint
+
+The accepted
+[manual run](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31482504475)
+proved the exact `workflow_dispatch` / `manual` path. The accepted
+[schedule run](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31489580926)
+proved the exact `schedule` / `monthly` path at head
+`3a6ec9e318c6c3d1ad5f68696b1210bab20debae`. It started after a 35-minute,
+29-second GitHub scheduler delay and then completed the verified 60-minute
+fallback, apply, migration, seed, authenticated asynchronous smoke,
+cleanup-session refresh, exact destroy, and a 27-category sweep with zero
+residual resources. [PR #127](https://github.com/Kentaro-Ono-jp/Portfolio/pull/127)
+removed the temporary proof cron with no intermediate Actions run. The
+permanent first-day 13:00 JST schedule is now the only cron entry.
 
 ## Verification
 

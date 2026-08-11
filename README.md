@@ -262,9 +262,11 @@ application resources.
 
 Deployment remains an explicit manual action or bounded monthly schedule.
 Before billable application creation, the lifecycle must register an
-independent destroy fallback. Normal execution uses one hour; explicitly
-selected values and `extend` may use the retained two-hour maximum. A green
-cycle requires migration,
+independent destroy fallback. Its normal safety deadline is 60 minutes from
+actual registration; a successful lifecycle does not wait for that deadline
+and destroys immediately after authenticated smoke and cleanup-session
+refresh. Explicitly selected values and `extend` may use the retained
+two-hour maximum. A green cycle requires migration,
 synthetic seed, health, authenticated asynchronous document proof, external
 HTTPS, destroy, and tag plus service-specific residual inventory. Ordinary PR,
 fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
@@ -306,11 +308,16 @@ residual proof all passed. The fallback was removed only after zero residue.
 Cost Explorer was observed once through the separate billing-read role; its
 delayed estimate is supporting evidence, not the destroy proof. The ephemeral
 environment and deployment images are gone; persistent static IAM, empty ECR
-repositories, state backend, and independent controller remain. Step 6 adds
-one exact GitHub OIDC workflow: owner-started dispatch maps to `manual`, the
-first-day 13:00 JST schedule maps to `monthly`, both use a one-hour normal TTL,
-and neither requires a per-run reviewer or wait timer. A temporary practical
-schedule is used only for real schedule-event proof and is removed afterward.
+repositories, state backend, and independent controller remain. Issue #116
+adds and live-proves one exact GitHub OIDC workflow: owner-started dispatch
+maps to `manual`, the first-day 13:00 JST schedule maps to `monthly`, both use
+a one-hour normal safety fallback, and neither requires a per-run reviewer or
+wait timer. The accepted [manual run](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31482504475)
+and [real schedule run](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31489580926)
+both passed authenticated asynchronous smoke, immediate destroy, and the
+27-category zero-residue sweep. The temporary proof cron was then removed by
+[PR #127](https://github.com/Kentaro-Ono-jp/Portfolio/pull/127); only the
+permanent first-day schedule remains.
 
 ## Completed third vertical slice
 
