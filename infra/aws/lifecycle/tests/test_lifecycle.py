@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -516,6 +517,54 @@ class LifecycleContractTests(unittest.TestCase):
                 self.assertRaisesRegex(LifecycleError, "Git remote"),
             ):
                 lifecycle.verify_local_source(config, require_remote=False)
+
+    def test_relative_config_resolves_every_terraform_runtime_path(self) -> None:
+        config = configuration()
+        state = LifecycleState(config.source_sha, sha256_json(config.to_dict()))
+        state.set_images(
+            {
+                "web": "sha256:" + "1" * 64,
+                "api": "sha256:" + "2" * 64,
+                "ml": "sha256:" + "3" * 64,
+            }
+        )
+        completed = SimpleNamespace(stdout="")
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(
+                os.path.relpath(
+                    Path(directory) / "config.json",
+                    start=REPOSITORY_ROOT,
+                )
+            )
+            with (
+                patch.object(lifecycle, "require_command", return_value="terraform"),
+                patch.object(lifecycle, "run_process", return_value=completed) as run,
+            ):
+                environment_root, tfvars, plan = lifecycle.terraform_init(
+                    config,
+                    state,
+                    config_path,
+                    FakeAws(),
+                )
+
+        command = run.call_args.args[0]
+        chdir = Path(
+            next(
+                item.split("=", 1)[1] for item in command if item.startswith("-chdir=")
+            )
+        )
+        backend = Path(
+            next(
+                item.split("=", 1)[1]
+                for item in command
+                if item.startswith("-backend-config=")
+            )
+        )
+        for path in (environment_root, backend, tfvars, plan, chdir):
+            with self.subTest(path=path):
+                self.assertTrue(path.is_absolute())
+        self.assertEqual(run.call_args.kwargs["safe_failure_prefix"], "Error:")
+        self.assertEqual(run.call_args.kwargs["env"]["TF_CLI_ARGS"], "-no-color")
 
     def test_image_buildspec_only_is_reconciled_and_read_back(self) -> None:
         config = configuration()

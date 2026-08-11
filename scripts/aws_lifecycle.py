@@ -879,7 +879,7 @@ def verify_state_bucket(config: LifecycleConfig, operator: AwsCli) -> None:
 
 
 def runtime_directory(config_path: Path) -> Path:
-    path = config_path.parent / "runtime"
+    path = (config_path.parent / "runtime").resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -1072,6 +1072,7 @@ def terraform_environment(config: LifecycleConfig, session: AwsCli) -> dict[str,
     env = dict(session.env)
     env["TF_IN_AUTOMATION"] = "1"
     env["TF_INPUT"] = "0"
+    env["TF_CLI_ARGS"] = "-no-color"
     return env
 
 
@@ -1169,6 +1170,7 @@ def terraform_init(
         env=terraform_environment(config, session),
         timeout=600,
         label="Terraform remote-backend initialization",
+        safe_failure_prefix="Error:",
     )
     return environment_root, tfvars, plan
 
@@ -1194,12 +1196,14 @@ def create_plan(
         env=terraform_environment(config, session),
         timeout=1200,
         label="Terraform fresh plan",
+        safe_failure_prefix="Error:",
     )
     shown = run_process(
         [terraform, f"-chdir={environment_root}", "show", "-json", str(plan)],
         env=terraform_environment(config, session),
         timeout=300,
         label="Terraform plan inspection",
+        safe_failure_prefix="Error:",
     )
     try:
         payload = json.loads(shown.stdout)
@@ -1245,6 +1249,7 @@ def terraform_output(
         env=terraform_environment(config, session),
         timeout=300,
         label="Terraform output read",
+        safe_failure_prefix="Error:",
     )
     try:
         payload = json.loads(result.stdout)
@@ -1908,6 +1913,7 @@ def command_apply(
             env=terraform_environment(config, operator),
             timeout=3600,
             label="Terraform managed environment apply",
+            safe_failure_prefix="Error:",
         )
     except LifecycleError:
         state.record_failure("apply")
@@ -2951,6 +2957,7 @@ def terraform_destroy(
         env=terraform_env,
         timeout=300,
         label="Terraform managed environment state inventory",
+        safe_failure_prefix="Error:",
     )
     managed_secret_versions = {
         "module.managed_state.aws_secretsmanager_secret_version.broker",
@@ -2970,6 +2977,7 @@ def terraform_destroy(
             env=terraform_env,
             timeout=300,
             label="Terraform managed secret-version state detachment",
+            safe_failure_prefix="Error:",
         )
     run_process(
         [
@@ -2984,6 +2992,7 @@ def terraform_destroy(
         env=terraform_env,
         timeout=3600,
         label="Terraform managed environment destroy",
+        safe_failure_prefix="Error:",
     )
 
 
