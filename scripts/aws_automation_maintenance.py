@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -35,8 +36,12 @@ WRITE_OPERATIONS = {
     "logs:create-log-group",
     "logs:put-retention-policy",
     "logs:tag-resource",
+    "logs:untag-resource",
     "scheduler:create-schedule-group",
+    "scheduler:tag-resource",
+    "scheduler:untag-resource",
     "codebuild:create-project",
+    "codebuild:update-project",
 }
 
 TRANSIENT_AWS_ERRORS = (
@@ -45,6 +50,7 @@ TRANSIENT_AWS_ERRORS = (
     "InternalFailure",
     "NoSuchEntity",
     "RequestLimitExceeded",
+    "ResourceNotFoundException",
     "ServiceFailure",
     "Throttling",
     "ThrottlingException",
@@ -67,8 +73,9 @@ class Effects:
 
 
 class AwsCli:
-    def __init__(self, executable: str) -> None:
+    def __init__(self, executable: str, *, region: str) -> None:
         self.executable = executable
+        self.region = region
         self.effects = Effects()
 
     def call(
@@ -89,6 +96,8 @@ class AwsCli:
             service,
             operation,
             *arguments,
+            "--region",
+            self.region,
             "--output",
             "json",
             "--no-cli-pager",
@@ -651,6 +660,7 @@ def ensure_monthly_controllers(
     state_bucket: str,
 ) -> dict[str, int]:
     planned = 0
+    planned_updates = 0
     created = 0
     group_name = f"{name_prefix}-monthly-lifecycle"
     group_arn = (
@@ -701,7 +711,28 @@ def ensure_monthly_controllers(
             if isinstance(item, dict)
         }
         if actual_group_tags != expected_group_tags:
-            raise RuntimeError("Monthly schedule group tags drifted")
+            planned_updates += 1
+            if apply:
+                extra_group_tags = sorted(
+                    set(actual_group_tags) - set(expected_group_tags)
+                )
+                if extra_group_tags:
+                    aws.call(
+                        "scheduler",
+                        "untag-resource",
+                        "--resource-arn",
+                        group_arn,
+                        "--tag-keys",
+                        *extra_group_tags,
+                    )
+                aws.call(
+                    "scheduler",
+                    "tag-resource",
+                    "--resource-arn",
+                    group_arn,
+                    "--tags",
+                    iam_tags(expected_group_tags),
+                )
 
     for purpose in ("image", "destroy"):
         log_name = f"/portfolio/{name_prefix}/monthly/controller/{purpose}"
@@ -747,14 +778,43 @@ def ensure_monthly_controllers(
                 )
                 created += 1
         else:
-            if exact_logs[0].get("retentionInDays") != 7:
-                raise RuntimeError("Monthly controller log retention drifted")
+            retention_drift = exact_logs[0].get("retentionInDays") != 7
             actual_log_tags = (
                 aws.call("logs", "list-tags-for-resource", "--resource-arn", log_arn)
                 or {}
             ).get("tags", {})
-            if actual_log_tags != controller_tags(repository, purpose):
-                raise RuntimeError("Monthly controller log tags drifted")
+            expected_log_tags = controller_tags(repository, purpose)
+            tag_drift = actual_log_tags != expected_log_tags
+            if retention_drift or tag_drift:
+                planned_updates += 1
+            if apply and retention_drift:
+                aws.call(
+                    "logs",
+                    "put-retention-policy",
+                    "--log-group-name",
+                    log_name,
+                    "--retention-in-days",
+                    "7",
+                )
+            if apply and tag_drift:
+                extra_log_tags = sorted(set(actual_log_tags) - set(expected_log_tags))
+                if extra_log_tags:
+                    aws.call(
+                        "logs",
+                        "untag-resource",
+                        "--resource-arn",
+                        log_arn,
+                        "--tag-keys",
+                        *extra_log_tags,
+                    )
+                aws.call(
+                    "logs",
+                    "tag-resource",
+                    "--resource-arn",
+                    log_arn,
+                    "--tags",
+                    json.dumps(expected_log_tags),
+                )
         payload = monthly_project_payload(
             purpose=purpose,
             account_id=account_id,
@@ -783,8 +843,22 @@ def ensure_monthly_controllers(
                 )
                 created += 1
         else:
-            verify_existing_monthly_project(existing_projects[0], payload)
-    return {"planned": planned, "created": created}
+            try:
+                verify_existing_monthly_project(existing_projects[0], payload)
+            except RuntimeError:
+                planned_updates += 1
+                if apply:
+                    aws.call(
+                        "codebuild",
+                        "update-project",
+                        "--cli-input-json",
+                        json.dumps(payload, separators=(",", ":")),
+                    )
+    return {
+        "planned": planned,
+        "plannedUpdates": planned_updates,
+        "created": created,
+    }
 
 
 def lifecycle_config(
@@ -860,7 +934,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    aws = AwsCli(args.aws_cli)
+    aws = AwsCli(args.aws_cli, region=args.region)
     identity = aws.call("sts", "get-caller-identity") or {}
     account_id = str(identity.get("Account", ""))
     caller_arn = str(identity.get("Arn", ""))
@@ -918,7 +992,11 @@ def main() -> int:
         repository=args.repository_identity,
         state_bucket=state_bucket,
     )
-    controller_apply = {"planned": controller_plan["planned"], "created": 0}
+    controller_apply = {
+        "planned": controller_plan["planned"],
+        "plannedUpdates": controller_plan["plannedUpdates"],
+        "created": 0,
+    }
     if args.apply:
         ensure_oidc_provider(
             aws,
@@ -1000,8 +1078,8 @@ def main() -> int:
             repository=args.repository_identity,
             state_bucket=state_bucket,
         )
-        if post_controller["planned"] != 0:
-            raise RuntimeError("Monthly controller post-write inventory is incomplete")
+        if post_controller["planned"] != 0 or post_controller["plannedUpdates"] != 0:
+            raise RuntimeError("Monthly controller post-write inventory drifted")
         config = lifecycle_config(
             account_id=account_id,
             partition=args.partition,
@@ -1010,7 +1088,10 @@ def main() -> int:
             repository=args.repository_identity,
             state_bucket=state_bucket,
         )
-        reader = lifecycle.AwsCli(args.aws_cli)
+        lifecycle_env = dict(os.environ)
+        lifecycle_env["AWS_REGION"] = args.region
+        lifecycle_env["AWS_DEFAULT_REGION"] = args.region
+        reader = lifecycle.AwsCli(args.aws_cli, env=lifecycle_env)
         lifecycle.verify_controller(config, reader)
         lifecycle.verify_image_repositories(config, reader)
         lifecycle.verify_state_bucket(config, reader)
@@ -1024,10 +1105,11 @@ def main() -> int:
         "persistentRoles": len(roles),
         "identityPlannedCreates": statuses["create"],
         "plannedCreates": statuses["create"] + controller_plan["planned"],
-        "plannedUpdates": statuses["update"],
+        "plannedUpdates": statuses["update"] + controller_plan["plannedUpdates"],
         "identityUnchangedObjects": statuses["unchanged"],
         "unchangedObjects": statuses["unchanged"] + 5 - controller_plan["planned"],
         "controllerResourcesPlanned": controller_plan["planned"],
+        "controllerResourcesPlannedUpdates": controller_plan["plannedUpdates"],
         "controllerResourcesCreated": controller_apply["created"],
         "controllerReadback": controller_readback,
         "postWriteReadback": args.apply,
@@ -1038,6 +1120,7 @@ def main() -> int:
         "policyDocumentsUpdated": aws.effects.policies_updated,
         "trustDocumentsUpdated": aws.effects.trusts_updated,
         "accountSpecificValuesPublished": False,
+        "awsRegionPinned": args.region,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
