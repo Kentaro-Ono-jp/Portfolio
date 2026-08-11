@@ -8,6 +8,7 @@ from pathlib import Path
 
 from aws_automation_contract import (
     EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+    PERMANENT_SCHEDULE,
     expected_oidc_subject,
 )
 from aws_automation_maintenance import (
@@ -116,6 +117,33 @@ def require(source: str, token: str, message: str) -> None:
         raise RuntimeError(message)
 
 
+def verify_schedule_topology(workflow: str, triggers: str) -> None:
+    permanent_match = re.search(
+        r'(?m)^\s+PORTFOLIO_PERMANENT_SCHEDULE: "([^"]*)"$', workflow
+    )
+    temporary_match = re.search(
+        r'(?m)^\s+PORTFOLIO_TEMPORARY_SCHEDULE: "([^"]*)"$', workflow
+    )
+    if permanent_match is None or temporary_match is None:
+        raise RuntimeError("Repository-owned schedule variables are unavailable")
+    permanent = permanent_match.group(1)
+    temporary = temporary_match.group(1)
+    if permanent != PERMANENT_SCHEDULE:
+        raise RuntimeError("Permanent monthly schedule contract drifted")
+    if temporary == permanent:
+        raise RuntimeError("Temporary schedule must be distinct when enabled")
+
+    cron_entries = re.findall(r'(?m)^\s+- cron: "([^"]+)"$', triggers)
+    expected_entries = [permanent, *([temporary] if temporary else [])]
+    if cron_entries != expected_entries:
+        raise RuntimeError(
+            "Workflow cron entries do not match the ordered repository-owned schedules"
+        )
+    timezones = re.findall(r'(?m)^\s+timezone: "([^"]+)"$', triggers)
+    if timezones != ["Asia/Tokyo"] * len(expected_entries):
+        raise RuntimeError("Every repository-owned schedule must use Asia/Tokyo")
+
+
 def main() -> int:
     for path in (
         WORKFLOW_PATH,
@@ -164,8 +192,7 @@ def main() -> int:
     ):
         if forbidden in triggers:
             raise RuntimeError(f"Forbidden AWS deployment trigger exists: {forbidden}")
-    require(triggers, 'cron: "0 13 1 * *"', "Permanent monthly cron drifted")
-    require(triggers, 'timezone: "Asia/Tokyo"', "Monthly timezone drifted")
+    verify_schedule_topology(workflow, triggers)
 
     permission_match = re.search(
         r"(?ms)^permissions:\n(?P<body>.+?)^concurrency:\n", workflow
