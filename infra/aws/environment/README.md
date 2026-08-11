@@ -1,5 +1,11 @@
 # AWS managed ephemeral environment
 
+Start with the repository-root
+[portable managed-ephemeral AWS operations guide](../../../AWS_OPERATIONS_GUIDE.md)
+for the hiring-oriented overview, complete operating order, recovery, cost,
+limitations, and exact evidence. This document is the component-level
+Terraform topology reference.
+
 This Terraform root implements Delivery Specification 0004 Step 4 as one
 independent, NAT-free, environment-owned state boundary. It is static
 infrastructure definition with AWS-free proof. It never performs IAM mutation

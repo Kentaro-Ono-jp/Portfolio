@@ -1,5 +1,10 @@
 # AWS managed-runtime compatibility
 
+The canonical reader and operator route is the
+[portable managed-ephemeral AWS operations guide](AWS_OPERATIONS_GUIDE.md).
+This document supplies the deeper application-adapter contract used by that
+route.
+
 The public repository keeps Docker Compose as its default evaluation path while
 providing explicit runtime modes for the managed AWS profile accepted in
 [ADR-0023](ips-microkernel/adr/0023-portable-managed-ephemeral-aws-deployment.md).
@@ -20,7 +25,8 @@ Both API and ML settings select exactly one storage mode:
 An AWS task definition therefore sets `PORTFOLIO_S3_MODE=aws` for API-area
 roles and `PORTFOLIO_ML_S3_MODE=aws` for ML, supplies only bucket and Region,
 and omits the endpoint, access-key, and secret-key variables. Task-role and
-bucket policy construction belongs to a later delivery increment.
+bucket policy construction is implemented by the managed environment root and
+described in [its guide](infra/aws/environment/README.md).
 
 ## Cognito-compatible OIDC boundary
 

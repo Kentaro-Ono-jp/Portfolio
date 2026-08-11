@@ -180,6 +180,25 @@ Terraform, IAM roles, managed-service adapters, deployment automation, or an
 AWS environment already exists. Those capabilities proceed through the
 focused increments and completion gates in Delivery Specification 0004.
 
+### Implementation outcome
+
+Delivery Specification 0004 completed on 2026-08-12 without changing this
+decision. The public implementation now includes managed-runtime adapters,
+persistent portable bootstrap, frozen static IAM and read-only attestation, the
+NAT-free environment root, TTL-first lifecycle, isolated GitHub OIDC
+manual/monthly automation, accepted real human and scheduled lifecycle proof,
+destroy, and 27-category zero-residue verification.
+
+The root [README](../../README.md) presents the completed portfolio outcome.
+The canonical
+[portable managed-ephemeral AWS operations guide](../../AWS_OPERATIONS_GUIDE.md)
+explains the deployed design, third-party responsibility and operation path,
+recovery, cost/security/quota boundary, accepted limitations, and exact public
+evidence. The maintainer's ephemeral application is absent; intentionally
+persistent state/ECR/IAM/controller resources remain reusable. This outcome is
+a short-lived evaluation proof, not an always-on or production-availability
+claim.
+
 ## Consequences
 
 ### Positive
