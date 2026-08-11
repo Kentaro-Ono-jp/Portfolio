@@ -1,9 +1,9 @@
 # Delivery Specification 0004: Portable managed-ephemeral AWS deployment proof
 
-- Status: In Progress
+- Status: Completed
 - Date: 2026-08-09
 - Accepted: 2026-08-09
-- Completed: Not yet
+- Completed: 2026-08-12
 - Owner: ReactorFront
 - Tracking issue: [#95](https://github.com/Kentaro-Ono-jp/Portfolio/issues/95)
 - Related decisions:
@@ -74,10 +74,19 @@ manual and real-schedule proofs both passed authenticated asynchronous smoke,
 immediate destroy, and 27-category zero residue; the temporary proof schedule
 was then removed. Final runtime CI and Publication Gate B passed at PR #128's
 preceding reviewed head; its documentation-only correction head uses the
-governed Markdown-only exception. Independent re-review, identical-tree merge
-evidence, and focused closure reconciliation remain for Issue #116. The Step 8
-completion record remains pending. Issue #114 completed the Step 7 real-AWS
-cycle described below.
+governed Markdown-only exception. Independent re-review approved exact head
+`b8051e970f33a0a2920f41cfb55b27e8cce1b1d1`; PR #128 merged as
+`a4ff417a00ec087391da785f9ee0918aaf08fef0` with an identical tree and a
+complete no-run limitation. Issue #116 is closed and reconciled.
+
+Issue #129 completes Step 8 with the reorganized root README and the canonical
+[portable managed-ephemeral AWS operations guide](../../AWS_OPERATIONS_GUIDE.md).
+The guide provides the hiring-oriented visual layer, ordered third-party
+route, local/AWS and persistent/ephemeral mapping, lifecycle and recovery,
+human verification checklist, cost/security/quota/limitation boundary, exact
+focused history, Issue #116 PR chain, real-AWS proof, and sanitized current
+state. Publication is Markdown-only and creates no new AWS or GitHub Actions
+execution. Issue #114 completed the Step 7 real-AWS cycle described below.
 
 ## Outcome
 
@@ -422,6 +431,13 @@ Deliver the third-party deployment guide, local/AWS mapping, cost and quota guid
 
 Acceptance requires a reader to understand how to deploy into their own account without maintainer help or private inputs, and requires the final record to identify every focused Issue, PR, exact reviewed head, successful authoritative workflow or complete governed qualified limitation, Gate B/Stage B result, independent verdict, merge, merged-main authoritative workflow or corresponding complete governed qualified limitation, real-AWS attempt outcome, and residual state. Workflow absence remains a limitation and never supplies passing evidence.
 
+Completed by focused [Issue #129](https://github.com/Kentaro-Ono-jp/Portfolio/issues/129).
+The root README is the concise portfolio entrance; the canonical
+[AWS operations guide](../../AWS_OPERATIONS_GUIDE.md) is the deeper operating
+and evidence layer. Its evidence ledger preserves passing, carried, historical,
+accepted-residual, and qualified no-run classifications without manufacturing
+a new lifecycle or CI result.
+
 ## Verification plan
 
 The canonical repository verification remains `python scripts/verify.py --static-only` for local AI-agent work and `python scripts/verify.py` in authoritative GitHub Actions. AWS-specific static/unit checks join the repository-owned selector rather than replacing it.
@@ -481,32 +497,65 @@ changing the proof path.
 
 ## Definition of done for the complete slice
 
-- [ ] The deployment ADR, Delivery Specification 0004, and umbrella Issue are accepted and aligned.
-- [ ] GitHub evaluation and local Docker Compose remain fully usable without AWS credentials.
-- [ ] A third-party clone can bootstrap and deploy only into the third party's account.
-- [ ] AWS workloads use task roles and secret injection, not long-term access keys.
-- [ ] Cognito access tokens preserve the accepted issuer, audience, purpose, capability, session, and API authorization boundary.
-- [ ] RabbitMQ 4.2 preserves request/result durability, retry, redelivery, idempotency, and recovery behavior.
+- [x] The deployment ADR, Delivery Specification 0004, and umbrella Issue are accepted and aligned.
+- [x] GitHub evaluation and local Docker Compose remain fully usable without AWS credentials.
+- [x] A third-party clone can bootstrap and deploy only into the third party's account.
+- [x] AWS workloads use task roles and secret injection, not long-term access keys.
+- [x] Cognito access tokens preserve the accepted issuer, audience, purpose, capability, session, and API authorization boundary.
+- [x] RabbitMQ 4.2 preserves request/result durability, retry, redelivery, idempotency, and recovery behavior.
 - [x] Terraform defines the accepted managed topology, immutable image identities, bounded retention, complete tags, and portable outputs.
-- [ ] Deployment and IAM roles remain within exact resource, path, trust, pass-role, and Permissions Boundary constraints.
-- [ ] Ordinary CI, fork PRs, and unapproved actors cannot obtain AWS write authority.
-- [ ] A one-hour normal fallback is registered before billable apply and remains independent of the environment state; explicit TTLs and `extend` retain the two-hour maximum.
-- [ ] Manual destroy and automatic destroy use the exact environment state and are safe to retry.
+- [x] Deployment and IAM roles remain within exact resource, path, trust, pass-role, and Permissions Boundary constraints.
+- [x] Ordinary CI, fork PRs, and unapproved actors cannot obtain AWS write authority.
+- [x] A one-hour normal fallback is registered before billable apply and remains independent of the environment state; explicit TTLs and `extend` retain the two-hour maximum.
+- [x] Manual destroy and automatic destroy use the exact environment state and are safe to retry.
 - [x] At least one complete apply-to-sweep real-AWS cycle passes within the completion-first serialized-attempt boundary selected by Issue #114.
 - [x] No billable application residue remains after the green cycle.
-- [ ] Public evidence contains no secret, private state, account-specific credential, personal input, local path, or maintainer-private dependency.
-- [ ] Third-party documentation explains ownership, cost drivers, limits, failure recovery, destroy, and residual verification.
-- [ ] Every focused increment has successful exact-head authoritative workflow
+- [x] Public evidence contains no secret, private state, account-specific credential, personal input, local path, or maintainer-private dependency.
+- [x] Third-party documentation explains ownership, cost drivers, limits, failure recovery, destroy, and residual verification.
+- [x] Every focused increment has successful exact-head authoritative workflow
   evidence or a complete governed qualified limitation, passing Gate B/Stage B
   against that source, exact selected/executed/carried/skipped group and both
   N/NN inventories, independent exact-head review, and owner-authorized merge.
-- [ ] Every merged-main commit has an authoritative workflow result or a
+- [x] Every merged-main commit has an authoritative workflow result or a
   corresponding complete governed qualified limitation; workflow absence is
   recorded only as a limitation and never as passing evidence.
-- [ ] Every focused Issue, PR, review, applicable workflow or complete governed
+- [x] Every focused Issue, PR, review, applicable workflow or complete governed
   qualified limitation, Gate B/Stage B result, merge, merged-main evidence or
   corresponding limitation, deployment attempt, and completion result is
   reconciled into the umbrella and durable specification.
+
+## Completion evidence — 2026-08-12
+
+- Canonical public explanation:
+  [AWS_OPERATIONS_GUIDE.md](../../AWS_OPERATIONS_GUIDE.md), with three Mermaid
+  diagrams, ordered operations, recovery, 27-category residue definition,
+  human verification, cost/quota/security/limitations, reviewed-increment
+  matrix, and the complete Issue #116 PR #117–#128 chain.
+- Portfolio entrance: [README.md](../../README.md), reorganized for product
+  value, engineering evidence, three evaluation routes, four completed slices,
+  limitations, and progressive navigation into the AWS guide.
+- Existing deep guides now route through the canonical guide:
+  [bootstrap](../../AWS_BOOTSTRAP.md),
+  [runtime compatibility](../../AWS_RUNTIME_COMPATIBILITY.md),
+  [environment](../../infra/aws/environment/README.md), and
+  [lifecycle](../../infra/aws/lifecycle/README.md).
+- Focused publication and live ledger:
+  [Issue #129](https://github.com/Kentaro-Ono-jp/Portfolio/issues/129). Its
+  exact PR head, governed Markdown-only no-run limitation, Gate B/Stage B,
+  independent verdict, merge, identical/merged-tree evidence, and post-merge
+  reconciliation are recorded there because a commit cannot durably name its
+  own eventual reviewed and merge SHAs.
+- Existing runtime proof is carried, not rerun. The accepted real scheduled
+  lifecycle remains
+  [run 31489580926](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31489580926).
+  Issue #129 created zero new deployment, lifecycle, Scheduler/CodeBuild,
+  Terraform, IAM, or GitHub Actions executions.
+- Bounded 2026-08-12 Console readback supported the current-state explanation:
+  ephemeral ECS/RDS/MQ/API Gateway and one-time fallback schedules were absent;
+  the state backend, three ECR repositories, both Scheduler groups, four
+  CodeBuild controllers, and static manual/monthly role families remained.
+  CloudWatch Logs UI failed to load and is explicitly excluded rather than
+  inferred. Current-state readback is not historical workflow or destroy proof.
 
 ## Accepted limitations for the initial proof
 

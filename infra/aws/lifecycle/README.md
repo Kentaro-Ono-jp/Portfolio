@@ -1,5 +1,11 @@
 # AWS TTL-first lifecycle
 
+Start with the repository-root
+[portable managed-ephemeral AWS operations guide](../../../AWS_OPERATIONS_GUIDE.md)
+for the visual lifecycle, third-party prerequisites, cost/security boundary,
+human verification checklist, and evidence ledger. This document is the deeper
+controller and retry implementation reference.
+
 This directory implements Delivery Specification 0004 Step 5 and is the
 shared execution surface for the Step 6 GitHub automation. The public
 entrypoint is:

@@ -1,5 +1,11 @@
 # Portable AWS bootstrap and bounded runtime authority
 
+Start with the canonical
+[portable managed-ephemeral AWS operations guide](AWS_OPERATIONS_GUIDE.md) for
+the visual overview, complete third-party order, lifecycle, recovery, cost,
+limitations, and evidence. This document is the deeper reference for the
+persistent bootstrap and static authority boundary.
+
 This guide covers the persistent control layer for the fourth vertical slice.
 It creates only an encrypted Terraform state bucket, three immutable ECR
 repositories, one fixed Permissions Boundary, and purpose-specific IAM roles.
