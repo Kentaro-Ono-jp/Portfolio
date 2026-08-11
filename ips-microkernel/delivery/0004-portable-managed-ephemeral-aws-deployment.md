@@ -540,11 +540,12 @@ changing the proof path.
   [environment](../../infra/aws/environment/README.md), and
   [lifecycle](../../infra/aws/lifecycle/README.md).
 - Focused publication and live ledger:
-  [Issue #129](https://github.com/Kentaro-Ono-jp/Portfolio/issues/129). Its
-  exact PR head, governed Markdown-only no-run limitation, Gate B/Stage B,
+  [Issue #129](https://github.com/Kentaro-Ono-jp/Portfolio/issues/129) and
+  [PR #130](https://github.com/Kentaro-Ono-jp/Portfolio/pull/130). Their exact
+  PR head, governed Markdown-only no-run limitation, Gate B/Stage B,
   independent verdict, merge, identical/merged-tree evidence, and post-merge
-  reconciliation are recorded there because a commit cannot durably name its
-  own eventual reviewed and merge SHAs.
+  reconciliation are recorded in those live ledgers because a commit cannot
+  durably name its own eventual reviewed and merge SHAs.
 - Existing runtime proof is carried, not rerun. The accepted real scheduled
   lifecycle remains
   [run 31489580926](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31489580926).

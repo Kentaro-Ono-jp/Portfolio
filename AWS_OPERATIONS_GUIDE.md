@@ -588,6 +588,22 @@ Terraform archive filename/checksum, CodeBuild Python 3.13 path, and exact
 lease-read authority. They remain failures; only the later complete automatic
 destroy and independent zero sweep are passing evidence.
 
+### Step 8 publication record
+
+Focused [Issue #129](https://github.com/Kentaro-Ono-jp/Portfolio/issues/129)
+and [PR #130](https://github.com/Kentaro-Ono-jp/Portfolio/pull/130) own this
+README/guide publication and Delivery Specification completion. The exact
+reviewed head, Markdown-only no-run limitation, Gate B/Stage B result,
+independent verdict, squash merge, merge-head no-run limitation, and closure
+reconciliation remain in those live GitHub ledgers. A tracked commit cannot
+name its own eventual exact reviewed or squash-merge SHA without moving that
+SHA; the stable Issue and PR links avoid a false self-reference.
+
+Issue #129 intentionally uses no new GitHub Actions or AWS execution. Its
+review and merge are qualified by the repository's Markdown-only exception;
+absence is recorded as a limitation and never replaces the existing runtime
+and scheduled-lifecycle proof above.
+
 ## Where to go next
 
 - Persistent account setup and IAM rationale:
