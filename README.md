@@ -2,8 +2,9 @@
 
 > Status: three vertical slices completed; fourth portable managed-ephemeral
 > AWS deployment slice in progress — runtime compatibility, persistent
-> bootstrap/least privilege, frozen persistent deployment IAM, and
-> managed-environment Terraform implemented — 2026-08-10
+> bootstrap/least privilege, frozen persistent deployment IAM, managed
+> Terraform lifecycle, and isolated GitHub OIDC automation implemented —
+> 2026-08-11
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
@@ -41,8 +42,8 @@ topology is also defined and proven through an AWS-free deterministic plan.
 The maintainer deployment IAM is a frozen Console-owned prerequisite:
 deployment assumes the exact operator, attests the canonical objects
 read-only, and fails closed instead of generating or repairing IAM.
-Lifecycle commands, deployment workflow, and a real AWS green cycle remain
-separate increments.
+The lifecycle, a real AWS green cycle, and the isolated GitHub OIDC deployment
+workflow are implemented as separate governed increments.
 
 ## Engineering evidence
 
@@ -261,7 +262,9 @@ application resources.
 
 Deployment remains an explicit manual action or bounded monthly schedule.
 Before billable application creation, the lifecycle must register an
-independent two-hour destroy fallback. A green cycle requires migration,
+independent destroy fallback. Normal execution uses one hour; explicitly
+selected values and `extend` may use the retained two-hour maximum. A green
+cycle requires migration,
 synthetic seed, health, authenticated asynchronous document proof, external
 HTTPS, destroy, and tag plus service-specific residual inventory. Ordinary PR,
 fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
@@ -303,8 +306,11 @@ residual proof all passed. The fallback was removed only after zero residue.
 Cost Explorer was observed once through the separate billing-read role; its
 delayed estimate is supporting evidence, not the destroy proof. The ephemeral
 environment and deployment images are gone; persistent static IAM, empty ECR
-repositories, state backend, and independent controller remain. Step 6
-automation remains a later increment.
+repositories, state backend, and independent controller remain. Step 6 adds
+one exact GitHub OIDC workflow: owner-started dispatch maps to `manual`, the
+first-day 13:00 JST schedule maps to `monthly`, both use a one-hour normal TTL,
+and neither requires a per-run reviewer or wait timer. A temporary practical
+schedule is used only for real schedule-event proof and is removed afterward.
 
 ## Completed third vertical slice
 

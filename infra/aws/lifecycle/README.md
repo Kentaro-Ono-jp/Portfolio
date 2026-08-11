@@ -1,6 +1,7 @@
 # AWS TTL-first lifecycle
 
-This directory implements Delivery Specification 0004 Step 5. The public
+This directory implements Delivery Specification 0004 Step 5 and is the
+shared execution surface for the Step 6 GitHub automation. The public
 entrypoint is:
 
 ```text
@@ -47,10 +48,14 @@ CodeBuild project and rejects any other caller.
 
 ## Credential and configuration boundary
 
-The CLI uses the standard AWS credential chain only for the existing weak
-source-user authentication material. It verifies that identity, assumes the
-exact operator, and performs frozen static-IAM plus persistent-controller
-attestation before lifecycle work. It never reads deployment configuration
+The CLI uses the standard AWS credential chain for one of two explicit caller
+modes. `source-user` preserves the existing exact credential-only human user;
+`github-automation` accepts only the exact `reactorfront-automation` assumed
+role and `portfolio-github-<run-id>` session shape. The configured GitHub event
+must map exactly from `workflow_dispatch` to `manual` or from `schedule` to
+`monthly`. Both modes assume their exact operator and perform frozen
+static-IAM plus persistent-controller attestation before lifecycle work. An
+arbitrary pre-assumed session is rejected, and configuration is never read
 from a credential file.
 
 `configure` derives account-bound role ARNs, ECR URLs, state key, controller
@@ -140,10 +145,37 @@ resource tag that disappears during forced deletion, so an interrupted delete
 remains idempotent without granting another environment's secret ARN.
 
 Fallback registration first creates a fresh create-only Terraform plan, then
-registers and reads back the one-time schedule before apply. The accepted
-maximum is 120 minutes from registration. `extend` is valid only for an active
-fallback and cannot cross that original maximum. Manual destroy may begin at
-any earlier time.
+registers and reads back the one-time schedule before apply. Normal `deploy`
+and `register-fallback` calls default to 60 minutes. Explicit values from 15 to
+120 minutes remain valid; the change to the normal default does not introduce
+a 60-minute-only restriction. The accepted maximum remains 120 minutes from
+registration. `extend` remains valid only for an active fallback and cannot
+cross that original maximum. Manual destroy may begin at any earlier time.
+
+## GitHub automation
+
+`.github/workflows/aws-deploy.yml` is the only deployment workflow. It accepts
+only owner-started `workflow_dispatch` and repository-owned `schedule` events,
+uses `contents: read` plus `id-token: write`, checks out the exact `main` SHA,
+and obtains two short-lived OIDC sessions: one for deploy and one for cleanup.
+It never consumes an AWS access-key secret. Manual and monthly runs share one
+non-cancelling GitHub concurrency group while their AWS names, state keys,
+controls, roles, controller projects, and ownership tags stay isolated.
+
+The permanent schedule starts at 13:00 `Asia/Tokyo` on the first day of each
+month. A separately recorded temporary cron may be added to `main` only long
+enough to prove a real `schedule` event; it maps to the same `monthly` path and
+is removed after the accepted proof. The `aws-deployment` environment has no
+required reviewer and no wait timer, so neither event has a per-run manual
+approval. The independent 60-minute AWS fallback is a cleanup deadline, not a
+GitHub job-duration limit.
+
+The first live OIDC/IAM/environment installation is a separate owner-admin
+maintenance operation. `scripts/aws_automation_maintenance.py` renders the two
+checked-in static profiles, changes only their named persistent objects when
+run with the recorded owner checkpoint, and then reads the monthly controller,
+ECR, and state contracts back. The normal deployment workflow never calls that
+maintenance script and never repairs IAM.
 
 ## Verification
 

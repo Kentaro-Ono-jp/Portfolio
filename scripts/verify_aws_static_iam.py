@@ -7,13 +7,17 @@ import json
 import os
 import subprocess
 import sys
+import re
 from pathlib import Path
 from typing import Any
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-CONTRACT_ROOT = REPOSITORY_ROOT / "infra" / "aws" / "environment" / "console-iam"
-DIGEST_PATH = CONTRACT_ROOT / "static-contract-digests.json"
+CONTRACT_PARENT = REPOSITORY_ROOT / "infra" / "aws" / "environment"
+CONTRACT_ROOTS = {
+    "manual": CONTRACT_PARENT / "console-iam",
+    "monthly": CONTRACT_PARENT / "console-iam-monthly",
+}
 MUTATION_PREFIXES = (
     "add",
     "attach",
@@ -89,31 +93,73 @@ def load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def contract_paths(manifest: dict[str, Any]) -> list[Path]:
+def contract_file(root: Path, relative: str) -> Path:
+    path = (root / relative).resolve()
+    if CONTRACT_PARENT.resolve() not in path.parents:
+        raise RuntimeError("Static IAM document escaped the contract root")
+    return path
+
+
+def contract_paths(root: Path, manifest: dict[str, Any]) -> list[Path]:
     documents = {
-        "manifest.json",
         *(spec["document"] for spec in manifest["managedPolicies"].values()),
         *(spec["trust"] for spec in manifest["roles"].values()),
     }
-    return [CONTRACT_ROOT / name for name in sorted(documents)]
+    return [
+        root / "manifest.json",
+        *(contract_file(root, name) for name in sorted(documents)),
+    ]
 
 
-def expected_digests(manifest: dict[str, Any]) -> dict[str, str]:
-    return {path.name: sha256(load_json(path)) for path in contract_paths(manifest)}
+def expected_digests(root: Path, manifest: dict[str, Any]) -> dict[str, str]:
+    return {
+        path.resolve().relative_to(CONTRACT_PARENT.resolve()).as_posix(): sha256(
+            load_json(path)
+        )
+        for path in contract_paths(root, manifest)
+    }
 
 
 def write_digests() -> None:
-    manifest = load_json(CONTRACT_ROOT / "manifest.json")
-    payload = {
-        "schemaVersion": 1,
-        "canonicalization": "RFC8259 JSON; UTF-8; sorted keys; compact separators",
-        "documents": expected_digests(manifest),
+    for root in CONTRACT_ROOTS.values():
+        manifest = load_json(root / "manifest.json")
+        payload = {
+            "schemaVersion": 2,
+            "canonicalization": "RFC8259 JSON; UTF-8; sorted keys; compact separators",
+            "documents": expected_digests(root, manifest),
+        }
+        (root / "static-contract-digests.json").write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+
+def render_tokens(
+    *,
+    account_id: str,
+    partition: str,
+    region: str,
+    environment: str,
+    name_prefix: str,
+    repository_identity: str,
+    state_bucket_name: str,
+) -> dict[str, str]:
+    return {
+        "AWS_ACCOUNT_ID": account_id,
+        "AWS_PARTITION": partition,
+        "AWS_REGION": region,
+        "ENVIRONMENT": environment,
+        "NAME_PREFIX": name_prefix,
+        "REPOSITORY_IDENTITY": repository_identity,
+        "STATE_BUCKET_NAME": state_bucket_name,
+        "GITHUB_REPOSITORY_SUBJECT": f"repo:{repository_identity}",
+        "GITHUB_ENVIRONMENT": "aws-deployment",
+        "GITHUB_WORKFLOW_NAME": "Deploy managed AWS proof",
+        "GITHUB_WORKFLOW_REF": (
+            f"{repository_identity}/.github/workflows/aws-deploy.yml@refs/heads/main"
+        ),
     }
-    DIGEST_PATH.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
 
 
 def rendered(payload: Any, tokens: dict[str, str]) -> Any:
@@ -135,6 +181,8 @@ def canonical_role_tags(
         **rendered(manifest["ownershipTags"], tokens),
         "PortfolioPurpose": purpose.replace("_", "-"),
     }
+    if purpose == "automation":
+        expected["PortfolioEnvironment"] = "shared"
     actual = rendered(role_tags, tokens)
     if actual != expected:
         raise RuntimeError(f"Static role tag contract drifted: {purpose}")
@@ -156,6 +204,8 @@ def statement_by_sid(policy: dict[str, Any], sid: str) -> dict[str, Any]:
 
 
 def verify_contract_payloads(
+    root: Path,
+    environment: str,
     manifest: dict[str, Any],
     policy: dict[str, Any],
     boundary: dict[str, Any],
@@ -188,18 +238,107 @@ def verify_contract_payloads(
     ]
     if operator.get("permissions") != expected_operator_policies:
         raise RuntimeError("Operator static policy attachments drifted")
+    if set(manifest.get("roles", {})) != {
+        "automation",
+        "operator_deployment",
+        "task_execution",
+        "web_workload",
+        "api_workload",
+        "ml_workload",
+        "destroy",
+        "scheduler",
+        "codebuild_image",
+        "codebuild_destroy",
+    }:
+        raise RuntimeError("Static IAM role inventory must include exact automation")
+    if not {"automation", "automationBoundary"}.issubset(policy_specs):
+        raise RuntimeError("Static IAM automation policies are missing")
 
-    tokens = {
-        "AWS_ACCOUNT_ID": "111122223333",
-        "AWS_PARTITION": "aws",
-        "AWS_REGION": "us-east-1",
-        "ENVIRONMENT": "manual",
-        "NAME_PREFIX": "example-portfolio",
-        "REPOSITORY_IDENTITY": "example-owner/example-repository",
-        "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
-    }
+    tokens = render_tokens(
+        account_id="111122223333",
+        partition="aws",
+        region="us-east-1",
+        environment=environment,
+        name_prefix="example-portfolio",
+        repository_identity="example-owner/example-repository",
+        state_bucket_name="example-portfolio-111122223333-us-east-1-state",
+    )
     for purpose in manifest["roles"]:
         canonical_role_tags(manifest, purpose, tokens)
+    automation_policy = rendered(
+        load_json(contract_file(root, policy_specs["automation"]["document"])),
+        tokens,
+    )
+    automation_boundary = rendered(
+        load_json(contract_file(root, policy_specs["automationBoundary"]["document"])),
+        tokens,
+    )
+    automation_resources = set(
+        values(
+            statement_by_sid(
+                automation_policy, "AssumeExactManualAndMonthlyLifecycleRoles"
+            )["Resource"]
+        )
+    )
+    boundary_resources = set(
+        values(
+            statement_by_sid(automation_boundary, "ExactAutomationAssumeRoleCeiling")[
+                "Resource"
+            ]
+        )
+    )
+    expected_automation_resources = {
+        f"arn:aws:iam::111122223333:role/example-portfolio-{mode}-{purpose}"
+        for mode in ("manual", "monthly")
+        for purpose in ("operator-deployment", "destroy")
+    }
+    if (
+        automation_resources != expected_automation_resources
+        or boundary_resources != expected_automation_resources
+    ):
+        raise RuntimeError("Automation authority is not the exact four lifecycle roles")
+    automation_trust = rendered(
+        load_json(contract_file(root, manifest["roles"]["automation"]["trust"])),
+        tokens,
+    )
+    trust_statement = statement_by_sid(
+        automation_trust, "ExactGitHubDeploymentWorkflow"
+    )
+    trust_equals = trust_statement.get("Condition", {}).get("StringEquals", {})
+    expected_subjects = {
+        "repo:example-owner/example-repository:environment:aws-deployment:"
+        "job_workflow_ref:example-owner/example-repository/.github/workflows/"
+        f"aws-deploy.yml@refs/heads/main:event_name:{event}"
+        for event in ("schedule", "workflow_dispatch")
+    }
+    if (
+        trust_statement.get("Action") != "sts:AssumeRoleWithWebIdentity"
+        or set(values(trust_equals.get("token.actions.githubusercontent.com:sub", [])))
+        != expected_subjects
+        or trust_equals.get("token.actions.githubusercontent.com:aud")
+        != "sts.amazonaws.com"
+        or trust_equals.get("token.actions.githubusercontent.com:repository")
+        != "example-owner/example-repository"
+        or trust_equals.get("token.actions.githubusercontent.com:ref")
+        != "refs/heads/main"
+        or trust_equals.get("token.actions.githubusercontent.com:environment")
+        != "aws-deployment"
+    ):
+        raise RuntimeError("Automation OIDC trust boundary drifted")
+    operator_trust = rendered(
+        load_json(
+            contract_file(root, manifest["roles"]["operator_deployment"]["trust"])
+        ),
+        tokens,
+    )
+    operator_principals = set(
+        values(operator_trust["Statement"][0]["Principal"]["AWS"])
+    )
+    if operator_principals != {
+        "arn:aws:iam::111122223333:user/ReactorFrontNoel",
+        "arn:aws:iam::111122223333:role/example-portfolio-automation",
+    }:
+        raise RuntimeError("Operator target trust is not exact")
     statements = {
         "ReadExactDeploymentSourceIdentity": USER_READ_ACTIONS,
         "ReadExactPersistentRoles": ROLE_READ_ACTIONS,
@@ -243,7 +382,8 @@ def verify_contract_payloads(
     }
     expected_ceiling_resources = {
         "arn:aws:iam::111122223333:user/ReactorFrontNoel",
-        "arn:aws:iam::111122223333:role/example-portfolio-manual-*",
+        "arn:aws:iam::111122223333:role/example-portfolio-automation",
+        f"arn:aws:iam::111122223333:role/example-portfolio-{environment}-*",
         "arn:aws:iam::111122223333:policy/ReactorFrontPortfolio*",
     }
     if set(values(ceiling["Resource"])) != expected_ceiling_resources:
@@ -263,7 +403,7 @@ def verify_contract_payloads(
     }:
         raise RuntimeError("Static IAM attestation inventory is not exact")
 
-    if digest_contract.get("schemaVersion") != 1:
+    if digest_contract.get("schemaVersion") != 2:
         raise RuntimeError("Unknown static IAM digest schema")
     if digest_contract.get("documents") != calculated:
         raise RuntimeError("Static IAM canonical digests drifted")
@@ -294,6 +434,8 @@ def expect_rejection(label: str, operation: Any) -> None:
 
 
 def verify_mutation_boundaries(
+    root: Path,
+    environment: str,
     manifest: dict[str, Any],
     policy: dict[str, Any],
     boundary: dict[str, Any],
@@ -330,18 +472,24 @@ def verify_mutation_boundaries(
     )
 
     stale_digests = copy.deepcopy(digest_contract)
-    stale_digests["documents"]["manifest.json"] = "0" * 64
+    manifest_key = (
+        (root / "manifest.json")
+        .resolve()
+        .relative_to(CONTRACT_PARENT.resolve())
+        .as_posix()
+    )
+    stale_digests["documents"][manifest_key] = "0" * 64
     cases.append(("stale canonical digest", manifest, policy, boundary, stale_digests))
 
-    tokens = {
-        "AWS_ACCOUNT_ID": "111122223333",
-        "AWS_PARTITION": "aws",
-        "AWS_REGION": "us-east-1",
-        "ENVIRONMENT": "manual",
-        "NAME_PREFIX": "example-portfolio",
-        "REPOSITORY_IDENTITY": "example-owner/example-repository",
-        "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
-    }
+    tokens = render_tokens(
+        account_id="111122223333",
+        partition="aws",
+        region="us-east-1",
+        environment=environment,
+        name_prefix="example-portfolio",
+        repository_identity="example-owner/example-repository",
+        state_bucket_name="example-portfolio-111122223333-us-east-1-state",
+    )
     tag_cases: list[tuple[str, str, dict[str, str], dict[str, str]]] = []
     purposes = tuple(manifest["roles"])
     for purpose in purposes:
@@ -378,7 +526,7 @@ def verify_mutation_boundaries(
         expect_rejection(
             label,
             lambda m=case_manifest, p=case_policy, b=case_boundary, d=case_digests: (
-                verify_contract_payloads(m, p, b, d, calculated)
+                verify_contract_payloads(root, environment, m, p, b, d, calculated)
             ),
         )
     for label, purpose, expected_tags, actual_tags in tag_cases:
@@ -425,43 +573,66 @@ def verify_live_document_normalization() -> int:
 
 
 def verify_offline() -> dict[str, Any]:
-    manifest = load_json(CONTRACT_ROOT / "manifest.json")
-    policy_specs = manifest.get("managedPolicies", {})
-    tokens = {
-        "AWS_ACCOUNT_ID": "111122223333",
-        "AWS_PARTITION": "aws",
-        "AWS_REGION": "us-east-1",
-        "ENVIRONMENT": "manual",
-        "NAME_PREFIX": "example-portfolio",
-        "REPOSITORY_IDENTITY": "example-owner/example-repository",
-        "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
-    }
-    policy = rendered(
-        load_json(CONTRACT_ROOT / policy_specs["staticIamAttestation"]["document"]),
-        tokens,
-    )
-    boundary = rendered(
-        load_json(CONTRACT_ROOT / policy_specs["operatorBoundary"]["document"]),
-        tokens,
-    )
-    digest_contract = load_json(DIGEST_PATH)
-    calculated = expected_digests(manifest)
-    result = verify_contract_payloads(
-        manifest, policy, boundary, digest_contract, calculated
-    )
-    mutation_cases = verify_mutation_boundaries(
-        manifest, policy, boundary, digest_contract, calculated
-    )
+    profiles: dict[str, dict[str, Any]] = {}
+    calculated_profiles: dict[str, dict[str, str]] = {}
+    for environment, root in CONTRACT_ROOTS.items():
+        manifest = load_json(root / "manifest.json")
+        policy_specs = manifest.get("managedPolicies", {})
+        tokens = render_tokens(
+            account_id="111122223333",
+            partition="aws",
+            region="us-east-1",
+            environment=environment,
+            name_prefix="example-portfolio",
+            repository_identity="example-owner/example-repository",
+            state_bucket_name="example-portfolio-111122223333-us-east-1-state",
+        )
+        policy = rendered(
+            load_json(
+                contract_file(root, policy_specs["staticIamAttestation"]["document"])
+            ),
+            tokens,
+        )
+        boundary = rendered(
+            load_json(
+                contract_file(root, policy_specs["operatorBoundary"]["document"])
+            ),
+            tokens,
+        )
+        digest_contract = load_json(root / "static-contract-digests.json")
+        calculated = expected_digests(root, manifest)
+        result = verify_contract_payloads(
+            root,
+            environment,
+            manifest,
+            policy,
+            boundary,
+            digest_contract,
+            calculated,
+        )
+        mutation_cases = verify_mutation_boundaries(
+            root,
+            environment,
+            manifest,
+            policy,
+            boundary,
+            digest_contract,
+            calculated,
+        )
+        profiles[environment] = {
+            "managedPolicies": len(policy_specs),
+            "roles": len(manifest["roles"]),
+            "sourceUsers": len(manifest["sourceUsers"]),
+            **result,
+            "canonicalDocuments": len(calculated),
+            "failClosedMutationCases": mutation_cases,
+        }
+        calculated_profiles[environment] = calculated
     normalization_cases = verify_live_document_normalization()
     return {
-        "schemaVersion": manifest["schemaVersion"],
-        "managedPolicies": len(policy_specs),
-        "roles": len(manifest["roles"]),
-        "sourceUsers": len(manifest["sourceUsers"]),
-        **result,
-        "canonicalDocuments": len(calculated),
-        "canonicalContractSha256": sha256(calculated),
-        "failClosedMutationCases": mutation_cases,
+        "schemaVersion": 3,
+        "environmentProfiles": profiles,
+        "canonicalContractSha256": sha256(calculated_profiles),
         "liveDocumentNormalizationCases": normalization_cases,
         "staticVerifierAwsApiCalls": 0,
         "staticVerifierAwsWrites": 0,
@@ -506,16 +677,17 @@ def arn_set(items: list[dict[str, Any]], key: str) -> set[str]:
 
 def verify_live(args: argparse.Namespace) -> dict[str, Any]:
     offline = verify_offline()
-    manifest_template = load_json(CONTRACT_ROOT / "manifest.json")
-    tokens = {
-        "AWS_ACCOUNT_ID": args.account_id,
-        "AWS_PARTITION": args.partition,
-        "AWS_REGION": args.region,
-        "ENVIRONMENT": args.environment,
-        "NAME_PREFIX": args.name_prefix,
-        "REPOSITORY_IDENTITY": args.repository_identity,
-        "STATE_BUCKET_NAME": args.state_bucket_name,
-    }
+    root = CONTRACT_ROOTS[args.environment]
+    manifest_template = load_json(root / "manifest.json")
+    tokens = render_tokens(
+        account_id=args.account_id,
+        partition=args.partition,
+        region=args.region,
+        environment=args.environment,
+        name_prefix=args.name_prefix,
+        repository_identity=args.repository_identity,
+        state_bucket_name=args.state_bucket_name,
+    )
     manifest = rendered(manifest_template, tokens)
     source_spec = manifest["sourceUsers"]["noel_deployment"]
     source_arn = (
@@ -534,8 +706,21 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
 
     source = AwsCli(args.aws_cli)
     identity = source.call("sts", "get-caller-identity") or {}
-    if identity.get("Arn") != source_arn:
-        raise RuntimeError("Active source credential is not the exact deployment user")
+    identity_arn = str(identity.get("Arn", ""))
+    if args.caller_mode == "source-user":
+        caller_verified = identity_arn == source_arn
+    else:
+        caller_verified = (
+            re.fullmatch(
+                rf"arn:{re.escape(args.partition)}:sts::{re.escape(args.account_id)}:"
+                rf"assumed-role/{re.escape(args.name_prefix)}-automation/"
+                r"portfolio-github-[0-9]+",
+                identity_arn,
+            )
+            is not None
+        )
+    if not caller_verified:
+        raise RuntimeError("Active credential is not the exact lifecycle caller")
     assumed = (
         source.call(
             "sts",
@@ -621,7 +806,7 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
     for purpose, spec in role_specs.items():
         role = operator.call("iam", "get-role", "--role-name", spec["name"]) or {}
         role_value = role.get("Role", {})
-        expected_trust = rendered(load_json(CONTRACT_ROOT / spec["trust"]), tokens)
+        expected_trust = rendered(load_json(contract_file(root, spec["trust"])), tokens)
         if role_value.get("Arn") != role_arns[purpose]:
             raise RuntimeError(f"Static role ARN drifted: {purpose}")
         if not iam_documents_equal(
@@ -673,7 +858,7 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
             or {}
         )
         expected_document = rendered(
-            load_json(CONTRACT_ROOT / spec["document"]), tokens
+            load_json(contract_file(root, spec["document"])), tokens
         )
         if not iam_documents_equal(
             version.get("PolicyVersion", {}).get("Document"), expected_document
@@ -723,11 +908,16 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
             or permission_entities.get("PolicyGroups")
         ):
             raise RuntimeError(f"Static managed policy attachments drifted: {key}")
-        expected_boundary_roles = (
-            {role_spec["name"] for role_spec in role_specs.values()}
-            if key == "operatorBoundary"
-            else set()
-        )
+        if key == "operatorBoundary":
+            expected_boundary_roles = {
+                role_spec["name"]
+                for purpose, role_spec in role_specs.items()
+                if purpose != "automation"
+            }
+        elif key == "automationBoundary":
+            expected_boundary_roles = {role_specs["automation"]["name"]}
+        else:
+            expected_boundary_roles = set()
         actual_boundary_roles = {
             item["RoleName"] for item in boundary_entities.get("PolicyRoles", [])
         }
@@ -747,7 +937,9 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
     return {
         **offline,
         "mode": "live-read-only",
-        "sourceCredentialVerified": True,
+        "callerMode": args.caller_mode,
+        "sourceCredentialVerified": args.caller_mode == "source-user",
+        "automationCredentialVerified": args.caller_mode == "github-automation",
         "operatorSessionVerified": True,
         "drift": False,
         "attestationAwsReadCalls": source.calls + operator.calls,
@@ -764,6 +956,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--write-digests", action="store_true")
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--aws-cli", default="aws")
+    parser.add_argument(
+        "--caller-mode",
+        choices=("source-user", "github-automation"),
+        default="source-user",
+    )
     for name in (
         "account-id",
         "partition",
@@ -791,6 +988,8 @@ def parse_args() -> argparse.Namespace:
         ]
         if missing:
             parser.error(f"--live requires explicit inputs: {', '.join(missing)}")
+        if args.environment not in CONTRACT_ROOTS:
+            parser.error("--environment must be manual or monthly")
     return args
 
 

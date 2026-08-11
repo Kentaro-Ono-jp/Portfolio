@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import string
@@ -18,6 +19,8 @@ from typing import Any, Iterator, Mapping, Sequence
 from urllib.parse import urlparse
 
 from aws_lifecycle_core import (
+    CALLER_MODE_GITHUB_AUTOMATION,
+    CALLER_MODE_SOURCE_USER,
     DIGEST_PATTERN,
     LifecycleConfig,
     LifecycleError,
@@ -268,15 +271,36 @@ def source_user_arn(config: LifecycleConfig) -> str:
     )
 
 
+def automation_session_pattern(config: LifecycleConfig) -> re.Pattern[str]:
+    return re.compile(
+        rf"^arn:{re.escape(config.partition)}:sts::{re.escape(config.account_id)}:"
+        rf"assumed-role/{re.escape(config.name_prefix)}-automation/"
+        r"portfolio-github-[0-9]+$"
+    )
+
+
 def derive_config(args: argparse.Namespace, source: AwsCli) -> LifecycleConfig:
     identity = source.call("sts", "get-caller-identity") or {}
     account_id = str(identity.get("Account", ""))
     partition = "aws"
+    source_arn = str(identity.get("Arn", ""))
     expected_source = f"arn:{partition}:iam::{account_id}:user/{SOURCE_USER_NAME}"
-    if identity.get("Arn") != expected_source:
-        raise LifecycleError(
-            "Active credential is not the exact Portfolio source user."
+    if args.caller_mode == CALLER_MODE_SOURCE_USER:
+        if source_arn != expected_source:
+            raise LifecycleError(
+                "Active credential is not the exact Portfolio source user."
+            )
+    elif args.caller_mode == CALLER_MODE_GITHUB_AUTOMATION:
+        expected_automation = re.compile(
+            rf"^arn:{partition}:sts::{re.escape(account_id)}:assumed-role/"
+            rf"{re.escape(args.name_prefix)}-automation/portfolio-github-[0-9]+$"
         )
+        if expected_automation.fullmatch(source_arn) is None:
+            raise LifecycleError(
+                "Active credential is not the exact GitHub automation session."
+            )
+    else:
+        raise LifecycleError("Unsupported lifecycle caller mode.")
     source_sha = run_process(
         ["git", "rev-parse", "HEAD"], label="Git source identity"
     ).stdout.strip()
@@ -326,6 +350,8 @@ def derive_config(args: argparse.Namespace, source: AwsCli) -> LifecycleConfig:
             "destroy": f"{prefix}-{environment}-destroy",
         },
         ecr_repository_urls=repositories,
+        caller_mode=args.caller_mode,
+        caller_event=args.automation_event,
         oidc_api_audience=args.oidc_api_audience,
     )
 
@@ -422,9 +448,16 @@ def assume_role(
 
 def verify_source(config: LifecycleConfig, source: AwsCli) -> None:
     identity = source.call("sts", "get-caller-identity") or {}
-    if identity.get("Arn") != source_user_arn(config):
+    arn = str(identity.get("Arn", ""))
+    if config.caller_mode == CALLER_MODE_SOURCE_USER:
+        accepted = arn == source_user_arn(config)
+    elif config.caller_mode == CALLER_MODE_GITHUB_AUTOMATION:
+        accepted = automation_session_pattern(config).fullmatch(arn) is not None
+    else:
+        accepted = False
+    if not accepted:
         raise LifecycleError(
-            "Active source credential is not the exact configured user."
+            "Active credential does not match the configured lifecycle caller."
         )
 
 
@@ -450,6 +483,8 @@ def verify_static_iam(config: LifecycleConfig, aws_executable: str) -> dict[str,
             config.repository_identity,
             "--state-bucket-name",
             config.state_bucket,
+            "--caller-mode",
+            config.caller_mode,
         ],
         timeout=300,
         label="Frozen static IAM attestation",
@@ -1345,6 +1380,8 @@ def command_configure(args: argparse.Namespace, source: AwsCli) -> dict[str, obj
         "environment": config.environment,
         "region": config.region,
         "configurationSource": "repository-and-sanitized-aws-identity",
+        "callerMode": config.caller_mode,
+        "callerEvent": config.caller_event or "none",
         **source.effects.result(),
     }
     assert_public_safe(result)
@@ -3368,6 +3405,14 @@ def build_parser() -> argparse.ArgumentParser:
     configure.add_argument("--repository-identity", default=DEFAULT_REPOSITORY)
     configure.add_argument("--name-prefix", default=DEFAULT_PREFIX)
     configure.add_argument("--environment", default=DEFAULT_ENVIRONMENT)
+    configure.add_argument(
+        "--caller-mode",
+        choices=(CALLER_MODE_SOURCE_USER, CALLER_MODE_GITHUB_AUTOMATION),
+        default=CALLER_MODE_SOURCE_USER,
+    )
+    configure.add_argument(
+        "--automation-event", choices=("workflow_dispatch", "schedule")
+    )
     configure.add_argument("--region", default=DEFAULT_REGION)
     configure.add_argument(
         "--availability-zones",
@@ -3391,15 +3436,13 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         subparsers.add_parser(name)
     fallback = subparsers.add_parser("register-fallback")
-    fallback.add_argument(
-        "--ttl-minutes", type=int, default=120, choices=range(15, 121)
-    )
+    fallback.add_argument("--ttl-minutes", type=int, default=60, choices=range(15, 121))
     extend = subparsers.add_parser("extend")
     extend.add_argument("--minutes", type=int, required=True)
     destroy = subparsers.add_parser("destroy")
     destroy.add_argument("--mode", choices=("manual", "scheduled"), default="manual")
     deploy = subparsers.add_parser("deploy")
-    deploy.add_argument("--ttl-minutes", type=int, default=120, choices=range(15, 121))
+    deploy.add_argument("--ttl-minutes", type=int, default=60, choices=range(15, 121))
     return parser
 
 

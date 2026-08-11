@@ -120,6 +120,29 @@ locals {
     }]
   })
 
+  operator_trust_policies = {
+    for environment in keys(var.environment_state_keys) : environment => jsonencode({
+      Version = "2012-10-17"
+      Statement = [
+        {
+          Sid       = "ExactOwnerPrincipal"
+          Effect    = "Allow"
+          Principal = { AWS = var.owner_principal_arn }
+          Action    = "sts:AssumeRole"
+          Condition = {
+            StringEquals = { "aws:PrincipalAccount" = var.aws_account_id }
+          }
+        },
+        {
+          Sid       = "ExactGitHubAutomationRole"
+          Effect    = "Allow"
+          Principal = { AWS = local.global_role_arns.automation }
+          Action    = "sts:AssumeRole"
+        },
+      ]
+    })
+  }
+
   ecs_trust_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -203,7 +226,7 @@ locals {
 
   environment_assume_role_policies = {
     for key, role in local.environment_roles : key => (
-      role.purpose == "operator-deployment" ? local.human_trust_policy :
+      role.purpose == "operator-deployment" ? local.operator_trust_policies[role.environment] :
       contains(["task-execution", "web-workload", "api-workload", "ml-workload"], role.purpose) ? local.ecs_trust_policy :
       role.purpose == "scheduler" ? local.scheduler_trust_policies[role.environment] :
       role.purpose == "codebuild-image" ? local.codebuild_image_trust_policies[role.environment] :

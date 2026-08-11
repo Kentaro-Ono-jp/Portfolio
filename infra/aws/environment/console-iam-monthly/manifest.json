@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 2,
+  "lifecycle": {
+    "staticIamOwner": "owner-admin principal",
+    "deploymentMode": "read-only-consumer",
+    "deploymentIamMutation": false,
+    "deploymentPolicyGeneration": false,
+    "deploymentQuotaCalculation": false,
+    "driftMode": "fail-closed"
+  },
+  "ownershipTags": {
+    "PortfolioEnvironment": "${ENVIRONMENT}",
+    "PortfolioManaged": "true",
+    "PortfolioPersistent": "true",
+    "PortfolioRepository": "${REPOSITORY_IDENTITY}"
+  },
+  "serviceLinkedRoles": {},
+  "managedPolicies": {
+    "automation": {
+      "name": "ReactorFrontPortfolioAutomation",
+      "document": "../console-iam/automation.json"
+    },
+    "automationBoundary": {
+      "name": "ReactorFrontPortfolioAutomationBoundary",
+      "document": "../console-iam/automation-boundary.json"
+    },
+    "noelAssumeBillingReadRole": {
+      "name": "ReactorFrontPortfolioNoelAssumeBillingReadRole",
+      "document": "../console-iam/noel-assume-billing-read-role.json"
+    },
+    "noelDeploymentAssumeOperator": {
+      "name": "ReactorFrontPortfolioNoelDeploymentAssumeOperator",
+      "document": "../console-iam/noel-deployment-assume-operator.json"
+    },
+    "noelAssumeObserverRole": {
+      "name": "ReactorFrontPortfolioNoelAssumeObserverRole",
+      "document": "../console-iam/noel-assume-observer-role.json"
+    },
+    "operatorPermissions": {
+      "name": "ReactorFrontPortfolioOperatorPermissionsMonthly",
+      "document": "../console-iam/operator-permissions.json"
+    },
+    "staticIamAttestation": {
+      "name": "ReactorFrontPortfolioStaticIamAttestationMonthly",
+      "document": "static-iam-attestation.json"
+    },
+    "managedEnvironmentPermissions": {
+      "name": "ReactorFrontPortfolioManagedEnvironmentPermissionsMonthly",
+      "document": "../console-iam/managed-environment-permissions.json"
+    },
+    "managedEnvironmentResourcePermissions": {
+      "name": "ReactorFrontPortfolioManagedEnvironmentResourcePermissionsMonthly",
+      "document": "../console-iam/managed-environment-resource-permissions.json"
+    },
+    "operatorBoundary": {
+      "name": "ReactorFrontPortfolioOperatorBoundaryMonthly",
+      "document": "../console-iam/operator-boundary.json"
+    },
+    "taskExecution": {
+      "name": "ReactorFrontPortfolioTaskExecutionPolicyMonthly",
+      "document": "../console-iam/task-execution.json"
+    },
+    "apiWorkload": {
+      "name": "ReactorFrontPortfolioApiWorkloadPolicyMonthly",
+      "document": "../console-iam/api-workload.json"
+    },
+    "mlWorkload": {
+      "name": "ReactorFrontPortfolioMlWorkloadPolicyMonthly",
+      "document": "../console-iam/ml-workload.json"
+    },
+    "destroy": {
+      "name": "ReactorFrontPortfolioDestroyPolicyMonthly",
+      "document": "../console-iam/destroy.json"
+    },
+    "lifecycleControl": {
+      "name": "ReactorFrontPortfolioLifecycleControlPolicyMonthly",
+      "document": "../console-iam/lifecycle-control.json"
+    },
+    "lifecycleDestroy": {
+      "name": "ReactorFrontPortfolioLifecycleDestroyPolicyMonthly",
+      "document": "../console-iam/lifecycle-destroy.json"
+    },
+    "scheduler": {
+      "name": "ReactorFrontPortfolioSchedulerPolicyMonthly",
+      "document": "../console-iam/scheduler.json"
+    },
+    "codebuildImage": {
+      "name": "ReactorFrontPortfolioCodeBuildImagePolicyMonthly",
+      "document": "../console-iam/codebuild-image.json"
+    },
+    "codebuildDestroy": {
+      "name": "ReactorFrontPortfolioCodeBuildDestroyPolicyMonthly",
+      "document": "../console-iam/codebuild-destroy.json"
+    }
+  },
+  "sourceUsers": {
+    "noel_deployment": {
+      "name": "ReactorFrontNoel",
+      "permissions": [
+        "noelAssumeBillingReadRole",
+        "noelDeploymentAssumeOperator",
+        "noelAssumeObserverRole"
+      ],
+      "inlinePolicies": [],
+      "groups": [],
+      "boundary": null,
+      "consoleLogin": false,
+      "credentialMode": "existingAccessKey"
+    }
+  },
+  "roles": {
+    "automation": {
+      "name": "${NAME_PREFIX}-automation",
+      "trust": "../console-iam/automation-trust.json",
+      "permissions": ["automation"],
+      "boundary": "automationBoundary",
+      "tags": {
+        "PortfolioEnvironment": "shared",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "automation"
+      }
+    },
+    "operator_deployment": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment",
+      "trust": "../console-iam/operator-trust.json",
+      "permissions": [
+        "operatorPermissions",
+        "staticIamAttestation",
+        "managedEnvironmentPermissions",
+        "managedEnvironmentResourcePermissions",
+        "lifecycleControl"
+      ],
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "operator-deployment"
+      }
+    },
+    "task_execution": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-task-execution",
+      "trust": "../console-iam/ecs-task-trust.json",
+      "permissions": ["taskExecution"],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "task-execution"}
+    },
+    "web_workload": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-web-workload",
+      "trust": "../console-iam/ecs-task-trust.json",
+      "permissions": [],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "web-workload"}
+    },
+    "api_workload": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-api-workload",
+      "trust": "../console-iam/ecs-task-trust.json",
+      "permissions": ["apiWorkload"],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "api-workload"}
+    },
+    "ml_workload": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-ml-workload",
+      "trust": "../console-iam/ecs-task-trust.json",
+      "permissions": ["mlWorkload"],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "ml-workload"}
+    },
+    "destroy": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
+      "trust": "../console-iam/destroy-trust.json",
+      "permissions": ["operatorPermissions", "destroy", "lifecycleDestroy"],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "destroy"}
+    },
+    "scheduler": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-scheduler",
+      "trust": "../console-iam/scheduler-trust.json",
+      "permissions": ["scheduler"],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "scheduler"}
+    },
+    "codebuild_image": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-codebuild-image",
+      "trust": "../console-iam/codebuild-image-trust.json",
+      "permissions": ["codebuildImage"],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "codebuild-image"}
+    },
+    "codebuild_destroy": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-codebuild-destroy",
+      "trust": "../console-iam/codebuild-destroy-trust.json",
+      "permissions": ["codebuildDestroy"],
+      "boundary": "operatorBoundary",
+      "tags": {"PortfolioEnvironment": "${ENVIRONMENT}", "PortfolioManaged": "true", "PortfolioPersistent": "true", "PortfolioRepository": "${REPOSITORY_IDENTITY}", "PortfolioPurpose": "codebuild-destroy"}
+    }
+  }
+}

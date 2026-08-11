@@ -1,0 +1,145 @@
+name: Deploy managed AWS proof
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 13 1 * *"
+      timezone: "Asia/Tokyo"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: managed-aws-proof
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: TTL-first managed lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: aws-deployment
+    env:
+      PORTFOLIO_GITHUB_ENVIRONMENT: aws-deployment
+      PORTFOLIO_PERMANENT_SCHEDULE: "0 13 1 * *"
+      PORTFOLIO_TEMPORARY_SCHEDULE: ""
+      PORTFOLIO_AWS_REGION: us-east-1
+
+    steps:
+      - name: Check out the exact source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Guard the exact automation route
+        id: guard
+        env:
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: python3 scripts/aws_automation_guard.py
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Obtain the short-lived GitHub OIDC session
+        id: oidc
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          audience: sts.amazonaws.com
+          aws-region: ${{ env.PORTFOLIO_AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_AUTOMATION_ROLE_ARN }}
+          role-session-name: portfolio-github-${{ github.run_id }}
+          role-duration-seconds: 3600
+          mask-aws-account-id: true
+          output-credentials: false
+          unset-current-credentials: true
+
+      - name: Configure the isolated lifecycle
+        run: >-
+          python scripts/aws_lifecycle.py
+          --config ".git/portfolio-aws-lifecycle/${{ steps.guard.outputs.mode }}/config.json"
+          configure
+          --caller-mode github-automation
+          --automation-event "${{ steps.guard.outputs.caller_event }}"
+          --repository-identity "${{ github.repository }}"
+          --name-prefix reactorfront
+          --environment "${{ steps.guard.outputs.mode }}"
+          --region "${{ env.PORTFOLIO_AWS_REGION }}"
+          --availability-zones
+          "${{ env.PORTFOLIO_AWS_REGION }}a"
+          "${{ env.PORTFOLIO_AWS_REGION }}b"
+
+      - name: Deploy through authenticated smoke
+        id: lifecycle
+        run: >-
+          python scripts/aws_lifecycle.py
+          --config ".git/portfolio-aws-lifecycle/${{ steps.guard.outputs.mode }}/config.json"
+          deploy
+
+      - name: Refresh the short-lived cleanup session
+        if: always() && steps.guard.outcome == 'success'
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          audience: sts.amazonaws.com
+          aws-region: ${{ env.PORTFOLIO_AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_AUTOMATION_ROLE_ARN }}
+          role-session-name: portfolio-github-${{ github.run_id }}
+          role-duration-seconds: 3600
+          mask-aws-account-id: true
+          output-credentials: false
+          unset-current-credentials: true
+
+      - name: Destroy the exact environment
+        id: destroy
+        if: always() && steps.guard.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          config=".git/portfolio-aws-lifecycle/${{ steps.guard.outputs.mode }}/config.json"
+          if [[ ! -f "$config" ]]; then
+            echo "Lifecycle configuration was not created; destroy is unavailable."
+            exit 1
+          fi
+          python scripts/aws_lifecycle.py --config "$config" destroy --mode manual
+
+      - name: Prove service and tag residue is zero
+        id: sweep
+        if: always() && steps.guard.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          config=".git/portfolio-aws-lifecycle/${{ steps.guard.outputs.mode }}/config.json"
+          if [[ ! -f "$config" ]]; then
+            echo "Lifecycle configuration was not created; sweep is unavailable."
+            exit 1
+          fi
+          python scripts/aws_lifecycle.py --config "$config" sweep
+
+      - name: Publish the sanitized conclusion
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Managed AWS lifecycle conclusion"
+            echo
+            echo "- Event: \`${{ github.event_name }}\`"
+            echo "- Isolated mode: \`${{ steps.guard.outputs.mode || 'unavailable' }}\`"
+            echo "- Deploy: \`${{ steps.lifecycle.outcome }}\`"
+            echo "- Destroy: \`${{ steps.destroy.outcome }}\`"
+            echo "- Residual sweep: \`${{ steps.sweep.outcome }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ steps.lifecycle.outcome }}" != "success" || \
+                "${{ steps.destroy.outcome }}" != "success" || \
+                "${{ steps.sweep.outcome }}" != "success" ]]; then
+            exit 1
+          fi

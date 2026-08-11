@@ -11,8 +11,15 @@ from typing import Any, Mapping
 
 
 SCHEMA_VERSION = 1
+CONFIG_SCHEMA_VERSION = 2
 MAX_TTL_MINUTES = 120
 MIN_TTL_MINUTES = 15
+CALLER_MODE_SOURCE_USER = "source-user"
+CALLER_MODE_GITHUB_AUTOMATION = "github-automation"
+AUTOMATION_EVENT_ENVIRONMENTS = {
+    "workflow_dispatch": "manual",
+    "schedule": "monthly",
+}
 CONFIG_KEY_PATTERN = re.compile(
     r"^controls/[a-z][a-z0-9-]{1,18}[a-z0-9]/[a-z][a-z0-9-]{0,14}[a-z0-9]/configuration\.json$"
 )
@@ -124,6 +131,8 @@ class LifecycleConfig:
     roles: Mapping[str, str]
     projects: Mapping[str, str]
     ecr_repository_urls: Mapping[str, str]
+    caller_mode: str = CALLER_MODE_SOURCE_USER
+    caller_event: str | None = None
     vpc_cidr: str = "10.42.0.0/16"
     rds_instance_class: str = "db.t4g.micro"
     mq_instance_type: str = "mq.m7g.large"
@@ -131,6 +140,7 @@ class LifecycleConfig:
     object_expiration_days: int = 2
     reviewer_group_name: str = "reactorfront-reviewers"
     oidc_api_audience: str = "https://api.reactorfront.invalid/api"
+    config_schema_version: int = CONFIG_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if ACCOUNT_PATTERN.fullmatch(self.account_id) is None:
@@ -186,6 +196,33 @@ class LifecycleConfig:
             raise LifecycleError("Lifecycle ECR inventory is incomplete.")
         if CONFIG_KEY_PATTERN.fullmatch(self.configuration_key) is None:
             raise LifecycleError("Lifecycle configuration key is invalid.")
+        schema_version = self.config_schema_version
+        if type(schema_version) is not int or schema_version not in {
+            1,
+            CONFIG_SCHEMA_VERSION,
+        }:
+            raise LifecycleError("Lifecycle configuration schema is invalid.")
+        if self.config_schema_version == 1 and (
+            self.caller_mode != CALLER_MODE_SOURCE_USER or self.caller_event is not None
+        ):
+            raise LifecycleError("Legacy lifecycle configuration must use source-user.")
+        if self.caller_mode == CALLER_MODE_SOURCE_USER:
+            if self.caller_event is not None:
+                raise LifecycleError("Source-user mode cannot carry a GitHub event.")
+            if self.environment != "manual":
+                raise LifecycleError(
+                    "Source-user mode is bound to the manual environment."
+                )
+        elif self.caller_mode == CALLER_MODE_GITHUB_AUTOMATION:
+            expected_environment = AUTOMATION_EVENT_ENVIRONMENTS.get(
+                self.caller_event or ""
+            )
+            if expected_environment != self.environment:
+                raise LifecycleError(
+                    "GitHub automation event is not bound to the exact environment."
+                )
+        else:
+            raise LifecycleError("Lifecycle caller mode is invalid.")
 
     @property
     def configuration_key(self) -> str:
@@ -221,8 +258,8 @@ class LifecycleConfig:
         }
 
     def to_dict(self) -> dict[str, object]:
-        return {
-            "schemaVersion": SCHEMA_VERSION,
+        payload: dict[str, object] = {
+            "schemaVersion": self.config_schema_version,
             "accountId": self.account_id,
             "partition": self.partition,
             "region": self.region,
@@ -247,10 +284,18 @@ class LifecycleConfig:
             "reviewerGroupName": self.reviewer_group_name,
             "oidcApiAudience": self.oidc_api_audience,
         }
+        if self.config_schema_version >= CONFIG_SCHEMA_VERSION:
+            payload["callerMode"] = self.caller_mode
+            payload["callerEvent"] = self.caller_event
+        return payload
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> LifecycleConfig:
-        if value.get("schemaVersion") != SCHEMA_VERSION:
+        schema_version = value.get("schemaVersion")
+        if type(schema_version) is not int or schema_version not in {
+            1,
+            CONFIG_SCHEMA_VERSION,
+        }:
             raise LifecycleError("Unsupported lifecycle configuration schema.")
         zones = value.get("availabilityZones")
         roles = value.get("roles")
@@ -287,6 +332,17 @@ class LifecycleConfig:
             roles=roles,
             projects=projects,
             ecr_repository_urls=repositories,
+            caller_mode=(
+                CALLER_MODE_SOURCE_USER
+                if schema_version == 1
+                else str(value.get("callerMode", ""))
+            ),
+            caller_event=(
+                str(value["callerEvent"])
+                if schema_version >= CONFIG_SCHEMA_VERSION
+                and value.get("callerEvent") is not None
+                else None
+            ),
             vpc_cidr=str(value.get("vpcCidr", "10.42.0.0/16")),
             rds_instance_class=str(value.get("rdsInstanceClass", "db.t4g.micro")),
             mq_instance_type=str(value.get("mqInstanceType", "mq.m7g.large")),
@@ -298,6 +354,7 @@ class LifecycleConfig:
             oidc_api_audience=str(
                 value.get("oidcApiAudience", "https://api.reactorfront.invalid/api")
             ),
+            config_schema_version=int(schema_version),
         )
 
 

@@ -152,8 +152,16 @@ Subsequent implementation selection: Issue #114 preserves the historical
 `3/3` record but supersedes the former numeric ceiling for Step 5/Step 7 with
 the completion-first serialized-attempt boundary selected by that Issue. Each
 attempt remains TTL-first, truthfully recorded, isolated, destroyed when
-appropriate, and swept to zero before another construction attempt. This does
-not weaken the two-hour fallback, destroy authority, or zero-residue decision.
+appropriate, and swept to zero before another construction attempt. This did
+not weaken the then-selected two-hour fallback, destroy authority, or
+zero-residue decision.
+
+Subsequent implementation selection: Issue #116 revises only the
+forward-looking normal fallback default from two hours to one hour for both
+manual and monthly automation. Explicit TTL values remain accepted, `extend`
+remains available, and the original 120-minute maximum, destroy authority, and
+zero-residue decision remain unchanged. The completed Step 5/Step 7 two-hour
+live evidence stays historical evidence of what actually ran.
 
 Each focused increment records exact review endpoints, successful
 authoritative workflow evidence or a complete governed qualified limitation,

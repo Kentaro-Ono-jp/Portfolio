@@ -148,6 +148,7 @@
       ],
       "Resource": [
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:user/ReactorFrontNoel",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-automation",
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-*",
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolio*"
       ]

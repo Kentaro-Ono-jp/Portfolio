@@ -33,6 +33,14 @@
     }
   },
   "managedPolicies": {
+    "automation": {
+      "name": "ReactorFrontPortfolioAutomation",
+      "document": "automation.json"
+    },
+    "automationBoundary": {
+      "name": "ReactorFrontPortfolioAutomationBoundary",
+      "document": "automation-boundary.json"
+    },
     "noelAssumeBillingReadRole": {
       "name": "ReactorFrontPortfolioNoelAssumeBillingReadRole",
       "document": "noel-assume-billing-read-role.json"
@@ -118,6 +126,19 @@
     }
   },
   "roles": {
+    "automation": {
+      "name": "${NAME_PREFIX}-automation",
+      "trust": "automation-trust.json",
+      "permissions": ["automation"],
+      "boundary": "automationBoundary",
+      "tags": {
+        "PortfolioEnvironment": "shared",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "automation"
+      }
+    },
     "operator_deployment": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment",
       "trust": "operator-trust.json",

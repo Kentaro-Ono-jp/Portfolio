@@ -21,7 +21,11 @@ Terraform bootstrap remains the portable equivalent for a new third-party
 account. After installation, normal deployment treats IAM as immutable:
 
 ```text
-source credential identity -> exact operator AssumeRole -> read-only static IAM attestation -> deployment preflight -> deploy
+exact source user or GitHub automation session
+-> exact environment operator AssumeRole
+-> read-only static IAM attestation
+-> deployment preflight
+-> deploy
 ```
 
 It must never perform quota calculation, policy generation or splitting,
@@ -59,7 +63,7 @@ environment destroy authority cannot remove persistent bootstrap resources.
 | Web workload | Has caller-identity proof only and no application-data authority. |
 | API workload | Owns only the exact environment application bucket objects. PostgreSQL remains an application connection boundary, not an IAM administration grant. |
 | ML workload | Reads/writes only the exact environment application objects; it cannot delete them and receives no PostgreSQL or Cognito administration authority. |
-| Future automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name/ref, and a customized subject that encodes only `workflow_dispatch` or `schedule`. It can assume only exact environment operator/destroy roles. |
+| GitHub automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name/ref, and customized `repo/context/job_workflow_ref/event_name` subject. The short-lived role can assume only the exact manual/monthly operator and destroy roles. |
 | Scheduler fallback | Uses the exact persistent environment schedule group and starts only that environment's future CodeBuild destroy project. The trust SourceArn is the group ARN required by Scheduler, never an individual schedule ARN. |
 | CodeBuild fallback | Reads only that environment's exact lifecycle configuration and lease, writes its exact destroy log, and assumes only that environment destroy role. Terraform state and lifecycle mutation begin only after the separate destroy role is assumed. |
 | Destroy | Deletes only exact environment-named or correctly tagged application resources. It cannot mutate state, ECR, IAM, the boundary, or another environment. |
@@ -177,9 +181,8 @@ proceed only when unrelated namespaces and services are absent, and stop for
 owner review otherwise. Exact namespace ownership still gates service creation
 and exact ownership still gates destroy.
 
-The future GitHub workflow and repository OIDC customization are Step 6
-non-targets. Before that workflow requests a token, the repository owner must
-configure GitHub's OIDC subject template with `use_default: false` and the
+The Step 6 GitHub workflow requires the repository owner to configure GitHub's
+OIDC subject template with `use_default: false` and the
 ordered `include_claim_keys` value `repo`, `context`, `job_workflow_ref`,
 `event_name`. The `github_oidc_repository_subject` input must match the
 resulting `repo:` segment, including owner/repository IDs when immutable GitHub
@@ -187,11 +190,15 @@ subjects are enabled. AWS does not expose `event_name` as a direct GitHub OIDC
 condition key, so the trust document matches the two complete customized
 subjects ending in `event_name:workflow_dispatch` and `event_name:schedule`.
 
-When implemented, the workflow must use the protected environment named by
-the bootstrap inputs. Until then, the trust document is a fail-closed contract,
-not a claim that deployment automation or GitHub customization exists.
-Ordinary pushes and verification, pull requests, forks, Dependabot, and
-unapproved refs have no AWS credential or write path.
+`.github/workflows/aws-deploy.yml` uses that exact protected environment,
+short-lived OIDC role, and `main` workflow identity. Owner-started dispatch
+maps only to `manual`; repository schedules map only to `monthly`. The
+permanent schedule is the first day of every month at 13:00 `Asia/Tokyo`, and
+the environment has no required reviewer or wait timer. Ordinary pushes and
+verification, pull requests, forks, Dependabot, and unapproved refs have no
+AWS credential or write path. Initial repository/OIDC/static-IAM configuration
+is still a separately recorded owner-admin operation; normal workflow runs
+never perform it or self-heal drift.
 
 ## Owner inputs and local safety
 
@@ -325,6 +332,7 @@ Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS
 simulation may add read-only sanitized evidence, but it must not mutate IAM or
 create a resource. Static proof now covers both this persistent bootstrap and
 the Step 4
-[managed-environment definition](infra/aws/environment/README.md). It does not
-claim that either root has been applied, or that the Step 5 lifecycle, Step 6
-automation, or Step 7 real-AWS cycle exists.
+[managed-environment definition](infra/aws/environment/README.md), plus the
+Step 5 lifecycle and Step 6 workflow contracts. Its AWS-free zero counters do
+not claim that a root has been applied, a live OIDC/environment configuration
+exists, or a real workflow/lifecycle run passed.

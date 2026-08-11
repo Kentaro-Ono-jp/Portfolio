@@ -136,6 +136,13 @@ CONSOLE_IAM_TOKENS = {
     "NAME_PREFIX": "example-portfolio",
     "REPOSITORY_IDENTITY": "example-owner/example-repository",
     "STATE_BUCKET_NAME": "example-portfolio-111122223333-us-east-1-state",
+    "GITHUB_REPOSITORY_SUBJECT": "repo:example-owner/example-repository",
+    "GITHUB_ENVIRONMENT": "aws-deployment",
+    "GITHUB_WORKFLOW_NAME": "Deploy managed AWS proof",
+    "GITHUB_WORKFLOW_REF": (
+        "example-owner/example-repository/.github/workflows/"
+        "aws-deploy.yml@refs/heads/main"
+    ),
 }
 MANAGED_POLICY_CHARACTER_LIMIT = 6_144
 MANAGED_POLICY_CHARACTER_RESERVE = 512
@@ -336,6 +343,8 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "noelAssumeBillingReadRole",
         "noelDeploymentAssumeOperator",
         "noelAssumeObserverRole",
+        "automation",
+        "automationBoundary",
         "operatorPermissions",
         "staticIamAttestation",
         "managedEnvironmentPermissions",
@@ -472,6 +481,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             )
 
     expected_roles = {
+        "automation",
         "operator_deployment",
         "task_execution",
         "web_workload",
@@ -486,13 +496,22 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
     if set(roles) != expected_roles:
         raise RuntimeError("Console IAM role inventory drifted")
     for purpose, role in roles.items():
-        expected_name = "example-portfolio-manual-" + purpose.replace("_", "-")
+        expected_name = (
+            "example-portfolio-automation"
+            if purpose == "automation"
+            else "example-portfolio-manual-" + purpose.replace("_", "-")
+        )
         if role.get("name") != expected_name:
             raise RuntimeError(f"Console IAM role name drifted: {purpose}")
-        if role.get("boundary") != "operatorBoundary":
+        expected_boundary = (
+            "automationBoundary" if purpose == "automation" else "operatorBoundary"
+        )
+        if role.get("boundary") != expected_boundary:
             raise RuntimeError(
                 f"Console IAM role lost the separate boundary: {purpose}"
             )
+    if roles["automation"].get("permissions") != ["automation"]:
+        raise RuntimeError("Automation role authority drifted")
     operator_permission_keys = [
         "operatorPermissions",
         "staticIamAttestation",
@@ -573,7 +592,10 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
                 "Sid": "ExactNoelDeploymentUser",
                 "Effect": "Allow",
                 "Principal": {
-                    "AWS": ("arn:aws:iam::111122223333:user/ReactorFrontNoel")
+                    "AWS": [
+                        "arn:aws:iam::111122223333:user/ReactorFrontNoel",
+                        "arn:aws:iam::111122223333:role/example-portfolio-automation",
+                    ]
                 },
                 "Action": "sts:AssumeRole",
                 "Condition": {
@@ -587,7 +609,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
     if trusts.get("operator-trust.json") != expected_operator_trust:
         raise RuntimeError(
             "Console operator trust must allow only the exact same-account owner "
-            "principal without an MFA condition"
+            "and automation principals without an MFA condition"
         )
     trust_policy_sizes = enforce_policy_character_reserve(
         trusts,

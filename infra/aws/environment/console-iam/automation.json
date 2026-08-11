@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeExactManualAndMonthlyLifecycleRoles",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": [
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-manual-operator-deployment",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-manual-destroy",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-monthly-operator-deployment",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-monthly-destroy"
+      ]
+    }
+  ]
+}
