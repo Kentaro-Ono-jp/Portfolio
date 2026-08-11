@@ -72,7 +72,8 @@ contract for the exact GitHub OIDC workflow, isolated manual/monthly callers,
 one-hour normal safety fallback, and no per-run environment approval. Its live
 manual and real-schedule proofs both passed authenticated asynchronous smoke,
 immediate destroy, and 27-category zero residue; the temporary proof schedule
-was then removed. Final exact-head CI, independent review, and focused evidence
+was then removed. Final exact-head CI and Publication Gate B passed on PR #128.
+Independent re-review, identical-tree merge evidence, and focused closure
 reconciliation remain for Issue #116. The Step 8 completion record remains
 pending. Issue #114 completed the Step 7 real-AWS cycle described below.
 
