@@ -59,7 +59,9 @@ proved/unproved classification, or permanence claim.
   full base and head SHAs, or the description's selected, executed, carried,
   and skipped group and test-file N/NN inventory differs from the applicable
   exact-head evidence source.
-- **Detect:** Read the live PR base and head full SHAs. For normal proof, read
+- **Detect:** Read the live PR base and head full SHAs and require an explicit
+  full base-to-head changed-path count in both the PR description and copyable
+  review prompt. For normal proof, read
   the successful exact-head Actions plan and inventory, including the exact
   source SHA and Actions run identity whenever any group is carried. For a qualified
   Markdown-only no-run head, require the complete exception contract, confirm

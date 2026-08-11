@@ -16,6 +16,7 @@ from aws_automation_guard import (  # noqa: E402
     PERMANENT_SCHEDULE,
     select_route,
 )
+from aws_automation_maintenance import lifecycle_config  # noqa: E402
 
 
 def context(**overrides: str) -> dict[str, str]:
@@ -106,6 +107,20 @@ class AutomationGuardTests(unittest.TestCase):
                     PORTFOLIO_TEMPORARY_SCHEDULE=PERMANENT_SCHEDULE,
                 )
             )
+
+    def test_monthly_maintenance_configuration_uses_the_schedule_caller(self) -> None:
+        config = lifecycle_config(
+            account_id="111122223333",
+            partition="aws",
+            region="us-east-1",
+            name_prefix="reactorfront",
+            repository=EXPECTED_REPOSITORY,
+            state_bucket="reactorfront-111122223333-us-east-1-state",
+        )
+
+        self.assertEqual(config.environment, "monthly")
+        self.assertEqual(config.caller_mode, "github-automation")
+        self.assertEqual(config.caller_event, "schedule")
 
 
 if __name__ == "__main__":

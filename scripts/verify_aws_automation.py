@@ -20,6 +20,52 @@ MAINTENANCE_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_maintenance.py"
 LIFECYCLE_PATH = REPOSITORY_ROOT / "scripts" / "aws_lifecycle.py"
 BOOTSTRAP_LOCALS_PATH = REPOSITORY_ROOT / "infra" / "aws" / "bootstrap" / "locals.tf"
 
+CHECKOUT_STEP = "Check out the exact source"
+GUARD_STEP = "Guard the exact automation route"
+OIDC_STEP = "Obtain the short-lived GitHub OIDC session"
+
+
+def workflow_step_names(source: str) -> list[str]:
+    return re.findall(r"(?m)^      - name: (.+)$", source)
+
+
+def verify_workflow_gate_order(names: list[str]) -> None:
+    for expected in (CHECKOUT_STEP, GUARD_STEP, OIDC_STEP):
+        if names.count(expected) != 1:
+            raise RuntimeError(f"Deployment workflow step is not exact: {expected}")
+    checkout = names.index(CHECKOUT_STEP)
+    guard = names.index(GUARD_STEP)
+    oidc = names.index(OIDC_STEP)
+    if guard <= checkout:
+        raise RuntimeError("Automation route guard must run after exact checkout")
+    if guard >= oidc:
+        raise RuntimeError("Automation route guard must run before OIDC assumption")
+
+
+def verify_workflow_order_mutations(names: list[str]) -> int:
+    cases = 0
+    before_checkout = list(names)
+    before_checkout.remove(GUARD_STEP)
+    before_checkout.insert(before_checkout.index(CHECKOUT_STEP), GUARD_STEP)
+    after_oidc = list(names)
+    after_oidc.remove(GUARD_STEP)
+    after_oidc.insert(after_oidc.index(OIDC_STEP) + 1, GUARD_STEP)
+    for label, mutation, expected in (
+        ("before checkout", before_checkout, "after exact checkout"),
+        ("after OIDC", after_oidc, "before OIDC assumption"),
+    ):
+        try:
+            verify_workflow_gate_order(mutation)
+        except RuntimeError as error:
+            if expected not in str(error):
+                raise RuntimeError(
+                    f"Workflow order mutation failed for the wrong reason: {label}"
+                ) from error
+            cases += 1
+        else:
+            raise RuntimeError(f"Workflow order mutation was accepted: {label}")
+    return cases
+
 
 def require(source: str, token: str, message: str) -> None:
     if token not in source:
@@ -44,6 +90,9 @@ def main() -> int:
 
     if not workflow.startswith("name: Deploy managed AWS proof\n"):
         raise RuntimeError("Deployment workflow display name drifted")
+    step_names = workflow_step_names(workflow)
+    verify_workflow_gate_order(step_names)
+    order_mutation_cases = verify_workflow_order_mutations(step_names)
     trigger_match = re.search(r"(?ms)^on:\n(?P<body>.+?)^permissions:\n", workflow)
     if trigger_match is None:
         raise RuntimeError("Deployment workflow trigger block is unavailable")
@@ -223,6 +272,7 @@ def main() -> int:
         "permanentSchedules": 1,
         "normalTtlMinutes": 60,
         "oidcCredentialRefreshes": 2,
+        "workflowOrderMutationCases": order_mutation_cases,
         "requiredReviewers": 0,
         "waitTimerMinutes": 0,
         "staticVerifierAwsApiCalls": 0,

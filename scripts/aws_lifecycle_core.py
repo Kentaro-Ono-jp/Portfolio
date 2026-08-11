@@ -196,7 +196,11 @@ class LifecycleConfig:
             raise LifecycleError("Lifecycle ECR inventory is incomplete.")
         if CONFIG_KEY_PATTERN.fullmatch(self.configuration_key) is None:
             raise LifecycleError("Lifecycle configuration key is invalid.")
-        if self.config_schema_version not in {1, CONFIG_SCHEMA_VERSION}:
+        schema_version = self.config_schema_version
+        if type(schema_version) is not int or schema_version not in {
+            1,
+            CONFIG_SCHEMA_VERSION,
+        }:
             raise LifecycleError("Lifecycle configuration schema is invalid.")
         if self.config_schema_version == 1 and (
             self.caller_mode != CALLER_MODE_SOURCE_USER or self.caller_event is not None
@@ -288,7 +292,10 @@ class LifecycleConfig:
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> LifecycleConfig:
         schema_version = value.get("schemaVersion")
-        if schema_version not in {1, CONFIG_SCHEMA_VERSION}:
+        if type(schema_version) is not int or schema_version not in {
+            1,
+            CONFIG_SCHEMA_VERSION,
+        }:
             raise LifecycleError("Unsupported lifecycle configuration schema.")
         zones = value.get("availabilityZones")
         roles = value.get("roles")

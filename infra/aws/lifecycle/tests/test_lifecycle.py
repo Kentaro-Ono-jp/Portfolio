@@ -581,6 +581,19 @@ class LifecycleContractTests(unittest.TestCase):
         self.assertIsNone(loaded.caller_event)
         self.assertEqual(loaded.to_dict(), legacy)
 
+    def test_configuration_schema_rejects_json_booleans(self) -> None:
+        for boolean_version in (True, False):
+            with self.subTest(boolean_version=boolean_version):
+                payload = configuration().to_dict()
+                payload["schemaVersion"] = boolean_version
+                with self.assertRaisesRegex(LifecycleError, "configuration schema"):
+                    LifecycleConfig.from_dict(payload)
+                with self.assertRaisesRegex(LifecycleError, "configuration schema"):
+                    replace(
+                        configuration(),
+                        config_schema_version=boolean_version,
+                    )
+
     def test_automation_source_requires_exact_role_and_session_shape(self) -> None:
         config = replace(
             configuration(),

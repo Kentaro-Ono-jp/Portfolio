@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import aws_lifecycle as lifecycle
-from aws_lifecycle_core import LifecycleConfig
+from aws_lifecycle_core import CALLER_MODE_GITHUB_AUTOMATION, LifecycleConfig
 from verify_aws_static_iam import (
     CONTRACT_ROOTS,
     contract_file,
@@ -620,6 +620,8 @@ def lifecycle_config(
             )
             for purpose in ("web", "api", "ml")
         },
+        caller_mode=CALLER_MODE_GITHUB_AUTOMATION,
+        caller_event="schedule",
     )
 
 
