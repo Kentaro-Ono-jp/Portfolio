@@ -16,6 +16,7 @@ from aws_automation_contract import (
     EXPECTED_WORKFLOW,
     PERMANENT_SCHEDULE,
 )
+from aws_lifecycle_core import accepted_repository_remotes
 
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
@@ -90,11 +91,7 @@ def verify_checkout(values: Mapping[str, str]) -> None:
     if git_output("status", "--porcelain", "--untracked-files=all"):
         raise RuntimeError("Automation checkout is not clean.")
     remote = git_output("remote", "get-url", "origin")
-    if remote not in {
-        f"https://github.com/{EXPECTED_REPOSITORY}",
-        f"https://github.com/{EXPECTED_REPOSITORY}.git",
-        f"git@github.com:{EXPECTED_REPOSITORY}.git",
-    }:
+    if remote not in accepted_repository_remotes(EXPECTED_REPOSITORY):
         raise RuntimeError("Automation checkout remote is not accepted.")
 
 
