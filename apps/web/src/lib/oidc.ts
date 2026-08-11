@@ -211,6 +211,9 @@ export async function beginAuthorization(
       redirect_uri: settings.redirectUri,
       response_type: "code",
       scope: settings.oidcScopes,
+      ...(settings.oidcResource === undefined
+        ? {}
+        : { resource: settings.oidcResource }),
       state,
       nonce,
       code_challenge: await oidc.calculatePKCECodeChallenge(codeVerifier),

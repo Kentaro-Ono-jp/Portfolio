@@ -335,6 +335,7 @@ def test_consumer_readiness_declares_durable_result_topology(
         }
     ]
     assert channel.queues[0]["queue"] == "reactorfront.document-processing.events.v1"
+    assert channel.queues[0]["arguments"] == {"x-queue-type": "quorum"}
     assert [binding["routing_key"] for binding in channel.bindings] == [
         "document.processing.started.v1",
         "document.processing.completed.v1",

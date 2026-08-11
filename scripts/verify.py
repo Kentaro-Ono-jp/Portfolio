@@ -14,6 +14,7 @@ from uuid import UUID
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PROJECT_NAME = "reactorfront-portfolio"
+RABBITMQ_VOLUME_NAME = f"{COMPOSE_PROJECT_NAME}_rabbitmq-data"
 ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "artifacts" / "verification"
 EXPECTED_BROWSER_MODEL_EVIDENCE = {
     "status": "measured",
@@ -317,9 +318,17 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
         "scripts/aws_bootstrap_backend.py",
         "scripts/verify_aws_bootstrap.py",
         "scripts/verify_aws_environment.py",
+        "scripts/verify_aws_lifecycle.py",
         "scripts/verify_aws_static_iam.py",
-    } or normalized.startswith(("infra/aws/bootstrap/", "infra/aws/environment/")):
+        "scripts/aws_lifecycle.py",
+        "scripts/aws_lifecycle_core.py",
+    } or normalized.startswith(
+        ("infra/aws/bootstrap/", "infra/aws/environment/", "infra/aws/lifecycle/")
+    ):
         return frozenset({"aws-static"})
+
+    if normalized == "playwright.aws.config.ts" or normalized.startswith("tests/aws/"):
+        return frozenset({"aws-static", "web-static"})
 
     api_runtime_helpers = {
         "scripts/prepare_integration.py",
@@ -414,20 +423,31 @@ def groups_for_changed_path(raw_path: str) -> frozenset[str] | None:
 
 
 def plan_for_paths(
-    changed_files: list[str] | tuple[str, ...],
+    selection_paths: list[str] | tuple[str, ...],
     *,
+    changed_files: list[str] | tuple[str, ...] | None = None,
     base: str | None = None,
     head: str | None = None,
     baseline_proven: bool = False,
     baseline_skipped_groups: frozenset[str] = frozenset(),
     carry_provenance: CarryProvenance | None = None,
 ) -> VerificationPlan:
-    normalized = tuple(dict.fromkeys(path.replace("\\", "/") for path in changed_files))
-    if not normalized:
+    normalized_selection = tuple(
+        dict.fromkeys(path.replace("\\", "/") for path in selection_paths)
+    )
+    normalized_changed = tuple(
+        dict.fromkeys(
+            path.replace("\\", "/")
+            for path in (
+                changed_files if changed_files is not None else selection_paths
+            )
+        )
+    )
+    if not normalized_selection:
         return plan_with_baseline_evidence(
             VerificationPlan(
                 groups=ALL_GROUPS,
-                changed_files=normalized,
+                changed_files=normalized_changed,
                 reason="No changed path was available; full verification is required.",
                 base=base,
                 head=head,
@@ -438,13 +458,13 @@ def plan_for_paths(
         )
 
     selected: set[str] = set()
-    for path in normalized:
+    for path in normalized_selection:
         path_groups = groups_for_changed_path(path)
         if path_groups is None or path_groups == ALL_GROUPS:
             return plan_with_baseline_evidence(
                 VerificationPlan(
                     groups=ALL_GROUPS,
-                    changed_files=normalized,
+                    changed_files=normalized_changed,
                     reason=(
                         f"{path} is cross-cutting or unmapped; "
                         "fail closed to full verification."
@@ -461,7 +481,7 @@ def plan_for_paths(
     return plan_with_baseline_evidence(
         VerificationPlan(
             groups=expand_group_dependencies(selected),
-            changed_files=normalized,
+            changed_files=normalized_changed,
             reason="Selected from the changed path boundaries.",
             base=base,
             head=head,
@@ -472,9 +492,10 @@ def plan_for_paths(
     )
 
 
-def paths_from_name_status(output: bytes) -> list[str]:
+def path_sets_from_name_status(output: bytes) -> tuple[list[str], list[str]]:
     fields = [field for field in output.split(b"\0") if field]
-    paths: list[str] = []
+    changed_files: list[str] = []
+    selection_paths: list[str] = []
     index = 0
     while index < len(fields):
         status = os.fsdecode(fields[index])
@@ -486,10 +507,15 @@ def paths_from_name_status(output: bytes) -> list[str]:
             or index + path_count > len(fields)
         ):
             raise ValueError("Git returned malformed --name-status -z output.")
-        for field in fields[index : index + path_count]:
-            paths.append(os.fsdecode(field))
+        decoded = [os.fsdecode(field) for field in fields[index : index + path_count]]
+        selection_paths.extend(decoded)
+        changed_files.append(decoded[-1])
         index += path_count
-    return paths
+    return changed_files, selection_paths
+
+
+def paths_from_name_status(output: bytes) -> list[str]:
+    return path_sets_from_name_status(output)[1]
 
 
 def require_exact_commit_endpoint(value: str, label: str) -> str:
@@ -512,7 +538,7 @@ def changed_files_from_git(
     base: str | None = None,
     endpoints: tuple[str, str] | None = None,
     staged: bool = False,
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
     command = [
         "git",
         "diff",
@@ -541,7 +567,7 @@ def changed_files_from_git(
         check=True,
         stdout=subprocess.PIPE,
     )
-    return paths_from_name_status(result.stdout)
+    return path_sets_from_name_status(result.stdout)
 
 
 def plan_from_git(
@@ -557,7 +583,7 @@ def plan_from_git(
     endpoint_head = endpoints[1] if endpoints is not None else None
     plan_base = endpoint_base or base
     try:
-        changed_files = changed_files_from_git(
+        changed_files, selection_paths = changed_files_from_git(
             base=base,
             endpoints=endpoints,
             staged=staged,
@@ -571,7 +597,8 @@ def plan_from_git(
             head=endpoint_head,
         )
     return plan_for_paths(
-        changed_files,
+        selection_paths,
+        changed_files=changed_files,
         base=plan_base,
         head=endpoint_head,
         baseline_proven=baseline_proven,
@@ -604,6 +631,12 @@ def test_file_inventory() -> tuple[tuple[str, str], ...]:
             inventory.append(
                 ("aws-static", path.relative_to(REPOSITORY_ROOT).as_posix())
             )
+    for path in (REPOSITORY_ROOT / "infra" / "aws" / "lifecycle" / "tests").glob(
+        "test_*.py"
+    ):
+        inventory.append(("aws-static", path.relative_to(REPOSITORY_ROOT).as_posix()))
+    for path in (REPOSITORY_ROOT / "tests" / "aws").glob("*.spec.ts"):
+        inventory.append(("web-static", path.relative_to(REPOSITORY_ROOT).as_posix()))
     return tuple(sorted(inventory))
 
 
@@ -799,7 +832,10 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_lifecycle.py",
                 "scripts/verify_aws_static_iam.py",
+                "scripts/aws_lifecycle.py",
+                "scripts/aws_lifecycle_core.py",
             ],
         ),
         (
@@ -830,7 +866,10 @@ def static_checks(
                 "scripts/aws_bootstrap_backend.py",
                 "scripts/verify_aws_bootstrap.py",
                 "scripts/verify_aws_environment.py",
+                "scripts/verify_aws_lifecycle.py",
                 "scripts/verify_aws_static_iam.py",
+                "scripts/aws_lifecycle.py",
+                "scripts/aws_lifecycle_core.py",
             ],
         ),
         (
@@ -978,6 +1017,10 @@ def static_checks(
             "Prove the NAT-free managed AWS environment",
             [sys.executable, "scripts/verify_aws_environment.py"],
         ),
+        (
+            "Prove the bounded AWS lifecycle controller",
+            [sys.executable, "scripts/verify_aws_lifecycle.py"],
+        ),
     ]
     check_groups = {
         "Validate canonical contracts": "contracts",
@@ -1007,6 +1050,7 @@ def static_checks(
         "Prove portable AWS bootstrap and policy boundaries": "aws-static",
         "Prove the frozen persistent static IAM contract": "aws-static",
         "Prove the NAT-free managed AWS environment": "aws-static",
+        "Prove the bounded AWS lifecycle controller": "aws-static",
     }
     filtered = [check for check in checks if check_groups[check[0]] in groups]
     if "api-static" in groups:
@@ -1602,6 +1646,49 @@ def cleanup_runtime(docker: str) -> None:
     run("Stop the isolated runtime", compose_command(docker, *arguments))
 
 
+def reset_local_rabbitmq() -> None:
+    docker = require_command("docker")
+    print(
+        f"\n==> Reset target: Compose project {COMPOSE_PROJECT_NAME}, "
+        f"volume {RABBITMQ_VOLUME_NAME}",
+        flush=True,
+    )
+    run(
+        "Stop the project before its RabbitMQ topology reset",
+        compose_command(docker, "down", "--remove-orphans"),
+    )
+    inventory = subprocess.run(
+        [
+            docker,
+            "volume",
+            "ls",
+            "--filter",
+            f"name=^{RABBITMQ_VOLUME_NAME}$",
+            "--format",
+            "{{.Name}}",
+        ],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    volume_names = tuple(
+        line.strip()
+        for line in os.fsdecode(inventory.stdout).splitlines()
+        if line.strip()
+    )
+    if volume_names == (RABBITMQ_VOLUME_NAME,):
+        run(
+            "Remove only the project-scoped synthetic RabbitMQ volume",
+            [docker, "volume", "rm", RABBITMQ_VOLUME_NAME],
+        )
+    elif volume_names:
+        raise RuntimeError("RabbitMQ reset resolved an unexpected volume target.")
+    print(
+        "RabbitMQ reset complete; PostgreSQL and MinIO volumes were preserved.",
+        flush=True,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run canonical repository verification."
@@ -1610,6 +1697,14 @@ def parse_args() -> argparse.Namespace:
         "--static-only",
         action="store_true",
         help="Run the five non-Docker groups without resolving the Docker CLI.",
+    )
+    parser.add_argument(
+        "--reset-local-rabbitmq",
+        action="store_true",
+        help=(
+            "Stop only this repository's Compose project and remove only its "
+            "synthetic RabbitMQ volume for a classic-to-quorum upgrade."
+        ),
     )
     parser.add_argument(
         "--groups",
@@ -1845,6 +1940,39 @@ def resolve_selection(args: argparse.Namespace) -> VerificationPlan:
 
 def main() -> int:
     args = parse_args()
+    if args.reset_local_rabbitmq:
+        incompatible = (
+            args.plan
+            or args.groups
+            or args.static_only
+            or args.base
+            or args.endpoints
+            or args.staged
+            or args.full
+            or args.carry_all
+            or args.baseline_proven
+            or args.baseline_sha
+            or args.baseline_run_id
+            or args.baseline_run_url
+            or args.baseline_skipped_groups
+            or args.close_baseline_gaps
+            or args.carried_groups
+            or args.skipped_groups
+            or args.github_output is not None
+            or args.summary is not None
+        )
+        if incompatible:
+            print(
+                "\nVerification failed: --reset-local-rabbitmq is a standalone operation.",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            reset_local_rabbitmq()
+        except (RuntimeError, subprocess.CalledProcessError, OSError) as error:
+            print(f"\nRabbitMQ reset failed: {error}", file=sys.stderr)
+            return 1
+        return 0
     selection_modes = sum(
         (
             bool(args.groups),

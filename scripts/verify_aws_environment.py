@@ -28,10 +28,10 @@ OWNERSHIP_TAGS = {
     "PortfolioRepository": "example-owner/example-repository",
 }
 EXPECTED_RESOURCE_COUNTS = {
-    "aws_apigatewayv2_api": 1,
-    "aws_apigatewayv2_integration": 1,
-    "aws_apigatewayv2_route": 1,
-    "aws_apigatewayv2_stage": 1,
+    "aws_apigatewayv2_api": 2,
+    "aws_apigatewayv2_integration": 2,
+    "aws_apigatewayv2_route": 2,
+    "aws_apigatewayv2_stage": 2,
     "aws_apigatewayv2_vpc_link": 1,
     "aws_cloudwatch_log_group": 5,
     "aws_cognito_managed_login_branding": 1,
@@ -68,6 +68,7 @@ EXPECTED_RESOURCE_COUNTS = {
     "aws_vpc_security_group_ingress_rule": 5,
     "random_password": 2,
 }
+EXPECTED_TAGGABLE_RESOURCE_COUNT = 62
 FORBIDDEN_RESOURCE_TYPES = {
     "aws_acm_certificate",
     "aws_alb",
@@ -86,10 +87,31 @@ OPERATOR_ACTION_OWNERSHIP_MODES = {
     "exact-resource-and-request-tags",
     "global-read",
     "owner-accepted-global-tagging",
+    "owner-accepted-global-service-dependency",
+    "owner-accepted-no-tag-context",
     "request-tags",
     "resource-and-request-tags",
     "resource-tags",
     "service-delegated",
+}
+
+API_GATEWAY_LOG_DELIVERY_ACTIONS = {
+    "logs:CreateLogDelivery",
+    "logs:DeleteLogDelivery",
+    "logs:DescribeResourcePolicies",
+    "logs:GetLogDelivery",
+    "logs:ListLogDeliveries",
+    "logs:PutResourcePolicy",
+    "logs:UpdateLogDelivery",
+}
+OWNER_ACCEPTED_GLOBAL_SERVICE_DEPENDENCY_ACTIONS = API_GATEWAY_LOG_DELIVERY_ACTIONS | {
+    "ecs:DeregisterTaskDefinition"
+}
+
+API_GATEWAY_LOG_DELIVERY_DESTROY_ACTIONS = {
+    "logs:DeleteLogDelivery",
+    "logs:GetLogDelivery",
+    "logs:ListLogDeliveries",
 }
 CLOUD_MAP_DELEGATED_ACTIONS = {
     "ec2:DescribeRegions",
@@ -101,7 +123,10 @@ REVIEWED_API_GATEWAY_IAM_ACTIONS = {
     "apigateway:*",
     "apigateway:DELETE",
     "apigateway:GET",
+    "apigateway:PATCH",
     "apigateway:POST",
+    "apigateway:PUT",
+    "apigateway:TagResource",
 }
 CONSOLE_IAM_TOKENS = {
     "AWS_ACCOUNT_ID": "111122223333",
@@ -238,6 +263,7 @@ def operator_resource(symbol: str) -> str:
         "api-gateway-route": f"arn:{partition}:apigateway:{region}::/apis/api-owned/routes/route-owned",
         "api-gateway-stage-collection": f"arn:{partition}:apigateway:{region}::/apis/api-owned/stages",
         "api-gateway-stage": f"arn:{partition}:apigateway:{region}::/apis/api-owned/stages/$default",
+        "api-gateway-tags": f"arn:{partition}:apigateway:{region}::/tags/encoded-owned-resource",
         "api-gateway-vpc-link-collection": f"arn:{partition}:apigateway:{region}::/vpclinks",
         "api-gateway-vpc-link": f"arn:{partition}:apigateway:{region}::/vpclinks/vpclink-owned",
         "cloudmap-namespace": f"arn:{partition}:servicediscovery:{region}:{account}:namespace/ns-owned",
@@ -319,6 +345,11 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "apiWorkload",
         "mlWorkload",
         "destroy",
+        "lifecycleControl",
+        "lifecycleDestroy",
+        "scheduler",
+        "codebuildImage",
+        "codebuildDestroy",
     }
     policy_specs = manifest.get("managedPolicies", {})
     if set(policy_specs) != expected_policy_keys:
@@ -447,6 +478,9 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "api_workload",
         "ml_workload",
         "destroy",
+        "scheduler",
+        "codebuild_image",
+        "codebuild_destroy",
     }
     roles = manifest.get("roles", {})
     if set(roles) != expected_roles:
@@ -464,6 +498,7 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         "staticIamAttestation",
         "managedEnvironmentPermissions",
         "managedEnvironmentResourcePermissions",
+        "lifecycleControl",
     ]
     if roles["operator_deployment"].get("permissions") != operator_permission_keys:
         raise RuntimeError(
@@ -471,9 +506,51 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         )
     if roles["web_workload"].get("permissions") != []:
         raise RuntimeError("Web workload must remain an empty-authority role")
-    if roles["destroy"].get("permissions") != ["operatorPermissions", "destroy"]:
+    if roles["destroy"].get("permissions") != [
+        "operatorPermissions",
+        "destroy",
+        "lifecycleDestroy",
+    ]:
         raise RuntimeError(
             "Destroy must combine backend reads with separate delete authority"
+        )
+    expected_controller_permissions = {
+        "scheduler": ["scheduler"],
+        "codebuild_image": ["codebuildImage"],
+        "codebuild_destroy": ["codebuildDestroy"],
+    }
+    for purpose, expected_permissions in expected_controller_permissions.items():
+        if roles[purpose].get("permissions") != expected_permissions:
+            raise RuntimeError(f"Controller role permissions drifted: {purpose}")
+    codebuild_destroy = policies["codebuildDestroy"]
+    lifecycle_inputs = [
+        statement
+        for statement in codebuild_destroy.get("Statement", [])
+        if statement.get("Sid") == "ReadExactLifecycleInputs"
+    ]
+    exact_control_inputs = {
+        "arn:aws:s3:::example-portfolio-111122223333-us-east-1-state/controls/"
+        "example-portfolio/manual/configuration.json",
+        "arn:aws:s3:::example-portfolio-111122223333-us-east-1-state/controls/"
+        "example-portfolio/manual/lease.json",
+    }
+    if (
+        len(lifecycle_inputs) != 1
+        or lifecycle_inputs[0].get("Action") != "s3:GetObject"
+        or set(string_values(lifecycle_inputs[0].get("Resource", [])))
+        != exact_control_inputs
+    ):
+        raise RuntimeError(
+            "CodeBuild destroy must read both exact lifecycle inputs before assumption"
+        )
+    if any(
+        fnmatch.fnmatchcase(action.lower(), pattern.lower())
+        for statement in codebuild_destroy.get("Statement", [])
+        for action in ("s3:PutObject", "s3:DeleteObject")
+        for pattern in string_values(statement.get("Action", []))
+    ):
+        raise RuntimeError(
+            "CodeBuild destroy must not mutate lifecycle or Terraform state directly"
         )
 
     trust_files = {role["trust"] for role in roles.values()}
@@ -976,6 +1053,116 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             identity_allows and boundary_allows,
         )
 
+    api_gateway_tag_identity_statements = [
+        statement
+        for statement in permissions["Statement"]
+        if set(string_values(statement.get("Action", [])))
+        == {"apigateway:POST", "apigateway:PUT"}
+        and statement.get("Resource") == "arn:aws:apigateway:us-east-1::/tags/*"
+    ]
+    api_gateway_target_identity_statements = [
+        statement
+        for statement in permissions["Statement"]
+        if statement.get("Action") == "apigateway:PATCH"
+        and set(string_values(statement.get("Resource", [])))
+        == {
+            "arn:aws:apigateway:us-east-1::/apis/*",
+            "arn:aws:apigateway:us-east-1::/vpclinks/*",
+        }
+    ]
+    api_gateway_create_identity_statements = [
+        statement
+        for statement in permissions["Statement"]
+        if statement.get("Action") == "apigateway:TagResource"
+        and set(string_values(statement.get("Resource", [])))
+        == {
+            "arn:aws:apigateway:us-east-1::/apis/*/stages",
+            "arn:aws:apigateway:us-east-1::/vpclinks",
+        }
+    ]
+    record(
+        "operatorApiGatewayDependentTaggingUsesExactNoContextGrants",
+        len(api_gateway_tag_identity_statements) == 1
+        and "Condition" not in api_gateway_tag_identity_statements[0]
+        and len(api_gateway_target_identity_statements) == 1
+        and "Condition" not in api_gateway_target_identity_statements[0]
+        and len(api_gateway_create_identity_statements) == 1
+        and "Condition" not in api_gateway_create_identity_statements[0],
+    )
+    api_gateway_dependent_authorizations = {
+        "TagPost": ("apigateway:POST", "api-gateway-tags"),
+        "TagPut": ("apigateway:PUT", "api-gateway-tags"),
+        "ApiPatch": ("apigateway:PATCH", "api-gateway-api"),
+        "StagePatch": ("apigateway:PATCH", "api-gateway-stage"),
+        "StageCreateCollectionTagResource": (
+            "apigateway:TagResource",
+            "api-gateway-stage-collection",
+        ),
+        "VpcLinkPatch": ("apigateway:PATCH", "api-gateway-vpc-link"),
+        "VpcLinkCreateCollectionTagResource": (
+            "apigateway:TagResource",
+            "api-gateway-vpc-link-collection",
+        ),
+    }
+    for label, (action, symbol) in api_gateway_dependent_authorizations.items():
+        resource = operator_resource(symbol)
+        identity_allows = policy_allows(permissions, action, resource, {})
+        boundary_allows = policy_allows(boundary, action, resource, {})
+        record(
+            f"operatorIdentityAllowsOwnerAcceptedApiGateway{label}WithoutTagContext",
+            identity_allows,
+        )
+        record(
+            f"operatorBoundaryAllowsOwnerAcceptedApiGateway{label}WithoutTagContext",
+            boundary_allows,
+        )
+        record(
+            f"operatorEffectiveAllowsOwnerAcceptedApiGateway{label}WithoutTagContext",
+            identity_allows and boundary_allows,
+        )
+
+    api_gateway_log_delivery_statements = [
+        statement
+        for statement in permissions["Statement"]
+        if set(string_values(statement.get("Action", [])))
+        == API_GATEWAY_LOG_DELIVERY_ACTIONS
+        and statement.get("Resource") == "*"
+    ]
+    record(
+        "operatorApiGatewayLogDeliveryUsesExactGlobalDependencyGrant",
+        len(api_gateway_log_delivery_statements) == 1
+        and "Condition" not in api_gateway_log_delivery_statements[0],
+    )
+    for action in sorted(API_GATEWAY_LOG_DELIVERY_ACTIONS):
+        label = action.removeprefix("logs:")
+        identity_allows = policy_allows(permissions, action, "*", {})
+        boundary_allows = policy_allows(boundary, action, "*", {})
+        record(
+            f"operatorIdentityAllowsOwnerAcceptedApiGateway{label}",
+            identity_allows,
+        )
+        record(
+            f"operatorBoundaryAllowsOwnerAcceptedApiGateway{label}",
+            boundary_allows,
+        )
+        record(
+            f"operatorEffectiveAllowsOwnerAcceptedApiGateway{label}",
+            identity_allows and boundary_allows,
+        )
+
+    destroy_log_delivery_statements = [
+        statement
+        for statement in destroy["Statement"]
+        if set(string_values(statement.get("Action", [])))
+        == API_GATEWAY_LOG_DELIVERY_DESTROY_ACTIONS
+        and statement.get("Resource") == "*"
+    ]
+    record(
+        "destroyApiGatewayLogDeliveryUsesExactGlobalCleanupGrant",
+        len(destroy_log_delivery_statements) == 1
+        and "Condition" not in destroy_log_delivery_statements[0],
+    )
+
     for (
         resource_type,
         row_index,
@@ -1058,8 +1245,15 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             if not verb.startswith(("describe", "get", "head", "list")):
                 unconditioned_global_operator_writes.append(action)
     record(
-        "operatorHasNoUnconditionedGlobalWrite",
-        unconditioned_global_operator_writes == [],
+        "operatorHasOnlyOwnerAcceptedUnconditionedGlobalWrites",
+        set(unconditioned_global_operator_writes)
+        == {
+            action
+            for action in OWNER_ACCEPTED_GLOBAL_SERVICE_DEPENDENCY_ACTIONS
+            if not action.split(":", 1)[-1]
+            .lower()
+            .startswith(("describe", "get", "head", "list"))
+        },
     )
 
     generated_id_actions = [
@@ -1387,8 +1581,9 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
             if not verb.startswith(("describe", "get", "head", "list")):
                 unconditioned_global_writes.append(action)
     record(
-        "onlyAwsGlobalDestroyActionIsTaskDefinitionDeregister",
-        unconditioned_global_writes == ["ecs:DeregisterTaskDefinition"],
+        "destroyHasOnlyOwnerAcceptedUnconditionedGlobalWrites",
+        set(unconditioned_global_writes)
+        == {"ecs:DeregisterTaskDefinition", "logs:DeleteLogDelivery"},
     )
     record(
         "destroyCanDeregisterTaskDefinition",
@@ -1399,8 +1594,8 @@ def verify_console_iam_contract(matrix: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     record(
-        "operatorCannotDeregisterTaskDefinition",
-        not policy_allows(
+        "operatorCanDeregisterSupersededTaskDefinition",
+        policy_allows(
             permissions,
             "ecs:DeregisterTaskDefinition",
             "arn:aws:ecs:us-east-1:111122223333:task-definition/example-portfolio-manual-web:1",
@@ -1513,13 +1708,40 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 action not in CLOUD_MAP_DELEGATED_ACTIONS
             ):
                 raise RuntimeError(f"Unexpected service-delegated action: {row}")
+            owner_accepted_global_tagging_targets = {
+                ("servicediscovery:TagResource", "cloudmap-namespace"),
+                ("servicediscovery:TagResource", "cloudmap-service"),
+            }
             if ownership == "owner-accepted-global-tagging" and (
-                action != "servicediscovery:TagResource"
-                or resource not in {"cloudmap-namespace", "cloudmap-service"}
+                (action, resource) not in owner_accepted_global_tagging_targets
             ):
                 raise RuntimeError(
-                    "Owner-accepted global tagging is limited to the two exact "
-                    f"Cloud Map authorization targets: {row}"
+                    "Owner-accepted global tagging is limited to the reviewed "
+                    f"AWS create-operation authorization targets: {row}"
+                )
+            owner_accepted_no_tag_context_targets = {
+                ("apigateway:POST", "api-gateway-tags"),
+                ("apigateway:PUT", "api-gateway-tags"),
+                ("apigateway:PATCH", "api-gateway-api"),
+                ("apigateway:TagResource", "api-gateway-stage-collection"),
+                ("apigateway:PATCH", "api-gateway-stage"),
+                ("apigateway:TagResource", "api-gateway-vpc-link-collection"),
+                ("apigateway:PATCH", "api-gateway-vpc-link"),
+            }
+            if ownership == "owner-accepted-no-tag-context" and (
+                (action, resource) not in owner_accepted_no_tag_context_targets
+            ):
+                raise RuntimeError(
+                    "Owner-accepted no-tag-context authorization is limited to "
+                    f"the AWS-proven API Gateway dependent targets: {row}"
+                )
+            if ownership == "owner-accepted-global-service-dependency" and (
+                action not in OWNER_ACCEPTED_GLOBAL_SERVICE_DEPENDENCY_ACTIONS
+                or resource != "*"
+            ):
+                raise RuntimeError(
+                    "Owner-accepted global service dependency is limited to "
+                    f"the reviewed log-delivery and ECS deregistration actions: {row}"
                 )
             if action == "servicediscovery:TagResource" and (
                 ownership != "owner-accepted-global-tagging"
@@ -1604,6 +1826,169 @@ def verify_operator_action_matrix() -> dict[str, Any]:
                 "Cloud Map operation-mapping mutation was not rejected: "
                 f"{resource_type}"
             )
+    required_api_gateway_create_tag_authorizations = {
+        "aws_apigatewayv2_api": ("api-gateway-api", None),
+        "aws_apigatewayv2_stage": (
+            "api-gateway-stage",
+            "api-gateway-stage-collection",
+        ),
+        "aws_apigatewayv2_vpc_link": (
+            "api-gateway-vpc-link",
+            "api-gateway-vpc-link-collection",
+        ),
+    }
+
+    def require_api_gateway_create_tag_authorizations(
+        candidate_actions: dict[str, Any],
+    ) -> None:
+        for (
+            resource_type,
+            (target_resource, create_resource),
+        ) in required_api_gateway_create_tag_authorizations.items():
+            required = {
+                (action, "api-gateway-tags", "owner-accepted-no-tag-context")
+                for action in ("apigateway:POST", "apigateway:PUT")
+            }
+            required.add(
+                (
+                    "apigateway:PATCH",
+                    target_resource,
+                    "owner-accepted-no-tag-context",
+                )
+            )
+            if create_resource is not None:
+                required.add(
+                    (
+                        "apigateway:TagResource",
+                        create_resource,
+                        "owner-accepted-no-tag-context",
+                    )
+                )
+            if resource_type == "aws_apigatewayv2_stage":
+                required.update(
+                    (
+                        action,
+                        "*",
+                        "owner-accepted-global-service-dependency",
+                    )
+                    for action in API_GATEWAY_LOG_DELIVERY_ACTIONS
+                )
+            actual = {tuple(row[:3]) for row in candidate_actions[resource_type]}
+            if not required.issubset(actual):
+                raise RuntimeError(
+                    "API Gateway tagged creates must authorize the documented "
+                    "POST + PUT mapping at /tags, PATCH at the create-time "
+                    "target, any AWS-proven no-context create collection, and "
+                    "the exact HTTP API log-delivery dependency: "
+                    f"{resource_type} "
+                    f"missing={sorted(required - actual)}"
+                )
+
+    require_api_gateway_create_tag_authorizations(resource_actions)
+    for (
+        resource_type,
+        (target_resource, create_resource),
+    ) in required_api_gateway_create_tag_authorizations.items():
+        required_rows = {
+            *(
+                (action, "api-gateway-tags", "owner-accepted-no-tag-context")
+                for action in ("apigateway:POST", "apigateway:PUT")
+            ),
+            (
+                "apigateway:PATCH",
+                target_resource,
+                "owner-accepted-no-tag-context",
+            ),
+        }
+        if create_resource is not None:
+            required_rows.add(
+                (
+                    "apigateway:TagResource",
+                    create_resource,
+                    "owner-accepted-no-tag-context",
+                )
+            )
+        if resource_type == "aws_apigatewayv2_stage":
+            required_rows.update(
+                (
+                    action,
+                    "*",
+                    "owner-accepted-global-service-dependency",
+                )
+                for action in API_GATEWAY_LOG_DELIVERY_ACTIONS
+            )
+        for required in required_rows:
+            mutation = {key: list(value) for key, value in resource_actions.items()}
+            mutation[resource_type] = [
+                row for row in mutation[resource_type] if tuple(row[:3]) != required
+            ]
+            try:
+                require_api_gateway_create_tag_authorizations(mutation)
+            except RuntimeError as error:
+                if resource_type not in str(error):
+                    raise RuntimeError(
+                        "API Gateway create-tag mutation failed unexpectedly"
+                    ) from error
+                operation_mapping_mutation_cases += 1
+            else:
+                raise RuntimeError(
+                    "API Gateway create-tag mutation was not rejected: "
+                    f"{resource_type} {required}"
+                )
+
+    required_ec2_multi_resource_authorizations = {
+        "aws_route_table": {
+            ("ec2:CreateRouteTable", "ec2-vpc", "resource-tags"),
+        },
+        "aws_security_group": {
+            ("ec2:CreateSecurityGroup", "ec2-vpc", "resource-tags"),
+        },
+        "aws_subnet": {
+            ("ec2:CreateSubnet", "ec2-vpc", "resource-tags"),
+        },
+        "aws_vpc_endpoint": {
+            ("ec2:CreateVpcEndpoint", "ec2-vpc", "resource-tags"),
+            ("ec2:CreateVpcEndpoint", "ec2-route-table", "resource-tags"),
+        },
+    }
+
+    def require_ec2_multi_resource_authorizations(
+        candidate_actions: dict[str, Any],
+    ) -> None:
+        for (
+            resource_type,
+            required,
+        ) in required_ec2_multi_resource_authorizations.items():
+            actual = {tuple(row[:3]) for row in candidate_actions[resource_type]}
+            if not required.issubset(actual):
+                raise RuntimeError(
+                    "EC2 create operations must authorize every existing owned "
+                    f"network dependency: {resource_type} missing={sorted(required - actual)}"
+                )
+
+    require_ec2_multi_resource_authorizations(resource_actions)
+    for (
+        resource_type,
+        required_rows,
+    ) in required_ec2_multi_resource_authorizations.items():
+        for required in required_rows:
+            mutation = {key: list(value) for key, value in resource_actions.items()}
+            mutation[resource_type] = [
+                row for row in mutation[resource_type] if tuple(row[:3]) != required
+            ]
+            try:
+                require_ec2_multi_resource_authorizations(mutation)
+            except RuntimeError as error:
+                if resource_type not in str(error):
+                    raise RuntimeError(
+                        "EC2 multi-resource mutation failed unexpectedly"
+                    ) from error
+                operation_mapping_mutation_cases += 1
+            else:
+                raise RuntimeError(
+                    "EC2 multi-resource mutation was not rejected: "
+                    f"{resource_type} {required}"
+                )
     return {
         "provider": provider,
         "resourceTypes": len(resource_actions),
@@ -1742,8 +2127,11 @@ def verify_tags(resources: list[dict[str, Any]]) -> int:
                 f"Resource has non-exact ownership tags: {resource['address']} {tags}"
             )
         tagged += 1
-    if tagged != 60:
-        raise RuntimeError(f"Expected 60 taggable resources, got {tagged}")
+    if tagged != EXPECTED_TAGGABLE_RESOURCE_COUNT:
+        raise RuntimeError(
+            f"Expected {EXPECTED_TAGGABLE_RESOURCE_COUNT} taggable resources, "
+            f"got {tagged}"
+        )
     return tagged
 
 
@@ -1827,6 +2215,37 @@ def verify_planned_service_properties(resources: list[dict[str, Any]]) -> int:
         "module.ingress.aws_apigatewayv2_stage.default",
         ("default_route_settings", 0, "throttling_rate_limit"),
         10,
+    )
+    expect("module.ingress.aws_apigatewayv2_api.api", ("protocol_type",), "HTTP")
+    expect(
+        "module.ingress.aws_apigatewayv2_api.api",
+        ("disable_execute_api_endpoint",),
+        False,
+    )
+    expect(
+        "module.ingress.aws_apigatewayv2_integration.api",
+        ("integration_type",),
+        "HTTP_PROXY",
+    )
+    expect(
+        "module.ingress.aws_apigatewayv2_integration.api",
+        ("connection_type",),
+        "VPC_LINK",
+    )
+    expect(
+        "module.ingress.aws_apigatewayv2_route.api_default",
+        ("route_key",),
+        "$default",
+    )
+    expect(
+        "module.ingress.aws_apigatewayv2_route.api_default",
+        ("authorization_type",),
+        "NONE",
+    )
+    expect(
+        "module.ingress.aws_apigatewayv2_stage.api_default",
+        ("auto_deploy",),
+        True,
     )
 
     task_contracts = {
@@ -2067,10 +2486,10 @@ def verify_security_group_reference_contract(
                 "aws_security_group.environment",
             },
         },
-        "aws_vpc_security_group_egress_rule.web_to_api": {
+        "aws_vpc_security_group_egress_rule.vpc_link_to_api": {
             "security_group_id": {
-                'aws_security_group.environment["web"].id',
-                'aws_security_group.environment["web"]',
+                'aws_security_group.environment["vpc-link"].id',
+                'aws_security_group.environment["vpc-link"]',
                 "aws_security_group.environment",
             },
             "referenced_security_group_id": {
@@ -2079,15 +2498,15 @@ def verify_security_group_reference_contract(
                 "aws_security_group.environment",
             },
         },
-        "aws_vpc_security_group_ingress_rule.api_from_web": {
+        "aws_vpc_security_group_ingress_rule.api_from_vpc_link": {
             "security_group_id": {
                 'aws_security_group.environment["api"].id',
                 'aws_security_group.environment["api"]',
                 "aws_security_group.environment",
             },
             "referenced_security_group_id": {
-                'aws_security_group.environment["web"].id',
-                'aws_security_group.environment["web"]',
+                'aws_security_group.environment["vpc-link"].id',
+                'aws_security_group.environment["vpc-link"]',
                 "aws_security_group.environment",
             },
         },
@@ -2156,8 +2575,8 @@ def verify_security_group_reference_contract(
         'module.network.aws_vpc_security_group_egress_rule.task_https["ml"]',
         'module.network.aws_vpc_security_group_egress_rule.task_https["web"]',
         "module.network.aws_vpc_security_group_egress_rule.vpc_link_to_web",
-        "module.network.aws_vpc_security_group_egress_rule.web_to_api",
-        "module.network.aws_vpc_security_group_ingress_rule.api_from_web",
+        "module.network.aws_vpc_security_group_egress_rule.vpc_link_to_api",
+        "module.network.aws_vpc_security_group_ingress_rule.api_from_vpc_link",
         'module.network.aws_vpc_security_group_ingress_rule.broker_from_clients["api"]',
         'module.network.aws_vpc_security_group_ingress_rule.broker_from_clients["ml"]',
         "module.network.aws_vpc_security_group_ingress_rule.database_from_api",
@@ -2198,6 +2617,8 @@ def verify_security_contract(
         == "api-gateway-http-api-generated-https",
         contract["ingress"]["integration_connection"] == "VPC_LINK",
         contract["ingress"]["integration_target"] == "cloud-map:web",
+        contract["ingress"]["api_integration_target"] == "cloud-map:api",
+        contract["ingress"]["generated_https_apis"] == 2,
         contract["ingress"]["alb_resources"] == 0,
         contract["ingress"]["custom_domain_resources"] == 0,
         contract["runtime"]["network_mode"] == "awsvpc",

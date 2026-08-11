@@ -6,6 +6,7 @@
       "Effect": "Allow",
       "Action": [
         "apigateway:*",
+        "codebuild:*",
         "cognito-idp:*",
         "ec2:*",
         "ecs:*",
@@ -25,9 +26,13 @@
         "servicediscovery:GetNamespace",
         "servicediscovery:GetOperation",
         "servicediscovery:GetService",
+        "servicediscovery:ListInstances",
+        "servicediscovery:ListNamespaces",
+        "servicediscovery:ListServices",
         "servicediscovery:ListTagsForResource",
         "servicediscovery:TagResource",
-        "sts:GetCallerIdentity"
+        "sts:GetCallerIdentity",
+        "tag:GetResources"
       ],
       "Resource": "*"
     },
@@ -41,9 +46,9 @@
       ]
     },
     {
-      "Sid": "StateBucketLocationCeiling",
+      "Sid": "StateBucketInspectionCeiling",
       "Effect": "Allow",
-      "Action": "s3:GetBucketLocation",
+      "Action": ["s3:GetBucket*", "s3:GetEncryptionConfiguration"],
       "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}"
     },
     {
@@ -71,6 +76,23 @@
       "Effect": "Allow",
       "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/environments/${ENVIRONMENT}/terraform.tfstate.tflock"
+    },
+    {
+      "Sid": "LifecycleControlBucketCeiling",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "controls/${NAME_PREFIX}/${ENVIRONMENT}/*"
+        }
+      }
+    },
+    {
+      "Sid": "LifecycleControlObjectCeiling",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/*"
     },
     {
       "Sid": "ImageRepositoryCeiling",
@@ -126,25 +148,20 @@
       ],
       "Resource": [
         "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:user/ReactorFrontNoel",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-operator-deployment",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-task-execution",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-web-workload",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-api-workload",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-ml-workload",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-destroy",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioNoelAssumeBillingReadRole",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioNoelDeploymentAssumeOperator",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioNoelAssumeObserverRole",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioOperatorPermissions",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioStaticIamAttestation",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioManagedEnvironmentPermissions",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioManagedEnvironmentResourcePermissions",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioOperatorBoundary",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioTaskExecutionPolicy",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioApiWorkloadPolicy",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioMlWorkloadPolicy",
-        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolioDestroyPolicy"
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-*",
+        "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/ReactorFrontPortfolio*"
       ]
+    },
+    {
+      "Sid": "SchedulerPassRoleCeiling",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${NAME_PREFIX}-${ENVIRONMENT}-scheduler",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "scheduler.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "DestroyRoleAssumptionCeiling",

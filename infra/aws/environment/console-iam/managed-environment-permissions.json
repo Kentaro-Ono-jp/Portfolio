@@ -34,6 +34,28 @@
       }
     },
     {
+      "Sid": "CreateAgainstOwnedNetworkDependencies",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateSubnet",
+        "ec2:CreateVpcEndpoint"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:route-table/*",
+        "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:vpc/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
+          "aws:ResourceTag/PortfolioManaged": "true",
+          "aws:ResourceTag/PortfolioPersistent": "false",
+          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
+        }
+      }
+    },
+    {
       "Sid": "CreateTaggedApiGatewayResources",
       "Effect": "Allow",
       "Action": "apigateway:POST",
@@ -57,6 +79,33 @@
           ]
         }
       }
+    },
+    {
+      "Sid": "AuthorizeApiGatewayCreateTagDependency",
+      "Effect": "Allow",
+      "Action": "apigateway:TagResource",
+      "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*/stages",
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks"
+      ]
+    },
+    {
+      "Sid": "TagApiGatewayResourcesWithoutDependentTagContext",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:POST",
+        "apigateway:PUT"
+      ],
+      "Resource": "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/tags/*"
+    },
+    {
+      "Sid": "PatchApiGatewayTagTargetsWithoutDependentTagContext",
+      "Effect": "Allow",
+      "Action": "apigateway:PATCH",
+      "Resource": [
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/apis/*",
+        "arn:${AWS_PARTITION}:apigateway:${AWS_REGION}::/vpclinks/*"
+      ]
     },
     {
       "Sid": "TagOnlyDuringNetworkCreation",

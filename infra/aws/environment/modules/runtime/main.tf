@@ -74,7 +74,7 @@ locals {
     PORTFOLIO_ML_S3_REGION                      = var.aws_region
   }
   web_environment = {
-    PORTFOLIO_API_BASE_URL                     = "http://${var.cloud_map.api_dns_name}:8000"
+    PORTFOLIO_API_BASE_URL                     = var.api_base_url
     PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK = "false"
     PORTFOLIO_WEB_OIDC_AUTHORIZATION_URL       = var.identity.authorization_url
     PORTFOLIO_WEB_OIDC_CLIENT_ID               = var.identity.client_id
@@ -82,6 +82,7 @@ locals {
     PORTFOLIO_WEB_OIDC_ISSUER                  = var.identity.issuer
     PORTFOLIO_WEB_OIDC_JWKS_URL                = var.identity.jwks_url
     PORTFOLIO_WEB_OIDC_SCOPES                  = var.identity.scopes
+    PORTFOLIO_WEB_OIDC_RESOURCE                = var.identity.audience
     PORTFOLIO_WEB_OIDC_TOKEN_URL               = var.identity.token_url
     PORTFOLIO_WEB_OIDC_TRANSACTION_SECONDS     = "300"
     PORTFOLIO_WEB_PUBLIC_BASE_URL              = var.public_web_base_url

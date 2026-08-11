@@ -18,14 +18,15 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region              = var.aws_region
+  allowed_account_ids = var.offline_static_mode ? null : [var.aws_account_id]
 
   # These settings keep static plan proof AWS-free. Apply credentials remain
   # external and Step 5 must preflight their exact account and role identity.
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_region_validation      = true
-  skip_requesting_account_id  = true
+  skip_credentials_validation = var.offline_static_mode
+  skip_metadata_api_check     = var.offline_static_mode
+  skip_region_validation      = var.offline_static_mode
+  skip_requesting_account_id  = var.offline_static_mode
 
   default_tags {
     tags = local.ownership_tags

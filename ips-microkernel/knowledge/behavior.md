@@ -654,6 +654,98 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #113
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/113#issuecomment-5235195287).
 
+### Reconcile cloud effects before replaying or overlapping checkpointed writes
+
+- **Trigger:** A resumable cloud operation adds or changes an external write
+  whose success is recorded in a later remote checkpoint, or permits two
+  operator invocations to reach the same non-idempotent phase.
+- **HEAD effect:** `moving`
+- **Problem:** Interruption after the cloud effect and before the checkpoint
+  leaves retry replaying an immutable or same-name write that cannot succeed or
+  cannot prove it owns the existing effect; alternatively, a lifecycle-wide
+  source lease lets two same-source invocations interleave effects before either
+  invocation conditionally owns the operation.
+- **Detect:** Execute the production command and failure-inject immediately
+  after its real cloud adapter accepts each effect but before the next durable
+  checkpoint. Reconstruct the retry from the last persisted state against a
+  complete exact effect, an absent effect, a partial effect, and a foreign or
+  mismatched effect while counting API attempts, resource identities,
+  mutations, and checkpoints. When the service supplies an idempotency token,
+  also repeat the exact token and parameters and change one parameter once. For
+  a non-idempotent phase, start two production-command instances from the same
+  checkpoint with distinct invocation owners, hold the winner across its first
+  external effect, and exercise same-checkout active overlap, stale remote CAS,
+  foreign-checkout recovery, and exact-owner interruption recovery.
+- **Pass:** A complete exact effect is read back or reconciled with zero
+  repeated resource mutation, an absent effect is created once, an exact
+  service-native idempotent retry yields the original resource, a changed-
+  parameter token and every partial or mismatched effect fail closed with zero
+  additional mutation, and the final checkpoint is written only after exact
+  read-back. Exactly one non-idempotent operation owner is conditionally
+  checkpointed before its first effect; local, stale, and foreign competitors
+  fail before mutation; the exact interrupted owner alone can resume; and the
+  final external state, private capsule, and passed checkpoint identify one
+  consistent operation outcome.
+- **Repair:** Persist deterministic intent before the external write when its
+  parameters cannot otherwise be recovered, use a service-native idempotency
+  key where available, inventory or read back the exact target before replay,
+  adopt only the complete source- and configuration-bound effect, and retain
+  production-command effect-before-checkpoint interruption tests. Where the
+  effect is not service-idempotent, add an invocation-distinguishing remote CAS
+  claim before mutation, retain only the exact private recovery identity, and
+  serialize active recovery within one checkout.
+- **Origins:** PR #115
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5247567798),
+  PR #115
+  [exact-head re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5248116097),
+  PR #115
+  [same-source concurrency re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5248549070).
+
+### Use complete live invariants for status and guarded mutation
+
+- **Trigger:** A read-only status surface or guarded mutation adds or changes
+  interpretation of the same safety-critical external object.
+- **HEAD effect:** `moving`
+- **Problem:** Status reduces verification to existence or one field while the
+  mutation overwrites live drift before checking the complete accepted
+  precondition, so a disabled or foreign binding appears healthy or is silently
+  repaired.
+- **Detect:** Execute the production status and mutation commands against one
+  canonical active object, a missing object, a disabled object, and one
+  single-field mismatch for every verifier field while recording all external
+  calls; separately interrupt an accepted mutation before its final checkpoint
+  and retry from the persisted intent.
+- **Pass:** Only the complete active object is reported verified; missing,
+  expired, disabled, and every mismatched variant are distinguished without a
+  write. Mutation rejects every non-canonical precondition before writing, and
+  an exact already-completed intended update is adopted with no repeated
+  resource mutation.
+- **Repair:** Route status, mutation precondition, post-write read-back, and
+  retry adoption through one complete invariant verifier; report drift
+  explicitly, persist deterministic mutation intent before the write, and
+  retain positive plus one-field inverse and interruption tests.
+- **Origins:** PR #115
+  [exact-head re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5248116097).
+
+### Provide a scoped upgrade path for persistent fixture topology
+
+- **Trigger:** A retained local dependency volume can contain a resource whose
+  immutable declaration changes, such as a durable queue type.
+- **HEAD effect:** `moving`
+- **Problem:** Fresh CI passes while an existing checkout fails when the new
+  declaration is applied to the retained incompatible resource.
+- **Detect:** Identify the exact project volume holding the incompatible
+  disposable fixture, invoke the production upgrade command with command
+  capture, and run the fresh-volume runtime proof for the new declaration.
+- **Pass:** The upgrade stops only the named project, deletes only the one
+  declared disposable volume, preserves every other project and unrelated
+  volume, and the canonical fresh runtime recreates the new topology.
+- **Repair:** Add an explicit project-scoped reset or migration command, reject
+  unscoped deletion, document the upgrade boundary, and retain exact command-
+  target assertions plus the fresh runtime proof.
+- **Origins:** PR #115
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5247567798).
+
 ## Execution and correction
 
 A failed triggered rule blocks reviewer dispatch.

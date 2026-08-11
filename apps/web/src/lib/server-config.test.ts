@@ -58,6 +58,7 @@ describe("readServerConfig", () => {
       PORTFOLIO_WEB_OIDC_TOKEN_URL: "https://identity.internal.test/dex/token",
       PORTFOLIO_WEB_OIDC_JWKS_URL: "https://identity.internal.test/dex/keys",
       PORTFOLIO_WEB_OIDC_CLIENT_SECRET: "runtime-only-secret",
+      PORTFOLIO_WEB_OIDC_RESOURCE: "https://api.example.test/resource/",
       PORTFOLIO_WEB_OIDC_ALLOW_INSECURE_LOOPBACK: "false",
       PORTFOLIO_WEB_SESSION_ABSOLUTE_SECONDS: "3600",
       PORTFOLIO_WEB_SESSION_INACTIVITY_SECONDS: "600",
@@ -67,6 +68,7 @@ describe("readServerConfig", () => {
       apiBaseUrl: "https://api.example.test/base",
       timeoutMilliseconds: 1_500,
       oidcClientSecret: "runtime-only-secret",
+      oidcResource: "https://api.example.test/resource",
       secureCookies: true,
       sessionAbsoluteSeconds: 3_600,
       sessionInactivitySeconds: 600,
@@ -89,6 +91,10 @@ describe("readServerConfig", () => {
       {
         ...loopbackEnvironment(),
         PORTFOLIO_WEB_OIDC_SCOPES: "groups offline_access",
+      },
+      {
+        ...loopbackEnvironment(),
+        PORTFOLIO_WEB_OIDC_RESOURCE: "not a URL",
       },
       {
         ...loopbackEnvironment(),

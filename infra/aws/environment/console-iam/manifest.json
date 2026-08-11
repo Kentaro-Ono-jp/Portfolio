@@ -80,6 +80,26 @@
     "destroy": {
       "name": "ReactorFrontPortfolioDestroyPolicy",
       "document": "destroy.json"
+    },
+    "lifecycleControl": {
+      "name": "ReactorFrontPortfolioLifecycleControlPolicy",
+      "document": "lifecycle-control.json"
+    },
+    "lifecycleDestroy": {
+      "name": "ReactorFrontPortfolioLifecycleDestroyPolicy",
+      "document": "lifecycle-destroy.json"
+    },
+    "scheduler": {
+      "name": "ReactorFrontPortfolioSchedulerPolicy",
+      "document": "scheduler.json"
+    },
+    "codebuildImage": {
+      "name": "ReactorFrontPortfolioCodeBuildImagePolicy",
+      "document": "codebuild-image.json"
+    },
+    "codebuildDestroy": {
+      "name": "ReactorFrontPortfolioCodeBuildDestroyPolicy",
+      "document": "codebuild-destroy.json"
     }
   },
   "sourceUsers": {
@@ -105,7 +125,8 @@
         "operatorPermissions",
         "staticIamAttestation",
         "managedEnvironmentPermissions",
-        "managedEnvironmentResourcePermissions"
+        "managedEnvironmentResourcePermissions",
+        "lifecycleControl"
       ],
       "boundary": "operatorBoundary",
       "tags": {
@@ -171,7 +192,7 @@
     "destroy": {
       "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
       "trust": "destroy-trust.json",
-      "permissions": ["operatorPermissions", "destroy"],
+      "permissions": ["operatorPermissions", "destroy", "lifecycleDestroy"],
       "boundary": "operatorBoundary",
       "tags": {
         "PortfolioEnvironment": "${ENVIRONMENT}",
@@ -179,6 +200,45 @@
         "PortfolioPersistent": "true",
         "PortfolioRepository": "${REPOSITORY_IDENTITY}",
         "PortfolioPurpose": "destroy"
+      }
+    },
+    "scheduler": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-scheduler",
+      "trust": "scheduler-trust.json",
+      "permissions": ["scheduler"],
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "scheduler"
+      }
+    },
+    "codebuild_image": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-codebuild-image",
+      "trust": "codebuild-image-trust.json",
+      "permissions": ["codebuildImage"],
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "codebuild-image"
+      }
+    },
+    "codebuild_destroy": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-codebuild-destroy",
+      "trust": "codebuild-destroy-trust.json",
+      "permissions": ["codebuildDestroy"],
+      "boundary": "operatorBoundary",
+      "tags": {
+        "PortfolioEnvironment": "${ENVIRONMENT}",
+        "PortfolioManaged": "true",
+        "PortfolioPersistent": "true",
+        "PortfolioRepository": "${REPOSITORY_IDENTITY}",
+        "PortfolioPurpose": "codebuild-destroy"
       }
     }
   }

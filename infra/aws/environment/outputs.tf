@@ -10,6 +10,7 @@ output "public_endpoints" {
   description = "Non-secret generated endpoints and private service identifiers required by Step 5."
   value = {
     web_https             = module.ingress.public_api_endpoint
+    api_https             = module.ingress.api_endpoint
     api_private_dns       = module.ingress.cloud_map.api_dns_name
     cognito_authorization = module.identity.runtime_contract.authorization_url
     cognito_issuer        = module.identity.runtime_contract.issuer
@@ -28,6 +29,15 @@ output "service_identifiers" {
     cognito_user_pool_id      = module.identity.user_pool_id
     cognito_client_id         = module.identity.client_id
     application_bucket        = module.managed_state.application_bucket_name
+  }
+}
+
+output "migration_network" {
+  description = "Exact Fargate network boundary for the one-shot API-area migration task."
+  value = {
+    subnet_ids        = module.network.public_task_subnet_ids
+    security_group_id = module.network.security_group_ids.api
+    public_ip         = true
   }
 }
 

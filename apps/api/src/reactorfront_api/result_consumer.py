@@ -253,6 +253,7 @@ class PikaResultEventConsumer:
             durable=True,
             exclusive=False,
             auto_delete=False,
+            arguments={"x-queue-type": "quorum"},
         )
         for routing_key in RESULT_ROUTING_KEYS:
             channel.queue_bind(

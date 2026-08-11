@@ -113,13 +113,21 @@ def prepare_queues(settings: Settings, *, purge_requested: bool = True) -> None:
             exchange_type="direct",
             durable=True,
         )
-        channel.queue_declare(queue=REQUEST_QUEUE, durable=True)
+        channel.queue_declare(
+            queue=REQUEST_QUEUE,
+            durable=True,
+            arguments={"x-queue-type": "quorum"},
+        )
         channel.queue_bind(
             queue=REQUEST_QUEUE,
             exchange=DOCUMENT_EXCHANGE,
             routing_key=REQUEST_ROUTING_KEY,
         )
-        channel.queue_declare(queue=RESULT_QUEUE, durable=True)
+        channel.queue_declare(
+            queue=RESULT_QUEUE,
+            durable=True,
+            arguments={"x-queue-type": "quorum"},
+        )
         for event_type in RESULT_EVENT_TYPES:
             channel.queue_bind(
                 queue=RESULT_QUEUE,

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "normalDeploymentIamMutation": false,
+  "imageBuildspecReconciliation": {
+    "actor": "operator_deployment",
+    "project": "image",
+    "requiresEveryOtherProjectFieldExact": true,
+    "readBackExactSha256": true,
+    "changesIamOrServiceRole": false
+  },
+  "projects": {
+    "image": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-image-build",
+      "role": "codebuild_image",
+      "buildspec": "image-build.buildspec.yml",
+      "artifacts": "NO_ARTIFACTS",
+      "autoRetryLimit": 0,
+      "privileged": true
+    },
+    "destroy": {
+      "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
+      "role": "codebuild_destroy",
+      "buildspec": "destroy.buildspec.yml",
+      "artifacts": "NO_ARTIFACTS",
+      "autoRetryLimit": 2,
+      "privileged": false
+    }
+  },
+  "schedule": {
+    "name": "${NAME_PREFIX}-${ENVIRONMENT}-destroy",
+    "group": "${NAME_PREFIX}-${ENVIRONMENT}-lifecycle",
+    "actionAfterCompletion": "NONE",
+    "maximumTtlMinutes": 120,
+    "target": "destroy"
+  },
+  "remoteControl": {
+    "configurationKey": "controls/${NAME_PREFIX}/${ENVIRONMENT}/configuration.json",
+    "leaseKey": "controls/${NAME_PREFIX}/${ENVIRONMENT}/lease.json",
+    "syntheticReviewerKey": "controls/${NAME_PREFIX}/${ENVIRONMENT}/synthetic-reviewer.json",
+    "conditionalLease": "If-None-Match:*",
+    "deleteOnlyAfterZeroResidue": true
+  }
+}

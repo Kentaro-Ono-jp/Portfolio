@@ -81,12 +81,11 @@ def test_celery_configuration_preserves_late_ack_and_fixed_route() -> None:
     assert celery_app.app.conf.worker_hijack_root_logger is False
     assert celery_app.app.conf.worker_prefetch_multiplier == 1
     assert celery_app.app.conf.task_default_queue == REQUEST_QUEUE
+    assert celery_app.app.conf.task_default_queue_type == "quorum"
     assert celery_app.app.conf.task_default_routing_key == REQUEST_ROUTING_KEY
     assert celery_app.app.conf.broker_transport_options["confirm_publish"] is True
-    assert celery_app.app.conf.control_queue_durable is False
-    assert celery_app.app.conf.control_queue_exclusive is True
-    assert celery_app.app.conf.event_queue_durable is False
-    assert celery_app.app.conf.event_queue_exclusive is True
+    assert celery_app.app.conf.worker_enable_remote_control is False
+    assert celery_app.app.conf.task_queues[0].queue_arguments == {"x-queue-type": "quorum"}
 
 
 def test_valid_request_runs_processor(monkeypatch: pytest.MonkeyPatch) -> None:

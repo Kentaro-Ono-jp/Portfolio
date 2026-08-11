@@ -3,6 +3,7 @@
 aws_account_id = "111122223333"
 aws_partition  = "aws"
 aws_region     = "us-east-1"
+offline_static_mode = true
 availability_zones = [
   "us-east-1a",
   "us-east-1b",

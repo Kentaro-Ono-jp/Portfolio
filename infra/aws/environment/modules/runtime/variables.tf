@@ -36,6 +36,10 @@ variable "public_web_base_url" {
   type = string
 }
 
+variable "api_base_url" {
+  type = string
+}
+
 variable "identity" {
   type = object({
     issuer            = string

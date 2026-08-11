@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartExactDestroyProject",
+      "Effect": "Allow",
+      "Action": "codebuild:StartBuild",
+      "Resource": "arn:${AWS_PARTITION}:codebuild:${AWS_REGION}:${AWS_ACCOUNT_ID}:project/${NAME_PREFIX}-${ENVIRONMENT}-destroy"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-FROM python:3.13.14-slim-bookworm@sha256:9d7f287598e1a5a978c015ee176d8216435aaf335ed69ac3c38dd1bbb10e8d64 AS base
+FROM public.ecr.aws/docker/library/python:3.13.14-slim-bookworm@sha256:9d7f287598e1a5a978c015ee176d8216435aaf335ed69ac3c38dd1bbb10e8d64 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -46,4 +46,4 @@ COPY --chown=10002:10002 apps/ml/MODEL_CARD.md /opt/reactorfront/model/MODEL_CAR
 COPY --chown=10002:10002 packages/contracts/events /workspace/packages/contracts/events
 
 USER 10002:10002
-CMD ["/bin/sh", "-c", "python -m reactorfront_ml.health --check && exec celery -A reactorfront_ml.celery_app:app worker --loglevel=INFO --concurrency=1 --pool=solo --without-gossip --without-mingle"]
+CMD ["/bin/sh", "-c", "python -m reactorfront_ml.health --check && exec celery -A reactorfront_ml.celery_app:app worker --loglevel=INFO --concurrency=1 --pool=solo --without-heartbeat --without-gossip --without-mingle"]

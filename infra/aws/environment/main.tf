@@ -54,6 +54,7 @@ module "runtime" {
   public_task_subnet_ids  = module.network.public_task_subnet_ids
   security_group_ids      = module.network.security_group_ids
   cloud_map               = module.ingress.cloud_map
+  api_base_url            = module.ingress.api_endpoint
   public_web_base_url     = module.ingress.public_api_endpoint
   identity                = module.identity.runtime_contract
   application_bucket_name = module.managed_state.application_bucket_name

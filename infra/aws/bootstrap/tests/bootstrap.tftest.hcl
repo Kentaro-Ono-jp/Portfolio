@@ -64,8 +64,35 @@ run "portable_bootstrap_contract" {
   }
 
   assert {
-    condition     = length(aws_iam_role.global) == 2 && length(aws_iam_role.environment) == 16
-    error_message = "The bootstrap must create two global roles and eight one-purpose roles per explicit environment."
+    condition     = length(aws_iam_role.global) == 2 && length(aws_iam_role.environment) == 18
+    error_message = "The bootstrap must create two global roles and nine one-purpose roles per explicit environment."
+  }
+
+  assert {
+    condition = (
+      length(aws_codebuild_project.controller) == 4 &&
+      length(aws_cloudwatch_log_group.controller) == 4 &&
+      length(aws_scheduler_schedule_group.lifecycle) == 2
+    )
+    error_message = "Each environment must have persistent image and destroy controllers."
+  }
+
+  assert {
+    condition = (
+      length(aws_iam_policy.lifecycle_operator) == 2 &&
+      length(aws_iam_policy.lifecycle_destroy) == 2 &&
+      length(aws_iam_role_policy_attachment.lifecycle_operator) == 2 &&
+      length(aws_iam_role_policy_attachment.lifecycle_destroy) == 2
+    )
+    error_message = "Each environment must attach separate lifecycle control and destroy policies."
+  }
+
+  assert {
+    condition = alltrue([
+      for key, project in aws_codebuild_project.controller :
+      project.auto_retry_limit == (endswith(key, "/destroy") ? 2 : 0)
+    ])
+    error_message = "Only the destroy controller must retain two automatic retries."
   }
 
   assert {
@@ -80,7 +107,9 @@ run "portable_bootstrap_contract" {
     condition = (
       length(local.permissions_boundary_policy) <= 5632 &&
       alltrue([for policy in values(local.global_identity_policies) : length(policy) <= 9728]) &&
-      alltrue([for policy in values(local.environment_identity_policies) : length(policy) <= 9728])
+      alltrue([for policy in values(local.environment_inline_policies) : length(policy) <= 9728]) &&
+      alltrue([for policy in values(local.lifecycle_operator_policies) : length(policy) <= 5632]) &&
+      alltrue([for policy in values(local.lifecycle_destroy_policies) : length(policy) <= 5632])
     )
     error_message = "Every generated IAM policy must fit its quota and preserve the boundary headroom reserve."
   }

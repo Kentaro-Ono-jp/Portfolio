@@ -138,7 +138,7 @@ def main() -> int:
     )
     missing_worker_flags = [
         flag
-        for flag in ("--without-gossip", "--without-mingle")
+        for flag in ("--without-heartbeat", "--without-gossip", "--without-mingle")
         if flag not in dockerfile
     ]
     if missing_worker_flags:

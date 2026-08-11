@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadExactLifecycleConfiguration",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:${AWS_PARTITION}:s3:::${STATE_BUCKET_NAME}/controls/${NAME_PREFIX}/${ENVIRONMENT}/configuration.json"
+    },
+    {
+      "Sid": "AuthorizeEcr",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "PublishExactImages",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeImages",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:InitiateLayerUpload",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart"
+      ],
+      "Resource": [
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/web",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/api",
+        "arn:${AWS_PARTITION}:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${NAME_PREFIX}/ml"
+      ]
+    },
+    {
+      "Sid": "WriteExactImageBuildLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:${AWS_PARTITION}:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/controller/image:*"
+    }
+  ]
+}

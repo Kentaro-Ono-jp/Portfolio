@@ -53,9 +53,10 @@ manual lifecycle or the accepted bounded monthly schedule.
 Adopt Terraform and the following initial AWS mapping:
 
 - API Gateway HTTP API provides its generated HTTPS endpoint;
-- a VPC Link and AWS Cloud Map route private ingress to one Web ECS/Fargate
-  service;
-- Web reaches a private API-area ECS/Fargate service through Cloud Map;
+- one VPC Link and AWS Cloud Map route two generated HTTPS APIs to the exact
+  Web and API ECS/Fargate services;
+- Web reaches the API only through the API's generated HTTPS endpoint; the API
+  Gateway private integration resolves the SRV-only Cloud Map API service;
 - the API area keeps migration, FastAPI, outbox, and result-consumer processes
   as distinct containers in one task definition;
 - the ML worker remains an independent ECS/Fargate service;
@@ -73,8 +74,9 @@ document and processing identities required by the accepted event contracts.
 
 Place Fargate tasks in public task subnets with public addresses only for
 outbound access. Security Groups allow no direct Internet inbound traffic.
-VPC Link reaches only the Web port, Web reaches only the API port, API reaches
-only PostgreSQL, and API/ML reach only RabbitMQ and required HTTPS services.
+VPC Link reaches only the exact Web and API ports, Web reaches API through the
+generated HTTPS endpoint, API reaches only PostgreSQL, and API/ML reach only
+RabbitMQ and required HTTPS services.
 RDS and Amazon MQ stay in isolated service subnets. An S3 gateway endpoint
 serves the task subnets.
 
@@ -100,8 +102,8 @@ secret values and Terraform state are never public evidence.
 
 Keep only low-cost control resources in a persistent bootstrap layer: the
 encrypted and versioned S3 state backend and lockfile, ECR repositories with
-lifecycle cleanup, bounded IAM and workload roles, and the independent
-destroy controller.
+lifecycle cleanup, bounded IAM and workload roles, the environment-scoped
+Scheduler group, and the independent destroy controller.
 
 Put network, ingress, discovery, ECS, RDS, S3 application data, Amazon MQ,
 Cognito, runtime secrets, and environment logs in an environment-specific
@@ -114,7 +116,10 @@ maintainer's account, identity, credentials, state, or machine-local files.
 Before creating billable application resources, register a one-time two-hour
 fallback outside the state it destroys. EventBridge Scheduler invokes a
 persistent CodeBuild destroy project bound to the exact source, backend, state
-key, and environment, then deletes the completed schedule.
+key, and environment, then deletes the completed schedule. Scheduler execution
+trust is scoped to the exact persistent schedule-group ARN, which is the
+service-supported confused-deputy boundary; it is not scoped to an unsupported
+individual schedule ARN.
 
 The normal lifecycle is preflight, immutable image publication, fallback
 registration, Terraform apply, migration, synthetic seed, health and
@@ -122,6 +127,12 @@ authenticated smoke, external HTTPS check, manual destroy, and tag plus
 service-specific residual inventory. The fallback remains available if the
 operator path is interrupted. A successful `terraform destroy` exit code,
 Budget alert, or schedule invocation alone is not proof that spending stopped.
+
+The operator may reconcile only the exact image project's inline buildspec
+from the checked-out repository, and only after every other project property
+matches the persistent controller contract. It must read back the normalized
+SHA-256 before use. This exception adds no CodeBuild `iam:PassRole`, cannot
+update the destroy project, and does not permit deployment-time IAM mutation.
 
 ### Bound authority, cost, and evidence
 
@@ -136,6 +147,13 @@ billable application-resource creation. A partial failed apply counts. Static
 work, tests, validation, read-only inventory, and plan-only work do not. Cost
 estimates are assumptions rather than guarantees; TTL, destroy, residual
 inventory, and the deploying account's cost boundary remain authoritative.
+
+Subsequent implementation selection: Issue #114 preserves the historical
+`3/3` record but supersedes the former numeric ceiling for Step 5/Step 7 with
+the completion-first serialized-attempt boundary selected by that Issue. Each
+attempt remains TTL-first, truthfully recorded, isolated, destroyed when
+appropriate, and swept to zero before another construction attempt. This does
+not weaken the two-hour fallback, destroy authority, or zero-residue decision.
 
 Each focused increment records exact review endpoints, successful
 authoritative workflow evidence or a complete governed qualified limitation,

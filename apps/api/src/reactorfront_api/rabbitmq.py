@@ -215,6 +215,7 @@ class _PublishAttempt:
             durable=True,
             exclusive=False,
             auto_delete=False,
+            arguments={"x-queue-type": "quorum"},
             callback=self._on_queue_declared,
         )
 

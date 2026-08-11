@@ -135,6 +135,16 @@
       }
     },
     {
+      "Sid": "RemoveApiGatewayLogDeliveryDependency",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DeleteLogDelivery",
+        "logs:GetLogDelivery",
+        "logs:ListLogDeliveries"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "DeleteExactOwnedBroker",
       "Effect": "Allow",
       "Action": "mq:DeleteBroker",
@@ -169,15 +179,7 @@
       "Sid": "DeleteExactOwnedSecrets",
       "Effect": "Allow",
       "Action": "secretsmanager:DeleteSecret",
-      "Resource": "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-*",
-      "Condition": {
-        "StringEquals": {
-          "aws:ResourceTag/PortfolioEnvironment": "${ENVIRONMENT}",
-          "aws:ResourceTag/PortfolioManaged": "true",
-          "aws:ResourceTag/PortfolioPersistent": "false",
-          "aws:ResourceTag/PortfolioRepository": "${REPOSITORY_IDENTITY}"
-        }
-      }
+      "Resource": "arn:${AWS_PARTITION}:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${NAME_PREFIX}-${ENVIRONMENT}-*"
     },
     {
       "Sid": "DeleteExactApplicationBucket",

@@ -80,7 +80,7 @@ resource "aws_iam_role" "environment" {
 }
 
 resource "aws_iam_role_policy" "environment" {
-  for_each = local.environment_identity_policies
+  for_each = local.environment_inline_policies
 
   name   = "${var.name_prefix}-${replace(each.key, "/", "-")}-authority"
   role   = aws_iam_role.environment[each.key].name
@@ -92,4 +92,54 @@ resource "aws_iam_role_policy" "environment" {
       error_message = "An environment role inline policy must reserve at least 512 characters below the AWS 10,240-character aggregate role quota."
     }
   }
+}
+
+resource "aws_iam_policy" "lifecycle_operator" {
+  for_each = local.lifecycle_operator_policies
+
+  name        = "${var.name_prefix}-${each.key}-lifecycle-control"
+  path        = local.role_path
+  description = "Persistent TTL lifecycle authority for ${each.key}."
+  policy      = each.value
+
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition     = length(each.value) <= 5632
+      error_message = "A lifecycle managed policy must preserve 512 characters of headroom."
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "lifecycle_operator" {
+  for_each = local.lifecycle_operator_policies
+
+  role       = aws_iam_role.environment["${each.key}/operator-deployment"].name
+  policy_arn = aws_iam_policy.lifecycle_operator[each.key].arn
+}
+
+resource "aws_iam_policy" "lifecycle_destroy" {
+  for_each = local.lifecycle_destroy_policies
+
+  name        = "${var.name_prefix}-${each.key}-lifecycle-destroy"
+  path        = local.role_path
+  description = "Persistent TTL destroy and residue authority for ${each.key}."
+  policy      = each.value
+
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition     = length(each.value) <= 5632
+      error_message = "A lifecycle destroy managed policy must preserve 512 characters of headroom."
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "lifecycle_destroy" {
+  for_each = local.lifecycle_destroy_policies
+
+  role       = aws_iam_role.environment["${each.key}/destroy"].name
+  policy_arn = aws_iam_policy.lifecycle_destroy[each.key].arn
 }

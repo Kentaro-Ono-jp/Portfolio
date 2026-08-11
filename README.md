@@ -202,6 +202,21 @@ but it is not the default AI-agent workflow:
 python scripts/verify.py
 ```
 
+Repositories updated from the earlier classic-queue topology may still have a
+project-scoped `rabbitmq-data` volume. RabbitMQ rejects redeclaring those queues
+as quorum queues. A human who intentionally owns the local Docker action can
+stop only this Compose project and remove only its synthetic RabbitMQ volume;
+the PostgreSQL and MinIO volumes are preserved:
+
+```console
+python scripts/verify.py --reset-local-rabbitmq
+python scripts/verify.py
+```
+
+The reset is an explicit local upgrade step because queued portfolio fixtures
+are disposable, while unrelated Docker resources and the other two project
+data volumes are outside its deletion scope.
+
 ### Run the current Web, API, outbox, result-consumer, and ML worker boundary
 
 Start the three dependencies, create the deterministic development bucket,
@@ -252,8 +267,8 @@ HTTPS, destroy, and tag plus service-specific residual inventory. Ordinary PR,
 fork, Dependabot, and `main` CI paths remain AWS-free and receive no AWS write
 authority.
 
-This section records an implementation contract, not a successful deployment
-claim. The repository implements and verifies the managed-runtime
+This section distinguishes implemented lifecycle machinery from successful
+live proof. The repository implements and verifies the managed-runtime
 compatibility boundary for task-role S3, Cognito-shaped OIDC, RabbitMQ 4.2, and
 initial measured Fargate sizing. It also defines the portable persistent S3
 state backend, immutable Web/API/ML ECR repositories, fixed Permissions
@@ -270,14 +285,26 @@ canonical static objects by exact ARN. It cannot mutate IAM or self-heal
 drift. See the
 [AWS runtime compatibility guide](AWS_RUNTIME_COMPATIBILITY.md) and
 [portable AWS bootstrap guide](AWS_BOOTSTRAP.md), plus the
-[managed-environment guide](infra/aws/environment/README.md). An
-owner-authorized exploratory AWS evaluation consumed the governed `3/3`
-construction attempts without reaching a successful hosted cycle. The partial
-environment was destroyed, Terraform state returned to zero, a fresh live plan
-returned 81 create-only resources, and service-specific inventory found zero
-application residue. Step 5 lifecycle, Step 6 automation, and the successful
-Step 7 green-cycle proof remain unimplemented; no fourth construction apply is
-claimed or performed.
+[managed-environment guide](infra/aws/environment/README.md) and
+[TTL-first lifecycle guide](infra/aws/lifecycle/README.md). The lifecycle now
+provides preflight, immutable CodeBuild image publication, independent
+Scheduler/CodeBuild destroy fallback, apply, migration, seed, authenticated
+smoke, extend, destroy, status, and residual sweep. Scheduler trust is bound to
+the exact persistent environment schedule group rather than an unsupported
+individual schedule ARN. An owner-authorized exploratory AWS evaluation
+historically consumed the governed `3/3` construction attempts without
+reaching a successful hosted cycle. Issue #114 superseded that old numeric
+ceiling with a completion-first serialized-attempt boundary and then completed
+Step 7: exact source/user/role and static-IAM attestation, three immutable
+CodeBuild image digests, verified schedule-first fallback, Terraform apply,
+three healthy ECS tasks, migration, synthetic seed, authenticated asynchronous
+document smoke over external HTTPS, manual destroy, and 27-category service/tag
+residual proof all passed. The fallback was removed only after zero residue.
+Cost Explorer was observed once through the separate billing-read role; its
+delayed estimate is supporting evidence, not the destroy proof. The ephemeral
+environment and deployment images are gone; persistent static IAM, empty ECR
+repositories, state backend, and independent controller remain. Step 6
+automation remains a later increment.
 
 ## Completed third vertical slice
 

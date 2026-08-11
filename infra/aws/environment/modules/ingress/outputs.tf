@@ -2,6 +2,10 @@ output "public_api_endpoint" {
   value = aws_apigatewayv2_api.web.api_endpoint
 }
 
+output "api_endpoint" {
+  value = aws_apigatewayv2_api.api.api_endpoint
+}
+
 output "cloud_map" {
   value = {
     namespace_id    = aws_service_discovery_private_dns_namespace.environment.id
@@ -18,6 +22,8 @@ output "static_contract" {
     public_boundary         = "api-gateway-http-api-generated-https"
     integration_type        = "HTTP_PROXY"
     integration_target      = "cloud-map:web"
+    api_integration_target  = "cloud-map:api"
+    generated_https_apis    = 2
     integration_connection  = "VPC_LINK"
     custom_domain_resources = 0
     alb_resources           = 0

@@ -285,6 +285,7 @@ describe("OIDC client boundary", () => {
       oidcJwksUrl:
         "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_SYNTHETIC/.well-known/jwks.json",
       oidcScopes: "openid reactorfront-api/read",
+      oidcResource: "https://api.example.test/resource",
       redirectUri: "https://portfolio.example/api/auth/callback",
       allowInsecureLoopback: false,
       secureCookies: true,
@@ -303,6 +304,9 @@ describe("OIDC client boundary", () => {
     expect(
       result.authorizationUrl.searchParams.get("code_challenge_method"),
     ).toBe("S256");
+    expect(result.authorizationUrl.searchParams.get("resource")).toBe(
+      "https://api.example.test/resource",
+    );
     expect(client.None).toHaveBeenCalled();
     expect(client.allowInsecureRequests).not.toHaveBeenCalled();
   });

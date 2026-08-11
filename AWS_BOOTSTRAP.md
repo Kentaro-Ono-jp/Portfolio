@@ -60,8 +60,8 @@ environment destroy authority cannot remove persistent bootstrap resources.
 | API workload | Owns only the exact environment application bucket objects. PostgreSQL remains an application connection boundary, not an IAM administration grant. |
 | ML workload | Reads/writes only the exact environment application objects; it cannot delete them and receives no PostgreSQL or Cognito administration authority. |
 | Future automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name/ref, and a customized subject that encodes only `workflow_dispatch` or `schedule`. It can assume only exact environment operator/destroy roles. |
-| Scheduler fallback | Starts only that environment's future CodeBuild destroy project. |
-| CodeBuild fallback | Uses only that environment state and lock objects, writes its exact destroy log, and assumes only that environment destroy role. |
+| Scheduler fallback | Uses the exact persistent environment schedule group and starts only that environment's future CodeBuild destroy project. The trust SourceArn is the group ARN required by Scheduler, never an individual schedule ARN. |
+| CodeBuild fallback | Reads only that environment's exact lifecycle configuration and lease, writes its exact destroy log, and assumes only that environment destroy role. Terraform state and lifecycle mutation begin only after the separate destroy role is assumed. |
 | Destroy | Deletes only exact environment-named or correctly tagged application resources. It cannot mutate state, ECR, IAM, the boundary, or another environment. |
 
 Every delegable role carries the same fixed boundary. The boundary is the
@@ -110,6 +110,45 @@ requires the existing pool to carry that tuple. Request-tagged creation rejects
 cross-environment, cross-repository, and undeclared fifth-key variants. Every
 request is evaluated independently at identity, boundary, and effective layers
 with expectations that name the actual enforcing layer.
+
+API Gateway V2 tagged creates also have a companion authorization. Live AWS
+execution proved that this dependent `TagResource` authorization exposes
+neither request nor resource ownership tags. It uses `apigateway:POST` + `PUT`
+on `/tags/*`, `PATCH` on the new target, and—for `CreateStage` and
+`CreateVpcLink`—the literal `apigateway:TagResource` action on the same
+`/apis/*/stages` and `/vpclinks` collection resource used by the create. The
+Service Authorization table maps standalone tagging to HTTP verbs, but repeated
+live creates still requested this literal dependent action after all three
+mapped verbs were present; the IAM Console validator currently labels the
+literal action unknown even though IAM stores it and the live service consumes
+it. The static identity therefore grants only those
+exact action/resource pairs without a tag condition; target `POST` + `PUT` and
+all later operations retain resource-tag conditions. Because these resources
+expose neither a distinguishable create-only action nor a prior-resource-tag
+condition, static proof records this as the same kind of owner-accepted
+creation-time tagging limitation described below
+for Cloud Map, rather than claiming foreign-target isolation. RDS provider
+polling uses the wildcard resource for the read-only
+`rds:DescribeDBInstances` list operation; that action is isolated as global
+metadata read and does not grant RDS mutation or secret access.
+
+HTTP API access logging has a separate CloudWatch Logs dependency. AWS's
+official logging guide requires the account-level log-delivery actions, and the
+Service Authorization table exposes no resource type or scoping condition for
+them. The operator therefore grants only `CreateLogDelivery`,
+`DeleteLogDelivery`, `DescribeResourcePolicies`, `GetLogDelivery`,
+`ListLogDeliveries`, `PutResourcePolicy`, and `UpdateLogDelivery` at
+`Resource: "*"`; log-group creation, tagging, retention, and later access stay
+bound to the exact `/portfolio/${NAME_PREFIX}/${ENVIRONMENT}/*` log groups.
+The destroy role receives only the corresponding `ListLogDeliveries`,
+`GetLogDelivery`, and `DeleteLogDelivery` account-level subset needed to remove
+that Stage delivery; it does not receive the create/update/resource-policy
+actions.
+
+ECS `DescribeTaskDefinition` is another resource-less read in AWS's Service
+Authorization table. It therefore uses `Resource: "*"` only in the global
+metadata-read statement; registration, tagging, and service mutation remain
+scoped to the environment task-definition and service ARNs.
 
 Amazon MQ `CreateBroker` is resource-less at authorization time. The fixed
 boundary therefore permits only that action for the environment-operator
@@ -273,6 +312,13 @@ also records exact generated policy sizes for both the synthetic example and
 the maximum accepted 20-character prefix, the complete 1,656-case delegated
 `iam:PassRole` ceiling, 60 tagged-destroy layer/context decisions, and 336
 operator control-plane layer/context decisions.
+
+EC2 create authorization is multi-resource as well: subnet, Security Group,
+and route-table creation each requires request-tag authority for the new
+resource plus resource-tag authority for the already-owned VPC. VPC-endpoint
+creation additionally requires the already-owned route table. The
+managed-environment verifier removes every VPC and route-table companion row in
+turn and requires each mutation to fail closed.
 
 This repository-owned evaluator is static contract proof, not AWS IAM Access
 Analyzer or the live IAM Policy Simulator. A later owner-authorized AWS
