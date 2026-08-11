@@ -80,6 +80,26 @@ def state_at(config: LifecycleConfig, target: Phase) -> LifecycleState:
     raise AssertionError(f"Unsupported target phase: {target}")
 
 
+def migration_outputs(config: LifecycleConfig) -> dict[str, object]:
+    return {
+        "service_identifiers": {
+            "value": {
+                "ecs_cluster": f"{config.name_prefix}-{config.environment}",
+                "migration_task_definition": (
+                    f"arn:{config.partition}:ecs:{config.region}:{config.account_id}:"
+                    f"task-definition/{config.name_prefix}-{config.environment}-migration:1"
+                ),
+            }
+        },
+        "migration_network": {
+            "value": {
+                "subnet_ids": ["subnet-public-a", "subnet-public-b"],
+                "security_group_id": "sg-api",
+            }
+        },
+    }
+
+
 class FakeAws:
     def __init__(self, identity: str = "") -> None:
         self.identity = identity
@@ -240,7 +260,95 @@ class ScheduleAws(FakeAws):
                 "Target": json.loads(arguments[arguments.index("--target") + 1]),
             }
             return {}
+        if service == "scheduler" and operation == "update-schedule":
+            self.calls.append((service, operation, arguments))
+            if self.schedule is None:
+                raise AssertionError("Schedule must exist before update")
+            self.schedule.update(
+                {
+                    "Name": arguments[arguments.index("--name") + 1],
+                    "GroupName": arguments[arguments.index("--group-name") + 1],
+                    "State": arguments[arguments.index("--state") + 1],
+                    "ScheduleExpression": arguments[
+                        arguments.index("--schedule-expression") + 1
+                    ],
+                    "ScheduleExpressionTimezone": arguments[
+                        arguments.index("--schedule-expression-timezone") + 1
+                    ],
+                    "FlexibleTimeWindow": json.loads(
+                        arguments[arguments.index("--flexible-time-window") + 1]
+                    ),
+                    "ActionAfterCompletion": arguments[
+                        arguments.index("--action-after-completion") + 1
+                    ],
+                    "Target": json.loads(arguments[arguments.index("--target") + 1]),
+                }
+            )
+            return {}
         return super().call(service, operation, *arguments, **kwargs)
+
+
+class MigrationAws(FakeAws):
+    def __init__(
+        self,
+        config: LifecycleConfig,
+        *,
+        exit_code: int = 0,
+        described_task_definition: str | None = None,
+    ) -> None:
+        super().__init__()
+        self.config = config
+        self.exit_code = exit_code
+        self.described_task_definition = described_task_definition
+        self.created_task_count = 0
+        self.task_arn = (
+            f"arn:{config.partition}:ecs:{config.region}:{config.account_id}:"
+            f"task/{config.name_prefix}-{config.environment}/" + "a" * 32
+        )
+        self.request: tuple[str, ...] | None = None
+
+    def call(self, service: str, operation: str, *arguments: str, **kwargs: object):
+        if service == "ecs" and operation == "run-task":
+            self.calls.append((service, operation, arguments))
+            if self.request is None:
+                self.request = arguments
+                self.created_task_count += 1
+            elif arguments != self.request:
+                raise LifecycleError("Synthetic ECS client-token conflict.")
+            return {"tasks": [{"taskArn": self.task_arn}], "failures": []}
+        if service == "ecs" and operation == "describe-tasks":
+            self.calls.append((service, operation, arguments))
+            assert self.request is not None
+            cluster = self.request[self.request.index("--cluster") + 1]
+            task_definition = self.request[self.request.index("--task-definition") + 1]
+            started_by = self.request[self.request.index("--started-by") + 1]
+            tags = json.loads(self.request[self.request.index("--tags") + 1])
+            return {
+                "tasks": [
+                    {
+                        "taskArn": self.task_arn,
+                        "clusterArn": (
+                            f"arn:{self.config.partition}:ecs:{self.config.region}:"
+                            f"{self.config.account_id}:cluster/{cluster}"
+                        ),
+                        "taskDefinitionArn": (
+                            self.described_task_definition or task_definition
+                        ),
+                        "startedBy": started_by,
+                        "launchType": "FARGATE",
+                        "platformVersion": "1.4.0",
+                        "lastStatus": "STOPPED",
+                        "desiredStatus": "STOPPED",
+                        "tags": tags,
+                        "containers": [{"exitCode": self.exit_code}],
+                    }
+                ],
+                "failures": [],
+            }
+        return super().call(service, operation, *arguments, **kwargs)
+
+    def wait(self, service: str, waiter: str, *arguments: str) -> None:
+        self.calls.append((service, f"wait:{waiter}", arguments))
 
 
 class LifecycleContractTests(unittest.TestCase):
@@ -678,6 +786,454 @@ class LifecycleContractTests(unittest.TestCase):
                 for service, operation, _arguments in operator.calls
             )
         )
+
+    def test_status_uses_complete_schedule_invariant_without_mutation(self) -> None:
+        config = configuration()
+        registered = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
+        expiry = registered + timedelta(minutes=60)
+        state = state_at(config, Phase.FALLBACK_REGISTERED)
+        state.set_fallback(
+            schedule_name=config.schedule_name,
+            registered_at=registered,
+            expires_at=expiry,
+        )
+        source = FakeAws()
+        mutations = {
+            "disabled": lambda schedule: schedule.update({"State": "DISABLED"}),
+            "foreign-target": lambda schedule: schedule["Target"].update(
+                {"Arn": "arn:aws:codebuild:us-east-1:111122223333:project/foreign"}
+            ),
+            "wrong-expression": lambda schedule: schedule.update(
+                {
+                    "ScheduleExpression": lifecycle.schedule_expression(
+                        expiry + timedelta(minutes=1)
+                    )
+                }
+            ),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                operator = ScheduleAws(registered)
+                lifecycle.ensure_schedule(operator, config, expiry)
+                assert operator.schedule is not None
+                mutate(operator.schedule)
+                operator.calls.clear()
+                with (
+                    patch.object(lifecycle, "verify_source"),
+                    patch.object(lifecycle, "assume_role", return_value=operator),
+                    patch.object(
+                        lifecycle, "read_remote_state", return_value=(state, "etag")
+                    ),
+                    patch.object(
+                        lifecycle,
+                        "application_resources_possible",
+                        return_value=False,
+                    ),
+                    patch.object(
+                        lifecycle,
+                        "utc_now",
+                        return_value=registered + timedelta(minutes=10),
+                    ),
+                ):
+                    result = lifecycle.command_status(
+                        config, Path("config.json"), source
+                    )
+                self.assertEqual(result["fallback"], "drifted")
+                self.assertFalse(
+                    any(
+                        service == "scheduler"
+                        and operation in {"create-schedule", "update-schedule"}
+                        for service, operation, _arguments in operator.calls
+                    )
+                )
+
+    def test_extend_rejects_drift_before_any_write(self) -> None:
+        config = configuration()
+        registered = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
+        expiry = registered + timedelta(minutes=60)
+        state = state_at(config, Phase.FALLBACK_REGISTERED)
+        state.set_fallback(
+            schedule_name=config.schedule_name,
+            registered_at=registered,
+            expires_at=expiry,
+        )
+        operator = ScheduleAws(registered)
+        lifecycle.ensure_schedule(operator, config, expiry)
+        assert operator.schedule is not None
+        operator.schedule["State"] = "DISABLED"
+        operator.calls.clear()
+        source = FakeAws()
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(lifecycle, "write_remote_state") as write,
+            patch.object(
+                lifecycle,
+                "utc_now",
+                return_value=registered + timedelta(minutes=10),
+            ),
+        ):
+            with self.assertRaisesRegex(LifecycleError, "read-back drifted"):
+                lifecycle.command_extend(config, Path("config.json"), source, 20)
+        self.assertEqual(write.call_count, 0)
+        self.assertNotIn("fallbackExtendIntent", state.checkpoints)
+        self.assertFalse(
+            any(
+                service == "scheduler" and operation == "update-schedule"
+                for service, operation, _arguments in operator.calls
+            )
+        )
+
+    def test_extend_adopts_effect_before_final_checkpoint(self) -> None:
+        config = configuration()
+        registered = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
+        expiry = registered + timedelta(minutes=60)
+        state = state_at(config, Phase.FALLBACK_REGISTERED)
+        state.set_fallback(
+            schedule_name=config.schedule_name,
+            registered_at=registered,
+            expires_at=expiry,
+        )
+        operator = ScheduleAws(registered)
+        lifecycle.ensure_schedule(operator, config, expiry)
+        operator.calls.clear()
+        source = FakeAws()
+        snapshots: list[dict[str, object]] = []
+
+        def interrupt_after_schedule(
+            _client: object,
+            _config: object,
+            _path: object,
+            current: LifecycleState,
+            **_kwargs: object,
+        ) -> str:
+            snapshots.append(current.to_dict(config))
+            if len(snapshots) == 1:
+                return "intent-etag"
+            raise LifecycleError("synthetic post-update interruption")
+
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(
+                lifecycle, "write_remote_state", side_effect=interrupt_after_schedule
+            ),
+            patch.object(
+                lifecycle,
+                "utc_now",
+                return_value=registered + timedelta(minutes=10),
+            ),
+        ):
+            with self.assertRaisesRegex(LifecycleError, "post-update interruption"):
+                lifecycle.command_extend(config, Path("config.json"), source, 20)
+        interrupted = LifecycleState.from_dict(snapshots[0])[1]
+        self.assertIn("fallbackExtendIntent", interrupted.checkpoints)
+        self.assertEqual(
+            sum(
+                service == "scheduler" and operation == "update-schedule"
+                for service, operation, _arguments in operator.calls
+            ),
+            1,
+        )
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(
+                lifecycle,
+                "read_remote_state",
+                return_value=(interrupted, "intent-etag"),
+            ),
+            patch.object(lifecycle, "write_remote_state", return_value="final-etag"),
+            patch.object(
+                lifecycle,
+                "utc_now",
+                return_value=registered + timedelta(minutes=11),
+            ),
+        ):
+            result = lifecycle.command_extend(config, Path("config.json"), source, 20)
+        self.assertEqual(result["fallback"], "extended-and-verified")
+        self.assertNotIn("fallbackExtendIntent", interrupted.checkpoints)
+        self.assertEqual(
+            sum(
+                service == "scheduler" and operation == "update-schedule"
+                for service, operation, _arguments in operator.calls
+            ),
+            1,
+        )
+
+    def test_migration_retry_reuses_idempotent_task_after_effect_gap(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.APPLIED)
+        operator = MigrationAws(config)
+        source = FakeAws()
+        now = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
+        snapshots: list[dict[str, object]] = []
+
+        def interrupt_before_task_checkpoint(
+            _client: object,
+            _config: object,
+            _path: object,
+            current: LifecycleState,
+            **_kwargs: object,
+        ) -> str:
+            snapshots.append(current.to_dict(config))
+            if len(snapshots) == 1:
+                return "intent-etag"
+            raise LifecycleError("synthetic post-RunTask interruption")
+
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(
+                lifecycle, "terraform_output", return_value=migration_outputs(config)
+            ),
+            patch.object(
+                lifecycle,
+                "write_remote_state",
+                side_effect=interrupt_before_task_checkpoint,
+            ),
+            patch.object(lifecycle, "utc_now", return_value=now),
+        ):
+            with self.assertRaisesRegex(LifecycleError, "post-RunTask interruption"):
+                lifecycle.command_migrate(config, Path("config.json"), source)
+        interrupted = LifecycleState.from_dict(snapshots[0])[1]
+        self.assertEqual(interrupted.checkpoints["migration"], "running")
+        self.assertIn("migrationIntent", interrupted.checkpoints)
+        self.assertNotIn("migrationTaskArn", interrupted.checkpoints)
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(
+                lifecycle,
+                "read_remote_state",
+                return_value=(interrupted, "intent-etag"),
+            ),
+            patch.object(
+                lifecycle, "terraform_output", return_value=migration_outputs(config)
+            ),
+            patch.object(lifecycle, "write_remote_state", return_value="next-etag"),
+            patch.object(lifecycle, "utc_now", return_value=now + timedelta(minutes=1)),
+        ):
+            result = lifecycle.command_migrate(config, Path("config.json"), source)
+        self.assertEqual(result["migration"], "passed")
+        self.assertEqual(operator.created_task_count, 1)
+        self.assertEqual(
+            sum(
+                service == "ecs" and operation == "run-task"
+                for service, operation, _arguments in operator.calls
+            ),
+            2,
+        )
+        self.assertEqual(interrupted.phase, Phase.MIGRATED)
+        self.assertNotIn("migrationIntent", interrupted.checkpoints)
+        self.assertNotIn("migrationTaskArn", interrupted.checkpoints)
+
+    def test_migration_rejects_foreign_task_read_back(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.APPLIED)
+        operator = MigrationAws(
+            config,
+            described_task_definition=(
+                f"arn:{config.partition}:ecs:{config.region}:{config.account_id}:"
+                "task-definition/foreign:1"
+            ),
+        )
+        source = FakeAws()
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(
+                lifecycle, "terraform_output", return_value=migration_outputs(config)
+            ),
+            patch.object(lifecycle, "write_remote_state", return_value="next-etag"),
+            patch.object(
+                lifecycle,
+                "utc_now",
+                return_value=datetime(2026, 8, 11, 0, 0, tzinfo=UTC),
+            ),
+        ):
+            with self.assertRaisesRegex(LifecycleError, "read-back drifted"):
+                lifecycle.command_migrate(config, Path("config.json"), source)
+        self.assertEqual(operator.created_task_count, 1)
+        self.assertEqual(state.phase, Phase.FAILED)
+        self.assertEqual(state.checkpoints["migration"], "unknown")
+
+    def test_migration_retry_rejects_request_parameter_drift(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.APPLIED)
+        outputs = migration_outputs(config)
+        services = outputs["service_identifiers"]["value"]  # type: ignore[index]
+        network = outputs["migration_network"]["value"]  # type: ignore[index]
+        network_configuration = lifecycle.canonical_json(
+            {
+                "awsvpcConfiguration": {
+                    "subnets": network["subnet_ids"],  # type: ignore[index]
+                    "securityGroups": [network["security_group_id"]],  # type: ignore[index]
+                    "assignPublicIp": "ENABLED",
+                }
+            }
+        )
+        tags = [
+            {"key": key, "value": value} for key, value in config.ownership_tags.items()
+        ]
+        now = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
+        intent = lifecycle.expected_migration_intent(
+            state,
+            services,  # type: ignore[arg-type]
+            network_configuration,
+            tags,
+            attempt=1,
+            requested_at=now,
+        )
+        state.transition(
+            Phase.APPLIED,
+            checkpoint={"migration": "running", "migrationIntent": intent},
+        )
+        drifted_outputs = migration_outputs(config)
+        drifted_outputs["migration_network"]["value"]["subnet_ids"] = [  # type: ignore[index]
+            "subnet-foreign"
+        ]
+        operator = MigrationAws(config)
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(lifecycle, "terraform_output", return_value=drifted_outputs),
+        ):
+            with self.assertRaisesRegex(LifecycleError, "foreign or drifted"):
+                lifecycle.command_migrate(config, Path("config.json"), FakeAws())
+        self.assertFalse(
+            any(
+                service == "ecs" and operation == "run-task"
+                for service, operation, _arguments in operator.calls
+            )
+        )
+
+    def test_smoke_process_failure_records_running_then_failed(self) -> None:
+        config = configuration()
+        outputs = {
+            "public_endpoints": {
+                "value": {
+                    "web_https": "https://example.execute-api.us-east-1.amazonaws.com"
+                }
+            }
+        }
+        failures = {
+            "process": LifecycleError("synthetic Playwright failure"),
+            "timeout": lifecycle.subprocess.TimeoutExpired("pnpm", 600),
+        }
+        for label, failure in failures.items():
+            with self.subTest(label=label):
+                state = state_at(config, Phase.SEEDED)
+                operator = FakeAws()
+                source = FakeAws()
+                snapshots: list[dict[str, object]] = []
+
+                def record_state(
+                    _client: object,
+                    _config: object,
+                    _path: object,
+                    current: LifecycleState,
+                    **_kwargs: object,
+                ) -> str:
+                    snapshots.append(current.to_dict(config))
+                    return f"etag-{len(snapshots)}"
+
+                with tempfile.TemporaryDirectory() as directory:
+                    config_path = Path(directory) / "configuration.json"
+                    with (
+                        patch.object(lifecycle, "verify_source"),
+                        patch.object(lifecycle, "assume_role", return_value=operator),
+                        patch.object(
+                            lifecycle,
+                            "read_remote_state",
+                            return_value=(state, "etag"),
+                        ),
+                        patch.object(
+                            lifecycle, "terraform_output", return_value=outputs
+                        ),
+                        patch.object(
+                            lifecycle,
+                            "s3_get_json",
+                            return_value=(
+                                {"username": "synthetic", "password": "private"},
+                                "etag",
+                            ),
+                        ),
+                        patch.object(lifecycle, "require_command", return_value="pnpm"),
+                        patch.object(lifecycle, "run_process", side_effect=failure),
+                        patch.object(
+                            lifecycle,
+                            "write_remote_state",
+                            side_effect=record_state,
+                        ),
+                    ):
+                        with self.assertRaises(type(failure)):
+                            lifecycle.command_smoke(config, config_path, source)
+                self.assertEqual(len(snapshots), 2)
+                running = LifecycleState.from_dict(snapshots[0])[1]
+                failed = LifecycleState.from_dict(snapshots[1])[1]
+                self.assertEqual(running.phase, Phase.SEEDED)
+                self.assertEqual(running.checkpoints["smoke"], "running")
+                self.assertEqual(failed.phase, Phase.FAILED)
+                self.assertEqual(
+                    failed.last_failure["operation"],
+                    "smoke",  # type: ignore[index]
+                )
+                self.assertEqual(sanitized_status(failed)["smoke"], "failed")
+
+    def test_smoke_preserves_cause_when_failure_checkpoint_also_fails(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.SEEDED)
+        operator = FakeAws()
+        causal_error = LifecycleError("synthetic causal Playwright failure")
+        checkpoint_error = LifecycleError("synthetic checkpoint failure")
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "configuration.json"
+            with (
+                patch.object(lifecycle, "verify_source"),
+                patch.object(lifecycle, "assume_role", return_value=operator),
+                patch.object(
+                    lifecycle, "read_remote_state", return_value=(state, "etag")
+                ),
+                patch.object(
+                    lifecycle,
+                    "terraform_output",
+                    return_value={
+                        "public_endpoints": {
+                            "value": {
+                                "web_https": "https://example.execute-api.us-east-1.amazonaws.com"
+                            }
+                        }
+                    },
+                ),
+                patch.object(
+                    lifecycle,
+                    "s3_get_json",
+                    return_value=(
+                        {"username": "synthetic", "password": "private"},
+                        "etag",
+                    ),
+                ),
+                patch.object(lifecycle, "require_command", return_value="pnpm"),
+                patch.object(lifecycle, "run_process", side_effect=causal_error),
+                patch.object(
+                    lifecycle,
+                    "write_remote_state",
+                    side_effect=("running-etag", checkpoint_error),
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    LifecycleError, "causal Playwright"
+                ) as raised:
+                    lifecycle.command_smoke(config, config_path, FakeAws())
+        self.assertIs(raised.exception, causal_error)
+        self.assertIs(raised.exception.__cause__, checkpoint_error)
+        self.assertIn("checkpoint also failed safely", raised.exception.__notes__[0])
 
     def test_destroy_requires_a_remote_write_boundary(self) -> None:
         config = configuration()

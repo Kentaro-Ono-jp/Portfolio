@@ -1559,6 +1559,64 @@ def ensure_schedule(
     return "created"
 
 
+def schedule_matches_payload(
+    schedule: Mapping[str, Any], config: LifecycleConfig, expected_expiry: datetime
+) -> bool:
+    try:
+        verify_schedule_payload(schedule, config, expected_expiry)
+    except LifecycleError:
+        return False
+    return True
+
+
+def update_schedule(
+    client: AwsCli, config: LifecycleConfig, expected_expiry: datetime
+) -> None:
+    client.call(
+        "scheduler",
+        "update-schedule",
+        "--name",
+        config.schedule_name,
+        "--group-name",
+        config.schedule_group_name,
+        "--schedule-expression",
+        schedule_expression(expected_expiry),
+        "--schedule-expression-timezone",
+        "UTC",
+        "--flexible-time-window",
+        '{"Mode":"OFF"}',
+        "--action-after-completion",
+        "NONE",
+        "--state",
+        "ENABLED",
+        "--target",
+        schedule_target(config),
+    )
+
+
+def reconcile_schedule_extension(
+    client: AwsCli,
+    config: LifecycleConfig,
+    current_expiry: datetime,
+    new_expiry: datetime,
+    *,
+    now: datetime,
+) -> str:
+    existing = read_schedule(client, config)
+    if existing is None:
+        raise LifecycleError("Fallback schedule is missing.")
+    if schedule_matches_payload(existing, config, new_expiry):
+        if new_expiry <= now:
+            raise LifecycleError("Extended fallback schedule is expired.")
+        return "reused"
+    verify_schedule_payload(existing, config, current_expiry)
+    if current_expiry <= now:
+        raise LifecycleError("An expired fallback cannot be extended.")
+    update_schedule(client, config, new_expiry)
+    verify_schedule(client, config, new_expiry)
+    return "updated"
+
+
 def schedule_window(schedule: Mapping[str, Any]) -> tuple[datetime, datetime]:
     expression = str(schedule.get("ScheduleExpression", ""))
     if not expression.startswith("at(") or not expression.endswith(")"):
@@ -1592,6 +1650,36 @@ def fallback_intent(
     expiry = parse_time(str(candidate.get("expiresAt", "")))
     validate_fallback_window(registered, expiry)
     return registered, expiry
+
+
+def fallback_extend_intent(
+    state: LifecycleState, config: LifecycleConfig, minutes: int
+) -> tuple[datetime, datetime] | None:
+    candidate = state.checkpoints.get("fallbackExtendIntent")
+    if candidate is None:
+        return None
+    if not isinstance(candidate, dict) or set(candidate) != {
+        "scheduleName",
+        "currentExpiresAt",
+        "newExpiresAt",
+        "addedMinutes",
+    }:
+        raise LifecycleError("Fallback extension intent is malformed.")
+    added_minutes = candidate.get("addedMinutes")
+    if type(added_minutes) is not int or added_minutes <= 0:
+        raise LifecycleError("Fallback extension intent duration is malformed.")
+    if added_minutes != minutes:
+        raise LifecycleError("Fallback extension retry changed its duration.")
+    if candidate.get("scheduleName") != config.schedule_name:
+        raise LifecycleError("Fallback extension intent is foreign.")
+    current = parse_time(str(candidate.get("currentExpiresAt", "")))
+    new_expiry = parse_time(str(candidate.get("newExpiresAt", "")))
+    state_current = parse_time(str(state.fallback.get("expiresAt", "")))
+    registered = parse_time(str(state.fallback.get("registeredAt", "")))
+    if current != state_current or new_expiry != current + timedelta(minutes=minutes):
+        raise LifecycleError("Fallback extension intent drifted.")
+    validate_fallback_window(registered, new_expiry)
+    return current, new_expiry
 
 
 def command_register_fallback(
@@ -1742,6 +1830,148 @@ def command_apply(
     return result
 
 
+def migration_attempt(state: LifecycleState) -> int:
+    candidate = state.checkpoints.get("migrationAttempt", 0)
+    if type(candidate) is not int or candidate < 0:
+        raise LifecycleError("Migration attempt checkpoint is malformed.")
+    return candidate
+
+
+def expected_migration_intent(
+    state: LifecycleState,
+    services: Mapping[str, Any],
+    network_configuration: str,
+    tags: Sequence[Mapping[str, str]],
+    *,
+    attempt: int,
+    requested_at: datetime,
+) -> dict[str, object]:
+    cluster = str(services["ecs_cluster"])
+    task_definition = str(services["migration_task_definition"])
+    request_digest = sha256_json(
+        {
+            "cluster": cluster,
+            "taskDefinition": task_definition,
+            "launchType": "FARGATE",
+            "platformVersion": "1.4.0",
+            "networkConfiguration": json.loads(network_configuration),
+            "tags": list(tags),
+            "propagateTags": "TASK_DEFINITION",
+        }
+    )
+    client_token = sha256_json(
+        {
+            "operation": "migrate",
+            "deploymentId": state.deployment_id,
+            "createdAt": state.created_at,
+            "attempt": attempt,
+            "requestDigest": request_digest,
+        }
+    )
+    return {
+        "attempt": attempt,
+        "requestedAt": isoformat(requested_at),
+        "cluster": cluster,
+        "taskDefinition": task_definition,
+        "requestDigest": request_digest,
+        "clientToken": client_token,
+        "startedBy": f"portfolio-{client_token[:26]}",
+    }
+
+
+def read_migration_intent(
+    state: LifecycleState,
+    services: Mapping[str, Any],
+    network_configuration: str,
+    tags: Sequence[Mapping[str, str]],
+) -> dict[str, object] | None:
+    candidate = state.checkpoints.get("migrationIntent")
+    if candidate is None:
+        return None
+    expected_keys = {
+        "attempt",
+        "requestedAt",
+        "cluster",
+        "taskDefinition",
+        "requestDigest",
+        "clientToken",
+        "startedBy",
+    }
+    if not isinstance(candidate, dict) or set(candidate) != expected_keys:
+        raise LifecycleError("Migration intent is malformed.")
+    attempt = candidate.get("attempt")
+    if type(attempt) is not int or attempt != migration_attempt(state) + 1:
+        raise LifecycleError("Migration intent attempt drifted.")
+    requested_at = parse_time(str(candidate.get("requestedAt", "")))
+    expected = expected_migration_intent(
+        state,
+        services,
+        network_configuration,
+        tags,
+        attempt=attempt,
+        requested_at=requested_at,
+    )
+    if candidate != expected:
+        raise LifecycleError("Migration intent is foreign or drifted.")
+    return expected
+
+
+def validate_migration_task_arn(
+    task_arn: str, config: LifecycleConfig, cluster: str
+) -> None:
+    prefix = (
+        f"arn:{config.partition}:ecs:{config.region}:{config.account_id}:"
+        f"task/{cluster}/"
+    )
+    task_id = task_arn.removeprefix(prefix)
+    if (
+        not task_arn.startswith(prefix)
+        or not task_id
+        or len(task_id) > 64
+        or any(not (character.isalnum() or character == "-") for character in task_id)
+    ):
+        raise LifecycleError("Migration task identity is foreign or malformed.")
+
+
+def verify_migration_task(
+    task: Mapping[str, Any],
+    config: LifecycleConfig,
+    intent: Mapping[str, object],
+    task_arn: str,
+) -> int:
+    cluster = str(intent["cluster"])
+    cluster_arn = (
+        f"arn:{config.partition}:ecs:{config.region}:{config.account_id}:"
+        f"cluster/{cluster}"
+    )
+    raw_tags = task.get("tags")
+    if not isinstance(raw_tags, list):
+        raise LifecycleError("Migration task tags are missing.")
+    tags = {
+        str(item.get("key")): str(item.get("value"))
+        for item in raw_tags
+        if isinstance(item, dict)
+    }
+    containers = task.get("containers")
+    if (
+        task.get("taskArn") != task_arn
+        or task.get("clusterArn") != cluster_arn
+        or task.get("taskDefinitionArn") != intent["taskDefinition"]
+        or task.get("startedBy") != intent["startedBy"]
+        or task.get("launchType") != "FARGATE"
+        or task.get("platformVersion") != "1.4.0"
+        or task.get("lastStatus") != "STOPPED"
+        or task.get("desiredStatus") != "STOPPED"
+        or any(tags.get(key) != value for key, value in config.ownership_tags.items())
+        or not isinstance(containers, list)
+        or len(containers) != 1
+        or not isinstance(containers[0], dict)
+        or type(containers[0].get("exitCode")) is not int
+    ):
+        raise LifecycleError("Migration task read-back drifted.")
+    return int(containers[0]["exitCode"])
+
+
 def command_migrate(
     config: LifecycleConfig, config_path: Path, source: AwsCli
 ) -> dict[str, object]:
@@ -1774,60 +2004,132 @@ def command_migrate(
     tags = [
         {"key": key, "value": value} for key, value in config.ownership_tags.items()
     ]
-    response = (
-        operator.call(
-            "ecs",
-            "run-task",
-            "--cluster",
-            str(services["ecs_cluster"]),
-            "--task-definition",
-            str(services["migration_task_definition"]),
-            "--launch-type",
-            "FARGATE",
-            "--platform-version",
-            "1.4.0",
-            "--network-configuration",
+    intent = read_migration_intent(state, services, network_configuration, tags)
+    intent_was_present = intent is not None
+    if intent is None:
+        requested_at = utc_now()
+        intent = expected_migration_intent(
+            state,
+            services,
             network_configuration,
-            "--started-by",
-            f"portfolio-{config.source_sha[:20]}",
-            "--tags",
-            canonical_json(tags),
-            "--propagate-tags",
-            "TASK_DEFINITION",
-            resource_delta=1,
+            tags,
+            attempt=migration_attempt(state) + 1,
+            requested_at=requested_at,
         )
-        or {}
-    )
-    tasks = response.get("tasks")
-    if not isinstance(tasks, list) or len(tasks) != 1:
-        raise LifecycleError("Migration did not start one exact ECS task.")
-    task_arn = str(tasks[0].get("taskArn", ""))
-    operator.wait(
-        "ecs",
-        "tasks-stopped",
-        "--cluster",
-        str(services["ecs_cluster"]),
-        "--tasks",
-        task_arn,
-    )
-    described = (
-        operator.call(
+        state.transition(
+            Phase.APPLIED,
+            checkpoint={"migration": "running", "migrationIntent": intent},
+        )
+        etag = write_remote_state(operator, config, config_path, state, if_match=etag)
+    task_arn_checkpoint = state.checkpoints.get("migrationTaskArn")
+    if task_arn_checkpoint is None:
+        requested_at = parse_time(str(intent["requestedAt"]))
+        if intent_was_present and utc_now() >= requested_at + timedelta(minutes=50):
+            raise LifecycleError(
+                "Unreconciled migration intent exceeded the safe ECS idempotency window."
+            )
+        response = (
+            operator.call(
+                "ecs",
+                "run-task",
+                "--cluster",
+                str(intent["cluster"]),
+                "--task-definition",
+                str(intent["taskDefinition"]),
+                "--launch-type",
+                "FARGATE",
+                "--platform-version",
+                "1.4.0",
+                "--network-configuration",
+                network_configuration,
+                "--started-by",
+                str(intent["startedBy"]),
+                "--client-token",
+                str(intent["clientToken"]),
+                "--tags",
+                canonical_json(tags),
+                "--propagate-tags",
+                "TASK_DEFINITION",
+                resource_delta=1,
+            )
+            or {}
+        )
+        tasks = response.get("tasks")
+        failures = response.get("failures", [])
+        if (
+            not isinstance(tasks, list)
+            or len(tasks) != 1
+            or not isinstance(failures, list)
+            or failures
+        ):
+            raise LifecycleError("Migration did not start one exact ECS task.")
+        task_arn = str(tasks[0].get("taskArn", ""))
+        validate_migration_task_arn(task_arn, config, str(intent["cluster"]))
+        state.transition(
+            Phase.APPLIED,
+            checkpoint={"migration": "running", "migrationTaskArn": task_arn},
+        )
+        etag = write_remote_state(operator, config, config_path, state, if_match=etag)
+    else:
+        if not isinstance(task_arn_checkpoint, str):
+            raise LifecycleError("Migration task checkpoint is malformed.")
+        task_arn = task_arn_checkpoint
+        validate_migration_task_arn(task_arn, config, str(intent["cluster"]))
+    try:
+        operator.wait(
             "ecs",
-            "describe-tasks",
+            "tasks-stopped",
             "--cluster",
-            str(services["ecs_cluster"]),
+            str(intent["cluster"]),
             "--tasks",
             task_arn,
         )
-        or {}
-    )
-    stopped = described.get("tasks", [])
-    containers = stopped[0].get("containers", []) if stopped else []
-    if len(containers) != 1 or containers[0].get("exitCode") != 0:
+        described = (
+            operator.call(
+                "ecs",
+                "describe-tasks",
+                "--cluster",
+                str(intent["cluster"]),
+                "--tasks",
+                task_arn,
+                "--include",
+                "TAGS",
+            )
+            or {}
+        )
+        stopped = described.get("tasks")
+        failures = described.get("failures", [])
+        if (
+            not isinstance(stopped, list)
+            or len(stopped) != 1
+            or not isinstance(stopped[0], dict)
+            or not isinstance(failures, list)
+            or failures
+        ):
+            raise LifecycleError("Migration task read-back was incomplete.")
+        exit_code = verify_migration_task(stopped[0], config, intent, task_arn)
+    except LifecycleError as observation_error:
+        state.record_failure("migrate")
+        state.checkpoints["migration"] = "unknown"
+        try:
+            write_remote_state(operator, config, config_path, state, if_match=etag)
+        except LifecycleError as checkpoint_error:
+            observation_error.add_note(
+                "The migration observation failure checkpoint also failed safely."
+            )
+            raise observation_error from checkpoint_error
+        raise
+    if exit_code != 0:
+        state.checkpoints["migrationAttempt"] = intent["attempt"]
+        state.checkpoints.pop("migrationIntent", None)
+        state.checkpoints.pop("migrationTaskArn", None)
         state.record_failure("migrate")
         state.checkpoints["migration"] = "failed"
         write_remote_state(operator, config, config_path, state, if_match=etag)
         raise LifecycleError("Migration task did not exit successfully.")
+    state.checkpoints["migrationAttempt"] = intent["attempt"]
+    state.checkpoints.pop("migrationIntent", None)
+    state.checkpoints.pop("migrationTaskArn", None)
     state.transition(Phase.MIGRATED, checkpoint={"migration": "passed"})
     write_remote_state(operator, config, config_path, state, if_match=etag)
     effects = Effects()
@@ -2014,20 +2316,8 @@ def command_smoke(
     pnpm_command = [pnpm]
     if os.name == "nt" and Path(pnpm).suffix.lower() in {".cmd", ".bat"}:
         pnpm_command = [require_command("cmd"), "/d", "/c", pnpm]
-    run_process(
-        [
-            *pnpm_command,
-            "exec",
-            "playwright",
-            "test",
-            "--config",
-            "playwright.aws.config.ts",
-        ],
-        env=env,
-        timeout=600,
-        label="Authenticated external AWS smoke",
-    )
-    smoke = load_json(runtime_directory(config_path) / "smoke-result.json")
+    state.transition(Phase.SEEDED, checkpoint={"smoke": "running"})
+    etag = write_remote_state(operator, config, config_path, state, if_match=etag)
     required = {
         "externalHttps": True,
         "authorizationCodePkce": True,
@@ -2039,11 +2329,34 @@ def command_smoke(
         "auditHistory": True,
         "sourcePrivate": True,
     }
-    if any(smoke.get(key) != expected for key, expected in required.items()):
+    try:
+        run_process(
+            [
+                *pnpm_command,
+                "exec",
+                "playwright",
+                "test",
+                "--config",
+                "playwright.aws.config.ts",
+            ],
+            env=env,
+            timeout=600,
+            label="Authenticated external AWS smoke",
+        )
+        smoke = load_json(runtime_directory(config_path) / "smoke-result.json")
+        if any(smoke.get(key) != expected for key, expected in required.items()):
+            raise LifecycleError("Authenticated AWS smoke evidence was incomplete.")
+    except (LifecycleError, subprocess.TimeoutExpired) as smoke_error:
         state.record_failure("smoke")
         state.checkpoints["smoke"] = "failed"
-        write_remote_state(operator, config, config_path, state, if_match=etag)
-        raise LifecycleError("Authenticated AWS smoke evidence was incomplete.")
+        try:
+            write_remote_state(operator, config, config_path, state, if_match=etag)
+        except LifecycleError as checkpoint_error:
+            smoke_error.add_note(
+                "The authenticated smoke failure checkpoint also failed safely."
+            )
+            raise smoke_error from checkpoint_error
+        raise
     state.transition(Phase.SMOKE_PASSED, checkpoint={"smoke": "passed"})
     write_remote_state(operator, config, config_path, state, if_match=etag)
     effects = Effects()
@@ -2072,30 +2385,45 @@ def command_extend(
     if remote is None:
         raise LifecycleError("Remote lifecycle is missing.")
     state, etag = remote
-    current = parse_time(str(state.fallback.get("expiresAt", "")))
-    new_expiry = current + timedelta(minutes=minutes)
-    state.extend_fallback(new_expiry)
-    operator.call(
-        "scheduler",
-        "update-schedule",
-        "--name",
-        config.schedule_name,
-        "--group-name",
-        config.schedule_group_name,
-        "--schedule-expression",
-        schedule_expression(new_expiry),
-        "--schedule-expression-timezone",
-        "UTC",
-        "--flexible-time-window",
-        '{"Mode":"OFF"}',
-        "--action-after-completion",
-        "NONE",
-        "--state",
-        "ENABLED",
-        "--target",
-        schedule_target(config),
+    intent = fallback_extend_intent(state, config, minutes)
+    instant = utc_now()
+    if intent is None:
+        current = parse_time(str(state.fallback.get("expiresAt", "")))
+        new_expiry = current + timedelta(minutes=minutes)
+        state.validate_fallback_extension(new_expiry, now=instant)
+        verify_schedule(operator, config, current)
+        state.transition(
+            state.phase,
+            checkpoint={
+                "fallbackExtendIntent": {
+                    "scheduleName": config.schedule_name,
+                    "currentExpiresAt": isoformat(current),
+                    "newExpiresAt": isoformat(new_expiry),
+                    "addedMinutes": minutes,
+                }
+            },
+        )
+        etag = write_remote_state(operator, config, config_path, state, if_match=etag)
+    else:
+        current, new_expiry = intent
+    extension = reconcile_schedule_extension(
+        operator,
+        config,
+        current,
+        new_expiry,
+        now=instant,
     )
-    verify_schedule(operator, config, new_expiry)
+    registered = parse_time(str(state.fallback.get("registeredAt", "")))
+    state.set_fallback(
+        schedule_name=config.schedule_name,
+        registered_at=registered,
+        expires_at=new_expiry,
+    )
+    state.checkpoints.pop("fallbackExtendIntent", None)
+    state.transition(
+        state.phase,
+        checkpoint={"fallback": "verified", "fallbackExtension": extension},
+    )
     write_remote_state(operator, config, config_path, state, if_match=etag)
     effects = Effects()
     effects.add(source.effects)
@@ -2704,23 +3032,22 @@ def command_status(
     status = sanitized_status(state)
     if state is not None and state.fallback.get("verified"):
         expiry = parse_time(str(state.fallback["expiresAt"]))
-        schedule = operator.call(
-            "scheduler",
-            "get-schedule",
-            "--name",
-            config.schedule_name,
-            "--group-name",
-            config.schedule_group_name,
-            allow_error_codes=("ResourceNotFoundException",),
-        )
-        status["fallback"] = (
-            "verified"
-            if schedule is not None and expiry > utc_now()
-            else "expired-or-missing"
-        )
+        schedule = read_schedule(operator, config)
+        instant = utc_now()
+        if schedule is None:
+            status["fallback"] = "expired-or-missing"
+        else:
+            try:
+                verify_schedule_payload(schedule, config, expiry)
+            except LifecycleError:
+                status["fallback"] = "drifted"
+            else:
+                status["fallback"] = (
+                    "verified" if expiry > instant else "expired-or-missing"
+                )
         status["fallbackExpiresAt"] = isoformat(expiry)
         status["fallbackRemainingMinutes"] = max(
-            0, int((expiry - utc_now()).total_seconds() // 60)
+            0, int((expiry - instant).total_seconds() // 60)
         )
     if state is not None and application_resources_possible(state):
         services = (

@@ -263,8 +263,15 @@ def main() -> int:
         "read_exact_image_digests",
         '"imagePublication"',
         '"fallbackIntent"',
+        '"fallbackExtendIntent"',
         "ensure_schedule",
+        "reconcile_schedule_extension",
         '"fallbackRegistration"',
+        '"migrationIntent"',
+        '"migrationTaskArn"',
+        '"--client-token"',
+        "verify_migration_task",
+        'checkpoint={"smoke": "running"}',
     ):
         if token not in lifecycle_source:
             raise RuntimeError("Lifecycle effect-before-checkpoint recovery drifted")

@@ -399,6 +399,12 @@ class LifecycleState:
     def extend_fallback(
         self, new_expiry: datetime, *, now: datetime | None = None
     ) -> None:
+        self.validate_fallback_extension(new_expiry, now=now)
+        self.fallback["expiresAt"] = isoformat(new_expiry)
+
+    def validate_fallback_extension(
+        self, new_expiry: datetime, *, now: datetime | None = None
+    ) -> None:
         if not self.fallback.get("verified"):
             raise LifecycleError("An active verified fallback is required.")
         registered_at = parse_time(str(self.fallback["registeredAt"]))
@@ -410,7 +416,6 @@ class LifecycleState:
             raise LifecycleError("Extend must move an active fallback later.")
         if new_expiry > registered_at + timedelta(minutes=MAX_TTL_MINUTES):
             raise LifecycleError("Extend exceeds the accepted two-hour maximum.")
-        self.fallback["expiresAt"] = isoformat(new_expiry)
 
     def to_dict(self, config: LifecycleConfig) -> dict[str, object]:
         return {
