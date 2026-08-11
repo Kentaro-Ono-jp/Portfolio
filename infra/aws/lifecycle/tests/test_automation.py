@@ -4,7 +4,9 @@ import sys
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
@@ -19,6 +21,7 @@ from aws_automation_guard import (  # noqa: E402
     select_route,
 )
 from aws_automation_maintenance import (  # noqa: E402
+    AwsCli,
     aws_error_code,
     build_contract,
     ensure_monthly_controllers,
@@ -341,13 +344,29 @@ class AutomationGuardTests(unittest.TestCase):
             state_bucket="reactorfront-111122223333-us-east-1-state",
         )
 
-        self.assertEqual(result, {"planned": 5, "created": 0})
+        self.assertEqual(
+            result,
+            {"planned": 5, "plannedUpdates": 0, "created": 0},
+        )
         self.assertFalse(
             any(
                 operation.startswith(("create", "put", "tag"))
                 for _, operation in aws.calls
             )
         )
+
+    def test_every_owner_maintenance_call_pins_the_selected_region(self) -> None:
+        aws = AwsCli("aws", region="us-east-1")
+        completed = SimpleNamespace(returncode=0, stdout="{}", stderr="")
+
+        with patch(
+            "aws_automation_maintenance.subprocess.run", return_value=completed
+        ) as run:
+            aws.call("sts", "get-caller-identity")
+
+        command = run.call_args.args[0]
+        self.assertEqual(command.count("--region"), 1)
+        self.assertEqual(command[command.index("--region") + 1], "us-east-1")
 
 
 if __name__ == "__main__":

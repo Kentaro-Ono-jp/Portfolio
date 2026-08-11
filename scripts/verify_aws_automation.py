@@ -178,7 +178,10 @@ def main() -> int:
         'caller_arn.endswith(":user/ReactorFrontNoel")',
         '"mode": "apply" if args.apply else "plan"',
         '"accountSpecificValuesPublished": False',
+        '"awsRegionPinned": args.region',
         '"postWriteReadback": args.apply',
+        "aws = AwsCli(args.aws_cli, region=args.region)",
+        'lifecycle_env["AWS_DEFAULT_REGION"] = args.region',
         "lifecycle.verify_controller(config, reader)",
         "lifecycle.verify_image_repositories(config, reader)",
         "lifecycle.verify_state_bucket(config, reader)",
@@ -197,8 +200,12 @@ def main() -> int:
         "logs:create-log-group",
         "logs:put-retention-policy",
         "logs:tag-resource",
+        "logs:untag-resource",
         "scheduler:create-schedule-group",
+        "scheduler:tag-resource",
+        "scheduler:untag-resource",
         "codebuild:create-project",
+        "codebuild:update-project",
     }
     if WRITE_OPERATIONS != expected_writes:
         raise RuntimeError("Static maintenance write inventory drifted")
