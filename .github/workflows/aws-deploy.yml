@@ -51,6 +51,9 @@ jobs:
           terraform_version: 1.15.8
           terraform_wrapper: false
 
+      - name: Verify the exact GitHub OIDC claims
+        run: python3 scripts/aws_oidc_claim_guard.py
+
       - name: Obtain the short-lived GitHub OIDC session
         id: oidc
         uses: aws-actions/configure-aws-credentials@v6.2.3
@@ -65,6 +68,7 @@ jobs:
           unset-current-credentials: true
 
       - name: Configure the isolated lifecycle
+        id: configure
         run: >-
           python scripts/aws_lifecycle.py
           --config ".git/portfolio-aws-lifecycle/${{ steps.guard.outputs.mode }}/config.json"
@@ -87,7 +91,7 @@ jobs:
           deploy
 
       - name: Refresh the short-lived cleanup session
-        if: always() && steps.guard.outcome == 'success'
+        if: always() && steps.configure.outcome == 'success'
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
           audience: sts.amazonaws.com
@@ -101,7 +105,7 @@ jobs:
 
       - name: Destroy the exact environment
         id: destroy
-        if: always() && steps.guard.outcome == 'success'
+        if: always() && steps.configure.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
@@ -114,7 +118,7 @@ jobs:
 
       - name: Prove service and tag residue is zero
         id: sweep
-        if: always() && steps.guard.outcome == 'success'
+        if: always() && steps.configure.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |

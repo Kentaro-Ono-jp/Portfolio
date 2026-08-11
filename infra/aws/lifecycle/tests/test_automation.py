@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import sys
 import unittest
 from dataclasses import dataclass
@@ -8,11 +10,10 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
 
-from aws_automation_guard import (  # noqa: E402
+from aws_automation_guard import (
     EXPECTED_ENVIRONMENT,
     EXPECTED_REF,
     EXPECTED_REPOSITORY,
@@ -20,7 +21,7 @@ from aws_automation_guard import (  # noqa: E402
     PERMANENT_SCHEDULE,
     select_route,
 )
-from aws_automation_maintenance import (  # noqa: E402
+from aws_automation_maintenance import (
     AwsCli,
     aws_error_code,
     build_contract,
@@ -29,6 +30,11 @@ from aws_automation_maintenance import (  # noqa: E402
     is_transient_aws_failure,
     lifecycle_config,
     ordered_role_specs,
+)
+from aws_oidc_claim_guard import (
+    decode_claims,
+    expected_claims,
+    validate_claims,
 )
 
 
@@ -367,6 +373,48 @@ class AutomationGuardTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command.count("--region"), 1)
         self.assertEqual(command[command.index("--region") + 1], "us-east-1")
+
+    def test_oidc_claim_guard_accepts_both_exact_event_subjects(self) -> None:
+        for event_name in ("workflow_dispatch", "schedule"):
+            claims = expected_claims(event_name)
+            with self.subTest(event_name=event_name):
+                validate_claims(claims, event_name)
+                self.assertEqual(
+                    claims["sub"],
+                    (
+                        "repo:Kentaro-Ono-jp/Portfolio:environment:aws-deployment:"
+                        "job_workflow_ref:Kentaro-Ono-jp/Portfolio/.github/"
+                        "workflows/aws-deploy.yml@refs/heads/main:"
+                        f"event_name:{event_name}"
+                    ),
+                )
+
+    def test_oidc_claim_guard_rejects_every_identity_dimension(self) -> None:
+        expected = expected_claims("workflow_dispatch")
+        for key in expected:
+            mutation = dict(expected)
+            mutation[key] = "unexpected"
+            with (
+                self.subTest(key=key),
+                self.assertRaisesRegex(RuntimeError, f"OIDC claim mismatch: {key}"),
+            ):
+                validate_claims(mutation, "workflow_dispatch")
+
+    def test_oidc_claim_decoder_exposes_only_the_payload_object(self) -> None:
+        payload = expected_claims("schedule")
+
+        def encode(value: dict[str, str]) -> str:
+            return (
+                base64.urlsafe_b64encode(json.dumps(value).encode("utf-8"))
+                .decode("ascii")
+                .rstrip("=")
+            )
+
+        token = f"{encode({'alg': 'none'})}.{encode(payload)}.signature"
+
+        self.assertEqual(decode_claims(token), payload)
+        with self.assertRaisesRegex(RuntimeError, "token shape"):
+            decode_claims("not-a-jwt")
 
 
 if __name__ == "__main__":
