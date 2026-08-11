@@ -260,6 +260,15 @@ def main() -> int:
         if token not in lifecycle_source:
             raise RuntimeError("Lifecycle zero-residue image proof drifted")
     for token in (
+        "read_exact_image_digests",
+        '"imagePublication"',
+        '"fallbackIntent"',
+        "ensure_schedule",
+        '"fallbackRegistration"',
+    ):
+        if token not in lifecycle_source:
+            raise RuntimeError("Lifecycle effect-before-checkpoint recovery drifted")
+    for token in (
         '"-refresh=false"',
         "retain_private_process_diagnostic",
         "aws_secretsmanager_secret_version.broker",

@@ -180,6 +180,69 @@ class FakeControllerAws(FakeAws):
         return super().call(service, operation, *arguments)
 
 
+class ImageInventoryAws(FakeAws):
+    def __init__(
+        self, images: dict[str, str], *, image_tag_override: str | None = None
+    ) -> None:
+        super().__init__()
+        self.images = images
+        self.image_tag_override = image_tag_override
+
+    def call(self, service: str, operation: str, *arguments: str, **kwargs: object):
+        if service == "ecr" and operation == "describe-images":
+            self.calls.append((service, operation, arguments))
+            repository = arguments[arguments.index("--repository-name") + 1]
+            purpose = repository.rsplit("/", maxsplit=1)[-1]
+            digest = self.images.get(purpose)
+            image_tag = arguments[arguments.index("--image-ids") + 1].removeprefix(
+                "imageTag="
+            )
+            image_tag = self.image_tag_override or image_tag
+            return (
+                None
+                if digest is None
+                else {
+                    "imageDetails": [{"imageDigest": digest, "imageTags": [image_tag]}]
+                }
+            )
+        return super().call(service, operation, *arguments, **kwargs)
+
+
+class ScheduleAws(FakeAws):
+    def __init__(self, registered: datetime) -> None:
+        super().__init__()
+        self.registered = registered
+        self.schedule: dict[str, object] | None = None
+
+    def call(self, service: str, operation: str, *arguments: str, **kwargs: object):
+        if service == "scheduler" and operation == "get-schedule":
+            self.calls.append((service, operation, arguments))
+            return self.schedule
+        if service == "scheduler" and operation == "create-schedule":
+            self.calls.append((service, operation, arguments))
+            self.schedule = {
+                "Name": arguments[arguments.index("--name") + 1],
+                "GroupName": arguments[arguments.index("--group-name") + 1],
+                "CreationDate": self.registered.isoformat(),
+                "State": "ENABLED",
+                "ScheduleExpression": arguments[
+                    arguments.index("--schedule-expression") + 1
+                ],
+                "ScheduleExpressionTimezone": arguments[
+                    arguments.index("--schedule-expression-timezone") + 1
+                ],
+                "FlexibleTimeWindow": json.loads(
+                    arguments[arguments.index("--flexible-time-window") + 1]
+                ),
+                "ActionAfterCompletion": arguments[
+                    arguments.index("--action-after-completion") + 1
+                ],
+                "Target": json.loads(arguments[arguments.index("--target") + 1]),
+            }
+            return {}
+        return super().call(service, operation, *arguments, **kwargs)
+
+
 class LifecycleContractTests(unittest.TestCase):
     def test_image_buildspec_only_is_reconciled_and_read_back(self) -> None:
         config = configuration()
@@ -368,6 +431,253 @@ class LifecycleContractTests(unittest.TestCase):
             }
         )
         self.assertEqual(len(state.images), 3)
+
+    def test_publish_retry_adopts_complete_immutable_image_effect(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.PREFLIGHTED)
+        digests = {
+            "web": "sha256:" + "1" * 64,
+            "api": "sha256:" + "2" * 64,
+            "ml": "sha256:" + "3" * 64,
+        }
+        operator = ImageInventoryAws(digests)
+        source = FakeAws("arn:aws:iam::111122223333:user/ReactorFrontNoel")
+        with (
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "run_resume_preflight", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(
+                lifecycle, "write_remote_state", return_value="next-etag"
+            ) as write,
+        ):
+            result = lifecycle.command_publish_images(
+                config, Path("config.json"), source
+            )
+        self.assertEqual(result["imagePublication"], "reused")
+        self.assertEqual(state.phase, Phase.IMAGES_PUBLISHED)
+        self.assertEqual(state.images, digests)
+        self.assertEqual(write.call_count, 1)
+        self.assertFalse(
+            any(
+                service == "codebuild" and operation == "start-build"
+                for service, operation, _arguments in operator.calls
+            )
+        )
+
+    def test_publish_retry_rejects_partial_immutable_image_effect(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.PREFLIGHTED)
+        operator = ImageInventoryAws({"web": "sha256:" + "1" * 64})
+        source = FakeAws("arn:aws:iam::111122223333:user/ReactorFrontNoel")
+        with (
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "run_resume_preflight", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(lifecycle, "write_remote_state", return_value="failed-etag"),
+        ):
+            with self.assertRaisesRegex(LifecycleError, "publication is partial"):
+                lifecycle.command_publish_images(config, Path("config.json"), source)
+        self.assertEqual(state.phase, Phase.FAILED)
+        self.assertFalse(
+            any(
+                service == "codebuild" and operation == "start-build"
+                for service, operation, _arguments in operator.calls
+            )
+        )
+
+    def test_immutable_image_inventory_rejects_foreign_source_tag(self) -> None:
+        config = configuration()
+        operator = ImageInventoryAws(
+            {
+                "web": "sha256:" + "1" * 64,
+                "api": "sha256:" + "2" * 64,
+                "ml": "sha256:" + "3" * 64,
+            },
+            image_tag_override="sha-foreign",
+        )
+        with self.assertRaisesRegex(LifecycleError, "bind the exact source"):
+            lifecycle.read_exact_image_digests(operator, config)
+
+    def test_fresh_publication_starts_one_build_and_reads_back_digests(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.PREFLIGHTED)
+        digests = {
+            "web": "sha256:" + "1" * 64,
+            "api": "sha256:" + "2" * 64,
+            "ml": "sha256:" + "3" * 64,
+        }
+        operator = ImageInventoryAws({})
+        source = FakeAws("arn:aws:iam::111122223333:user/ReactorFrontNoel")
+
+        def finish_build(_client: object, _build_id: str) -> dict[str, object]:
+            operator.images = digests
+            return {
+                "exportedEnvironmentVariables": [
+                    {"name": f"{purpose.upper()}_DIGEST", "value": digest}
+                    for purpose, digest in digests.items()
+                ]
+            }
+
+        original_call = operator.call
+
+        def call_with_build(
+            service: str, operation: str, *arguments: str, **kwargs: object
+        ):
+            if service == "codebuild" and operation == "start-build":
+                operator.calls.append((service, operation, arguments))
+                return {"build": {"id": "exact-build"}}
+            return original_call(service, operation, *arguments, **kwargs)
+
+        operator.call = call_with_build  # type: ignore[method-assign]
+        with (
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "run_resume_preflight", return_value=operator),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(lifecycle, "wait_for_build", side_effect=finish_build),
+            patch.object(lifecycle, "write_remote_state", return_value="next-etag"),
+        ):
+            result = lifecycle.command_publish_images(
+                config, Path("config.json"), source
+            )
+        self.assertEqual(result["imagePublication"], "built")
+        self.assertEqual(
+            sum(
+                service == "codebuild" and operation == "start-build"
+                for service, operation, _arguments in operator.calls
+            ),
+            1,
+        )
+
+    def test_schedule_retry_adopts_effect_before_checkpoint(self) -> None:
+        config = configuration()
+        registered = lifecycle.utc_now()
+        expiry = registered + timedelta(minutes=60)
+        operator = ScheduleAws(registered)
+        self.assertEqual(lifecycle.ensure_schedule(operator, config, expiry), "created")
+        self.assertEqual(lifecycle.ensure_schedule(operator, config, expiry), "reused")
+        creates = [
+            call
+            for call in operator.calls
+            if call[0] == "scheduler" and call[1] == "create-schedule"
+        ]
+        self.assertEqual(len(creates), 1)
+
+    def test_schedule_retry_rejects_mismatched_existing_effect(self) -> None:
+        config = configuration()
+        registered = lifecycle.utc_now()
+        expiry = registered + timedelta(minutes=60)
+        operator = ScheduleAws(registered)
+        self.assertEqual(lifecycle.ensure_schedule(operator, config, expiry), "created")
+        assert operator.schedule is not None
+        target = dict(operator.schedule["Target"])  # type: ignore[arg-type]
+        target["Arn"] = "arn:aws:codebuild:us-east-1:111122223333:project/foreign"
+        operator.schedule["Target"] = target
+        with self.assertRaisesRegex(LifecycleError, "read-back drifted"):
+            lifecycle.ensure_schedule(operator, config, expiry)
+        self.assertEqual(
+            sum(
+                service == "scheduler" and operation == "create-schedule"
+                for service, operation, _arguments in operator.calls
+            ),
+            1,
+        )
+
+    def test_fallback_intent_is_checkpointed_before_schedule_creation(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.IMAGES_PUBLISHED)
+        state.set_images(
+            {
+                "web": "sha256:" + "1" * 64,
+                "api": "sha256:" + "2" * 64,
+                "ml": "sha256:" + "3" * 64,
+            }
+        )
+        registered = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
+        operator = ScheduleAws(registered)
+        source = FakeAws()
+        snapshots: list[dict[str, object]] = []
+
+        def record_state(
+            _client: object,
+            _config: object,
+            _path: object,
+            current: LifecycleState,
+            **_kwargs: object,
+        ) -> str:
+            snapshots.append(current.to_dict(config))
+            return f"etag-{len(snapshots)}"
+
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "verify_controller") as verify_controller,
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(
+                lifecycle,
+                "create_plan",
+                return_value={
+                    "fresh": True,
+                    "counts": {},
+                    "createdAt": lifecycle.isoformat(registered),
+                },
+            ),
+            patch.object(lifecycle, "write_remote_state", side_effect=record_state),
+            patch.object(lifecycle, "utc_now", return_value=registered),
+        ):
+            lifecycle.command_register_fallback(config, Path("config.json"), source, 60)
+        first_state = snapshots[0]
+        self.assertEqual(first_state["phase"], Phase.IMAGES_PUBLISHED.value)
+        self.assertIn("fallbackIntent", first_state["checkpoints"])
+        self.assertEqual(snapshots[-1]["phase"], Phase.FALLBACK_REGISTERED.value)
+        self.assertNotIn("fallbackIntent", snapshots[-1]["checkpoints"])
+        verify_controller.assert_called_once_with(
+            config, operator, reconcile_image_buildspec=False
+        )
+
+    def test_register_fallback_adopts_existing_effect_without_intent(self) -> None:
+        config = configuration()
+        state = state_at(config, Phase.IMAGES_PUBLISHED)
+        state.set_images(
+            {
+                "web": "sha256:" + "1" * 64,
+                "api": "sha256:" + "2" * 64,
+                "ml": "sha256:" + "3" * 64,
+            }
+        )
+        registered = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
+        expiry = registered + timedelta(minutes=60)
+        operator = ScheduleAws(registered)
+        with patch.object(lifecycle, "utc_now", return_value=registered):
+            lifecycle.ensure_schedule(operator, config, expiry)
+        operator.calls.clear()
+        source = FakeAws()
+        with (
+            patch.object(lifecycle, "verify_source"),
+            patch.object(lifecycle, "assume_role", return_value=operator),
+            patch.object(lifecycle, "verify_controller"),
+            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
+            patch.object(
+                lifecycle,
+                "create_plan",
+                return_value={
+                    "fresh": True,
+                    "counts": {},
+                    "createdAt": lifecycle.isoformat(registered),
+                },
+            ),
+            patch.object(lifecycle, "write_remote_state", return_value="next-etag"),
+            patch.object(lifecycle, "utc_now", return_value=registered),
+        ):
+            result = lifecycle.command_register_fallback(
+                config, Path("config.json"), source, 60
+            )
+        self.assertEqual(result["fallbackRegistration"], "reused")
+        self.assertFalse(
+            any(
+                service == "scheduler" and operation == "create-schedule"
+                for service, operation, _arguments in operator.calls
+            )
+        )
 
     def test_destroy_requires_a_remote_write_boundary(self) -> None:
         config = configuration()

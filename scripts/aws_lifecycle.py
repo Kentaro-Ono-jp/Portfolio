@@ -17,6 +17,7 @@ from typing import Any, Mapping, Sequence
 from urllib.parse import urlparse
 
 from aws_lifecycle_core import (
+    DIGEST_PATTERN,
     LifecycleConfig,
     LifecycleError,
     LifecycleState,
@@ -29,6 +30,7 @@ from aws_lifecycle_core import (
     sha256_file,
     sha256_json,
     utc_now,
+    validate_fallback_window,
 )
 
 
@@ -1320,6 +1322,34 @@ def command_preflight(
     return {**proof, **effects.result()}
 
 
+def read_exact_image_digests(client: AwsCli, config: LifecycleConfig) -> dict[str, str]:
+    images: dict[str, str] = {}
+    for purpose in ("web", "api", "ml"):
+        response = client.call(
+            "ecr",
+            "describe-images",
+            "--repository-name",
+            f"{config.name_prefix}/{purpose}",
+            "--image-ids",
+            f"imageTag={config.image_tag}",
+            allow_error_codes=("ImageNotFoundException",),
+        )
+        if response is None:
+            continue
+        details = response.get("imageDetails", [])
+        if not isinstance(details, list) or len(details) != 1:
+            raise LifecycleError("Exact immutable image inventory was ambiguous.")
+        detail = details[0]
+        tags = detail.get("imageTags", []) if isinstance(detail, dict) else []
+        if not isinstance(tags, list) or config.image_tag not in tags:
+            raise LifecycleError("Immutable image tag did not bind the exact source.")
+        digest = str(detail.get("imageDigest", ""))
+        if DIGEST_PATTERN.fullmatch(digest) is None:
+            raise LifecycleError("Exact immutable image digest was malformed.")
+        images[purpose] = digest
+    return images
+
+
 def command_publish_images(
     config: LifecycleConfig, config_path: Path, source: AwsCli
 ) -> dict[str, object]:
@@ -1366,41 +1396,58 @@ def command_publish_images(
             raise LifecycleError(
                 "Image publication is already complete or cannot resume."
             )
-    response = (
-        operator.call(
-            "codebuild",
-            "start-build",
-            "--project-name",
-            config.projects["image"],
-        )
-        or {}
-    )
-    build_id = str(response.get("build", {}).get("id", ""))
-    if not build_id:
-        state.record_failure("publish-images")
-        write_remote_state(operator, config, config_path, state, if_match=etag)
-        raise LifecycleError("Image build did not return an exact build identity.")
+    publication = "built"
     try:
-        completed_build = wait_for_build(operator, build_id)
-        exported = {
-            str(item.get("name")): str(item.get("value"))
-            for item in completed_build.get("exportedEnvironmentVariables", [])
-            if isinstance(item, dict)
-        }
-        images = {
-            purpose: exported.get(f"{purpose.upper()}_DIGEST", "")
-            for purpose in ("web", "api", "ml")
-        }
+        existing_images = read_exact_image_digests(operator, config)
+        if existing_images and set(existing_images) != {"web", "api", "ml"}:
+            raise LifecycleError(
+                "Immutable image publication is partial; destroy is required before retry."
+            )
+        if existing_images:
+            images = existing_images
+            publication = "reused"
+        else:
+            response = (
+                operator.call(
+                    "codebuild",
+                    "start-build",
+                    "--project-name",
+                    config.projects["image"],
+                )
+                or {}
+            )
+            build_id = str(response.get("build", {}).get("id", ""))
+            if not build_id:
+                raise LifecycleError(
+                    "Image build did not return an exact build identity."
+                )
+            completed_build = wait_for_build(operator, build_id)
+            exported = {
+                str(item.get("name")): str(item.get("value"))
+                for item in completed_build.get("exportedEnvironmentVariables", [])
+                if isinstance(item, dict)
+            }
+            images = {
+                purpose: exported.get(f"{purpose.upper()}_DIGEST", "")
+                for purpose in ("web", "api", "ml")
+            }
+            published_images = read_exact_image_digests(operator, config)
+            if published_images != images:
+                raise LifecycleError(
+                    "CodeBuild digest evidence did not match immutable ECR read-back."
+                )
         state.set_images(images)
-        state.transition(
-            Phase.IMAGES_PUBLISHED,
-            checkpoint={"imageBuild": "passed"},
-        )
-        write_remote_state(operator, config, config_path, state, if_match=etag)
     except LifecycleError:
         state.record_failure("publish-images")
         write_remote_state(operator, config, config_path, state, if_match=etag)
         raise
+    state.transition(
+        Phase.IMAGES_PUBLISHED,
+        checkpoint={
+            "imageBuild": "passed" if publication == "built" else "reused-exact"
+        },
+    )
+    write_remote_state(operator, config, config_path, state, if_match=etag)
     effects = Effects()
     effects.add(source.effects)
     effects.add(probe.effects)
@@ -1409,6 +1456,7 @@ def command_publish_images(
         "phase": state.phase.value,
         "sourceRevision": config.source_sha,
         "immutableImages": len(state.images),
+        "imagePublication": publication,
         "lease": "acquired",
         **effects.result(),
     }
@@ -1433,55 +1481,60 @@ def schedule_target(config: LifecycleConfig) -> str:
     )
 
 
-def verify_schedule(
-    client: AwsCli, config: LifecycleConfig, expected_expiry: datetime
-) -> None:
-    schedule = (
-        client.call(
-            "scheduler",
-            "get-schedule",
-            "--name",
-            config.schedule_name,
-            "--group-name",
-            config.schedule_group_name,
-        )
-        or {}
+def read_schedule(client: AwsCli, config: LifecycleConfig) -> dict[str, Any] | None:
+    response = client.call(
+        "scheduler",
+        "get-schedule",
+        "--name",
+        config.schedule_name,
+        "--group-name",
+        config.schedule_group_name,
+        allow_error_codes=("ResourceNotFoundException",),
     )
+    if response is None:
+        return None
+    if not isinstance(response, dict):
+        raise LifecycleError("Fallback schedule read-back was malformed.")
+    return response
+
+
+def verify_schedule_payload(
+    schedule: Mapping[str, Any], config: LifecycleConfig, expected_expiry: datetime
+) -> None:
+    expected_target = json.loads(schedule_target(config))
     if (
-        schedule.get("State") != "ENABLED"
+        schedule.get("Name") != config.schedule_name
+        or schedule.get("GroupName") != config.schedule_group_name
+        or schedule.get("State") != "ENABLED"
         or schedule.get("ScheduleExpression") != schedule_expression(expected_expiry)
+        or schedule.get("ScheduleExpressionTimezone") != "UTC"
+        or schedule.get("FlexibleTimeWindow") != {"Mode": "OFF"}
         or schedule.get("ActionAfterCompletion") != "NONE"
-        or schedule.get("Target", {}).get("Arn") != project_arn(config, "destroy")
-        or schedule.get("Target", {}).get("RoleArn") != role_arn(config, "scheduler")
+        or schedule.get("Target") != expected_target
+        or any(key in schedule for key in ("StartDate", "EndDate", "KmsKeyArn"))
     ):
         raise LifecycleError("Fallback schedule read-back drifted.")
 
 
-def command_register_fallback(
-    config: LifecycleConfig,
-    config_path: Path,
-    source: AwsCli,
-    ttl_minutes: int,
-) -> dict[str, object]:
-    verify_source(config, source)
-    operator = assume_role(
-        source, config, "operator_deployment", "portfolio-register-fallback"
-    )
-    remote = read_remote_state(operator, config, config_path)
-    if remote is None:
-        raise LifecycleError("Remote lifecycle is missing.")
-    state, etag = remote
-    if state.phase != Phase.IMAGES_PUBLISHED:
-        raise LifecycleError("Fallback registration requires published images.")
-    state.plan = create_plan(config, state, config_path, operator)
-    registered = utc_now()
-    expiry = registered + timedelta(minutes=ttl_minutes)
-    state.set_fallback(
-        schedule_name=config.schedule_name,
-        registered_at=registered,
-        expires_at=expiry,
-    )
-    operator.call(
+def verify_schedule(
+    client: AwsCli, config: LifecycleConfig, expected_expiry: datetime
+) -> None:
+    schedule = read_schedule(client, config)
+    if schedule is None:
+        raise LifecycleError("Fallback schedule is missing.")
+    verify_schedule_payload(schedule, config, expected_expiry)
+
+
+def ensure_schedule(
+    client: AwsCli, config: LifecycleConfig, expected_expiry: datetime
+) -> str:
+    existing = read_schedule(client, config)
+    if existing is not None:
+        verify_schedule_payload(existing, config, expected_expiry)
+        if expected_expiry <= utc_now():
+            raise LifecycleError("Existing fallback schedule is expired.")
+        return "reused"
+    client.call(
         "scheduler",
         "create-schedule",
         "--name",
@@ -1489,7 +1542,7 @@ def command_register_fallback(
         "--group-name",
         config.schedule_group_name,
         "--schedule-expression",
-        schedule_expression(expiry),
+        schedule_expression(expected_expiry),
         "--schedule-expression-timezone",
         "UTC",
         "--flexible-time-window",
@@ -1502,10 +1555,111 @@ def command_register_fallback(
         config.source_sha[:32],
         resource_delta=1,
     )
-    verify_schedule(operator, config, expiry)
+    verify_schedule(client, config, expected_expiry)
+    return "created"
+
+
+def schedule_window(schedule: Mapping[str, Any]) -> tuple[datetime, datetime]:
+    expression = str(schedule.get("ScheduleExpression", ""))
+    if not expression.startswith("at(") or not expression.endswith(")"):
+        raise LifecycleError("Fallback schedule expression was malformed.")
+    try:
+        expiry = datetime.strptime(expression[3:-1], "%Y-%m-%dT%H:%M:%S").replace(
+            tzinfo=UTC
+        )
+    except ValueError as error:
+        raise LifecycleError("Fallback schedule expression was malformed.") from error
+    registered = parse_time(str(schedule.get("CreationDate", "")))
+    validate_fallback_window(registered, expiry)
+    return registered, expiry
+
+
+def fallback_intent(
+    state: LifecycleState, config: LifecycleConfig
+) -> tuple[datetime, datetime] | None:
+    candidate = state.checkpoints.get("fallbackIntent")
+    if candidate is None:
+        return None
+    if not isinstance(candidate, dict) or set(candidate) != {
+        "scheduleName",
+        "registeredAt",
+        "expiresAt",
+    }:
+        raise LifecycleError("Fallback registration intent is malformed.")
+    if candidate.get("scheduleName") != config.schedule_name:
+        raise LifecycleError("Fallback registration intent is foreign.")
+    registered = parse_time(str(candidate.get("registeredAt", "")))
+    expiry = parse_time(str(candidate.get("expiresAt", "")))
+    validate_fallback_window(registered, expiry)
+    return registered, expiry
+
+
+def command_register_fallback(
+    config: LifecycleConfig,
+    config_path: Path,
+    source: AwsCli,
+    ttl_minutes: int,
+) -> dict[str, object]:
+    verify_source(config, source)
+    operator = assume_role(
+        source, config, "operator_deployment", "portfolio-register-fallback"
+    )
+    verify_controller(config, operator, reconcile_image_buildspec=False)
+    remote = read_remote_state(operator, config, config_path)
+    if remote is None:
+        raise LifecycleError("Remote lifecycle is missing.")
+    state, etag = remote
+    if state.phase != Phase.IMAGES_PUBLISHED:
+        raise LifecycleError("Fallback registration requires published images.")
+    intent = fallback_intent(state, config)
+    plan_path = runtime_directory(config_path) / "environment.tfplan"
+    if intent is None:
+        existing = read_schedule(operator, config)
+        if existing is None:
+            registered = utc_now()
+            expiry = registered + timedelta(minutes=ttl_minutes)
+            validate_fallback_window(registered, expiry)
+        else:
+            registered, expiry = schedule_window(existing)
+            verify_schedule_payload(existing, config, expiry)
+            if expiry <= utc_now():
+                raise LifecycleError("Existing fallback schedule is expired.")
+        state.plan = create_plan(config, state, config_path, operator)
+        state.transition(
+            Phase.IMAGES_PUBLISHED,
+            checkpoint={
+                "fallbackIntent": {
+                    "scheduleName": config.schedule_name,
+                    "registeredAt": isoformat(registered),
+                    "expiresAt": isoformat(expiry),
+                }
+            },
+        )
+        etag = write_remote_state(operator, config, config_path, state, if_match=etag)
+    else:
+        registered, expiry = intent
+        if expiry <= utc_now():
+            raise LifecycleError("Fallback registration intent is expired.")
+        if not plan_is_fresh(state, plan_path):
+            state.plan = create_plan(config, state, config_path, operator)
+            state.transition(Phase.IMAGES_PUBLISHED)
+            etag = write_remote_state(
+                operator, config, config_path, state, if_match=etag
+            )
+    registration = ensure_schedule(operator, config, expiry)
+    state.set_fallback(
+        schedule_name=config.schedule_name,
+        registered_at=registered,
+        expires_at=expiry,
+    )
+    del state.checkpoints["fallbackIntent"]
     state.transition(
         Phase.FALLBACK_REGISTERED,
-        checkpoint={"fallback": "verified", "plan": "fresh"},
+        checkpoint={
+            "fallback": "verified",
+            "fallbackRegistration": registration,
+            "plan": "fresh",
+        },
     )
     write_remote_state(operator, config, config_path, state, if_match=etag)
     effects = Effects()
@@ -1514,7 +1668,8 @@ def command_register_fallback(
     result = {
         "phase": state.phase.value,
         "fallback": "verified",
-        "ttlMinutes": ttl_minutes,
+        "fallbackRegistration": registration,
+        "ttlMinutes": int((expiry - registered).total_seconds() // 60),
         "plan": state.plan.get("counts", {}),
         **effects.result(),
     }

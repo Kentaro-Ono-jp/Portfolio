@@ -654,6 +654,48 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #113
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/113#issuecomment-5235195287).
 
+### Reconcile cloud effects before replaying checkpointed writes
+
+- **Trigger:** A resumable cloud operation adds or changes an external write
+  whose success is recorded in a later remote checkpoint.
+- **HEAD effect:** `moving`
+- **Problem:** Interruption after the cloud effect and before the checkpoint
+  leaves retry replaying an immutable or same-name write that cannot succeed or
+  cannot prove it owns the existing effect.
+- **Detect:** Failure-inject the command after each external effect and before
+  its final remote checkpoint, then invoke the same command from the preserved
+  pre-effect state against a complete exact effect, an absent effect, a partial
+  effect, and a foreign or mismatched effect while counting repeated writes.
+- **Pass:** A complete exact effect is read back and adopted with zero repeated
+  writes, an absent effect is created once, every partial or mismatched effect
+  fails closed with zero additional writes, and the final checkpoint is written
+  only after exact read-back.
+- **Repair:** Persist deterministic intent before the external write when its
+  parameters cannot otherwise be recovered, inventory the exact target before
+  replay, adopt only the complete source- and configuration-bound effect, and
+  retain effect-before-checkpoint interruption tests.
+- **Origins:** PR #115
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5247567798).
+
+### Provide a scoped upgrade path for persistent fixture topology
+
+- **Trigger:** A retained local dependency volume can contain a resource whose
+  immutable declaration changes, such as a durable queue type.
+- **HEAD effect:** `moving`
+- **Problem:** Fresh CI passes while an existing checkout fails when the new
+  declaration is applied to the retained incompatible resource.
+- **Detect:** Identify the exact project volume holding the incompatible
+  disposable fixture, invoke the production upgrade command with command
+  capture, and run the fresh-volume runtime proof for the new declaration.
+- **Pass:** The upgrade stops only the named project, deletes only the one
+  declared disposable volume, preserves every other project and unrelated
+  volume, and the canonical fresh runtime recreates the new topology.
+- **Repair:** Add an explicit project-scoped reset or migration command, reject
+  unscoped deletion, document the upgrade boundary, and retain exact command-
+  target assertions plus the fresh runtime proof.
+- **Origins:** PR #115
+  [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5247567798).
+
 ## Execution and correction
 
 A failed triggered rule blocks reviewer dispatch.

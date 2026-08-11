@@ -48,6 +48,12 @@ explicitly own that local action. Never use Docker prune or an unscoped cleanup
 command; teardown must target only `reactorfront-portfolio` resources created by
 the verification run.
 
+When upgrading a retained local checkout from classic to quorum RabbitMQ
+queues, a human may run `python scripts/verify.py --reset-local-rabbitmq`. The
+standalone command stops only this Compose project and removes only its
+synthetic RabbitMQ volume; PostgreSQL, MinIO, and unrelated Docker resources
+remain untouched.
+
 ## Pull requests
 
 A PR should link its focused Issue, remain Draft until its evidence is current,

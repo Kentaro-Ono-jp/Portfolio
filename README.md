@@ -202,6 +202,21 @@ but it is not the default AI-agent workflow:
 python scripts/verify.py
 ```
 
+Repositories updated from the earlier classic-queue topology may still have a
+project-scoped `rabbitmq-data` volume. RabbitMQ rejects redeclaring those queues
+as quorum queues. A human who intentionally owns the local Docker action can
+stop only this Compose project and remove only its synthetic RabbitMQ volume;
+the PostgreSQL and MinIO volumes are preserved:
+
+```console
+python scripts/verify.py --reset-local-rabbitmq
+python scripts/verify.py
+```
+
+The reset is an explicit local upgrade step because queued portfolio fixtures
+are disposable, while unrelated Docker resources and the other two project
+data volumes are outside its deletion scope.
+
 ### Run the current Web, API, outbox, result-consumer, and ML worker boundary
 
 Start the three dependencies, create the deterministic development bucket,

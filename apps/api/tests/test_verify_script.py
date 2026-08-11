@@ -52,6 +52,7 @@ def test_populated_migration_verifiers_track_current_alembic_head(script_name: s
 def verifier_args(**overrides: object) -> argparse.Namespace:
     values: dict[str, object] = {
         "static_only": False,
+        "reset_local_rabbitmq": False,
         "groups": None,
         "plan": False,
         "base": None,
@@ -617,11 +618,28 @@ def test_cross_boundary_rename_selects_old_and_new_path_groups(
 
     plan = verifier.plan_from_git(base="baseline")
 
-    assert plan.changed_files == (
-        "apps/api/src/reactorfront_api/legacy.py",
-        "ips-microkernel/legacy.md",
-    )
+    assert plan.changed_files == ("ips-microkernel/legacy.md",)
     assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
+
+
+def test_copy_source_selects_tests_without_inflating_changed_inventory(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def completed(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout=(b"C056\0apps/api/src/reactorfront_api/legacy.py\0ips-microkernel/copied.md\0"),
+        )
+
+    monkeypatch.setattr(verifier.subprocess, "run", completed)
+
+    plan = verifier.plan_from_git(base="baseline")
+
+    assert plan.changed_files == ("ips-microkernel/copied.md",)
+    assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
+    assert verifier.plan_lines(plan)[-1] == "Changed files: 1"
 
 
 def test_exact_endpoints_use_direct_two_point_diff(
@@ -794,10 +812,7 @@ def test_real_git_cross_boundary_copy_selects_source_and_destination_groups(
     monkeypatch.setattr(verifier, "REPOSITORY_ROOT", repository)
     plan = verifier.plan_from_git(base=base)
 
-    assert plan.changed_files == (
-        "apps/api/src/reactorfront_api/copied.py",
-        "ips-microkernel/copied.md",
-    )
+    assert plan.changed_files == ("ips-microkernel/copied.md",)
     assert plan.groups == {"docs", "compose", "api-static", "api-runtime"}
 
 
@@ -1129,6 +1144,76 @@ def test_static_only_main_never_resolves_docker(
 
     assert verifier.main() == 0
     assert required == ["pnpm", "uv", "terraform", "tflint"]
+
+
+def test_rabbitmq_upgrade_reset_is_exact_and_preserves_other_volumes(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+    inventories: list[list[str]] = []
+    monkeypatch.setattr(verifier, "require_command", lambda command: command)
+    monkeypatch.setattr(
+        verifier,
+        "run",
+        lambda _label, command, **_kwargs: commands.append(command),
+    )
+
+    def inspect(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        inventories.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, stdout=f"{verifier.RABBITMQ_VOLUME_NAME}\n".encode()
+        )
+
+    monkeypatch.setattr(verifier.subprocess, "run", inspect)
+
+    verifier.reset_local_rabbitmq()
+
+    assert commands == [
+        [
+            "docker",
+            "compose",
+            "-p",
+            verifier.COMPOSE_PROJECT_NAME,
+            "down",
+            "--remove-orphans",
+        ],
+        ["docker", "volume", "rm", verifier.RABBITMQ_VOLUME_NAME],
+    ]
+    assert inventories == [
+        [
+            "docker",
+            "volume",
+            "ls",
+            "--filter",
+            f"name=^{verifier.RABBITMQ_VOLUME_NAME}$",
+            "--format",
+            "{{.Name}}",
+        ]
+    ]
+    assert "postgres-data" not in " ".join(" ".join(command) for command in commands)
+    assert "minio-data" not in " ".join(" ".join(command) for command in commands)
+
+
+def test_rabbitmq_upgrade_reset_is_a_standalone_cli_operation(
+    verifier: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    def reset() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(
+        verifier,
+        "parse_args",
+        lambda: verifier_args(reset_local_rabbitmq=True),
+    )
+    monkeypatch.setattr(verifier, "reset_local_rabbitmq", reset)
+
+    assert verifier.main() == 0
+    assert called
 
 
 def test_plan_accepts_explicit_non_docker_groups(

@@ -28,6 +28,15 @@ class LifecycleError(RuntimeError):
     pass
 
 
+def validate_fallback_window(registered_at: datetime, expires_at: datetime) -> None:
+    if expires_at <= registered_at:
+        raise LifecycleError("Fallback expiry must be after registration.")
+    if expires_at > registered_at + timedelta(minutes=MAX_TTL_MINUTES):
+        raise LifecycleError("Fallback exceeds the accepted two-hour maximum.")
+    if expires_at < registered_at + timedelta(minutes=MIN_TTL_MINUTES):
+        raise LifecycleError("Fallback is too short for a safe construction attempt.")
+
+
 class Phase(StrEnum):
     CONFIGURED = "configured"
     PREFLIGHTED = "preflighted"
@@ -379,14 +388,7 @@ class LifecycleState:
         registered_at: datetime,
         expires_at: datetime,
     ) -> None:
-        if expires_at <= registered_at:
-            raise LifecycleError("Fallback expiry must be after registration.")
-        if expires_at > registered_at + timedelta(minutes=MAX_TTL_MINUTES):
-            raise LifecycleError("Fallback exceeds the accepted two-hour maximum.")
-        if expires_at < registered_at + timedelta(minutes=MIN_TTL_MINUTES):
-            raise LifecycleError(
-                "Fallback is too short for a safe construction attempt."
-            )
+        validate_fallback_window(registered_at, expires_at)
         self.fallback = {
             "scheduleName": schedule_name,
             "registeredAt": isoformat(registered_at),
