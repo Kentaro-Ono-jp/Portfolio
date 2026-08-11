@@ -131,6 +131,11 @@ path origin even when the workflow supplies a repository-relative config path.
 Terraform emits no-color diagnostics, and only a public-safe `Error:` line may
 leave the private diagnostic boundary.
 
+The GitHub workflow installs the pinned Node, pnpm lockfile dependencies, and
+Chromium Playwright runtime before OIDC credential acquisition. Lifecycle
+preflight and resume also require both Node and pnpm, while smoke repeats the
+command check before using the private reviewer credential capsule.
+
 Destroy also handles an interruption before all three image digests were
 checkpointed: it resolves the deterministic immutable tag in each exact
 repository, validates any digest already recorded, removes any partial image,

@@ -51,6 +51,22 @@ jobs:
           terraform_version: 1.15.8
           terraform_wrapper: false
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install pinned dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pinned Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Verify the exact GitHub OIDC claims
         run: python3 scripts/aws_oidc_claim_guard.py
 
