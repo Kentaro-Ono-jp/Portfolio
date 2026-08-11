@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import sys
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
@@ -16,7 +18,59 @@ from aws_automation_guard import (  # noqa: E402
     PERMANENT_SCHEDULE,
     select_route,
 )
-from aws_automation_maintenance import lifecycle_config  # noqa: E402
+from aws_automation_maintenance import ensure_role, lifecycle_config  # noqa: E402
+
+
+@dataclass
+class MaintenanceEffects:
+    trusts_updated: int = 0
+
+
+class DriftedRoleAws:
+    def __init__(self, spec: dict[str, Any]) -> None:
+        self.spec = spec
+        self.effects = MaintenanceEffects()
+        self.calls: list[tuple[str, str]] = []
+
+    def call(
+        self,
+        service: str,
+        operation: str,
+        *arguments: str,
+        **_: Any,
+    ) -> dict[str, Any]:
+        self.calls.append((service, operation))
+        if operation == "get-role":
+            return {
+                "Role": {
+                    "Path": "/",
+                    "MaxSessionDuration": 3600,
+                    "PermissionsBoundary": {
+                        "PermissionsBoundaryArn": (
+                            "arn:aws:iam::111122223333:policy/ExactBoundary"
+                        )
+                    },
+                    "Tags": [
+                        {"Key": key, "Value": value}
+                        for key, value in self.spec["tags"].items()
+                    ],
+                    "AssumeRolePolicyDocument": {"Version": "2012-10-17"},
+                }
+            }
+        if operation == "list-attached-role-policies":
+            return {
+                "AttachedPolicies": [
+                    {"PolicyArn": ("arn:aws:iam::111122223333:policy/ExactPermission")},
+                    {
+                        "PolicyArn": (
+                            "arn:aws:iam::111122223333:policy/UndeclaredPermission"
+                        )
+                    },
+                ]
+            }
+        if operation == "list-role-policies":
+            return {"PolicyNames": []}
+        return {}
 
 
 def context(**overrides: str) -> dict[str, str]:
@@ -121,6 +175,34 @@ class AutomationGuardTests(unittest.TestCase):
         self.assertEqual(config.environment, "monthly")
         self.assertEqual(config.caller_mode, "github-automation")
         self.assertEqual(config.caller_event, "schedule")
+
+    def test_role_drift_is_fully_checked_before_trust_update(self) -> None:
+        spec = {
+            "name": "reactorfront-automation",
+            "trust": {"Version": "2012-10-17", "Statement": []},
+            "permissions": ["ExactPermission"],
+            "boundary": "ExactBoundary",
+            "tags": {
+                "PortfolioEnvironment": "shared",
+                "PortfolioManaged": "true",
+                "PortfolioPersistent": "true",
+                "PortfolioRepository": EXPECTED_REPOSITORY,
+                "PortfolioPurpose": "automation",
+            },
+        }
+        aws = DriftedRoleAws(spec)
+
+        with self.assertRaisesRegex(RuntimeError, "undeclared policy"):
+            ensure_role(
+                aws,  # type: ignore[arg-type]
+                apply=True,
+                account_id="111122223333",
+                partition="aws",
+                spec=spec,
+            )
+
+        self.assertNotIn(("iam", "update-assume-role-policy"), aws.calls)
+        self.assertEqual(aws.effects.trusts_updated, 0)
 
 
 if __name__ == "__main__":

@@ -319,6 +319,7 @@ def ensure_role(
     )
     boundary = policy_arn(partition, account_id, str(spec["boundary"]))
     created = role is None
+    trust_update_required = False
     if created:
         if apply:
             aws.call(
@@ -351,19 +352,10 @@ def ensure_role(
         }
         if actual_tags != spec["tags"]:
             raise RuntimeError("Existing static role tags drifted")
-        if not iam_documents_equal(
+        trust_update_required = not iam_documents_equal(
             value.get("AssumeRolePolicyDocument"), spec["trust"]
-        ):
-            if apply:
-                aws.call(
-                    "iam",
-                    "update-assume-role-policy",
-                    "--role-name",
-                    name,
-                    "--policy-document",
-                    json.dumps(spec["trust"], separators=(",", ":"), sort_keys=True),
-                )
-                aws.effects.trusts_updated += 1
+        )
+        if trust_update_required:
             status = "update"
         else:
             status = "unchanged"
@@ -386,6 +378,16 @@ def ensure_role(
     }
     if inline.get("PolicyNames"):
         raise RuntimeError("Existing static role has an inline policy")
+    if trust_update_required and apply:
+        aws.call(
+            "iam",
+            "update-assume-role-policy",
+            "--role-name",
+            name,
+            "--policy-document",
+            json.dumps(spec["trust"], separators=(",", ":"), sort_keys=True),
+        )
+        aws.effects.trusts_updated += 1
     for arn in sorted(expected - actual):
         if apply:
             aws.call(
