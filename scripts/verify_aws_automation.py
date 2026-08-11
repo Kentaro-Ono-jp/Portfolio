@@ -12,16 +12,17 @@ from aws_automation_maintenance import (
     ordered_role_specs,
 )
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "aws-deploy.yml"
 GUARD_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_guard.py"
+OIDC_CLAIM_PATH = REPOSITORY_ROOT / "scripts" / "aws_oidc_claim_guard.py"
 MAINTENANCE_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_maintenance.py"
 LIFECYCLE_PATH = REPOSITORY_ROOT / "scripts" / "aws_lifecycle.py"
 BOOTSTRAP_LOCALS_PATH = REPOSITORY_ROOT / "infra" / "aws" / "bootstrap" / "locals.tf"
 
 CHECKOUT_STEP = "Check out the exact source"
 GUARD_STEP = "Guard the exact automation route"
+OIDC_CLAIM_STEP = "Verify the exact GitHub OIDC claims"
 OIDC_STEP = "Obtain the short-lived GitHub OIDC session"
 
 
@@ -30,16 +31,21 @@ def workflow_step_names(source: str) -> list[str]:
 
 
 def verify_workflow_gate_order(names: list[str]) -> None:
-    for expected in (CHECKOUT_STEP, GUARD_STEP, OIDC_STEP):
+    for expected in (CHECKOUT_STEP, GUARD_STEP, OIDC_CLAIM_STEP, OIDC_STEP):
         if names.count(expected) != 1:
             raise RuntimeError(f"Deployment workflow step is not exact: {expected}")
     checkout = names.index(CHECKOUT_STEP)
     guard = names.index(GUARD_STEP)
+    claim = names.index(OIDC_CLAIM_STEP)
     oidc = names.index(OIDC_STEP)
     if guard <= checkout:
         raise RuntimeError("Automation route guard must run after exact checkout")
     if guard >= oidc:
         raise RuntimeError("Automation route guard must run before OIDC assumption")
+    if claim <= guard:
+        raise RuntimeError("OIDC claim guard must run after the route guard")
+    if claim >= oidc:
+        raise RuntimeError("OIDC claim guard must run before OIDC assumption")
 
 
 def verify_workflow_order_mutations(names: list[str]) -> int:
@@ -50,9 +56,13 @@ def verify_workflow_order_mutations(names: list[str]) -> int:
     after_oidc = list(names)
     after_oidc.remove(GUARD_STEP)
     after_oidc.insert(after_oidc.index(OIDC_STEP) + 1, GUARD_STEP)
+    claim_after_oidc = list(names)
+    claim_after_oidc.remove(OIDC_CLAIM_STEP)
+    claim_after_oidc.insert(claim_after_oidc.index(OIDC_STEP) + 1, OIDC_CLAIM_STEP)
     for label, mutation, expected in (
         ("before checkout", before_checkout, "after exact checkout"),
         ("after OIDC", after_oidc, "before OIDC assumption"),
+        ("claim after OIDC", claim_after_oidc, "before OIDC assumption"),
     ):
         try:
             verify_workflow_gate_order(mutation)
@@ -76,6 +86,7 @@ def main() -> int:
     for path in (
         WORKFLOW_PATH,
         GUARD_PATH,
+        OIDC_CLAIM_PATH,
         MAINTENANCE_PATH,
         LIFECYCLE_PATH,
         BOOTSTRAP_LOCALS_PATH,
@@ -84,6 +95,7 @@ def main() -> int:
             raise RuntimeError(f"AWS automation contract is missing: {path.name}")
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
     guard = GUARD_PATH.read_text(encoding="utf-8")
+    oidc_claim = OIDC_CLAIM_PATH.read_text(encoding="utf-8")
     maintenance = MAINTENANCE_PATH.read_text(encoding="utf-8")
     lifecycle = LIFECYCLE_PATH.read_text(encoding="utf-8")
     bootstrap = BOOTSTRAP_LOCALS_PATH.read_text(encoding="utf-8")
@@ -131,6 +143,7 @@ def main() -> int:
         "persist-credentials: false",
         "ref: ${{ github.sha }}",
         "python3 scripts/aws_automation_guard.py",
+        "python3 scripts/aws_oidc_claim_guard.py",
         "aws-actions/configure-aws-credentials@v6.2.3",
         "audience: sts.amazonaws.com",
         "role-to-assume: ${{ vars.AWS_AUTOMATION_ROLE_ARN }}",
@@ -144,10 +157,18 @@ def main() -> int:
         "deploy",
         "destroy --mode manual",
         "sweep",
+        "id: configure",
+        "if: always() && steps.configure.outcome == 'success'",
     ):
         require(workflow, token, f"Deployment workflow contract drifted: {token}")
     if workflow.count("aws-actions/configure-aws-credentials@v6.2.3") != 2:
         raise RuntimeError("Deployment and cleanup need two short-lived OIDC sessions")
+    if workflow.count("if: always() && steps.configure.outcome == 'success'") != 3:
+        raise RuntimeError(
+            "AWS cleanup must require successful credential configuration"
+        )
+    if "steps.guard.outcome == 'success'" in workflow:
+        raise RuntimeError("AWS cleanup must not run after an OIDC setup failure")
     for forbidden in (
         "AWS_ACCESS_KEY_ID:",
         "AWS_SECRET_ACCESS_KEY:",
@@ -172,6 +193,18 @@ def main() -> int:
         "Scheduled automation cron is not repository-owned.",
     ):
         require(guard, token, f"Automation guard contract drifted: {token}")
+
+    for token in (
+        'EXPECTED_REPOSITORY = "Kentaro-Ono-jp/Portfolio"',
+        'EXPECTED_REF = "refs/heads/main"',
+        'EXPECTED_ENVIRONMENT = "aws-deployment"',
+        'EXPECTED_WORKFLOW = "Deploy managed AWS proof"',
+        'EXPECTED_EVENTS = {"workflow_dispatch", "schedule"}',
+        '"audience": "sts.amazonaws.com"',
+        "validate_claims(decode_claims(token), event_name)",
+        "OIDC claim mismatch:",
+    ):
+        require(oidc_claim, token, f"OIDC claim guard contract drifted: {token}")
 
     for token in (
         'parser.error("--apply requires --owner-checkpoint issue-116")',
