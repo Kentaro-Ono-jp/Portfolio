@@ -10,10 +10,11 @@ import string
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 from urllib.parse import urlparse
 
 from aws_lifecycle_core import (
@@ -44,6 +45,7 @@ DEFAULT_ENVIRONMENT = "manual"
 DEFAULT_REGION = "us-east-1"
 BUILD_TIMEOUT_SECONDS = 3600
 PLAN_MAX_AGE_SECONDS = 1800
+SEED_OWNER_LENGTH = 64
 
 
 WRITE_OPERATIONS = {
@@ -822,6 +824,43 @@ def runtime_directory(config_path: Path) -> Path:
     path = config_path.parent / "runtime"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+@contextmanager
+def seed_operation_lock(config_path: Path) -> Iterator[None]:
+    """Serialize seed recovery within one checkout; remote CAS covers other hosts."""
+    lock_path = runtime_directory(config_path) / "seed-operation.lock"
+    with lock_path.open("a+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            raise LifecycleError(
+                "Another local seed invocation owns this lifecycle operation."
+            ) from error
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def s3_get_json(
@@ -2140,6 +2179,101 @@ def command_migrate(
     return result
 
 
+def seed_recovery_path(config_path: Path) -> Path:
+    return runtime_directory(config_path) / "seed-operation.json"
+
+
+def validate_seed_owner(value: object) -> str:
+    owner = str(value)
+    if len(owner) != SEED_OWNER_LENGTH or any(
+        character not in string.hexdigits.lower() for character in owner
+    ):
+        raise LifecycleError("Seed operation owner is malformed.")
+    return owner
+
+
+def validate_seed_intent(
+    candidate: object, state: LifecycleState, username: str
+) -> dict[str, str]:
+    if not isinstance(candidate, dict) or set(candidate) != {
+        "owner",
+        "requestedAt",
+        "username",
+    }:
+        raise LifecycleError("Seed intent is malformed.")
+    owner = validate_seed_owner(candidate.get("owner"))
+    requested_at = str(candidate.get("requestedAt", ""))
+    parse_time(requested_at)
+    if candidate.get("username") != username:
+        raise LifecycleError("Seed intent is foreign or drifted.")
+    return {"owner": owner, "requestedAt": requested_at, "username": username}
+
+
+def load_seed_recovery(
+    state: LifecycleState,
+    config_path: Path,
+    username: str,
+    intent: dict[str, str] | None,
+) -> dict[str, str]:
+    path = seed_recovery_path(config_path)
+    record: dict[str, Any] | None = None
+    if path.exists():
+        loaded = load_json(path)
+        if not isinstance(loaded, dict):
+            raise LifecycleError("Local seed recovery identity is malformed.")
+        record = loaded
+    expected_keys = {
+        "schemaVersion",
+        "deploymentId",
+        "lifecycleCreatedAt",
+        "owner",
+        "requestedAt",
+        "username",
+    }
+    current_record = (
+        record is not None
+        and set(record) == expected_keys
+        and record.get("schemaVersion") == 1
+        and record.get("deploymentId") == state.deployment_id
+        and record.get("lifecycleCreatedAt") == state.created_at
+        and record.get("username") == username
+    )
+    if current_record:
+        owner = validate_seed_owner(record.get("owner"))
+        requested_at = str(record.get("requestedAt", ""))
+        parse_time(requested_at)
+        recovery = {
+            "owner": owner,
+            "requestedAt": requested_at,
+            "username": username,
+        }
+    elif intent is not None:
+        raise LifecycleError(
+            "Seed operation is owned by another invocation; exact local recovery "
+            "identity is unavailable."
+        )
+    else:
+        recovery = {
+            "owner": secrets.token_hex(SEED_OWNER_LENGTH // 2),
+            "requestedAt": isoformat(utc_now()),
+            "username": username,
+        }
+        write_private_json(
+            path,
+            {
+                "schemaVersion": 1,
+                "deploymentId": state.deployment_id,
+                "lifecycleCreatedAt": state.created_at,
+                **recovery,
+            },
+        )
+    if intent is not None and recovery != intent:
+        raise LifecycleError(
+            "Seed operation is owned by another invocation; recovery was rejected."
+        )
+    return recovery
+
+
 def generated_password() -> str:
     alphabet = string.ascii_letters + string.digits + "!@#%+-_"
     while True:
@@ -2156,116 +2290,157 @@ def generated_password() -> str:
 def command_seed(
     config: LifecycleConfig, config_path: Path, source: AwsCli
 ) -> dict[str, object]:
-    verify_source(config, source)
-    operator = assume_role(source, config, "operator_deployment", "portfolio-seed")
-    remote = read_remote_state(operator, config, config_path)
-    if remote is None:
-        raise LifecycleError("Remote lifecycle is missing.")
-    state, etag = remote
-    if state.phase == Phase.FAILED and state.last_failure is not None:
-        if state.last_failure.get("operation") != "seed":
-            raise LifecycleError("A different failed operation owns this lifecycle.")
-        state.resume(Phase.MIGRATED)
-    if state.phase != Phase.MIGRATED:
-        raise LifecycleError("Synthetic seed requires a successful migration.")
-    outputs = terraform_output(config, state, config_path, operator)
-    services = output_value(outputs, "service_identifiers")
-    if not isinstance(services, dict):
-        raise LifecycleError("Identity outputs are incomplete.")
-    pool = str(services["cognito_user_pool_id"])
-    username = "reviewer@synthetic.invalid"
-    password = generated_password()
-    try:
-        existing = operator.call(
-            "cognito-idp",
-            "admin-get-user",
-            "--user-pool-id",
-            pool,
-            "--username",
-            username,
-            allow_error_codes=("UserNotFoundException",),
+    with seed_operation_lock(config_path):
+        verify_source(config, source)
+        operator = assume_role(source, config, "operator_deployment", "portfolio-seed")
+        remote = read_remote_state(operator, config, config_path)
+        if remote is None:
+            raise LifecycleError("Remote lifecycle is missing.")
+        state, etag = remote
+        username = "reviewer@synthetic.invalid"
+        raw_intent = state.checkpoints.get("seedIntent")
+        intent = (
+            None
+            if raw_intent is None
+            else validate_seed_intent(raw_intent, state, username)
         )
-        if existing is not None:
-            operator.call(
+        if state.phase == Phase.FAILED and state.last_failure is not None:
+            if state.last_failure.get("operation") != "seed":
+                raise LifecycleError(
+                    "A different failed operation owns this lifecycle."
+                )
+            if intent is None:
+                raise LifecycleError("Failed seed has no exact recovery owner.")
+            recovery = load_seed_recovery(state, config_path, username, intent)
+            state.resume(Phase.MIGRATED)
+            state.transition(
+                Phase.MIGRATED,
+                checkpoint={"seed": "running", "seedIntent": recovery},
+            )
+            etag = write_remote_state(
+                operator, config, config_path, state, if_match=etag
+            )
+        elif state.phase == Phase.MIGRATED:
+            recovery = load_seed_recovery(state, config_path, username, intent)
+            if intent is None:
+                state.transition(
+                    Phase.MIGRATED,
+                    checkpoint={"seed": "running", "seedIntent": recovery},
+                )
+                etag = write_remote_state(
+                    operator, config, config_path, state, if_match=etag
+                )
+        else:
+            raise LifecycleError("Synthetic seed requires a successful migration.")
+        outputs = terraform_output(config, state, config_path, operator)
+        services = output_value(outputs, "service_identifiers")
+        if not isinstance(services, dict):
+            raise LifecycleError("Identity outputs are incomplete.")
+        pool = str(services["cognito_user_pool_id"])
+        password = generated_password()
+        try:
+            existing = operator.call(
                 "cognito-idp",
-                "admin-delete-user",
+                "admin-get-user",
                 "--user-pool-id",
                 pool,
                 "--username",
                 username,
+                allow_error_codes=("UserNotFoundException",),
             )
-        operator.call(
-            "s3api",
-            "delete-object",
-            "--bucket",
-            config.state_bucket,
-            "--key",
-            config.secret_key,
-        )
-        operator.call(
-            "cognito-idp",
-            "admin-create-user",
-            "--user-pool-id",
-            pool,
-            "--username",
-            username,
-            "--temporary-password",
-            password,
-            "--message-action",
-            "SUPPRESS",
-            "--user-attributes",
-            "Name=email,Value=reviewer@synthetic.invalid",
-            "Name=email_verified,Value=true",
-            resource_delta=1,
-        )
-        operator.call(
-            "cognito-idp",
-            "admin-set-user-password",
-            "--user-pool-id",
-            pool,
-            "--username",
-            username,
-            "--password",
-            password,
-            "--permanent",
-        )
-        operator.call(
-            "cognito-idp",
-            "admin-add-user-to-group",
-            "--user-pool-id",
-            pool,
-            "--username",
-            username,
-            "--group-name",
-            config.reviewer_group_name,
-        )
-        s3_put_json(
-            operator,
-            config,
-            config.secret_key,
-            {"schemaVersion": 1, "username": username, "password": password},
-            runtime_directory(config_path) / "synthetic-reviewer-upload.json",
-            if_none_match=True,
-            resource_delta=1,
-        )
-    except LifecycleError:
-        state.record_failure("seed")
-        state.checkpoints["seed"] = "failed"
+            if existing is not None:
+                operator.call(
+                    "cognito-idp",
+                    "admin-delete-user",
+                    "--user-pool-id",
+                    pool,
+                    "--username",
+                    username,
+                )
+            operator.call(
+                "s3api",
+                "delete-object",
+                "--bucket",
+                config.state_bucket,
+                "--key",
+                config.secret_key,
+            )
+            operator.call(
+                "cognito-idp",
+                "admin-create-user",
+                "--user-pool-id",
+                pool,
+                "--username",
+                username,
+                "--temporary-password",
+                password,
+                "--message-action",
+                "SUPPRESS",
+                "--user-attributes",
+                "Name=email,Value=reviewer@synthetic.invalid",
+                "Name=email_verified,Value=true",
+                resource_delta=1,
+            )
+            operator.call(
+                "cognito-idp",
+                "admin-set-user-password",
+                "--user-pool-id",
+                pool,
+                "--username",
+                username,
+                "--password",
+                password,
+                "--permanent",
+            )
+            operator.call(
+                "cognito-idp",
+                "admin-add-user-to-group",
+                "--user-pool-id",
+                pool,
+                "--username",
+                username,
+                "--group-name",
+                config.reviewer_group_name,
+            )
+            s3_put_json(
+                operator,
+                config,
+                config.secret_key,
+                {"schemaVersion": 1, "username": username, "password": password},
+                runtime_directory(config_path) / "synthetic-reviewer-upload.json",
+                if_none_match=True,
+                resource_delta=1,
+            )
+        except LifecycleError as seed_error:
+            state.record_failure("seed")
+            state.checkpoints["seed"] = "failed"
+            try:
+                write_remote_state(operator, config, config_path, state, if_match=etag)
+            except LifecycleError as checkpoint_error:
+                seed_error.add_note(
+                    "The seed failure checkpoint also failed safely; the exact "
+                    "local recovery owner was retained."
+                )
+                raise seed_error from checkpoint_error
+            raise
+        state.checkpoints.pop("seedIntent", None)
+        state.transition(Phase.SEEDED, checkpoint={"seed": "passed"})
         write_remote_state(operator, config, config_path, state, if_match=etag)
-        raise
-    state.transition(Phase.SEEDED, checkpoint={"seed": "passed"})
-    write_remote_state(operator, config, config_path, state, if_match=etag)
-    effects = Effects()
-    effects.add(source.effects)
-    effects.add(operator.effects)
-    result = {
-        "phase": state.phase.value,
-        "syntheticReviewer": "created",
-        "syntheticApplicationData": "bounded-by-smoke",
-        **effects.result(),
-    }
-    assert_public_safe(result)
-    return result
+        try:
+            seed_recovery_path(config_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+        effects = Effects()
+        effects.add(source.effects)
+        effects.add(operator.effects)
+        result = {
+            "phase": state.phase.value,
+            "syntheticReviewer": "created",
+            "syntheticApplicationData": "bounded-by-smoke",
+            **effects.result(),
+        }
+        assert_public_safe(result)
+        return result
 
 
 def command_smoke(

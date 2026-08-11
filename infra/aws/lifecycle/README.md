@@ -108,6 +108,17 @@ succeeded before the first configuration checkpoint, only the same exact
 source SHA may recover that isolated lease; a configuration checkpoint without
 its matching lease is always rejected.
 
+The source-wide lease is not treated as operation ownership. Before the first
+Cognito or credential-capsule mutation, `seed` conditionally checkpoints a
+random invocation owner and `running` status with the current configuration
+ETag. A stale or foreign owner therefore fails before external effects. The
+matching owner is retained only in the checkout-private runtime directory, and
+an OS-released local lock prevents two processes in that checkout from using it
+at once. After interruption, only that exact local owner may resume the remote
+intent; another checkout fails closed. Successful seed removes both the remote
+intent and the local recovery identity only after the credential capsule,
+Cognito user, and final `seed=passed` checkpoint agree.
+
 Destroy also handles an interruption before all three image digests were
 checkpointed: it resolves the deterministic immutable tag in each exact
 repository, validates any digest already recorded, removes any partial image,

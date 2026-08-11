@@ -419,6 +419,60 @@ class MigrationAws(FakeAws):
         self.calls.append((service, f"wait:{waiter}", arguments))
 
 
+class SeedCloud:
+    def __init__(self) -> None:
+        self.password: str | None = "old-password"
+        self.secret: dict[str, object] | None = None
+
+
+class SeedAws(FakeAws):
+    def __init__(self, cloud: SeedCloud) -> None:
+        super().__init__()
+        self.cloud = cloud
+
+    def call(self, service: str, operation: str, *arguments: str, **kwargs: object):
+        if service == "cognito-idp":
+            self.calls.append((service, operation, arguments))
+            if operation == "admin-get-user":
+                return None if self.cloud.password is None else {"Username": "reviewer"}
+            if operation == "admin-delete-user":
+                self.cloud.password = None
+                return {}
+            if operation == "admin-create-user":
+                self.cloud.password = arguments[
+                    arguments.index("--temporary-password") + 1
+                ]
+                return {}
+            if operation == "admin-set-user-password":
+                self.cloud.password = arguments[arguments.index("--password") + 1]
+                return {}
+            if operation == "admin-add-user-to-group":
+                return {}
+        if service == "s3api" and operation == "delete-object":
+            self.calls.append((service, operation, arguments))
+            self.cloud.secret = None
+            return {}
+        return super().call(service, operation, *arguments, **kwargs)
+
+
+class SeedRemote:
+    def __init__(self, config: LifecycleConfig) -> None:
+        self.config = config
+        self.payload = state_at(config, Phase.MIGRATED).to_dict(config)
+        self.revision = 0
+
+    def read(self) -> tuple[LifecycleState, str]:
+        state = LifecycleState.from_dict(self.payload)[1]
+        return state, f"etag-{self.revision}"
+
+    def write(self, state: LifecycleState, if_match: str | None) -> str:
+        if if_match != f"etag-{self.revision}":
+            raise LifecycleError("Synthetic stale lifecycle ETag.")
+        self.payload = state.to_dict(self.config)
+        self.revision += 1
+        return f"etag-{self.revision}"
+
+
 class LifecycleContractTests(unittest.TestCase):
     def test_image_buildspec_only_is_reconciled_and_read_back(self) -> None:
         config = configuration()
@@ -1197,6 +1251,216 @@ class LifecycleContractTests(unittest.TestCase):
                 for service, operation, _arguments in operator.calls
             )
         )
+
+    def test_parallel_seed_claim_rejects_stale_owner_before_external_effects(
+        self,
+    ) -> None:
+        config = configuration()
+        remote = SeedRemote(config)
+        stale_state, stale_etag = remote.read()
+        cloud = SeedCloud()
+        outputs = {
+            "service_identifiers": {"value": {"cognito_user_pool_id": "synthetic-pool"}}
+        }
+
+        def write_remote(
+            _client: object,
+            _config: object,
+            _path: object,
+            current: LifecycleState,
+            **kwargs: object,
+        ) -> str:
+            return remote.write(current, kwargs.get("if_match"))  # type: ignore[arg-type]
+
+        def put_secret(
+            client: SeedAws,
+            _config: object,
+            _key: object,
+            payload: dict[str, object],
+            _path: object,
+            **kwargs: object,
+        ) -> str:
+            if kwargs.get("if_none_match") and client.cloud.secret is not None:
+                raise LifecycleError("Synthetic secret already exists.")
+            client.cloud.secret = dict(payload)
+            return "secret-etag"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first_path = root / "first" / "config.json"
+            second_path = root / "second" / "config.json"
+            first = SeedAws(cloud)
+            with (
+                patch.object(lifecycle, "verify_source"),
+                patch.object(lifecycle, "assume_role", return_value=first),
+                patch.object(
+                    lifecycle,
+                    "read_remote_state",
+                    side_effect=lambda *_args, **_kwargs: remote.read(),
+                ),
+                patch.object(lifecycle, "write_remote_state", side_effect=write_remote),
+                patch.object(lifecycle, "terraform_output", return_value=outputs),
+                patch.object(lifecycle, "s3_put_json", side_effect=put_secret),
+                patch.object(
+                    lifecycle, "generated_password", return_value="password-A"
+                ),
+            ):
+                result = lifecycle.command_seed(config, first_path, FakeAws())
+            self.assertEqual(result["phase"], Phase.SEEDED.value)
+
+            second = SeedAws(cloud)
+            with (
+                patch.object(lifecycle, "verify_source"),
+                patch.object(lifecycle, "assume_role", return_value=second),
+                patch.object(
+                    lifecycle,
+                    "read_remote_state",
+                    return_value=(stale_state, stale_etag),
+                ),
+                patch.object(lifecycle, "write_remote_state", side_effect=write_remote),
+                patch.object(lifecycle, "terraform_output", return_value=outputs),
+                patch.object(lifecycle, "s3_put_json", side_effect=put_secret),
+                patch.object(
+                    lifecycle, "generated_password", return_value="password-B"
+                ),
+            ):
+                with self.assertRaisesRegex(LifecycleError, "stale lifecycle ETag"):
+                    lifecycle.command_seed(config, second_path, FakeAws())
+
+        self.assertFalse(
+            any(
+                service in {"cognito-idp", "s3api"}
+                and operation
+                in {
+                    "admin-delete-user",
+                    "admin-create-user",
+                    "admin-set-user-password",
+                    "admin-add-user-to-group",
+                    "delete-object",
+                }
+                for service, operation, _arguments in second.calls
+            )
+        )
+        final = LifecycleState.from_dict(remote.payload)[1]
+        self.assertEqual(final.phase, Phase.SEEDED)
+        self.assertEqual(final.checkpoints["seed"], "passed")
+        self.assertNotIn("seedIntent", final.checkpoints)
+        self.assertIsNotNone(cloud.secret)
+        self.assertEqual(cloud.password, cloud.secret["password"])  # type: ignore[index]
+
+    def test_seed_exact_owner_recovers_but_foreign_checkout_fails_closed(self) -> None:
+        config = configuration()
+        remote = SeedRemote(config)
+        cloud = SeedCloud()
+        outputs = {
+            "service_identifiers": {"value": {"cognito_user_pool_id": "synthetic-pool"}}
+        }
+
+        def write_remote(
+            _client: object,
+            _config: object,
+            _path: object,
+            current: LifecycleState,
+            **kwargs: object,
+        ) -> str:
+            return remote.write(current, kwargs.get("if_match"))  # type: ignore[arg-type]
+
+        def put_secret(
+            client: SeedAws,
+            _config: object,
+            _key: object,
+            payload: dict[str, object],
+            _path: object,
+            **_kwargs: object,
+        ) -> str:
+            client.cloud.secret = dict(payload)
+            return "secret-etag"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            owner_path = root / "owner" / "config.json"
+            foreign_path = root / "foreign" / "config.json"
+            interrupted = SeedAws(cloud)
+            with (
+                patch.object(lifecycle, "verify_source"),
+                patch.object(lifecycle, "assume_role", return_value=interrupted),
+                patch.object(
+                    lifecycle,
+                    "read_remote_state",
+                    side_effect=lambda *_args, **_kwargs: remote.read(),
+                ),
+                patch.object(lifecycle, "write_remote_state", side_effect=write_remote),
+                patch.object(
+                    lifecycle,
+                    "terraform_output",
+                    side_effect=LifecycleError("synthetic post-claim interruption"),
+                ),
+            ):
+                with self.assertRaisesRegex(LifecycleError, "post-claim interruption"):
+                    lifecycle.command_seed(config, owner_path, FakeAws())
+            claimed = LifecycleState.from_dict(remote.payload)[1]
+            self.assertEqual(claimed.phase, Phase.MIGRATED)
+            self.assertEqual(claimed.checkpoints["seed"], "running")
+            self.assertIn("seedIntent", claimed.checkpoints)
+
+            foreign = SeedAws(cloud)
+            with (
+                patch.object(lifecycle, "verify_source"),
+                patch.object(lifecycle, "assume_role", return_value=foreign),
+                patch.object(
+                    lifecycle,
+                    "read_remote_state",
+                    side_effect=lambda *_args, **_kwargs: remote.read(),
+                ),
+                patch.object(lifecycle, "write_remote_state", side_effect=write_remote),
+            ):
+                with self.assertRaisesRegex(
+                    LifecycleError, "exact local recovery identity is unavailable"
+                ):
+                    lifecycle.command_seed(config, foreign_path, FakeAws())
+            self.assertFalse(
+                any(
+                    service in {"cognito-idp", "s3api"}
+                    for service, _, _ in foreign.calls
+                )
+            )
+
+            resumed = SeedAws(cloud)
+            with (
+                patch.object(lifecycle, "verify_source"),
+                patch.object(lifecycle, "assume_role", return_value=resumed),
+                patch.object(
+                    lifecycle,
+                    "read_remote_state",
+                    side_effect=lambda *_args, **_kwargs: remote.read(),
+                ),
+                patch.object(lifecycle, "write_remote_state", side_effect=write_remote),
+                patch.object(lifecycle, "terraform_output", return_value=outputs),
+                patch.object(lifecycle, "s3_put_json", side_effect=put_secret),
+                patch.object(
+                    lifecycle, "generated_password", return_value="recovered-password"
+                ),
+            ):
+                result = lifecycle.command_seed(config, owner_path, FakeAws())
+            self.assertEqual(result["phase"], Phase.SEEDED.value)
+            self.assertFalse(lifecycle.seed_recovery_path(owner_path).exists())
+
+        final = LifecycleState.from_dict(remote.payload)[1]
+        self.assertEqual(final.phase, Phase.SEEDED)
+        self.assertEqual(final.checkpoints["seed"], "passed")
+        self.assertNotIn("seedIntent", final.checkpoints)
+        self.assertIsNotNone(cloud.secret)
+        self.assertEqual(cloud.password, cloud.secret["password"])  # type: ignore[index]
+
+    def test_seed_local_lock_rejects_a_second_process_before_remote_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.json"
+            with lifecycle.seed_operation_lock(config_path):
+                with self.assertRaisesRegex(
+                    LifecycleError, "Another local seed invocation"
+                ):
+                    with lifecycle.seed_operation_lock(config_path):
+                        self.fail("A second local seed process acquired the lock.")
 
     def test_smoke_process_failure_records_running_then_failed(self) -> None:
         config = configuration()

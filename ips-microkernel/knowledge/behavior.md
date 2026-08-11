@@ -654,36 +654,52 @@ proved/unproved classification, or permanence claim.
 - **Origins:** PR #113
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/113#issuecomment-5235195287).
 
-### Reconcile cloud effects before replaying checkpointed writes
+### Reconcile cloud effects before replaying or overlapping checkpointed writes
 
 - **Trigger:** A resumable cloud operation adds or changes an external write
-  whose success is recorded in a later remote checkpoint.
+  whose success is recorded in a later remote checkpoint, or permits two
+  operator invocations to reach the same non-idempotent phase.
 - **HEAD effect:** `moving`
 - **Problem:** Interruption after the cloud effect and before the checkpoint
   leaves retry replaying an immutable or same-name write that cannot succeed or
-  cannot prove it owns the existing effect.
+  cannot prove it owns the existing effect; alternatively, a lifecycle-wide
+  source lease lets two same-source invocations interleave effects before either
+  invocation conditionally owns the operation.
 - **Detect:** Execute the production command and failure-inject immediately
   after its real cloud adapter accepts each effect but before the next durable
   checkpoint. Reconstruct the retry from the last persisted state against a
   complete exact effect, an absent effect, a partial effect, and a foreign or
   mismatched effect while counting API attempts, resource identities,
   mutations, and checkpoints. When the service supplies an idempotency token,
-  also repeat the exact token and parameters and change one parameter once.
+  also repeat the exact token and parameters and change one parameter once. For
+  a non-idempotent phase, start two production-command instances from the same
+  checkpoint with distinct invocation owners, hold the winner across its first
+  external effect, and exercise same-checkout active overlap, stale remote CAS,
+  foreign-checkout recovery, and exact-owner interruption recovery.
 - **Pass:** A complete exact effect is read back or reconciled with zero
   repeated resource mutation, an absent effect is created once, an exact
   service-native idempotent retry yields the original resource, a changed-
   parameter token and every partial or mismatched effect fail closed with zero
   additional mutation, and the final checkpoint is written only after exact
-  read-back.
+  read-back. Exactly one non-idempotent operation owner is conditionally
+  checkpointed before its first effect; local, stale, and foreign competitors
+  fail before mutation; the exact interrupted owner alone can resume; and the
+  final external state, private capsule, and passed checkpoint identify one
+  consistent operation outcome.
 - **Repair:** Persist deterministic intent before the external write when its
   parameters cannot otherwise be recovered, use a service-native idempotency
   key where available, inventory or read back the exact target before replay,
   adopt only the complete source- and configuration-bound effect, and retain
-  production-command effect-before-checkpoint interruption tests.
+  production-command effect-before-checkpoint interruption tests. Where the
+  effect is not service-idempotent, add an invocation-distinguishing remote CAS
+  claim before mutation, retain only the exact private recovery identity, and
+  serialize active recovery within one checkout.
 - **Origins:** PR #115
   [initial review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5247567798),
   PR #115
-  [exact-head re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5248116097).
+  [exact-head re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5248116097),
+  PR #115
+  [same-source concurrency re-review](https://github.com/Kentaro-Ono-jp/Portfolio/pull/115#issuecomment-5248549070).
 
 ### Use complete live invariants for status and guarded mutation
 
