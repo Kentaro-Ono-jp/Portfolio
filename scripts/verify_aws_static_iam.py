@@ -5,12 +5,11 @@ import copy
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
-import re
 from pathlib import Path
 from typing import Any
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PARENT = REPOSITORY_ROOT / "infra" / "aws" / "environment"
@@ -144,7 +143,9 @@ def render_tokens(
     name_prefix: str,
     repository_identity: str,
     state_bucket_name: str,
+    github_repository_subject: str | None = None,
 ) -> dict[str, str]:
+    repository_subject = github_repository_subject or f"repo:{repository_identity}"
     return {
         "AWS_ACCOUNT_ID": account_id,
         "AWS_PARTITION": partition,
@@ -153,7 +154,7 @@ def render_tokens(
         "NAME_PREFIX": name_prefix,
         "REPOSITORY_IDENTITY": repository_identity,
         "STATE_BUCKET_NAME": state_bucket_name,
-        "GITHUB_REPOSITORY_SUBJECT": f"repo:{repository_identity}",
+        "GITHUB_REPOSITORY_SUBJECT": repository_subject,
         "GITHUB_ENVIRONMENT": "aws-deployment",
         "GITHUB_WORKFLOW_NAME": "Deploy managed AWS proof",
         "GITHUB_WORKFLOW_REF": (

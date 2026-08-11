@@ -187,9 +187,10 @@ and exact ownership still gates destroy.
 The Step 6 GitHub workflow requires the repository owner to configure GitHub's
 OIDC subject template with `use_default: false` and the
 ordered `include_claim_keys` value `repo`, `context`, `job_workflow_ref`,
-`event_name`. The `github_oidc_repository_subject` input must match the
-resulting `repo:` segment, including owner/repository IDs when immutable GitHub
-subjects are enabled. AWS does not expose `event_name` as a direct GitHub OIDC
+`event_name`, with `use_immutable_subject: true`. The checked-in automation
+contract records the exact stable owner and repository IDs, and
+`github_oidc_repository_subject` must match the resulting immutable `repo:`
+segment. AWS does not expose `event_name` as a direct GitHub OIDC
 condition key, so the trust document matches the two complete customized
 subjects ending in `event_name:workflow_dispatch` and `event_name:schedule`.
 

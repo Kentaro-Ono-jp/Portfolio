@@ -343,8 +343,9 @@ timer, so accepted dispatch and schedule runs need no per-run manual approval.
 Both use the one-hour normal fallback; that TTL is an independent AWS cleanup
 deadline, not a GitHub job-time limit.
 
-Acceptance requires the customized `repo/context/job_workflow_ref/event_name`
-subject, exact repository/ref/environment/workflow guards, the exact
+Acceptance requires the customized immutable
+`repo/context/job_workflow_ref/event_name` subject with stable owner and
+repository IDs, exact repository/ref/environment/workflow guards, the exact
 automation-to-manual/monthly operator/destroy chain, and a non-cancelling
 concurrency group. Fork PRs, ordinary CI, Dependabot, pushes, and unapproved
 branches remain unable to assume deployment authority. Deployment and destroy

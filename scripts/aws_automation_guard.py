@@ -4,16 +4,19 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
+from aws_automation_contract import (
+    EXPECTED_ENVIRONMENT,
+    EXPECTED_REF,
+    EXPECTED_REPOSITORY,
+    EXPECTED_REPOSITORY_OWNER,
+    EXPECTED_WORKFLOW,
+    PERMANENT_SCHEDULE,
+)
 
-EXPECTED_REPOSITORY = "Kentaro-Ono-jp/Portfolio"
-EXPECTED_REF = "refs/heads/main"
-EXPECTED_WORKFLOW = "Deploy managed AWS proof"
-EXPECTED_ENVIRONMENT = "aws-deployment"
-PERMANENT_SCHEDULE = "0 13 1 * *"
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -36,7 +39,7 @@ def select_route(values: Mapping[str, str]) -> AutomationRoute:
     configured_environment = values.get("PORTFOLIO_GITHUB_ENVIRONMENT", "")
     if repository != EXPECTED_REPOSITORY:
         raise RuntimeError("Automation repository identity is not accepted.")
-    if repository_owner != EXPECTED_REPOSITORY.split("/", maxsplit=1)[0]:
+    if repository_owner != EXPECTED_REPOSITORY_OWNER:
         raise RuntimeError("Automation repository owner is not accepted.")
     if ref != EXPECTED_REF:
         raise RuntimeError("Automation ref is not the exact main branch.")
