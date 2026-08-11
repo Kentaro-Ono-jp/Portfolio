@@ -367,7 +367,9 @@ prototype requiring human post-run review, not unattended operational truth.
 
 ```mermaid
 flowchart LR
-    C["configure"] --> P["preflight + frozen IAM/controller attestation"]
+    C["configure + prove exact source identity"] --> O["assume exact environment operator"]
+    O --> T["read-only frozen IAM/controller attestation"]
+    T --> P["lifecycle preflight"]
     P --> I["publish immutable images"]
     I --> F["fresh create-only plan"]
     F --> R["register + read back fallback"]
