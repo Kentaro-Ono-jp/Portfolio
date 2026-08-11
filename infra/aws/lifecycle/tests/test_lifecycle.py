@@ -288,6 +288,74 @@ class ScheduleAws(FakeAws):
         return super().call(service, operation, *arguments, **kwargs)
 
 
+SCHEDULE_DRIFT_CASES = (
+    "name",
+    "group",
+    "state",
+    "expression",
+    "timezone",
+    "flexible-window",
+    "action-after-completion",
+    "target-project",
+    "target-role",
+    "retry-event-age",
+    "retry-attempts",
+    "start-date",
+    "end-date",
+    "kms-key",
+)
+
+
+def drift_schedule(schedule: dict[str, object], case: str, expiry: datetime) -> None:
+    if case == "name":
+        schedule["Name"] = "foreign-destroy"
+    elif case == "group":
+        schedule["GroupName"] = "foreign-lifecycle"
+    elif case == "state":
+        schedule["State"] = "DISABLED"
+    elif case == "expression":
+        schedule["ScheduleExpression"] = lifecycle.schedule_expression(
+            expiry + timedelta(minutes=1)
+        )
+    elif case == "timezone":
+        schedule["ScheduleExpressionTimezone"] = "Asia/Tokyo"
+    elif case == "flexible-window":
+        schedule["FlexibleTimeWindow"] = {
+            "Mode": "FLEXIBLE",
+            "MaximumWindowInMinutes": 1,
+        }
+    elif case == "action-after-completion":
+        schedule["ActionAfterCompletion"] = "DELETE"
+    elif case in {
+        "target-project",
+        "target-role",
+        "retry-event-age",
+        "retry-attempts",
+    }:
+        target = dict(schedule["Target"])  # type: ignore[arg-type]
+        if case == "target-project":
+            target["Arn"] = "arn:aws:codebuild:us-east-1:111122223333:project/foreign"
+        elif case == "target-role":
+            target["RoleArn"] = "arn:aws:iam::111122223333:role/foreign"
+        else:
+            retry = dict(target["RetryPolicy"])
+            retry[
+                "MaximumEventAgeInSeconds"
+                if case == "retry-event-age"
+                else "MaximumRetryAttempts"
+            ] += 1
+            target["RetryPolicy"] = retry
+        schedule["Target"] = target
+    elif case == "start-date":
+        schedule["StartDate"] = "2026-08-11T00:00:00Z"
+    elif case == "end-date":
+        schedule["EndDate"] = "2026-08-11T01:00:00Z"
+    elif case == "kms-key":
+        schedule["KmsKeyArn"] = "arn:aws:kms:us-east-1:111122223333:key/synthetic"
+    else:
+        raise AssertionError(f"Unknown schedule drift case: {case}")
+
+
 class MigrationAws(FakeAws):
     def __init__(
         self,
@@ -798,26 +866,22 @@ class LifecycleContractTests(unittest.TestCase):
             expires_at=expiry,
         )
         source = FakeAws()
-        mutations = {
-            "disabled": lambda schedule: schedule.update({"State": "DISABLED"}),
-            "foreign-target": lambda schedule: schedule["Target"].update(
-                {"Arn": "arn:aws:codebuild:us-east-1:111122223333:project/foreign"}
-            ),
-            "wrong-expression": lambda schedule: schedule.update(
-                {
-                    "ScheduleExpression": lifecycle.schedule_expression(
-                        expiry + timedelta(minutes=1)
-                    )
-                }
-            ),
-        }
-        for label, mutate in mutations.items():
-            with self.subTest(label=label):
+        cases = ("canonical", "missing", "expired", *SCHEDULE_DRIFT_CASES)
+        for case in cases:
+            with self.subTest(case=case):
                 operator = ScheduleAws(registered)
                 lifecycle.ensure_schedule(operator, config, expiry)
                 assert operator.schedule is not None
-                mutate(operator.schedule)
+                if case == "missing":
+                    operator.schedule = None
+                elif case in SCHEDULE_DRIFT_CASES:
+                    drift_schedule(operator.schedule, case, expiry)
                 operator.calls.clear()
+                instant = (
+                    expiry + timedelta(seconds=1)
+                    if case == "expired"
+                    else registered + timedelta(minutes=10)
+                )
                 with (
                     patch.object(lifecycle, "verify_source"),
                     patch.object(lifecycle, "assume_role", return_value=operator),
@@ -832,13 +896,22 @@ class LifecycleContractTests(unittest.TestCase):
                     patch.object(
                         lifecycle,
                         "utc_now",
-                        return_value=registered + timedelta(minutes=10),
+                        return_value=instant,
                     ),
                 ):
                     result = lifecycle.command_status(
                         config, Path("config.json"), source
                     )
-                self.assertEqual(result["fallback"], "drifted")
+                expected = (
+                    "verified"
+                    if case == "canonical"
+                    else (
+                        "expired-or-missing"
+                        if case in {"missing", "expired"}
+                        else "drifted"
+                    )
+                )
+                self.assertEqual(result["fallback"], expected)
                 self.assertFalse(
                     any(
                         service == "scheduler"
@@ -851,39 +924,51 @@ class LifecycleContractTests(unittest.TestCase):
         config = configuration()
         registered = datetime(2026, 8, 11, 0, 0, tzinfo=UTC)
         expiry = registered + timedelta(minutes=60)
-        state = state_at(config, Phase.FALLBACK_REGISTERED)
-        state.set_fallback(
-            schedule_name=config.schedule_name,
-            registered_at=registered,
-            expires_at=expiry,
-        )
-        operator = ScheduleAws(registered)
-        lifecycle.ensure_schedule(operator, config, expiry)
-        assert operator.schedule is not None
-        operator.schedule["State"] = "DISABLED"
-        operator.calls.clear()
-        source = FakeAws()
-        with (
-            patch.object(lifecycle, "verify_source"),
-            patch.object(lifecycle, "assume_role", return_value=operator),
-            patch.object(lifecycle, "read_remote_state", return_value=(state, "etag")),
-            patch.object(lifecycle, "write_remote_state") as write,
-            patch.object(
-                lifecycle,
-                "utc_now",
-                return_value=registered + timedelta(minutes=10),
-            ),
-        ):
-            with self.assertRaisesRegex(LifecycleError, "read-back drifted"):
-                lifecycle.command_extend(config, Path("config.json"), source, 20)
-        self.assertEqual(write.call_count, 0)
-        self.assertNotIn("fallbackExtendIntent", state.checkpoints)
-        self.assertFalse(
-            any(
-                service == "scheduler" and operation == "update-schedule"
-                for service, operation, _arguments in operator.calls
-            )
-        )
+        cases = ("missing", "expired", *SCHEDULE_DRIFT_CASES)
+        for case in cases:
+            with self.subTest(case=case):
+                state = state_at(config, Phase.FALLBACK_REGISTERED)
+                state.set_fallback(
+                    schedule_name=config.schedule_name,
+                    registered_at=registered,
+                    expires_at=expiry,
+                )
+                operator = ScheduleAws(registered)
+                lifecycle.ensure_schedule(operator, config, expiry)
+                assert operator.schedule is not None
+                if case == "missing":
+                    operator.schedule = None
+                elif case in SCHEDULE_DRIFT_CASES:
+                    drift_schedule(operator.schedule, case, expiry)
+                operator.calls.clear()
+                instant = (
+                    expiry + timedelta(seconds=1)
+                    if case == "expired"
+                    else registered + timedelta(minutes=10)
+                )
+                with (
+                    patch.object(lifecycle, "verify_source"),
+                    patch.object(lifecycle, "assume_role", return_value=operator),
+                    patch.object(
+                        lifecycle,
+                        "read_remote_state",
+                        return_value=(state, "etag"),
+                    ),
+                    patch.object(lifecycle, "write_remote_state") as write,
+                    patch.object(lifecycle, "utc_now", return_value=instant),
+                ):
+                    with self.assertRaises(LifecycleError):
+                        lifecycle.command_extend(
+                            config, Path("config.json"), FakeAws(), 20
+                        )
+                self.assertEqual(write.call_count, 0)
+                self.assertNotIn("fallbackExtendIntent", state.checkpoints)
+                self.assertFalse(
+                    any(
+                        service == "scheduler" and operation == "update-schedule"
+                        for service, operation, _arguments in operator.calls
+                    )
+                )
 
     def test_extend_adopts_effect_before_final_checkpoint(self) -> None:
         config = configuration()
