@@ -124,6 +124,13 @@ intent; another checkout fails closed. Successful seed removes both the remote
 intent and the local recovery identity only after the credential capsule,
 Cognito user, and final `seed=passed` checkpoint agree.
 
+Every checkout-private runtime path is resolved to an absolute path before
+Terraform receives `-chdir`. The copied root, backend configuration, variable
+file, saved plan, apply, state operations, and destroy therefore share one
+path origin even when the workflow supplies a repository-relative config path.
+Terraform emits no-color diagnostics, and only a public-safe `Error:` line may
+leave the private diagnostic boundary.
+
 Destroy also handles an interruption before all three image digests were
 checkpointed: it resolves the deterministic immutable tag in each exact
 repository, validates any digest already recorded, removes any partial image,

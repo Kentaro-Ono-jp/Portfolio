@@ -319,10 +319,14 @@ def main() -> int:
         'safe_failure_prefix="Static IAM verification failed:"',
         '"--github-oidc-repository-subject"',
         "EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT",
+        '(config_path.parent / "runtime").resolve()',
+        'env["TF_CLI_ARGS"] = "-no-color"',
     ):
         require(lifecycle, token, f"Lifecycle automation boundary drifted: {token}")
     if lifecycle.count("default=60, choices=range(15, 121)") != 2:
         raise RuntimeError("Deploy and fallback must both default to one hour")
+    if lifecycle.count('safe_failure_prefix="Error:"') != 8:
+        raise RuntimeError("Every Terraform process must expose only safe diagnostics")
 
     for token in (
         "def accepted_repository_remotes(repository_identity: str)",
