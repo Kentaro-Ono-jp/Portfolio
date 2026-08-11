@@ -193,6 +193,9 @@ contract records the exact stable owner and repository IDs, and
 segment. AWS does not expose `event_name` as a direct GitHub OIDC
 condition key, so the trust document matches the two complete customized
 subjects ending in `event_name:workflow_dispatch` and `event_name:schedule`.
+Owner maintenance, the workflow claim guard, and the live read-only static-IAM
+attestor all consume this same immutable subject contract; the attestor cannot
+fall back to the legacy name-only subject.
 
 `.github/workflows/aws-deploy.yml` uses that exact protected environment,
 short-lived OIDC role, and `main` workflow identity. Owner-started dispatch

@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aws_automation_contract import validate_repository_subject
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PARENT = REPOSITORY_ROOT / "infra" / "aws" / "environment"
 CONTRACT_ROOTS = {
@@ -680,6 +682,10 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
     offline = verify_offline()
     root = CONTRACT_ROOTS[args.environment]
     manifest_template = load_json(root / "manifest.json")
+    repository_subject = validate_repository_subject(
+        args.repository_identity,
+        args.github_oidc_repository_subject,
+    )
     tokens = render_tokens(
         account_id=args.account_id,
         partition=args.partition,
@@ -688,6 +694,7 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
         name_prefix=args.name_prefix,
         repository_identity=args.repository_identity,
         state_bucket_name=args.state_bucket_name,
+        github_repository_subject=repository_subject,
     )
     manifest = rendered(manifest_template, tokens)
     source_spec = manifest["sourceUsers"]["noel_deployment"]
@@ -969,6 +976,7 @@ def parse_args() -> argparse.Namespace:
         "name-prefix",
         "environment",
         "repository-identity",
+        "github-oidc-repository-subject",
         "state-bucket-name",
     ):
         parser.add_argument(f"--{name}")
@@ -983,6 +991,7 @@ def parse_args() -> argparse.Namespace:
                 "name_prefix",
                 "environment",
                 "repository_identity",
+                "github_oidc_repository_subject",
                 "state_bucket_name",
             )
             if not getattr(args, name)
