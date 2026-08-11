@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from aws_automation_contract import EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT
 from aws_lifecycle_core import (
     CALLER_MODE_GITHUB_AUTOMATION,
     CALLER_MODE_SOURCE_USER,
@@ -176,6 +177,7 @@ def run_process(
     env: Mapping[str, str] | None = None,
     timeout: int | None = None,
     label: str,
+    safe_failure_prefix: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         list(command),
@@ -188,8 +190,28 @@ def run_process(
     )
     if result.returncode != 0:
         retain_private_process_diagnostic(label, result)
+        safe_detail = public_process_failure_detail(result, safe_failure_prefix)
+        if safe_detail:
+            raise LifecycleError(f"{label} failed safely: {safe_detail}")
         raise LifecycleError(f"{label} failed; private diagnostics were retained.")
     return result
+
+
+def public_process_failure_detail(
+    result: subprocess.CompletedProcess[str], prefix: str | None
+) -> str | None:
+    if not prefix:
+        return None
+    for line in reversed((result.stderr or "").splitlines()):
+        candidate = " ".join(line.split())
+        if not candidate.startswith(prefix) or len(candidate) > 500:
+            continue
+        try:
+            assert_public_safe({"processFailure": candidate})
+        except LifecycleError:
+            continue
+        return candidate
+    return None
 
 
 def retain_private_process_diagnostic(
@@ -479,6 +501,8 @@ def verify_static_iam(config: LifecycleConfig, aws_executable: str) -> dict[str,
             config.environment,
             "--repository-identity",
             config.repository_identity,
+            "--github-oidc-repository-subject",
+            EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
             "--state-bucket-name",
             config.state_bucket,
             "--caller-mode",
@@ -486,6 +510,7 @@ def verify_static_iam(config: LifecycleConfig, aws_executable: str) -> dict[str,
         ],
         timeout=300,
         label="Frozen static IAM attestation",
+        safe_failure_prefix="Static IAM verification failed:",
     )
     try:
         payload = json.loads(result.stdout)

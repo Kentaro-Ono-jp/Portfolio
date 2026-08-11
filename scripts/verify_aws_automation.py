@@ -24,6 +24,7 @@ OIDC_CLAIM_PATH = REPOSITORY_ROOT / "scripts" / "aws_oidc_claim_guard.py"
 MAINTENANCE_PATH = REPOSITORY_ROOT / "scripts" / "aws_automation_maintenance.py"
 LIFECYCLE_PATH = REPOSITORY_ROOT / "scripts" / "aws_lifecycle.py"
 LIFECYCLE_CORE_PATH = REPOSITORY_ROOT / "scripts" / "aws_lifecycle_core.py"
+STATIC_IAM_PATH = REPOSITORY_ROOT / "scripts" / "verify_aws_static_iam.py"
 BOOTSTRAP_LOCALS_PATH = REPOSITORY_ROOT / "infra" / "aws" / "bootstrap" / "locals.tf"
 
 CHECKOUT_STEP = "Check out the exact source"
@@ -97,6 +98,7 @@ def main() -> int:
         MAINTENANCE_PATH,
         LIFECYCLE_PATH,
         LIFECYCLE_CORE_PATH,
+        STATIC_IAM_PATH,
         BOOTSTRAP_LOCALS_PATH,
     ):
         if not path.is_file():
@@ -108,6 +110,7 @@ def main() -> int:
     maintenance = MAINTENANCE_PATH.read_text(encoding="utf-8")
     lifecycle = LIFECYCLE_PATH.read_text(encoding="utf-8")
     lifecycle_core = LIFECYCLE_CORE_PATH.read_text(encoding="utf-8")
+    static_iam = STATIC_IAM_PATH.read_text(encoding="utf-8")
     bootstrap = BOOTSTRAP_LOCALS_PATH.read_text(encoding="utf-8")
 
     if not workflow.startswith("name: Deploy managed AWS proof\n"):
@@ -313,6 +316,9 @@ def main() -> int:
         '"--caller-mode"',
         '"--automation-event"',
         "accepted_repository_remotes(config.repository_identity)",
+        'safe_failure_prefix="Static IAM verification failed:"',
+        '"--github-oidc-repository-subject"',
+        "EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT",
     ):
         require(lifecycle, token, f"Lifecycle automation boundary drifted: {token}")
     if lifecycle.count("default=60, choices=range(15, 121)") != 2:
@@ -330,6 +336,14 @@ def main() -> int:
         "accepted_repository_remotes(EXPECTED_REPOSITORY)",
         "Automation guard must use the shared Git remote contract",
     )
+
+    for token in (
+        '"github-oidc-repository-subject"',
+        "args.github_oidc_repository_subject",
+        "github_repository_subject=repository_subject",
+        "validate_repository_subject(",
+    ):
+        require(static_iam, token, f"Live static IAM subject drifted: {token}")
 
     for token in (
         "operator_trust_policies",

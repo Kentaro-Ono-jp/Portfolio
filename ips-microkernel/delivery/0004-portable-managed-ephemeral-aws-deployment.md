@@ -347,9 +347,10 @@ Acceptance requires the customized immutable
 `repo/context/job_workflow_ref/event_name` subject with stable owner and
 repository IDs, exact repository/ref/environment/workflow guards, the exact
 automation-to-manual/monthly operator/destroy chain, and a non-cancelling
-concurrency group. Fork PRs, ordinary CI, Dependabot, pushes, and unapproved
-branches remain unable to assume deployment authority. Deployment and destroy
-schedules must be independently recoverable, and outside-window application
+concurrency group. Owner maintenance and live read-only IAM attestation must
+render that same immutable subject. Fork PRs, ordinary CI, Dependabot, pushes,
+and unapproved branches remain unable to assume deployment authority. Deployment
+and destroy schedules must be independently recoverable, and outside-window application
 resources must not remain running. Initial GitHub/OIDC/static-IAM configuration
 is a separately checkpointed owner-admin operation; normal deployment never
 mutates or repairs IAM.

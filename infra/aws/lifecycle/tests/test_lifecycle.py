@@ -15,6 +15,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
 
 import aws_lifecycle as lifecycle
+from aws_automation_contract import EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT
 from aws_lifecycle_core import (
     CALLER_MODE_GITHUB_AUTOMATION,
     FORWARD_PHASES,
@@ -2052,6 +2053,71 @@ class LifecycleContractTests(unittest.TestCase):
                 / "synthetic-process.log"
             )
             self.assertIn("private-value", diagnostic.read_text(encoding="utf-8"))
+
+    def test_process_failure_exposes_only_an_allowlisted_public_safe_line(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            (repository / ".git").mkdir()
+            with patch.object(lifecycle, "REPOSITORY_ROOT", repository):
+                with self.assertRaisesRegex(
+                    LifecycleError,
+                    "Read-only AWS attestation call failed: iam get-role",
+                ):
+                    lifecycle.run_process(
+                        [
+                            sys.executable,
+                            "-c",
+                            (
+                                "import sys; print('Static IAM verification failed: "
+                                "Read-only AWS attestation call failed: iam get-role', "
+                                "file=sys.stderr); sys.exit(1)"
+                            ),
+                        ],
+                        label="Synthetic safe process",
+                        safe_failure_prefix="Static IAM verification failed:",
+                    )
+
+                with self.assertRaises(LifecycleError) as unsafe:
+                    lifecycle.run_process(
+                        [
+                            sys.executable,
+                            "-c",
+                            (
+                                "import sys; print('Static IAM verification failed: "
+                                "arn:aws:iam::111122223333:role/private', "
+                                "file=sys.stderr); sys.exit(1)"
+                            ),
+                        ],
+                        label="Synthetic unsafe process",
+                        safe_failure_prefix="Static IAM verification failed:",
+                    )
+            self.assertNotIn("111122223333", str(unsafe.exception))
+            self.assertIn("private diagnostics", str(unsafe.exception))
+
+    def test_live_static_attestation_receives_the_shared_immutable_subject(
+        self,
+    ) -> None:
+        completed = SimpleNamespace(
+            stdout=json.dumps(
+                {
+                    "drift": False,
+                    "attestationAwsWriteCalls": 0,
+                }
+            )
+        )
+        with patch.object(lifecycle, "run_process", return_value=completed) as run:
+            lifecycle.verify_static_iam(configuration(), "aws")
+
+        command = run.call_args.args[0]
+        subject_flag = command.index("--github-oidc-repository-subject")
+        self.assertEqual(
+            command[subject_flag + 1],
+            EXPECTED_IMMUTABLE_REPOSITORY_SUBJECT,
+        )
+        self.assertEqual(
+            run.call_args.kwargs["safe_failure_prefix"],
+            "Static IAM verification failed:",
+        )
 
 
 if __name__ == "__main__":
