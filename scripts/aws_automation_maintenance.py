@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,6 +39,22 @@ WRITE_OPERATIONS = {
     "codebuild:create-project",
 }
 
+TRANSIENT_AWS_ERRORS = (
+    "ConcurrentModification",
+    "EntityTemporarilyUnmodifiable",
+    "InternalFailure",
+    "NoSuchEntity",
+    "RequestLimitExceeded",
+    "ServiceFailure",
+    "Throttling",
+    "ThrottlingException",
+)
+TRANSIENT_AWS_MESSAGES = (
+    "Invalid principal in policy",
+    "does not exist or is not attachable",
+)
+AWS_RETRY_DELAYS_SECONDS = (1, 2, 4, 8, 16)
+
 
 @dataclass
 class Effects:
@@ -66,25 +84,34 @@ class AwsCli:
         is_write = key in WRITE_OPERATIONS
         if is_write:
             self.effects.write_attempts += 1
-        result = subprocess.run(
-            [
-                self.executable,
-                service,
-                operation,
-                *arguments,
-                "--output",
-                "json",
-                "--no-cli-pager",
-            ],
-            cwd=REPOSITORY_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
+        command = [
+            self.executable,
+            service,
+            operation,
+            *arguments,
+            "--output",
+            "json",
+            "--no-cli-pager",
+        ]
+        for attempt in range(len(AWS_RETRY_DELAYS_SECONDS) + 1):
+            result = subprocess.run(
+                command,
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                break
             if any(code in result.stderr for code in allow_missing):
                 return None
-            raise RuntimeError(f"AWS maintenance call failed safely: {key}")
+            retryable = is_transient_aws_failure(key, result.stderr)
+            if not retryable or attempt == len(AWS_RETRY_DELAYS_SECONDS):
+                break
+            time.sleep(AWS_RETRY_DELAYS_SECONDS[attempt])
+        if result.returncode != 0:
+            code = aws_error_code(result.stderr)
+            raise RuntimeError(f"AWS maintenance call failed safely: {key} ({code})")
         if is_write:
             self.effects.successful_writes += 1
             if creates:
@@ -93,6 +120,19 @@ class AwsCli:
         if not isinstance(payload, dict):
             raise RuntimeError(f"AWS maintenance returned invalid data: {key}")
         return payload
+
+
+def aws_error_code(stderr: str) -> str:
+    match = re.search(r"\(([A-Za-z][A-Za-z0-9._-]+)\)", stderr)
+    return match.group(1) if match else "UnclassifiedAwsError"
+
+
+def is_transient_aws_failure(key: str, stderr: str) -> bool:
+    if any(marker in stderr for marker in TRANSIENT_AWS_ERRORS):
+        return True
+    return key.startswith("iam:") and any(
+        marker in stderr for marker in TRANSIENT_AWS_MESSAGES
+    )
 
 
 def tags(environment: str, repository: str, purpose: str) -> dict[str, str]:
@@ -401,24 +441,65 @@ def ensure_role(
     return status
 
 
-def role_creation_order(spec: dict[str, Any]) -> tuple[int, int, str]:
-    purpose_order = {
-        "operator_deployment": 0,
-        "task_execution": 1,
-        "web_workload": 2,
-        "api_workload": 3,
-        "ml_workload": 4,
-        "codebuild_image": 5,
-        "codebuild_destroy": 6,
-        "destroy": 7,
-        "scheduler": 8,
-    }
-    purpose = str(spec["purpose"])
-    if purpose == "automation":
-        return (-1, -1, str(spec["name"]))
-    name = str(spec["name"])
-    environment_order = 0 if "-manual-" in name else 1
-    return (environment_order, purpose_order[purpose], name)
+def trust_aws_principals(trust: dict[str, Any]) -> set[str]:
+    principals: set[str] = set()
+    statements = trust.get("Statement", [])
+    if not isinstance(statements, list):
+        raise RuntimeError("Role trust statement inventory is invalid")
+    for statement in statements:
+        if not isinstance(statement, dict):
+            raise RuntimeError("Role trust statement is invalid")
+        principal = statement.get("Principal", {})
+        if not isinstance(principal, dict) or "AWS" not in principal:
+            continue
+        values = principal["AWS"]
+        if isinstance(values, str):
+            principals.add(values)
+        elif isinstance(values, list) and all(
+            isinstance(value, str) for value in values
+        ):
+            principals.update(values)
+        else:
+            raise RuntimeError("Role trust AWS principal inventory is invalid")
+    return principals
+
+
+def ordered_role_specs(
+    roles: dict[str, dict[str, Any]],
+    *,
+    account_id: str,
+    partition: str,
+) -> list[dict[str, Any]]:
+    by_name = {str(spec["name"]): spec for spec in roles.values()}
+    if set(by_name) != set(roles):
+        raise RuntimeError("Static role key and name inventory disagrees")
+    role_prefix = f"arn:{partition}:iam::{account_id}:role/"
+    by_arn = {f"{role_prefix}{name}": name for name in by_name}
+    dependencies: dict[str, set[str]] = {}
+    for name, spec in by_name.items():
+        dependencies[name] = set()
+        for principal in trust_aws_principals(spec["trust"]):
+            dependency = by_arn.get(principal)
+            if dependency is not None:
+                dependencies[name].add(dependency)
+                continue
+            if principal.startswith(f"{role_prefix}reactorfront-"):
+                raise RuntimeError("Role trust references an undeclared internal role")
+
+    ordered: list[dict[str, Any]] = []
+    emitted: set[str] = set()
+    while len(emitted) < len(by_name):
+        ready = sorted(
+            name
+            for name, required in dependencies.items()
+            if name not in emitted and required <= emitted
+        )
+        if not ready:
+            raise RuntimeError("Static role trust dependency graph contains a cycle")
+        for name in ready:
+            ordered.append(by_name[name])
+            emitted.add(name)
+    return ordered
 
 
 def controller_tags(repository: str, purpose: str) -> dict[str, str]:
@@ -426,6 +507,136 @@ def controller_tags(repository: str, purpose: str) -> dict[str, str]:
         **tags("monthly", repository, f"{purpose}-controller"),
         "PortfolioLayer": "bootstrap",
     }
+
+
+def monthly_project_payload(
+    *,
+    purpose: str,
+    account_id: str,
+    partition: str,
+    region: str,
+    name_prefix: str,
+    repository: str,
+    state_bucket: str,
+) -> dict[str, Any]:
+    if purpose not in {"image", "destroy"}:
+        raise RuntimeError("Monthly controller purpose is invalid")
+    project_name = (
+        f"{name_prefix}-monthly-destroy"
+        if purpose == "destroy"
+        else f"{name_prefix}-monthly-image-build"
+    )
+    buildspec_name = (
+        "destroy.buildspec.yml" if purpose == "destroy" else "image-build.buildspec.yml"
+    )
+    role_purpose = "codebuild-destroy" if purpose == "destroy" else "codebuild-image"
+    log_name = f"/portfolio/{name_prefix}/monthly/controller/{purpose}"
+    return {
+        "name": project_name,
+        "source": {
+            "type": "NO_SOURCE",
+            "buildspec": (LIFECYCLE_ROOT / buildspec_name).read_text(encoding="utf-8"),
+        },
+        "artifacts": {"type": "NO_ARTIFACTS"},
+        "environment": {
+            "type": "LINUX_CONTAINER",
+            "image": "aws/codebuild/standard:7.0",
+            "computeType": "BUILD_GENERAL1_SMALL",
+            "imagePullCredentialsType": "CODEBUILD",
+            "privilegedMode": purpose == "image",
+            "environmentVariables": [
+                {"name": "PORTFOLIO_STATE_BUCKET", "value": state_bucket},
+                {
+                    "name": "PORTFOLIO_CONFIGURATION_KEY",
+                    "value": f"controls/{name_prefix}/monthly/configuration.json",
+                },
+                {
+                    "name": "PORTFOLIO_DESTROY_ROLE_ARN",
+                    "value": (
+                        f"arn:{partition}:iam::{account_id}:role/"
+                        f"{name_prefix}-monthly-destroy"
+                    ),
+                },
+                {"name": "PORTFOLIO_AWS_REGION", "value": region},
+            ],
+        },
+        "serviceRole": (
+            f"arn:{partition}:iam::{account_id}:role/"
+            f"{name_prefix}-monthly-{role_purpose}"
+        ),
+        "timeoutInMinutes": 60,
+        "queuedTimeoutInMinutes": 30,
+        "autoRetryLimit": 0 if purpose == "image" else 2,
+        "logsConfig": {
+            "cloudWatchLogs": {
+                "status": "ENABLED",
+                "groupName": log_name,
+                "streamName": purpose,
+            }
+        },
+        "tags": codebuild_tags(controller_tags(repository, purpose)),
+    }
+
+
+def verify_existing_monthly_project(
+    project: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    scalar_fields = (
+        "name",
+        "serviceRole",
+        "timeoutInMinutes",
+        "queuedTimeoutInMinutes",
+        "autoRetryLimit",
+    )
+    if any(project.get(field) != expected[field] for field in scalar_fields):
+        raise RuntimeError("Existing monthly CodeBuild project shape drifted")
+    actual_source = project.get("source", {})
+    expected_source = expected["source"]
+    if actual_source.get("type") != expected_source["type"] or (
+        lifecycle.normalized_buildspec(str(actual_source.get("buildspec", "")))
+        != lifecycle.normalized_buildspec(str(expected_source["buildspec"]))
+    ):
+        raise RuntimeError("Existing monthly CodeBuild source drifted")
+    if project.get("artifacts", {}).get("type") != expected["artifacts"]["type"]:
+        raise RuntimeError("Existing monthly CodeBuild artifacts drifted")
+    if (
+        project.get("logsConfig", {}).get("cloudWatchLogs")
+        != expected["logsConfig"]["cloudWatchLogs"]
+    ):
+        raise RuntimeError("Existing monthly CodeBuild logs drifted")
+    actual_environment = project.get("environment", {})
+    expected_environment = expected["environment"]
+    environment_fields = (
+        "type",
+        "image",
+        "computeType",
+        "imagePullCredentialsType",
+        "privilegedMode",
+    )
+    if any(
+        actual_environment.get(field) != expected_environment[field]
+        for field in environment_fields
+    ):
+        raise RuntimeError("Existing monthly CodeBuild environment drifted")
+    actual_variables = {
+        str(item.get("name")): str(item.get("value"))
+        for item in actual_environment.get("environmentVariables", [])
+        if isinstance(item, dict)
+    }
+    expected_variables = {
+        str(item["name"]): str(item["value"])
+        for item in expected_environment["environmentVariables"]
+    }
+    if actual_variables != expected_variables:
+        raise RuntimeError("Existing monthly CodeBuild inputs drifted")
+    actual_tags = {
+        str(item.get("key")): str(item.get("value"))
+        for item in project.get("tags", [])
+        if isinstance(item, dict)
+    }
+    expected_tags = {str(item["key"]): str(item["value"]) for item in expected["tags"]}
+    if actual_tags != expected_tags:
+        raise RuntimeError("Existing monthly CodeBuild tags drifted")
 
 
 def ensure_monthly_controllers(
@@ -438,7 +649,8 @@ def ensure_monthly_controllers(
     name_prefix: str,
     repository: str,
     state_bucket: str,
-) -> int:
+) -> dict[str, int]:
+    planned = 0
     created = 0
     group_name = f"{name_prefix}-monthly-lifecycle"
     group_arn = (
@@ -451,27 +663,45 @@ def ensure_monthly_controllers(
         group_name,
         allow_missing=("ResourceNotFoundException",),
     )
-    if group is None and apply:
-        aws.call(
-            "scheduler",
-            "create-schedule-group",
-            "--name",
-            group_name,
-            "--tags",
-            iam_tags(
-                {
-                    key: value
-                    for key, value in tags(
-                        "monthly", repository, "lifecycle-schedule-group"
-                    ).items()
-                    if key != "PortfolioPurpose"
-                }
-            ),
-            creates=True,
-        )
-        created += 1
-    elif group is not None and group.get("Arn") != group_arn:
-        raise RuntimeError("Monthly schedule group ARN drifted")
+    expected_group_tags = {
+        key: value
+        for key, value in tags(
+            "monthly", repository, "lifecycle-schedule-group"
+        ).items()
+        if key != "PortfolioPurpose"
+    }
+    if group is None:
+        planned += 1
+        if apply:
+            aws.call(
+                "scheduler",
+                "create-schedule-group",
+                "--name",
+                group_name,
+                "--tags",
+                iam_tags(expected_group_tags),
+                creates=True,
+            )
+            created += 1
+    else:
+        if group.get("Arn") != group_arn or group.get("State") != "ACTIVE":
+            raise RuntimeError("Monthly schedule group shape drifted")
+        group_tags = (
+            aws.call(
+                "scheduler",
+                "list-tags-for-resource",
+                "--resource-arn",
+                group_arn,
+            )
+            or {}
+        ).get("Tags", [])
+        actual_group_tags = {
+            str(item.get("Key")): str(item.get("Value"))
+            for item in group_tags
+            if isinstance(item, dict)
+        }
+        if actual_group_tags != expected_group_tags:
+            raise RuntimeError("Monthly schedule group tags drifted")
 
     for purpose in ("image", "destroy"):
         log_name = f"/portfolio/{name_prefix}/monthly/controller/{purpose}"
@@ -486,91 +716,75 @@ def ensure_monthly_controllers(
             for item in logs.get("logGroups", [])
             if item.get("logGroupName") == log_name
         ]
-        if not exact_logs and apply:
-            aws.call(
-                "logs", "create-log-group", "--log-group-name", log_name, creates=True
-            )
-            aws.call(
-                "logs",
-                "put-retention-policy",
-                "--log-group-name",
-                log_name,
-                "--retention-in-days",
-                "7",
-            )
-            log_arn = f"arn:{partition}:logs:{region}:{account_id}:log-group:{log_name}"
-            aws.call(
-                "logs",
-                "tag-resource",
-                "--resource-arn",
-                log_arn,
-                "--tags",
-                json.dumps(controller_tags(repository, purpose)),
-            )
-            created += 1
-        project_name = f"{name_prefix}-monthly-{purpose if purpose == 'destroy' else 'image-build'}"
+        if len(exact_logs) > 1:
+            raise RuntimeError("Monthly controller log inventory is ambiguous")
+        log_arn = f"arn:{partition}:logs:{region}:{account_id}:log-group:{log_name}"
+        if not exact_logs:
+            planned += 1
+            if apply:
+                aws.call(
+                    "logs",
+                    "create-log-group",
+                    "--log-group-name",
+                    log_name,
+                    creates=True,
+                )
+                aws.call(
+                    "logs",
+                    "put-retention-policy",
+                    "--log-group-name",
+                    log_name,
+                    "--retention-in-days",
+                    "7",
+                )
+                aws.call(
+                    "logs",
+                    "tag-resource",
+                    "--resource-arn",
+                    log_arn,
+                    "--tags",
+                    json.dumps(controller_tags(repository, purpose)),
+                )
+                created += 1
+        else:
+            if exact_logs[0].get("retentionInDays") != 7:
+                raise RuntimeError("Monthly controller log retention drifted")
+            actual_log_tags = (
+                aws.call("logs", "list-tags-for-resource", "--resource-arn", log_arn)
+                or {}
+            ).get("tags", {})
+            if actual_log_tags != controller_tags(repository, purpose):
+                raise RuntimeError("Monthly controller log tags drifted")
+        payload = monthly_project_payload(
+            purpose=purpose,
+            account_id=account_id,
+            partition=partition,
+            region=region,
+            name_prefix=name_prefix,
+            repository=repository,
+            state_bucket=state_bucket,
+        )
+        project_name = str(payload["name"])
         projects = aws.call(
             "codebuild", "batch-get-projects", "--names", project_name
         ) or {"projects": []}
-        if not projects.get("projects") and apply:
-            buildspec_name = (
-                "image-build.buildspec.yml"
-                if purpose == "image"
-                else "destroy.buildspec.yml"
-            )
-            role_purpose = (
-                "codebuild-image" if purpose == "image" else "codebuild-destroy"
-            )
-            payload = {
-                "name": project_name,
-                "source": {
-                    "type": "NO_SOURCE",
-                    "buildspec": (LIFECYCLE_ROOT / buildspec_name).read_text(
-                        encoding="utf-8"
-                    ),
-                },
-                "artifacts": {"type": "NO_ARTIFACTS"},
-                "environment": {
-                    "type": "LINUX_CONTAINER",
-                    "image": "aws/codebuild/standard:7.0",
-                    "computeType": "BUILD_GENERAL1_SMALL",
-                    "imagePullCredentialsType": "CODEBUILD",
-                    "privilegedMode": purpose == "image",
-                    "environmentVariables": [
-                        {"name": "PORTFOLIO_STATE_BUCKET", "value": state_bucket},
-                        {
-                            "name": "PORTFOLIO_CONFIGURATION_KEY",
-                            "value": f"controls/{name_prefix}/monthly/configuration.json",
-                        },
-                        {
-                            "name": "PORTFOLIO_DESTROY_ROLE_ARN",
-                            "value": f"arn:{partition}:iam::{account_id}:role/{name_prefix}-monthly-destroy",
-                        },
-                        {"name": "PORTFOLIO_AWS_REGION", "value": region},
-                    ],
-                },
-                "serviceRole": f"arn:{partition}:iam::{account_id}:role/{name_prefix}-monthly-{role_purpose}",
-                "timeoutInMinutes": 60,
-                "queuedTimeoutInMinutes": 30,
-                "autoRetryLimit": 0 if purpose == "image" else 2,
-                "logsConfig": {
-                    "cloudWatchLogs": {
-                        "status": "ENABLED",
-                        "groupName": log_name,
-                        "streamName": purpose,
-                    }
-                },
-                "tags": codebuild_tags(controller_tags(repository, purpose)),
-            }
-            aws.call(
-                "codebuild",
-                "create-project",
-                "--cli-input-json",
-                json.dumps(payload, separators=(",", ":")),
-                creates=True,
-            )
-            created += 1
-    return created
+        existing_projects = projects.get("projects", [])
+        if not isinstance(existing_projects, list) or len(existing_projects) > 1:
+            raise RuntimeError("Monthly CodeBuild project inventory is invalid")
+        if not existing_projects:
+            planned += 1
+            if apply:
+                aws.call(
+                    "codebuild",
+                    "create-project",
+                    "--cli-input-json",
+                    json.dumps(payload, separators=(",", ":")),
+                    creates=True,
+                )
+                created += 1
+        else:
+            verify_existing_monthly_project(existing_projects[0], payload)
+    return {"planned": planned, "created": created}
 
 
 def lifecycle_config(
@@ -664,7 +878,7 @@ def main() -> int:
     statuses = {"create": 0, "update": 0, "unchanged": 0}
     oidc_status = ensure_oidc_provider(
         aws,
-        apply=args.apply,
+        apply=False,
         account_id=account_id,
         partition=args.partition,
         repository=args.repository_identity,
@@ -673,26 +887,30 @@ def main() -> int:
     for spec in policies.values():
         status = ensure_policy(
             aws,
-            apply=args.apply,
+            apply=False,
             account_id=account_id,
             partition=args.partition,
             name=spec["name"],
             document=spec["document"],
         )
         statuses[status] += 1
-    ordered_roles = sorted(roles.values(), key=role_creation_order)
+    ordered_roles = ordered_role_specs(
+        roles,
+        account_id=account_id,
+        partition=args.partition,
+    )
     for spec in ordered_roles:
         status = ensure_role(
             aws,
-            apply=args.apply,
+            apply=False,
             account_id=account_id,
             partition=args.partition,
             spec=spec,
         )
         statuses[status] += 1
-    controller_creates = ensure_monthly_controllers(
+    controller_plan = ensure_monthly_controllers(
         aws,
-        apply=args.apply,
+        apply=False,
         account_id=account_id,
         partition=args.partition,
         region=args.region,
@@ -700,7 +918,42 @@ def main() -> int:
         repository=args.repository_identity,
         state_bucket=state_bucket,
     )
+    controller_apply = {"planned": controller_plan["planned"], "created": 0}
     if args.apply:
+        ensure_oidc_provider(
+            aws,
+            apply=True,
+            account_id=account_id,
+            partition=args.partition,
+            repository=args.repository_identity,
+        )
+        for spec in policies.values():
+            ensure_policy(
+                aws,
+                apply=True,
+                account_id=account_id,
+                partition=args.partition,
+                name=spec["name"],
+                document=spec["document"],
+            )
+        for spec in ordered_roles:
+            ensure_role(
+                aws,
+                apply=True,
+                account_id=account_id,
+                partition=args.partition,
+                spec=spec,
+            )
+        controller_apply = ensure_monthly_controllers(
+            aws,
+            apply=True,
+            account_id=account_id,
+            partition=args.partition,
+            region=args.region,
+            name_prefix=args.name_prefix,
+            repository=args.repository_identity,
+            state_bucket=state_bucket,
+        )
         if (
             ensure_oidc_provider(
                 aws,
@@ -737,6 +990,18 @@ def main() -> int:
                 != "unchanged"
             ):
                 raise RuntimeError("Static role post-write read-back drifted")
+        post_controller = ensure_monthly_controllers(
+            aws,
+            apply=False,
+            account_id=account_id,
+            partition=args.partition,
+            region=args.region,
+            name_prefix=args.name_prefix,
+            repository=args.repository_identity,
+            state_bucket=state_bucket,
+        )
+        if post_controller["planned"] != 0:
+            raise RuntimeError("Monthly controller post-write inventory is incomplete")
         config = lifecycle_config(
             account_id=account_id,
             partition=args.partition,
@@ -757,10 +1022,13 @@ def main() -> int:
         "contractProfiles": 2,
         "managedPolicies": len(policies),
         "persistentRoles": len(roles),
-        "plannedCreates": statuses["create"],
+        "identityPlannedCreates": statuses["create"],
+        "plannedCreates": statuses["create"] + controller_plan["planned"],
         "plannedUpdates": statuses["update"],
-        "unchangedObjects": statuses["unchanged"],
-        "controllerResourcesCreated": controller_creates,
+        "identityUnchangedObjects": statuses["unchanged"],
+        "unchangedObjects": statuses["unchanged"] + 5 - controller_plan["planned"],
+        "controllerResourcesPlanned": controller_plan["planned"],
+        "controllerResourcesCreated": controller_apply["created"],
         "controllerReadback": controller_readback,
         "postWriteReadback": args.apply,
         "awsCalls": aws.effects.calls,

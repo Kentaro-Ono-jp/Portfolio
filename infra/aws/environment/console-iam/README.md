@@ -15,13 +15,18 @@ drift stops deployment; the deployment path never repairs it.
 policies. `OperatorPermissions` holds backend, exact PassRole, and
 destroy-role-assumption authority. Image publication belongs only to the
 separate CodeBuild image role. The operator's environment authority is
-split into two more static managed policies: one for exact ownership tags at
-creation and one for reads plus exact-ARN or ownership-tagged operations. This
-keeps every document below the managed-policy quota without widening an
-action to unrelated account resources. The boundary is only the maximum
-authority that any of the nine roles may receive. Never attach the boundary as
-an identity policy, and never use any permissions policy as a permissions
-boundary.
+split into two more static managed policies. Their exact tagged and named
+statements remain as reviewable intent, but Issue #116 deliberately adds a
+broad runtime-service statement for both the operator and destroy paths rather
+than extending an individual API allowlist after every live failure. The
+automation, image, destroy-controller, and Scheduler transport roles remain
+exact so none can bypass the operator/destroy responsibility boundary. The
+permissions boundary remains the effective ceiling and continues to
+exclude normal IAM mutation while fixing the state, control, image, PassRole,
+and destroy-role namespaces. This account-level runtime breadth is accepted for
+the dedicated Portfolio deployment account; it must not be described as
+per-API least privilege. Never attach the boundary as an identity policy, and
+never use any permissions policy as a permissions boundary.
 
 ## Literal substitutions
 

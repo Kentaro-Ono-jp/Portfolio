@@ -2,7 +2,7 @@
 
 > Status: three vertical slices completed; fourth portable managed-ephemeral
 > AWS deployment slice in progress — runtime compatibility, persistent
-> bootstrap/least privilege, frozen persistent deployment IAM, managed
+> bootstrap/bounded runtime authority, frozen persistent deployment IAM, managed
 > Terraform lifecycle, and isolated GitHub OIDC automation implemented —
 > 2026-08-11
 
@@ -37,7 +37,7 @@ The accepted fourth vertical slice adds an explicit managed AWS deployment
 path while preserving AWS-free GitHub Actions and local Docker Compose. A
 third-party clone deploys only into the third party's AWS account. Runtime
 adapters plus the persistent Terraform state/ECR/IAM bootstrap and static
-least-privilege proof are implemented. The NAT-free managed application
+permissions-boundary proof are implemented. The NAT-free managed application
 topology is also defined and proven through an AWS-free deterministic plan.
 The maintainer deployment IAM is a frozen Console-owned prerequisite:
 deployment assumes the exact operator, attests the canonical objects

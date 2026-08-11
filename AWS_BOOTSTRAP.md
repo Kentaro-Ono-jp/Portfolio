@@ -1,4 +1,4 @@
-# Portable AWS bootstrap and least privilege
+# Portable AWS bootstrap and bounded runtime authority
 
 This guide covers the persistent control layer for the fourth vertical slice.
 It creates only an encrypted Terraform state bucket, three immutable ECR
@@ -58,24 +58,27 @@ environment destroy authority cannot remove persistent bootstrap resources.
 | Authority | Scope |
 |---|---|
 | IAM manager | Creates only the exact declared, tagged environment roles with the fixed boundary. Terraform retains role deletion and inline-policy ownership. The manager cannot attach, replace, or delete policies; create users, groups, access keys, login profiles, arbitrary managed policies, or global roles; or remove/replace a boundary. |
-| Environment operator/deployment | Uses only that environment state key, publishes to the three owned ECR repositories, passes exact task/fallback role ARNs to exact AWS services, inventories EC2 without fabricated tags, and creates or mutates only request-tagged/resource-tagged environment resources. |
+| Environment operator/deployment | Uses the isolated environment state/control keys, publishes to the three owned ECR repositories, and passes exact task/fallback roles. Issue #116 deliberately grants broad Portfolio runtime-service actions inside the fixed permissions boundary instead of maintaining a per-API allowlist. |
 | Task execution | Pulls owned images, writes the environment log groups, and reads only environment-prefixed injected secrets. |
 | Web workload | Has caller-identity proof only and no application-data authority. |
 | API workload | Owns only the exact environment application bucket objects. PostgreSQL remains an application connection boundary, not an IAM administration grant. |
 | ML workload | Reads/writes only the exact environment application objects; it cannot delete them and receives no PostgreSQL or Cognito administration authority. |
 | GitHub automation | GitHub OIDC trust requires the exact audience, repository, `main` ref, protected environment, workflow name/ref, and customized `repo/context/job_workflow_ref/event_name` subject. The short-lived role can assume only the exact manual/monthly operator and destroy roles. |
-| Scheduler fallback | Uses the exact persistent environment schedule group and starts only that environment's future CodeBuild destroy project. The trust SourceArn is the group ARN required by Scheduler, never an individual schedule ARN. |
-| CodeBuild fallback | Reads only that environment's exact lifecycle configuration and lease, writes its exact destroy log, and assumes only that environment destroy role. Terraform state and lifecycle mutation begin only after the separate destroy role is assumed. |
-| Destroy | Deletes only exact environment-named or correctly tagged application resources. It cannot mutate state, ECR, IAM, the boundary, or another environment. |
+| Scheduler fallback | Uses the exact persistent environment schedule group and starts only that environment's destroy project. The trust SourceArn remains the exact group ARN. |
+| CodeBuild fallback | Reads the exact environment lifecycle inputs, writes its exact log, and assumes the exact destroy role. Terraform state and lifecycle mutation begin only after the separate destroy role is assumed. |
+| Destroy | Receives broad application-service actions inside the fixed boundary so cleanup does not fail one API at a time. It still cannot mutate IAM or the boundary, and the lifecycle accepts success only after the isolated state and residual inventories are empty. |
 
 Every delegable role carries the same fixed boundary. The boundary is the
 durable safety guardrail: it fixes role purposes, persistent state/ECR
 namespaces, IAM creation and mutation limits, application service families,
 and exact `iam:PassRole` role/service pairs. Bootstrap-owned inline identity
 policies are not replaceable by the delegated IAM manager; they bind generated
-application resources to the exact environment, repository, managed, and
-nonpersistent ownership tuple. The effective permission is always the
-intersection of these two layers.
+application resources to the expected Portfolio topology. Issue #116 accepts
+broad identity-policy service actions for operator, destroy, and controller
+roles; the effective permission is always the intersection with the fixed
+boundary. Exact GitHub OIDC trust, environment/state separation, TTL-first
+fallback, mandatory destroy, and zero-residue proof carry the runtime safety
+decision instead of a fragile per-API deployment allowlist.
 
 This separation is deliberate. Duplicating every generated-resource ownership
 predicate in the one fixed boundary consumed nearly all of AWS's managed-policy
