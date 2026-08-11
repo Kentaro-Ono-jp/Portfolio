@@ -11,11 +11,12 @@ import string
 import subprocess
 import sys
 import time
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any
 from urllib.parse import urlparse
 
 from aws_lifecycle_core import (
@@ -26,6 +27,7 @@ from aws_lifecycle_core import (
     LifecycleError,
     LifecycleState,
     Phase,
+    accepted_repository_remotes,
     assert_public_safe,
     canonical_json,
     isoformat,
@@ -36,7 +38,6 @@ from aws_lifecycle_core import (
     utc_now,
     validate_fallback_window,
 )
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 LIFECYCLE_ROOT = REPOSITORY_ROOT / "infra" / "aws" / "lifecycle"
@@ -378,10 +379,7 @@ def verify_local_source(config: LifecycleConfig, *, require_remote: bool) -> Non
     remote = run_process(
         ["git", "remote", "get-url", "origin"], label="Git remote check"
     ).stdout.strip()
-    accepted = {
-        config.repository_url,
-        f"git@github.com:{config.repository_identity}.git",
-    }
+    accepted = accepted_repository_remotes(config.repository_identity)
     if remote not in accepted:
         raise LifecycleError("The Git remote does not match repositoryIdentity.")
     if require_remote:

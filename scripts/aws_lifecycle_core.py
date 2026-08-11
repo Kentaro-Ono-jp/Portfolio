@@ -3,12 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Mapping
-
+from typing import Any
 
 SCHEMA_VERSION = 1
 CONFIG_SCHEMA_VERSION = 2
@@ -33,6 +33,18 @@ REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 class LifecycleError(RuntimeError):
     pass
+
+
+def accepted_repository_remotes(repository_identity: str) -> frozenset[str]:
+    if REPOSITORY_PATTERN.fullmatch(repository_identity) is None:
+        raise LifecycleError("repositoryIdentity is invalid.")
+    return frozenset(
+        {
+            f"https://github.com/{repository_identity}",
+            f"https://github.com/{repository_identity}.git",
+            f"git@github.com:{repository_identity}.git",
+        }
+    )
 
 
 def validate_fallback_window(registered_at: datetime, expires_at: datetime) -> None:

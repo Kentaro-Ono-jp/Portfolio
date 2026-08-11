@@ -4,27 +4,29 @@ import json
 import sys
 import tempfile
 import unittest
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
 
-from aws_lifecycle_core import (  # noqa: E402
+import aws_lifecycle as lifecycle
+from aws_lifecycle_core import (
     CALLER_MODE_GITHUB_AUTOMATION,
     FORWARD_PHASES,
     LifecycleConfig,
     LifecycleError,
     LifecycleState,
     Phase,
+    accepted_repository_remotes,
     assert_public_safe,
     sanitized_status,
     sha256_json,
 )
-import aws_lifecycle as lifecycle  # noqa: E402
 
 
 def configuration() -> LifecycleConfig:
@@ -71,6 +73,15 @@ def configuration() -> LifecycleConfig:
             for purpose in ("web", "api", "ml")
         },
     )
+
+
+def process_outputs(*values: str) -> Callable[..., SimpleNamespace]:
+    outputs = iter(values)
+
+    def run(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(stdout=next(outputs))
+
+    return run
 
 
 def state_at(config: LifecycleConfig, target: Phase) -> LifecycleState:
@@ -476,6 +487,35 @@ class SeedRemote:
 
 
 class LifecycleContractTests(unittest.TestCase):
+    def test_local_source_uses_one_exact_remote_contract_for_every_caller(self) -> None:
+        config = configuration()
+        for remote in accepted_repository_remotes(config.repository_identity):
+            with (
+                self.subTest(remote=remote),
+                patch.object(
+                    lifecycle,
+                    "run_process",
+                    side_effect=process_outputs("", config.source_sha, remote),
+                ),
+            ):
+                lifecycle.verify_local_source(config, require_remote=False)
+
+        for remote in (
+            "https://github.com/other/example-repository.git",
+            "https://token@github.com/example-owner/example-repository.git",
+            "https://github.com/example-owner/example-repository/extra",
+        ):
+            with (
+                self.subTest(rejected_remote=remote),
+                patch.object(
+                    lifecycle,
+                    "run_process",
+                    side_effect=process_outputs("", config.source_sha, remote),
+                ),
+                self.assertRaisesRegex(LifecycleError, "Git remote"),
+            ):
+                lifecycle.verify_local_source(config, require_remote=False)
+
     def test_image_buildspec_only_is_reconciled_and_read_back(self) -> None:
         config = configuration()
         fake = FakeControllerAws(
