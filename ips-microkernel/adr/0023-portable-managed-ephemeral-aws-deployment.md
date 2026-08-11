@@ -113,8 +113,11 @@ maintainer's account, identity, credentials, state, or machine-local files.
 
 ### Register destroy authority before billable apply
 
-Before creating billable application resources, register a one-time two-hour
-fallback outside the state it destroys. EventBridge Scheduler invokes a
+Before creating billable application resources, register a one-time normal
+one-hour fallback outside the state it destroys. Normal success refreshes the
+cleanup session and destroys immediately after authenticated smoke rather than
+waiting for that deadline. Explicit TTL values and `extend` retain the original
+120-minute maximum. EventBridge Scheduler invokes a
 persistent CodeBuild destroy project bound to the exact source, backend, state
 key, and environment, then deletes the completed schedule. Scheduler execution
 trust is scoped to the exact persistent schedule-group ARN, which is the

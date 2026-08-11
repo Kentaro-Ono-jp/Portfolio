@@ -59,9 +59,10 @@ The accepted AWS adapter below preserves its ownership and trust boundaries.
 
 The fourth-slice profile is an implemented Terraform definition with one
 owner-authorized live apply-to-smoke-to-sweep proof completed by Issue #114.
-[Delivery Specification 0004](../delivery/0004-portable-managed-ephemeral-aws-deployment.md)
-separates that Step 5/Step 7 result from the still-later Step 6 automation and
-Step 8 full-slice publication work.
+Issue #116 adds the exact GitHub OIDC manual/monthly automation and accepted
+live proofs for both event paths. [Delivery Specification 0004](../delivery/0004-portable-managed-ephemeral-aws-deployment.md)
+separates those Step 5 through Step 7 results from the still-later Step 8
+full-slice publication work.
 
 ```mermaid
 flowchart LR
@@ -120,13 +121,14 @@ destroy controller. The ephemeral layer owns network, ingress, discovery,
 ECS, RDS, S3 application data, Amazon MQ, Cognito, secrets, and bounded logs.
 Manual and monthly environments use different names, state keys, and tags.
 
-The accepted and live-proved lifecycle is preflight, immutable image selection, two-hour
-fallback registration, apply, migration, synthetic seed, health,
-authentication and asynchronous smoke, external HTTPS check, manual destroy,
-and tag plus service-specific residual sweep. The EventBridge Scheduler and
-CodeBuild fallback remain outside the state they destroy. A Budget alert,
-Terraform exit code, or schedule invocation alone cannot prove that billable
-resources are gone.
+The accepted and live-proved lifecycle is preflight, immutable image selection,
+normal one-hour fallback registration, apply, migration, synthetic seed,
+health, authentication and asynchronous smoke, external HTTPS check, immediate
+manual destroy, and tag plus service-specific residual sweep. Normal success
+does not wait for the fallback deadline; explicit TTL values and `extend`
+retain the 120-minute maximum. The EventBridge Scheduler and CodeBuild fallback
+remain outside the state they destroy. A Budget alert, Terraform exit code, or
+schedule invocation alone cannot prove that billable resources are gone.
 
 Ordinary PR, fork, Dependabot, and `main` verification paths remain AWS-free
 and receive no AWS write authority. Third-party deployment binds only to the

@@ -69,10 +69,15 @@ Issue #114 supersedes the old numeric attempt ceiling with its
 completion-first serialized-attempt boundary. The `3/3` notation remains
 immutable history, not a current cap. Issue #116 implements the repository
 contract for the exact GitHub OIDC workflow, isolated manual/monthly callers,
-one-hour normal TTL, and no per-run environment approval; its live manual and
-real-schedule proofs remain pending until their focused evidence is recorded.
-The Step 8 completion record remains pending. Issue #114 completed the Step 7
-real-AWS cycle described below.
+one-hour normal safety fallback, and no per-run environment approval. Its live
+manual and real-schedule proofs both passed authenticated asynchronous smoke,
+immediate destroy, and 27-category zero residue; the temporary proof schedule
+was then removed. Final runtime CI and Publication Gate B passed at PR #128's
+preceding reviewed head; its documentation-only correction head uses the
+governed Markdown-only exception. Independent re-review, identical-tree merge
+evidence, and focused closure reconciliation remain for Issue #116. The Step 8
+completion record remains pending. Issue #114 completed the Step 7 real-AWS
+cycle described below.
 
 ## Outcome
 
@@ -84,7 +89,7 @@ From one public repository clone, an authorized operator can:
    control resources without changing IAM or creating a shared maintainer
    account dependency;
 3. build and identify immutable application images;
-4. register a two-hour automatic destroy fallback before billable application creation;
+4. register a normal one-hour automatic destroy fallback before billable application creation;
 5. apply the managed AWS environment with Terraform;
 6. complete database migration, synthetic identity/data seed, health checks, and the authenticated document-processing smoke path;
 7. reach the Web over an AWS-provided HTTPS endpoint;
@@ -92,6 +97,12 @@ From one public repository clone, an authorized operator can:
    same operation surface; and
 9. prove that no image, tagged, or service-specific billable application
    residue remains.
+
+The one-hour value is the normal independent safety deadline measured from
+actual fallback registration. A successful lifecycle does not wait for that
+deadline: it refreshes its cleanup session and destroys immediately after the
+authenticated smoke path. Explicit TTL values and `extend` retain the original
+120-minute maximum.
 
 The repository continues to support AWS-free GitHub Actions verification and AWS-free local Docker Compose execution.
 
@@ -336,12 +347,27 @@ only to `monthly`. Environment names, state keys, controls, roles, controller
 projects, and tags remain isolated.
 
 The permanent monthly schedule starts on the first day of every month at
-13:00 `Asia/Tokyo`. A separately recorded temporary practical cron may exist on
-`main` only long enough to prove the real schedule-event path and must then be
-removed. The protected deployment environment has no required reviewer or wait
-timer, so accepted dispatch and schedule runs need no per-run manual approval.
-Both use the one-hour normal fallback; that TTL is an independent AWS cleanup
-deadline, not a GitHub job-time limit.
+13:00 `Asia/Tokyo`. The separately recorded temporary practical cron existed on
+`main` only long enough to prove the real schedule-event path and was removed
+after the accepted proof. The protected deployment environment has no required
+reviewer or wait timer, so accepted dispatch and schedule runs need no per-run
+manual approval. Both use the one-hour normal fallback; that TTL is an
+independent AWS cleanup deadline, not a GitHub job-time limit or a requirement
+to keep the environment running. Normal success destroys immediately after
+authenticated smoke and cleanup-session refresh.
+
+The accepted
+[manual run](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31482504475)
+proved `workflow_dispatch` / `manual`. The accepted
+[schedule run](https://github.com/Kentaro-Ono-jp/Portfolio/actions/runs/31489580926)
+was created 35 minutes 29 seconds after its intended temporary occurrence and
+proved `schedule` / `monthly` at exact head
+`3a6ec9e318c6c3d1ad5f68696b1210bab20debae`. It completed the verified
+60-minute fallback, apply, migration, seed, authenticated asynchronous smoke,
+cleanup-session refresh, exact destroy, and a 27-category sweep with zero
+residual resources. [PR #127](https://github.com/Kentaro-Ono-jp/Portfolio/pull/127)
+then removed the temporary cron with zero intermediate Actions runs, leaving
+only the permanent schedule.
 
 Acceptance requires the customized immutable
 `repo/context/job_workflow_ref/event_name` subject with stable owner and
