@@ -53,5 +53,18 @@ def test_readme_badges_link_to_inspectable_default_branch_evidence() -> None:
     readme = README_PATH.read_text(encoding="utf-8")
 
     assert "verify.yml/badge.svg?branch=main&event=push" in readme
-    assert "codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main" in readme
+    assert (
+        "github/actions/workflow/status/Kentaro-Ono-jp/Portfolio/aws-deploy.yml"
+        "?branch=main&event=schedule&label=Managed%20AWS%20lifecycle"
+    ) in readme
+    assert (
+        "raw.githubusercontent.com%2FKentaro-Ono-jp%2FPortfolio%2Fmain%2Fapps%2Fml%2F"
+        "evaluation%2Fcandidate-comparison-v1.json&query=%24.eligible"
+    ) in readme
+    assert (
+        "img.shields.io/codecov/c/github/Kentaro-Ono-jp/Portfolio?label=Overall%20coverage"
+    ) in readme
+    assert (
+        "img.shields.io/codecov/c/github/Kentaro-Ono-jp/Portfolio?flag=ml&label=ML%20coverage"
+    ) in readme
     assert "img.shields.io/github/license/Kentaro-Ono-jp/Portfolio" in readme
