@@ -6,7 +6,10 @@
 > residue.
 
 [![Verify](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml/badge.svg?branch=main&event=push)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/verify.yml?query=branch%3Amain+event%3Apush)
-[![Coverage](https://codecov.io/github/Kentaro-Ono-jp/Portfolio/graph/badge.svg?branch=main)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
+[![Managed AWS lifecycle](https://img.shields.io/github/actions/workflow/status/Kentaro-Ono-jp/Portfolio/aws-deploy.yml?branch=main&event=schedule&label=Managed%20AWS%20lifecycle)](https://github.com/Kentaro-Ono-jp/Portfolio/actions/workflows/aws-deploy.yml?query=branch%3Amain+event%3Aschedule)
+[![ML promotion eligible](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FKentaro-Ono-jp%2FPortfolio%2Fmain%2Fapps%2Fml%2Fevaluation%2Fcandidate-comparison-v1.json&query=%24.eligible&label=ML%20promotion%20eligible&color=informational)](apps/ml/evaluation/candidate-comparison-v1.json)
+[![Overall coverage](https://img.shields.io/codecov/c/github/Kentaro-Ono-jp/Portfolio?label=Overall%20coverage)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
+[![ML coverage](https://img.shields.io/codecov/c/github/Kentaro-Ono-jp/Portfolio?flag=ml&label=ML%20coverage)](https://app.codecov.io/github/Kentaro-Ono-jp/Portfolio)
 [![License: MIT](https://img.shields.io/github/license/Kentaro-Ono-jp/Portfolio)](LICENSE)
 
 ReactorFront Portfolio is one reproducible **Document Intelligence and Human
