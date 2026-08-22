@@ -243,6 +243,23 @@ class ImageInventoryAws(FakeAws):
         return super().call(service, operation, *arguments, **kwargs)
 
 
+class ResidueInventoryAws(FakeAws):
+    def __init__(self, images: dict[str, list[dict[str, object]]]) -> None:
+        super().__init__()
+        self.images = images
+
+    def call(self, service: str, operation: str, *arguments: str, **kwargs: object):
+        if service == "s3api" and operation == "head-bucket":
+            self.calls.append((service, operation, arguments))
+            return None
+        if service == "ecr" and operation == "describe-images":
+            self.calls.append((service, operation, arguments))
+            repository = arguments[arguments.index("--repository-name") + 1]
+            purpose = repository.rsplit("/", maxsplit=1)[-1]
+            return {"imageDetails": self.images.get(purpose, [])}
+        return super().call(service, operation, *arguments, **kwargs)
+
+
 class ScheduleAws(FakeAws):
     def __init__(self, registered: datetime) -> None:
         super().__init__()
@@ -1919,6 +1936,60 @@ class LifecycleContractTests(unittest.TestCase):
             {arguments[1] for arguments in deletes},
             {"reactorfront/web", "reactorfront/api", "reactorfront/ml"},
         )
+
+    def test_residue_inventory_reads_all_images_from_three_exact_repositories(
+        self,
+    ) -> None:
+        config = configuration()
+        fake = ResidueInventoryAws(
+            {
+                "api": [
+                    {
+                        "imageDigest": "sha256:" + "9" * 64,
+                        "imageTags": ["sha-stale-source"],
+                    }
+                ]
+            }
+        )
+
+        inventory = lifecycle.inventory_residue(fake, config)
+
+        self.assertEqual(inventory["immutableImageWeb"], 0)
+        self.assertEqual(inventory["immutableImageApi"], 1)
+        self.assertEqual(inventory["immutableImageMl"], 0)
+        self.assertEqual(sum(inventory.values()), 1)
+        image_reads = [
+            arguments
+            for service, operation, arguments in fake.calls
+            if service == "ecr" and operation == "describe-images"
+        ]
+        self.assertEqual(len(image_reads), 3)
+        self.assertEqual(
+            {arguments[1] for arguments in image_reads},
+            {"reactorfront/web", "reactorfront/api", "reactorfront/ml"},
+        )
+        self.assertTrue(
+            all("--image-ids" not in arguments for arguments in image_reads)
+        )
+
+    def test_residue_inventory_accepts_three_empty_image_repositories(self) -> None:
+        inventory = lifecycle.inventory_residue(
+            ResidueInventoryAws({}), configuration()
+        )
+
+        self.assertFalse(any(inventory.values()))
+
+    def test_sweep_fails_when_an_older_ecr_image_remains(self) -> None:
+        config = configuration()
+        source = FakeAws("arn:aws:iam::111122223333:user/ReactorFrontNoel")
+        operator = FakeAws()
+        destroy = ResidueInventoryAws({"web": [{"imageDigest": "sha256:" + "8" * 64}]})
+
+        with (
+            patch.object(lifecycle, "assume_role", side_effect=(operator, destroy)),
+            self.assertRaisesRegex(LifecycleError, "residual inventory is not zero"),
+        ):
+            lifecycle.command_sweep(config, Path("config.json"), source)
 
     def test_terraform_destroy_uses_state_then_independent_sweep(self) -> None:
         config = configuration()

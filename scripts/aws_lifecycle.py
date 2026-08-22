@@ -2933,13 +2933,11 @@ def inventory_residue(client: AwsCli, config: LifecycleConfig) -> dict[str, int]
             "describe-images",
             "--repository-name",
             f"{config.name_prefix}/{purpose}",
-            "--image-ids",
-            f"imageTag={config.image_tag}",
-            allow_error_codes=("ImageNotFoundException",),
         )
-        inventory[f"immutableImage{purpose.title()}"] = (
-            0 if response is None else len(response.get("imageDetails", []))
-        )
+        image_details = None if response is None else response.get("imageDetails")
+        if not isinstance(image_details, list):
+            raise LifecycleError("Persistent ECR image inventory was invalid.")
+        inventory[f"immutableImage{purpose.title()}"] = len(image_details)
     return inventory
 
 
